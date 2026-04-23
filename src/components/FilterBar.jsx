@@ -1,0 +1,215 @@
+import { useState } from 'react'
+import BottomSheet from './BottomSheet'
+
+const RANGES = [
+  { key: '12h', label: '12h' },
+  { key: '24h', label: '24h' },
+  { key: '48h', label: '48h' },
+  { key: '7d', label: '7 dias' },
+  { key: 'all', label: 'Tudo' }
+]
+const STATUS = [
+  { key: 'pending', label: 'Pendente', icon: '⏳', tone: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
+  { key: 'overdue', label: 'Atrasada', icon: '⚠️', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
+  { key: 'done', label: 'Tomada', icon: '✅', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
+  { key: 'skipped', label: 'Pulada', icon: '⏭️', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }
+]
+const TYPES = [
+  { key: 'scheduled', label: 'Agendada', icon: '🗓️' },
+  { key: 'sos', label: 'S.O.S', icon: '🆘' }
+]
+
+export default function FilterBar({ filters, setFilters, patients }) {
+  const [open, setOpen] = useState(false)
+
+  const activeCount =
+    (filters.status ? 1 : 0) +
+    (filters.type ? 1 : 0) +
+    (filters.patientId ? 1 : 0)
+
+  const activeChips = []
+  if (filters.patientId) {
+    const p = patients?.find((x) => x.id === filters.patientId)
+    if (p) activeChips.push({
+      key: 'p',
+      label: `${p.avatar || '👤'} ${p.name.split(' ')[0]}`,
+      clear: () => setFilters((f) => ({ ...f, patientId: null }))
+    })
+  }
+  if (filters.status) {
+    const s = STATUS.find((x) => x.key === filters.status)
+    activeChips.push({
+      key: 's',
+      label: `${s.icon} ${s.label}`,
+      clear: () => setFilters((f) => ({ ...f, status: null }))
+    })
+  }
+  if (filters.type) {
+    const t = TYPES.find((x) => x.key === filters.type)
+    activeChips.push({
+      key: 't',
+      label: `${t.icon} ${t.label}`,
+      clear: () => setFilters((f) => ({ ...f, type: null }))
+    })
+  }
+
+  function clearAll() {
+    setFilters((f) => ({ ...f, patientId: null, status: null, type: null }))
+  }
+
+  return (
+    <div className="sticky top-[68px] z-20 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
+      <div className="max-w-md mx-auto px-4 py-2.5 space-y-2">
+        {/* Linha 1: segmented period + botão Filtros */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0 flex p-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70 overflow-x-auto no-scrollbar">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => setFilters((f) => ({ ...f, range: r.key }))}
+                className={`flex-1 whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition
+                  ${filters.range === r.key
+                    ? 'bg-white dark:bg-slate-950 text-brand-700 dark:text-brand-300 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400'}`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setOpen(true)}
+            className="relative shrink-0 w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm active:scale-95 transition"
+            aria-label="Abrir filtros"
+          >
+            <span className="text-base">⚙</span>
+            {activeCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center">
+                {activeCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Linha 2: chips ativos */}
+        {activeChips.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap items-center">
+            {activeChips.map((c) => (
+              <button
+                key={c.key}
+                onClick={c.clear}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 text-xs font-medium active:scale-95"
+              >
+                {c.label}
+                <span className="opacity-60">✕</span>
+              </button>
+            ))}
+            <button
+              onClick={clearAll}
+              className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 ml-1 underline"
+            >
+              limpar
+            </button>
+          </div>
+        )}
+      </div>
+
+      <BottomSheet open={open} onClose={() => setOpen(false)} title="Filtros"
+        footer={
+          <div className="flex gap-2">
+            <button onClick={clearAll} className="btn-secondary flex-1">Limpar</button>
+            <button onClick={() => setOpen(false)} className="btn-primary flex-1">Aplicar</button>
+          </div>
+        }
+      >
+        <div className="space-y-5">
+          {patients && patients.length > 0 && (
+            <Section title="Paciente">
+              <div className="flex gap-2 flex-wrap">
+                <PickPill
+                  active={!filters.patientId}
+                  onClick={() => setFilters((f) => ({ ...f, patientId: null }))}
+                >Todos</PickPill>
+                {patients.map((p) => (
+                  <PickPill
+                    key={p.id}
+                    active={filters.patientId === p.id}
+                    onClick={() => setFilters((f) => ({ ...f, patientId: f.patientId === p.id ? null : p.id }))}
+                  >
+                    <span className="mr-1">{p.avatar || '👤'}</span>{p.name.split(' ')[0]}
+                  </PickPill>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <Section title="Status">
+            <div className="grid grid-cols-2 gap-2">
+              {STATUS.map((s) => {
+                const active = filters.status === s.key
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => setFilters((f) => ({ ...f, status: f.status === s.key ? null : s.key }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition
+                      ${active
+                        ? `${s.tone} ring-2 ring-brand-500`
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
+                  >
+                    <span className="text-base">{s.icon}</span>
+                    {s.label}
+                  </button>
+                )
+              })}
+            </div>
+          </Section>
+
+          <Section title="Tipo">
+            <div className="grid grid-cols-2 gap-2">
+              {TYPES.map((t) => {
+                const active = filters.type === t.key
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setFilters((f) => ({ ...f, type: f.type === t.key ? null : t.key }))}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition
+                      ${active
+                        ? 'bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 ring-2 ring-brand-500'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
+                  >
+                    <span className="text-base">{t.icon}</span>
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+          </Section>
+        </div>
+      </BottomSheet>
+
+      <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { scrollbar-width: none; }`}</style>
+    </div>
+  )
+}
+
+function Section({ title, children }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+function PickPill({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition
+        ${active
+          ? 'bg-brand-600 text-white shadow'
+          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
+    >
+      {children}
+    </button>
+  )
+}
