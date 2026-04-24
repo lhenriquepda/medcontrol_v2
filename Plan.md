@@ -103,42 +103,138 @@ CREATE POLICY "Users own their push subs"
 
 ---
 
-### 0.3 Proteger RPCs Administrativas
+### 0.3 Sistema de Admin Seguro — Controle Total de Tiers
 
-**Problema:** `admin_grant_tier` pode ser chamado diretamente pelo frontend se não tiver verificação server-side.
+**Contexto:** Como criador do app, você precisa poder:
+- Conceder PRO a qualquer usuário (mensal, anual, 2 anos, indeterminado)
+- Revogar PRO a qualquer momento
+- Ver lista de todos os usuários e seus tiers
+- Tudo isso via painel dentro do próprio app
 
-**Solução:** Garantir que a RPC verifique papel do chamador:
+**Problema atual:** O email do admin provavelmente está hardcoded em algum lugar do código ou da RPC. Se alguém inspecionar o JS do app ou o histórico do git, descobre quem é o admin. Pior: se a RPC não verificar server-side, qualquer usuário autenticado pode chamar `admin_grant_tier` diretamente e se promover para PRO.
+
+**Design seguro completo:**
+
+#### Passo 1 — Criar tabela `admins` no banco
+
+```sql
+CREATE TABLE medcontrol.admins (
+  user_id   uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  added_at  timestamptz DEFAULT now(),
+  added_by  uuid REFERENCES auth.users(id)  -- quem adicionou (auditoria)
+);
+
+-- Nenhum usuário lê essa tabela diretamente
+ALTER TABLE medcontrol.admins ENABLE ROW LEVEL SECURITY;
+-- Sem policies de SELECT para usuários comuns — invisível pelo frontend
+-- Apenas service_role (Edge Functions internas) pode ler/escrever
+
+-- Inserir seu próprio user_id como admin (fazer UMA vez no Supabase Dashboard)
+INSERT INTO medcontrol.admins (user_id) VALUES ('SEU_USER_ID_AQUI');
+```
+
+#### Passo 2 — Reescrever `admin_grant_tier` com verificação server-side
+
 ```sql
 CREATE OR REPLACE FUNCTION medcontrol.admin_grant_tier(
   target_user uuid,
-  new_tier text,
-  expires timestamptz DEFAULT NULL,
-  src text DEFAULT 'manual'
+  new_tier    text,       -- 'free' | 'pro' | 'admin'
+  expires     timestamptz DEFAULT NULL,   -- NULL = sem expiração
+  src         text        DEFAULT 'manual'
 )
-RETURNS void
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = medcontrol, public
 AS $$
 BEGIN
-  -- Verificar se chamador é admin (não confiar no frontend)
+  -- ✅ Verificação server-side: quem chama é admin?
+  -- Não confia em NADA do frontend — só no JWT do Supabase
   IF NOT EXISTS (
     SELECT 1 FROM medcontrol.admins WHERE user_id = auth.uid()
   ) THEN
-    -- Permitir apenas chamadas de Edge Function autenticada (service_role)
-    -- ou verificar via JWT claim
-    IF current_setting('request.jwt.claims', true)::jsonb->>'role' != 'service_role' THEN
-      RAISE EXCEPTION 'Unauthorized';
-    END IF;
+    RAISE EXCEPTION 'UNAUTHORIZED: caller is not an admin';
   END IF;
 
-  UPDATE medcontrol.subscriptions
-  SET tier = new_tier, tier_expires = expires, source = src
-  WHERE user_id = target_user;
+  -- Validar tier
+  IF new_tier NOT IN ('free', 'pro', 'admin') THEN
+    RAISE EXCEPTION 'INVALID_TIER: %', new_tier;
+  END IF;
+
+  -- Executar a mudança
+  INSERT INTO medcontrol.subscriptions (user_id, tier, tier_expires, source, updated_at)
+  VALUES (target_user, new_tier, expires, src, now())
+  ON CONFLICT (user_id) DO UPDATE
+    SET tier        = EXCLUDED.tier,
+        tier_expires = EXCLUDED.tier_expires,
+        source      = EXCLUDED.source,
+        updated_at  = now();
+
+  -- Log de auditoria
+  INSERT INTO medcontrol.security_events (user_id, event_type, metadata)
+  VALUES (
+    auth.uid(),
+    'admin_tier_change',
+    jsonb_build_object(
+      'target_user', target_user,
+      'new_tier', new_tier,
+      'expires', expires,
+      'source', src
+    )
+  );
+
+  RETURN jsonb_build_object('ok', true, 'target', target_user, 'tier', new_tier);
 END;
 $$;
 ```
 
-Também remover o email hardcoded de admin — usar tabela `medcontrol.admins` ou claim JWT.
+#### Passo 3 — Frontend: nada muda para você
+
+O painel admin continua funcionando exatamente como hoje. A diferença é que se alguém tentar chamar a RPC sem ser admin, o banco rejeita:
+
+```
+// Usuário comum tentando se promover:
+POST /rest/v1/rpc/admin_grant_tier
+Authorization: Bearer <token_usuario_normal>
+{ "target_user": "...", "new_tier": "pro" }
+
+→ 400 Bad Request: "UNAUTHORIZED: caller is not an admin"
+```
+
+```
+// Você (admin) usando o painel:
+POST /rest/v1/rpc/admin_grant_tier
+Authorization: Bearer <seu_token>
+{ "target_user": "...", "new_tier": "pro", "expires": "2027-04-24T00:00:00Z" }
+
+→ 200 OK: { "ok": true, "tier": "pro" }
+```
+
+#### Exemplos de uso no painel admin
+
+```javascript
+// Dar PRO por 1 mês
+await grantTier({ userId: '...', tier: 'pro', expiresAt: addMonths(new Date(), 1) })
+
+// Dar PRO por 1 ano
+await grantTier({ userId: '...', tier: 'pro', expiresAt: addYears(new Date(), 1) })
+
+// Dar PRO por 2 anos
+await grantTier({ userId: '...', tier: 'pro', expiresAt: addYears(new Date(), 2) })
+
+// PRO vitalício (sem expiração)
+await grantTier({ userId: '...', tier: 'pro', expiresAt: null })
+
+// Revogar PRO → volta para free imediatamente
+await grantTier({ userId: '...', tier: 'free', expiresAt: null })
+```
+
+#### O que muda no código
+
+- **Remover** email hardcoded de qualquer RPC, `.env`, `Contexto.md` ou código JS
+- **Não mudar** `subscriptionService.js` — o `grantTier()` já chama a RPC corretamente
+- **Não mudar** o painel admin — UI continua igual
+- **Adicionar** a tabela `admins` com seu `user_id` inserido manualmente via Supabase Dashboard (nunca via código commitado)
 
 ---
 
