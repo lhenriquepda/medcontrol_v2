@@ -6,8 +6,7 @@ import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 import { formatDate, formatDateTime, formatTime, toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
-
-const STATUS_PT = { done: 'Tomada', skipped: 'Pulada', overdue: 'Atrasada', pending: 'Pendente' }
+import { statusLabel } from '../utils/statusUtils'
 
 export default function Reports() {
   const { data: patients = [] } = usePatients()
@@ -38,7 +37,7 @@ export default function Reports() {
         d.medName, p?.name || '', d.unit,
         formatDateTime(d.scheduledAt),
         d.actualTime ? formatDateTime(d.actualTime) : '',
-        STATUS_PT[d.status] || d.status, d.type === 'sos' ? 'S.O.S' : 'Agendada',
+        statusLabel(d.status), d.type === 'sos' ? 'S.O.S' : 'Agendada',
         (d.observation || '').replace(/\r?\n/g, ' ')
       ]
     })
@@ -66,7 +65,7 @@ ${doses.map((d) => `<tr>
 <td>${esc(d.unit)}</td>
 <td>${formatDate(d.scheduledAt)} ${formatTime(d.scheduledAt)}</td>
 <td>${d.actualTime ? formatDate(d.actualTime) + ' ' + formatTime(d.actualTime) : '—'}</td>
-<td class="${d.status}">${STATUS_PT[d.status] || d.status}</td>
+<td class="${d.status}">${statusLabel(d.status)}</td>
 </tr>`).join('')}
 </tbody></table>
 <script>window.onload=()=>window.print()</script>

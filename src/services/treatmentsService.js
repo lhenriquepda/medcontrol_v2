@@ -66,26 +66,57 @@ export async function updateTreatment(id, patch) {
       patch.startDate !== undefined
 
     if (scheduleChanged) {
-      const now = new Date().toISOString()
+      const now = new Date()
+      const nowIso = now.toISOString()
+
       // Remove somente doses pending/overdue futuras (não apaga histórico done/skipped)
       await supabase.from('doses')
         .delete()
         .eq('treatmentId', id)
         .in('status', ['pending', 'overdue'])
-        .gte('scheduledAt', now)
+        .gte('scheduledAt', nowIso)
 
       const treatment = data
+      const isTimesMode = !treatment.intervalHours && treatment.firstDoseTime?.startsWith('[')
+
+      // Calcular próxima dose alinhada ao horário original
+      // Avança em passos de intervalHours a partir de startDate até passar de now
+      let startDate = nowIso
+      if (!isTimesMode && treatment.intervalHours) {
+        const origStart = new Date(treatment.startDate)
+        const [h0, m0] = (treatment.firstDoseTime || '08:00').split(':').map(Number)
+        origStart.setHours(h0, m0, 0, 0)
+        const stepMs = treatment.intervalHours * 3600000
+        // Avança até próxima ocorrência >= now
+        let next = new Date(origStart)
+        while (next <= now) next = new Date(next.getTime() + stepMs)
+        startDate = next.toISOString()
+      }
+
+      let dailyTimes = null
+      let firstDoseTime = treatment.firstDoseTime || '08:00'
+      if (isTimesMode) {
+        try { dailyTimes = JSON.parse(treatment.firstDoseTime) } catch { dailyTimes = ['08:00'] }
+        firstDoseTime = null
+        // Remaining days from today
+        const origEnd = new Date(treatment.startDate)
+        origEnd.setDate(origEnd.getDate() + treatment.durationDays)
+        const remainDays = Math.ceil((origEnd - now) / 86400000)
+        treatment.durationDays = Math.max(1, remainDays)
+        startDate = now.toISOString()
+      }
+
       const newDoses = generateDoses({
         id: treatment.id,
         patientId: treatment.patientId,
         medName: treatment.medName,
         unit: treatment.unit,
-        startDate: now, // futura a partir de agora
+        startDate,
         durationDays: treatment.durationDays,
-        mode: treatment.intervalHours ? 'interval' : 'times',
+        mode: isTimesMode ? 'times' : 'interval',
         intervalHours: treatment.intervalHours,
-        firstDoseTime: treatment.firstDoseTime || '08:00',
-        dailyTimes: null
+        firstDoseTime,
+        dailyTimes
       })
       if (newDoses.length) {
         await supabase.from('doses').insert(newDoses)

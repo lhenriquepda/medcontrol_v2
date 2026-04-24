@@ -6,6 +6,7 @@ import AdBanner from '../components/AdBanner'
 import { useAuth } from '../hooks/useAuth'
 import { displayName, initial } from '../utils/userDisplay'
 import { useIsAdmin, useIsPro, useMyTier } from '../hooks/useSubscription'
+import { TIER_LABELS, TIER_COLORS_BOLD as TIER_COLORS } from '../utils/tierUtils'
 
 const ITEMS = [
   { to: '/tratamentos', icon: '💊', label: 'Tratamentos', hint: 'Lista e histórico', pro: false },
@@ -13,13 +14,6 @@ const ITEMS = [
   { to: '/relatorios', icon: '📄', label: 'Relatórios', hint: 'Exportar PDF / CSV', pro: true },
   { to: '/ajustes', icon: '⚙️', label: 'Ajustes', hint: 'Tema, notificações, conta', pro: false }
 ]
-
-const TIER_LABELS = { free: 'Free', pro: 'PRO', admin: 'Admin' }
-const TIER_COLORS = {
-  free: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
-  pro: 'bg-emerald-500 text-white',
-  admin: 'bg-rose-600 text-white'
-}
 
 export default function More() {
   const { user } = useAuth()

@@ -1,14 +1,8 @@
 import { formatTime, relativeLabel } from '../utils/dateUtils'
-
-const STATUS = {
-  done: { label: 'Tomada', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300', icon: '✓' },
-  skipped: { label: 'Pulada', color: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300', icon: '↷' },
-  overdue: { label: 'Atrasada', color: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300', icon: '!' },
-  pending: { label: 'Pendente', color: 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300', icon: '○' }
-}
+import { STATUS_CONFIG } from '../utils/statusUtils'
 
 export default function DoseCard({ dose, onClick }) {
-  const s = STATUS[dose.status] || STATUS.pending
+  const s = STATUS_CONFIG[dose.status] || STATUS_CONFIG.pending
   const isOverdue = dose.status === 'overdue'
   return (
     <button onClick={onClick}

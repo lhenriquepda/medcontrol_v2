@@ -7,6 +7,8 @@ import { usePatients } from '../hooks/usePatients'
 import { useCreateTreatment, useDeleteTreatment, useTreatment, useTemplates, useCreateTemplate, useUpdateTreatment } from '../hooks/useTreatments'
 import { useToast } from '../hooks/useToast'
 import { toDatetimeLocalInput, fromDatetimeLocalInput, pad } from '../utils/dateUtils'
+import Field from '../components/Field'
+import MedNameInput from '../components/MedNameInput'
 
 const INTERVALS = [4, 6, 8, 12, 24]
 
@@ -43,16 +45,24 @@ export default function TreatmentForm() {
 
   useEffect(() => {
     if (existing) {
+      // Detect mode: if intervalHours is set → 'interval', otherwise → 'times'
+      const mode = existing.intervalHours ? 'interval' : 'times'
+      // Try to recover dailyTimes from firstDoseTime field if stored as JSON, else fallback
+      let dailyTimes = ['08:00']
+      if (mode === 'times' && existing.firstDoseTime) {
+        try { dailyTimes = JSON.parse(existing.firstDoseTime) } catch { dailyTimes = [existing.firstDoseTime] }
+      }
       setForm((f) => ({
         ...f,
         patientId: existing.patientId,
         medName: existing.medName,
         unit: existing.unit,
-        mode: 'interval',
+        mode,
         intervalHours: existing.intervalHours || 8,
+        dailyTimes,
         durationDays: existing.durationDays,
         startAt: toDatetimeLocalInput(existing.startDate),
-        firstDoseTime: existing.firstDoseTime || '08:00'
+        firstDoseTime: mode === 'interval' ? (existing.firstDoseTime || '08:00') : '08:00'
       }))
     }
   }, [existing])
@@ -75,7 +85,10 @@ export default function TreatmentForm() {
         startDate: fromDatetimeLocalInput(form.startAt),
         mode: form.mode,
         intervalHours: form.mode === 'interval' ? Number(form.intervalHours) : null,
-        firstDoseTime: form.mode === 'interval' ? form.firstDoseTime : null,
+        // store dailyTimes as JSON inside firstDoseTime so it can be restored on edit
+        firstDoseTime: form.mode === 'interval'
+          ? form.firstDoseTime
+          : JSON.stringify(form.dailyTimes),
         dailyTimes: form.mode === 'times' ? form.dailyTimes : null
       }
       if (editing) {
@@ -136,9 +149,10 @@ export default function TreatmentForm() {
             {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
-        <Field label="Medicamento *">
-          <input required className="input" value={form.medName} onChange={(e) => set('medName', e.target.value)} placeholder="Ex: Paracetamol" />
-        </Field>
+        <label className="block">
+          <span className="block text-xs font-medium mb-1">Medicamento *</span>
+          <MedNameInput value={form.medName} onChange={(v) => set('medName', v)} />
+        </label>
         <Field label="Dose / unidade *">
           <input required className="input" value={form.unit} onChange={(e) => set('unit', e.target.value)} placeholder="Ex: 1 comprimido, 15 gotas" />
         </Field>
@@ -238,11 +252,3 @@ export default function TreatmentForm() {
   )
 }
 
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <span className="block text-xs font-medium mb-1">{label}</span>
-      {children}
-    </label>
-  )
-}

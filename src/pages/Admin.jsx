@@ -6,13 +6,7 @@ import { SkeletonList } from '../components/Skeleton'
 import { useAllUsers, useGrantTier, useIsAdmin, useMyTier } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 import { formatDate, formatDateTime } from '../utils/dateUtils'
-
-const TIER_LABELS = { free: 'Free', pro: 'PRO', admin: 'Admin' }
-const TIER_COLORS = {
-  free: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  pro: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-  admin: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-}
+import { TIER_LABELS, TIER_COLORS_SUBTLE as TIER_COLORS } from '../utils/tierUtils'
 
 export default function Admin() {
   const isAdmin = useIsAdmin()
