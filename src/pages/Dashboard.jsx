@@ -29,8 +29,13 @@ export default function Dashboard() {
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
   const { data: todayDoses = [] } = useDoses({ from: startOfToday.toISOString(), to: endOfToday.toISOString() })
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
-  // Atrasadas: conta em toda a janela para não esconder doses antigas
-  const { data: overdueAll = [] } = useDoses({ status: 'overdue' })
+  // Atrasadas: olha 30 dias atrás para capturar doses antigas ainda pendentes
+  const overdueFrom = new Date(); overdueFrom.setDate(overdueFrom.getDate() - 30)
+  const { data: overdueAll = [] } = useDoses({
+    from: overdueFrom.toISOString(),
+    to: new Date().toISOString(),
+    status: 'overdue'
+  })
   const overdueNow = overdueAll.length
   const weekFrom = new Date(); weekFrom.setDate(weekFrom.getDate() - 7)
   const { data: weekDoses = [] } = useDoses({ from: weekFrom.toISOString(), to: new Date().toISOString() })

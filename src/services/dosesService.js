@@ -18,16 +18,17 @@ export async function listDoses({ from, to, patientId, status, type } = {}) {
     if (from) q = q.gte('scheduledAt', from)
     if (to) q = q.lte('scheduledAt', to)
     if (patientId) q = q.eq('patientId', patientId)
-    if (status) q = q.eq('status', status)
     if (type) q = q.eq('type', type)
+    // Importante: NÃO filtrar por status no servidor — overdue é computado no cliente
+    // e doses "overdue" ficam persistidas como 'pending' no DB.
     const { data, error } = await q
     if (error) throw error
-    // overdue computado no cliente + sort por scheduledAt
     const now = new Date()
-    const rows = (data || []).map((d) => {
+    let rows = (data || []).map((d) => {
       if (d.status === 'pending' && new Date(d.scheduledAt) < now) return { ...d, status: 'overdue' }
       return d
     })
+    if (status) rows = rows.filter((d) => d.status === status)
     rows.sort((a, b) => (a.scheduledAt || '').localeCompare(b.scheduledAt || ''))
     return rows
   }
