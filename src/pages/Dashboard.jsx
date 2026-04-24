@@ -24,21 +24,30 @@ export default function Dashboard() {
 
   const [selected, setSelected] = useState(null)
 
-  // resumo
-  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
-  const { data: todayDoses = [] } = useDoses({ from: startOfToday.toISOString(), to: endOfToday.toISOString() })
+  // Janelas de tempo memoizadas (tick por minuto evita novas chaves a cada render)
+  const [tick, setTick] = useState(() => Math.floor(Date.now() / 60000))
+  useEffect(() => {
+    const t = setInterval(() => setTick(Math.floor(Date.now() / 60000)), 60000)
+    return () => clearInterval(t)
+  }, [])
+  const windows = useMemo(() => {
+    const now = new Date(tick * 60000)
+    const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+    const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
+    const overdueFrom = new Date(now); overdueFrom.setDate(overdueFrom.getDate() - 30)
+    const weekFrom = new Date(now); weekFrom.setDate(weekFrom.getDate() - 7)
+    return {
+      today: { from: startOfToday.toISOString(), to: endOfToday.toISOString() },
+      overdue: { from: overdueFrom.toISOString(), to: now.toISOString(), status: 'overdue' },
+      week: { from: weekFrom.toISOString(), to: now.toISOString() }
+    }
+  }, [tick])
+
+  const { data: todayDoses = [] } = useDoses(windows.today)
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
-  // Atrasadas: olha 30 dias atrás para capturar doses antigas ainda pendentes
-  const overdueFrom = new Date(); overdueFrom.setDate(overdueFrom.getDate() - 30)
-  const { data: overdueAll = [] } = useDoses({
-    from: overdueFrom.toISOString(),
-    to: new Date().toISOString(),
-    status: 'overdue'
-  })
+  const { data: overdueAll = [] } = useDoses(windows.overdue)
   const overdueNow = overdueAll.length
-  const weekFrom = new Date(); weekFrom.setDate(weekFrom.getDate() - 7)
-  const { data: weekDoses = [] } = useDoses({ from: weekFrom.toISOString(), to: new Date().toISOString() })
+  const { data: weekDoses = [] } = useDoses(windows.week)
   const adherence = (() => {
     const past = weekDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
     if (past.length === 0) return null
