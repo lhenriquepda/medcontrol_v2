@@ -57,6 +57,41 @@ export async function updateTreatment(id, patch) {
   if (hasSupabase) {
     const { data, error } = await supabase.from('treatments').update(patch).eq('id', id).select().single()
     if (error) throw error
+
+    // Se mudou intervalo/duração/horário/data início → regerar doses futuras pendentes
+    const scheduleChanged =
+      patch.intervalHours !== undefined ||
+      patch.durationDays !== undefined ||
+      patch.firstDoseTime !== undefined ||
+      patch.startDate !== undefined
+
+    if (scheduleChanged) {
+      const now = new Date().toISOString()
+      // Remove somente doses pending/overdue futuras (não apaga histórico done/skipped)
+      await supabase.from('doses')
+        .delete()
+        .eq('treatmentId', id)
+        .in('status', ['pending', 'overdue'])
+        .gte('scheduledAt', now)
+
+      const treatment = data
+      const newDoses = generateDoses({
+        id: treatment.id,
+        patientId: treatment.patientId,
+        medName: treatment.medName,
+        unit: treatment.unit,
+        startDate: now, // futura a partir de agora
+        durationDays: treatment.durationDays,
+        mode: treatment.intervalHours ? 'interval' : 'times',
+        intervalHours: treatment.intervalHours,
+        firstDoseTime: treatment.firstDoseTime || '08:00',
+        dailyTimes: null
+      })
+      if (newDoses.length) {
+        await supabase.from('doses').insert(newDoses)
+      }
+    }
+
     return data
   }
   return mock.update('treatments', id, patch)
