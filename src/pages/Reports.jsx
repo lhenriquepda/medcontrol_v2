@@ -43,7 +43,7 @@ export default function Reports() {
     })
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    downloadBlob(blob, `medcontrol_${Date.now()}.csv`)
+    downloadBlob(blob, `dosy_${Date.now()}.csv`)
     toast.show({ message: 'CSV exportado.', kind: 'success' })
   }
 

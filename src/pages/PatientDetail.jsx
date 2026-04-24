@@ -107,7 +107,7 @@ export default function PatientDetail() {
                 <Link key={t.id} to={`/tratamento/${t.id}`} className="card p-3 block">
                   <p className="font-medium">{t.medName}</p>
                   <p className="text-xs text-slate-500">
-                    {t.unit} · a cada {t.intervalHours}h · {t.durationDays} dias
+                    {t.unit} · {t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'} · {t.isContinuous ? '♾ Contínuo' : `${t.durationDays} dias`}
                   </p>
                 </Link>
               ))}

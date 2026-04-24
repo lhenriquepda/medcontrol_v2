@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import Logo from '../components/Logo'
 
 export default function Login() {
   const { signInEmail, signUpEmail, signInDemo, hasSupabase } = useAuth()
@@ -26,14 +25,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-brand-50 to-white dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-3"><Logo size={72} /></div>
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            <span className="text-brand-600 dark:text-brand-400">Med</span>Control
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Gestão simples de medicamentos</p>
+          <img src="/dosy-logo.png" alt="Dosy" className="h-20 w-auto mx-auto mb-4 object-contain" />
+          <p className="text-sm text-white/60 mt-1">Gestão simples de medicamentos</p>
         </div>
 
         <div className="card p-5 space-y-4">

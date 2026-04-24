@@ -56,7 +56,7 @@ export default function TreatmentList() {
               <div className="min-w-0">
                 <p className="font-semibold truncate">{t.medName}</p>
                 <p className="text-xs text-slate-500 truncate">
-                  {patientName(t.patientId)} · {t.unit} · {t.intervalHours ? `${t.intervalHours}h` : 'horários'} · {t.durationDays} dias
+                  {patientName(t.patientId)} · {t.unit} · {t.intervalHours ? `${t.intervalHours}h` : 'horários'} · {t.isContinuous ? '♾ Contínuo' : `${t.durationDays} dias`}
                 </p>
               </div>
               <span className="chip">{STATUS_LABELS[t.status] || t.status}</span>

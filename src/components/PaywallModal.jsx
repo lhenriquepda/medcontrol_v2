@@ -11,7 +11,7 @@ const FEATURES = [
 
 export default function PaywallModal({ open, onClose, reason }) {
   return (
-    <BottomSheet open={open} onClose={onClose} title="Desbloqueie o MedControl PRO">
+    <BottomSheet open={open} onClose={onClose} title="Desbloqueie o Dosy PRO">
       {reason && (
         <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 p-3 text-sm mb-4">
           {reason}

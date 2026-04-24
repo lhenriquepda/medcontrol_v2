@@ -4,14 +4,11 @@ import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
 import EmptyState from '../components/EmptyState'
-import Logo from '../components/Logo'
-import TierBadge from '../components/TierBadge'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 import { useDoses } from '../hooks/useDoses'
 import { usePatients } from '../hooks/usePatients'
-import { useAuth } from '../hooks/useAuth'
-import { firstName } from '../utils/userDisplay'
+import { usePushNotifications } from '../hooks/usePushNotifications'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
@@ -77,11 +74,14 @@ export default function Dashboard() {
   }, [collapsed])
   const toggleCollapse = (id) => setCollapsed((s) => ({ ...s, [id]: !s[id] }))
 
-  const showOverdueOnly = () => setFilters({ range: 'all', status: 'overdue', patientId: null, type: null })
+  // Schedule push notifications for upcoming doses in the next 24h
+  const { scheduleDoses } = usePushNotifications()
+  useEffect(() => {
+    if (todayDoses.length) scheduleDoses(todayDoses)
+  }, [todayDoses, scheduleDoses])
 
   return (
     <div className="pb-28">
-      <DashboardHero overdueNow={overdueNow} onOverdueClick={showOverdueOnly} />
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
       <div className="max-w-md mx-auto px-4 pt-3">
@@ -97,7 +97,7 @@ export default function Dashboard() {
           patients.length === 0 ? (
             <div className="card p-5 mt-2">
               <div className="text-4xl mb-2">👋</div>
-              <h3 className="font-semibold text-lg">Bem-vindo ao MedControl!</h3>
+              <h3 className="font-semibold text-lg">Bem-vindo ao Dosy!</h3>
               <p className="text-sm text-slate-500 mt-1 mb-4">
                 Comece cadastrando as pessoas que você vai acompanhar — você, seus filhos, familiares…
               </p>
@@ -160,39 +160,6 @@ export default function Dashboard() {
   )
 }
 
-function DashboardHero({ overdueNow, onOverdueClick }) {
-  const { user } = useAuth()
-  const hour = new Date().getHours()
-  const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
-  const name = firstName(user)
-  return (
-    <header className="sticky top-0 z-30 safe-top bg-gradient-to-br from-brand-600 via-brand-500 to-brand-700 text-white shadow-lg">
-      <div className="max-w-md mx-auto px-4 pt-3 pb-4 flex items-center gap-3">
-        <Logo size={44} />
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] uppercase tracking-widest opacity-80">{greet}{name ? `, ${name}` : ''}</p>
-          <h1 className="font-extrabold text-lg leading-tight tracking-tight flex items-center gap-2">
-            Med<span className="opacity-90">Control</span>
-            <TierBadge />
-          </h1>
-        </div>
-        {overdueNow > 0 && (
-          <button
-            onClick={onOverdueClick}
-            aria-label="Filtrar atrasadas"
-            className="text-[11px] font-semibold bg-rose-500 px-2 py-1 rounded-full animate-pulse active:scale-95 hover:bg-rose-400 transition"
-          >
-            {overdueNow} atrasada{overdueNow > 1 ? 's' : ''}
-          </button>
-        )}
-        <Link to="/ajustes" aria-label="Ajustes"
-              className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
-          <span className="text-lg">⚙</span>
-        </Link>
-      </div>
-    </header>
-  )
-}
 
 function Stat({ label, value, tone = 'slate', alert }) {
   const tones = {

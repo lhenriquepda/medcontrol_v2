@@ -10,7 +10,22 @@ import { toDatetimeLocalInput, fromDatetimeLocalInput, pad } from '../utils/date
 import Field from '../components/Field'
 import MedNameInput from '../components/MedNameInput'
 
-const INTERVALS = [4, 6, 8, 12, 24]
+// [horas, rótulo]
+const INTERVALS = [
+  [4,   '4h'],
+  [6,   '6h'],
+  [8,   '8h'],
+  [12,  '12h'],
+  [24,  '1x/dia'],
+  [48,  '2 em 2 dias'],
+  [72,  '3 em 3 dias'],
+  [168, '1x/semana'],
+  [336, 'quinzenal'],
+  [720, '1x/mês'],
+]
+
+// Dias gerados para tratamentos contínuos (janela inicial)
+const CONTINUOUS_DAYS = 90
 
 export default function TreatmentForm() {
   const { id } = useParams()
@@ -35,6 +50,7 @@ export default function TreatmentForm() {
     intervalHours: 8,
     dailyTimes: ['08:00'],
     durationDays: 7,
+    isContinuous: false,
     startAt: toDatetimeLocalInput(new Date().toISOString()),
     firstDoseTime: '08:00',
     saveAsTemplate: false,
@@ -60,7 +76,8 @@ export default function TreatmentForm() {
         mode,
         intervalHours: existing.intervalHours || 8,
         dailyTimes,
-        durationDays: existing.durationDays,
+        durationDays: existing.isContinuous ? CONTINUOUS_DAYS : existing.durationDays,
+        isContinuous: !!existing.isContinuous,
         startAt: toDatetimeLocalInput(existing.startDate),
         firstDoseTime: mode === 'interval' ? (existing.firstDoseTime || '08:00') : '08:00'
       }))
@@ -81,7 +98,8 @@ export default function TreatmentForm() {
         patientId: form.patientId,
         medName: form.medName.trim(),
         unit: form.unit.trim(),
-        durationDays: Number(form.durationDays),
+        durationDays: form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays),
+        isContinuous: form.isContinuous,
         startDate: fromDatetimeLocalInput(form.startAt),
         mode: form.mode,
         intervalHours: form.mode === 'interval' ? Number(form.intervalHours) : null,
@@ -95,6 +113,7 @@ export default function TreatmentForm() {
         await update.mutateAsync({ id, patch: {
           medName: payload.medName, unit: payload.unit,
           intervalHours: payload.intervalHours, durationDays: payload.durationDays,
+          isContinuous: payload.isContinuous,
           startDate: payload.startDate, firstDoseTime: payload.firstDoseTime
         }})
         toast.show({ message: 'Tratamento atualizado.', kind: 'success' })
@@ -129,11 +148,13 @@ export default function TreatmentForm() {
   }
 
   const preview = useMemo(() => {
+    const days = form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays || 0)
+    const suffix = form.isContinuous ? ` (primeiros ${CONTINUOUS_DAYS} dias gerados)` : ' no total'
     if (form.mode === 'interval') {
-      const total = Math.floor((Number(form.durationDays) * 24) / Number(form.intervalHours || 1))
-      return `${total} doses no total`
+      const total = Math.floor((days * 24) / Number(form.intervalHours || 1))
+      return `${total} doses${suffix}`
     }
-    return `${form.dailyTimes.length * Number(form.durationDays || 0)} doses no total`
+    return `${form.dailyTimes.length * days} doses${suffix}`
   }, [form])
 
   return (
@@ -169,11 +190,11 @@ export default function TreatmentForm() {
           {form.mode === 'interval' ? (
             <>
               <div>
-                <p className="text-xs font-medium mb-1">A cada</p>
+                <p className="text-xs font-medium mb-1">Frequência</p>
                 <div className="flex gap-2 flex-wrap">
-                  {INTERVALS.map((h) => (
+                  {INTERVALS.map(([h, label]) => (
                     <button key={h} type="button" onClick={() => set('intervalHours', h)}
-                            className={`chip ${Number(form.intervalHours) === h ? 'chip-active' : ''}`}>{h}h</button>
+                            className={`chip ${Number(form.intervalHours) === h ? 'chip-active' : ''}`}>{label}</button>
                   ))}
                 </div>
               </div>
@@ -196,13 +217,23 @@ export default function TreatmentForm() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Duração (dias)">
-            <input type="number" min={1} className="input" value={form.durationDays} onChange={(e) => set('durationDays', e.target.value)} />
-          </Field>
-          <Field label="Início">
-            <input type="datetime-local" className="input" value={form.startAt} onChange={(e) => set('startAt', e.target.value)} />
-          </Field>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input type="checkbox" className="w-4 h-4 accent-brand-600"
+                   checked={form.isContinuous} onChange={(e) => set('isContinuous', e.target.checked)} />
+            <span className="font-medium">Uso contínuo ♾</span>
+            <span className="text-xs text-slate-400">(sem data de fim)</span>
+          </label>
+          <div className={`grid gap-2 ${form.isContinuous ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {!form.isContinuous && (
+              <Field label="Duração (dias)">
+                <input type="number" min={1} className="input" value={form.durationDays} onChange={(e) => set('durationDays', e.target.value)} />
+              </Field>
+            )}
+            <Field label="Início">
+              <input type="datetime-local" className="input" value={form.startAt} onChange={(e) => set('startAt', e.target.value)} />
+            </Field>
+          </div>
         </div>
 
         <p className="text-xs text-slate-500">{preview}</p>

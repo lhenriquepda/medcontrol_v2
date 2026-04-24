@@ -10,16 +10,27 @@ export function useDoses(filter = {}) {
 }
 
 function patchDoseInCache(qc, id, patch) {
-  const snapshots = qc.getQueriesData({ queryKey: ['doses'] })
-  qc.setQueriesData({ queryKey: ['doses'] }, (old) => {
-    if (!Array.isArray(old)) return old
-    return old.map((d) => (d.id === id ? { ...d, ...patch } : d))
-  })
+  // Use getQueryCache().findAll() — more reliable than setQueriesData partial key in v5
+  const queries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
+  const snapshots = queries.map((q) => [q.queryKey, q.state.data])
+  for (const q of queries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    qc.setQueryData(
+      q.queryKey,
+      data.map((d) => (d.id === id ? { ...d, ...patch } : d))
+    )
+  }
   return snapshots
 }
 
 function rollback(qc, snapshots) {
-  snapshots?.forEach(([key, data]) => qc.setQueryData(key, data))
+  for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
+}
+
+function refetchDoses(qc) {
+  // Force immediate refetch of all active dose queries (not just mark stale)
+  qc.refetchQueries({ queryKey: ['doses'] })
 }
 
 export function useConfirmDose() {
@@ -35,7 +46,7 @@ export function useConfirmDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
-    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onSettled: () => refetchDoses(qc)
   })
 }
 
@@ -49,7 +60,7 @@ export function useSkipDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
-    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onSettled: () => refetchDoses(qc)
   })
 }
 
@@ -63,7 +74,7 @@ export function useUndoDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
-    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onSettled: () => refetchDoses(qc)
   })
 }
 

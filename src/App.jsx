@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import AppHeader from './components/AppHeader'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -41,6 +42,8 @@ export default function App() {
   const hideNav = location.pathname.startsWith('/entrar')
 
   return (
+    <>
+    <AppHeader />
     <div className="min-h-screen">
       <Routes>
         <Route path="/" element={<Dashboard />} />
@@ -62,5 +65,6 @@ export default function App() {
       </Routes>
       {!hideNav && <BottomNav />}
     </div>
+    </>
   )
 }

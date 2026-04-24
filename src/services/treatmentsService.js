@@ -2,6 +2,8 @@ import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
 import { generateDoses } from '../utils/generateDoses'
 
+const CONTINUOUS_DAYS = 90
+
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
 export async function listTreatments(filter = {}) {
@@ -30,7 +32,9 @@ export async function createTreatmentWithDoses(payload) {
   if (hasSupabase) {
     const { data: t, error } = await supabase.from('treatments').insert({
       patientId: payload.patientId, medName: payload.medName, unit: payload.unit,
-      intervalHours: payload.intervalHours ?? null, durationDays: payload.durationDays,
+      intervalHours: payload.intervalHours ?? null,
+      durationDays: payload.isContinuous ? CONTINUOUS_DAYS : payload.durationDays,
+      isContinuous: !!payload.isContinuous,
       startDate: payload.startDate, firstDoseTime: payload.firstDoseTime ?? null,
       status: 'active', isTemplate: !!payload.isTemplate
     }).select().single()
@@ -44,7 +48,9 @@ export async function createTreatmentWithDoses(payload) {
   }
   const t = mock.insert('treatments', {
     patientId: payload.patientId, medName: payload.medName, unit: payload.unit,
-    intervalHours: payload.intervalHours ?? null, durationDays: payload.durationDays,
+    intervalHours: payload.intervalHours ?? null,
+    durationDays: payload.isContinuous ? CONTINUOUS_DAYS : payload.durationDays,
+    isContinuous: !!payload.isContinuous,
     startDate: payload.startDate, firstDoseTime: payload.firstDoseTime ?? null,
     status: 'active', isTemplate: !!payload.isTemplate
   })
@@ -106,13 +112,15 @@ export async function updateTreatment(id, patch) {
         startDate = now.toISOString()
       }
 
+      const effectiveDays = treatment.isContinuous ? CONTINUOUS_DAYS : treatment.durationDays
+
       const newDoses = generateDoses({
         id: treatment.id,
         patientId: treatment.patientId,
         medName: treatment.medName,
         unit: treatment.unit,
         startDate,
-        durationDays: treatment.durationDays,
+        durationDays: effectiveDays,
         mode: isTimesMode ? 'times' : 'interval',
         intervalHours: treatment.intervalHours,
         firstDoseTime,

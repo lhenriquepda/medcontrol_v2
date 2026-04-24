@@ -17,7 +17,7 @@ export default function DoseModal({ dose, open, onClose, patientName }) {
   useEffect(() => {
     if (dose) {
       setTakenAtScheduled(true)
-      setActualTime(toDatetimeLocalInput(dose.scheduledAt))
+      setActualTime(toDatetimeLocalInput(new Date().toISOString()))
       setObservation(dose.observation || '')
     }
   }, [dose])

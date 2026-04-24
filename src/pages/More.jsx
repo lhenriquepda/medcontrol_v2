@@ -52,7 +52,7 @@ export default function More() {
         {tier === 'free' && (
           <button onClick={() => setPaywall(true)}
                   className="w-full rounded-2xl p-4 bg-gradient-to-r from-brand-600 to-brand-500 text-white text-left active:scale-[0.99]">
-            <p className="font-bold">Conheça o MedControl PRO</p>
+            <p className="font-bold">Conheça o Dosy PRO</p>
             <p className="text-xs opacity-90">Pacientes ilimitados · Relatórios · Análises</p>
           </button>
         )}

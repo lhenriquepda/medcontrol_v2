@@ -43,7 +43,7 @@ export const mock = {
   uid() { return state.user?.id || 'demo-user' },
 
   async signInDemo(name = 'Usuário Demo') {
-    state.user = { id: 'demo-user', email: 'demo@medcontrol.app', name }
+    state.user = { id: 'demo-user', email: 'demo@dosy.app', name }
     const hasDemoData = state.patients.some((p) => p.userId === 'demo-user')
     if (!hasDemoData) seed()
     save()
