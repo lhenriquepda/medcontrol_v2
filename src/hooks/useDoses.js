@@ -8,27 +8,65 @@ export function useDoses(filter = {}) {
     refetchInterval: 60_000
   })
 }
+
+function patchDoseInCache(qc, id, patch) {
+  const snapshots = qc.getQueriesData({ queryKey: ['doses'] })
+  qc.setQueriesData({ queryKey: ['doses'] }, (old) => {
+    if (!Array.isArray(old)) return old
+    return old.map((d) => (d.id === id ? { ...d, ...patch } : d))
+  })
+  return snapshots
+}
+
+function rollback(qc, snapshots) {
+  snapshots?.forEach(([key, data]) => qc.setQueryData(key, data))
+}
+
 export function useConfirmDose() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...rest }) => confirmDose(id, rest),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onMutate: async ({ id, actualTime }) => {
+      await qc.cancelQueries({ queryKey: ['doses'] })
+      const snapshots = patchDoseInCache(qc, id, {
+        status: 'done',
+        actualTime: actualTime || new Date().toISOString()
+      })
+      return { snapshots }
+    },
+    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
   })
 }
+
 export function useSkipDose() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...rest }) => skipDose(id, rest),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['doses'] })
+      const snapshots = patchDoseInCache(qc, id, { status: 'skipped' })
+      return { snapshots }
+    },
+    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
   })
 }
+
 export function useUndoDose() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id) => undoDose(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['doses'] })
+      const snapshots = patchDoseInCache(qc, id, { status: 'pending', actualTime: null })
+      return { snapshots }
+    },
+    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['doses'] })
   })
 }
+
 export function useRegisterSos() {
   const qc = useQueryClient()
   return useMutation({

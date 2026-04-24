@@ -12,7 +12,8 @@ const TABLE_TO_KEYS = {
   doses: [['doses']],
   sos_rules: [['sos_rules']],
   treatment_templates: [['templates']],
-  subscriptions: [['my_tier'], ['admin_users']]
+  subscriptions: [['my_tier'], ['admin_users']],
+  patient_shares: [['patient_shares'], ['patients']]
 }
 
 /**

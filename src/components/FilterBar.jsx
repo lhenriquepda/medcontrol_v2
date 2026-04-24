@@ -15,8 +15,8 @@ const STATUS = [
   { key: 'skipped', label: 'Pulada', icon: '⏭️', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }
 ]
 const TYPES = [
-  { key: 'scheduled', label: 'Agendada', icon: '🗓️' },
-  { key: 'sos', label: 'S.O.S', icon: '🆘' }
+  { key: 'scheduled', label: 'Horário fixo', icon: '🗓️', hint: 'Doses com horário marcado' },
+  { key: 'sos', label: 'S.O.S', icon: '🆘', hint: 'Se necessário' }
 ]
 
 export default function FilterBar({ filters, setFilters, patients }) {
@@ -149,7 +149,10 @@ export default function FilterBar({ filters, setFilters, patients }) {
                 return (
                   <button
                     key={s.key}
-                    onClick={() => setFilters((f) => ({ ...f, status: f.status === s.key ? null : s.key }))}
+                    onClick={() => setFilters((f) => {
+                      const nextStatus = f.status === s.key ? null : s.key
+                      return { ...f, status: nextStatus, range: nextStatus ? 'all' : f.range }
+                    })}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition
                       ${active
                         ? `${s.tone} ring-2 ring-brand-500`
@@ -176,8 +179,10 @@ export default function FilterBar({ filters, setFilters, patients }) {
                         ? 'bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 ring-2 ring-brand-500'
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
                   >
-                    <span className="text-base">{t.icon}</span>
-                    {t.label}
+                    <div className="flex flex-col items-start leading-tight">
+                      <span className="flex items-center gap-1.5"><span className="text-base">{t.icon}</span>{t.label}</span>
+                      <span className="text-[10px] font-normal opacity-70">{t.hint}</span>
+                    </div>
                   </button>
                 )
               })}

@@ -1,14 +1,21 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import EmptyState from '../components/EmptyState'
+import SharePatientSheet from '../components/SharePatientSheet'
 import { usePatient } from '../hooks/usePatients'
 import { useTreatments } from '../hooks/useTreatments'
 import { useDoses } from '../hooks/useDoses'
+import { usePatientShares } from '../hooks/useShares'
+import { useAuth } from '../hooks/useAuth'
 
 export default function PatientDetail() {
   const { id } = useParams()
+  const { user } = useAuth()
   const { data: patient } = usePatient(id)
   const { data: treatments = [] } = useTreatments({ patientId: id })
+  const { data: shares = [] } = usePatientShares(id)
+  const [shareOpen, setShareOpen] = useState(false)
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
   const { data: todayDoses = [] } = useDoses({ patientId: id, from: startOfToday.toISOString(), to: endOfToday.toISOString() })
@@ -22,6 +29,7 @@ export default function PatientDetail() {
   )
 
   const active = treatments.filter((t) => t.status === 'active')
+  const isOwner = user && patient.userId === user.id
 
   return (
     <div className="pb-28">
@@ -46,6 +54,34 @@ export default function PatientDetail() {
             {patient.allergies && <p className="text-xs text-rose-600 mt-1">⚠ Alergias: {patient.allergies}</p>}
           </div>
         </div>
+
+        {isOwner ? (
+          <button
+            onClick={() => setShareOpen(true)}
+            className="w-full card p-3 flex items-center gap-3 active:scale-[0.99] transition text-left"
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 flex items-center justify-center text-lg">
+              🤝
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Compartilhar paciente</p>
+              <p className="text-[11px] text-slate-500">
+                {shares.length > 0
+                  ? `Compartilhado com ${shares.length} pessoa${shares.length > 1 ? 's' : ''}`
+                  : 'Trabalhe em conjunto com outro usuário · PRO'}
+              </p>
+            </div>
+            <span className="text-slate-400">›</span>
+          </button>
+        ) : (
+          <div className="card p-3 flex items-center gap-3 bg-brand-50 dark:bg-brand-500/10">
+            <div className="w-10 h-10 rounded-full bg-brand-500 text-white flex items-center justify-center text-lg">👥</div>
+            <div className="text-xs">
+              <p className="font-semibold text-brand-700 dark:text-brand-200">Paciente compartilhado com você</p>
+              <p className="text-slate-500">Edições aparecem em tempo real para ambos.</p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-2xl p-3 bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300">
@@ -79,6 +115,7 @@ export default function PatientDetail() {
           )}
         </div>
       </div>
+      <SharePatientSheet open={shareOpen} onClose={() => setShareOpen(false)} patient={patient} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
@@ -29,7 +29,9 @@ export default function Dashboard() {
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
   const { data: todayDoses = [] } = useDoses({ from: startOfToday.toISOString(), to: endOfToday.toISOString() })
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
-  const overdueNow = todayDoses.filter((d) => d.status === 'overdue').length
+  // Atrasadas: conta em toda a janela para não esconder doses antigas
+  const { data: overdueAll = [] } = useDoses({ status: 'overdue' })
+  const overdueNow = overdueAll.length
   const weekFrom = new Date(); weekFrom.setDate(weekFrom.getDate() - 7)
   const { data: weekDoses = [] } = useDoses({ from: weekFrom.toISOString(), to: new Date().toISOString() })
   const adherence = (() => {
@@ -53,9 +55,19 @@ export default function Dashboard() {
 
   const selectedPatient = selected && patients.find((p) => p.id === selected.patientId)
 
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dashCollapsed') || '{}') } catch { return {} }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('dashCollapsed', JSON.stringify(collapsed)) } catch {}
+  }, [collapsed])
+  const toggleCollapse = (id) => setCollapsed((s) => ({ ...s, [id]: !s[id] }))
+
+  const showOverdueOnly = () => setFilters({ range: 'all', status: 'overdue', patientId: null, type: null })
+
   return (
     <div className="pb-28">
-      <DashboardHero overdueNow={overdueNow} />
+      <DashboardHero overdueNow={overdueNow} onOverdueClick={showOverdueOnly} />
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
       <div className="max-w-md mx-auto px-4 pt-3">
@@ -88,20 +100,41 @@ export default function Dashboard() {
                         action={<Link to="/tratamento/novo" className="btn-primary">+ Novo tratamento</Link>} />
           ) : (
             <div className="space-y-5">
-              {grouped.map(({ patient, list }) => (
-                <section key={patient.id}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">{patient.avatar || '👤'}</span>
-                    <h2 className="font-semibold">{patient.name}</h2>
-                    <span className="text-xs text-slate-500">({list.length})</span>
-                  </div>
-                  <div className="space-y-2">
-                    {list.map((d) => (
-                      <DoseCard key={d.id} dose={d} onClick={() => setSelected(d)} />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {grouped.map(({ patient, list }) => {
+                const isCollapsed = !!collapsed[patient.id]
+                const overdueCount = list.filter((d) => d.status === 'overdue').length
+                const pendingCount = list.filter((d) => d.status === 'pending').length
+                return (
+                  <section key={patient.id}>
+                    <button
+                      onClick={() => toggleCollapse(patient.id)}
+                      className="w-full flex items-center gap-2 mb-2 group"
+                    >
+                      <span className="text-lg">{patient.avatar || '👤'}</span>
+                      <h2 className="font-semibold">{patient.name}</h2>
+                      <span className="text-xs text-slate-500">({list.length})</span>
+                      {overdueCount > 0 && (
+                        <span className="text-[10px] font-semibold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">
+                          {overdueCount} atrasada{overdueCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {isCollapsed && pendingCount > 0 && overdueCount === 0 && (
+                        <span className="text-[10px] font-semibold bg-brand-500/20 text-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-full">
+                          {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      <span className={`ml-auto text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="space-y-2">
+                        {list.map((d) => (
+                          <DoseCard key={d.id} dose={d} onClick={() => setSelected(d)} />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
             </div>
           )
         )}
@@ -113,7 +146,7 @@ export default function Dashboard() {
   )
 }
 
-function DashboardHero({ overdueNow }) {
+function DashboardHero({ overdueNow, onOverdueClick }) {
   const { user } = useAuth()
   const hour = new Date().getHours()
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
@@ -130,9 +163,13 @@ function DashboardHero({ overdueNow }) {
           </h1>
         </div>
         {overdueNow > 0 && (
-          <span className="text-[11px] font-semibold bg-rose-500 px-2 py-1 rounded-full animate-pulse">
+          <button
+            onClick={onOverdueClick}
+            aria-label="Filtrar atrasadas"
+            className="text-[11px] font-semibold bg-rose-500 px-2 py-1 rounded-full animate-pulse active:scale-95 hover:bg-rose-400 transition"
+          >
             {overdueNow} atrasada{overdueNow > 1 ? 's' : ''}
-          </span>
+          </button>
         )}
         <Link to="/ajustes" aria-label="Ajustes"
               className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
