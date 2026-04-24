@@ -22,12 +22,450 @@ React 19 (UI) + Vite (build) → dist/
 
 ## Fases do Projeto
 
+### Fase 0 — Segurança & LGPD ⚠️ (fazer antes de publicar)
 ### Fase 1 — Fundação Capacitor
 ### Fase 2 — Notificações Nativas (FCM)
 ### Fase 3 — Monetização Real (In-App Purchase)
 ### Fase 4 — Polimento & Experiência Nativa
 ### Fase 5 — Preparação Play Store
 ### Fase 6 — Publicação & Pós-Launch
+
+---
+
+## FASE 0 — Segurança & LGPD
+
+**Objetivo:** App seguro, dados dos usuários protegidos, conformidade com a LGPD (Lei 13.709/2018). Obrigatório antes de qualquer publicação pública. Play Store exige para apps de saúde.
+
+> Apps de saúde manipulam dados sensíveis (categoria especial pela LGPD, Art. 11). Vazamento ou negligência pode gerar multas de até 2% do faturamento (máx R$50M) e dano reputacional irreversível.
+
+---
+
+### 0.1 Auditoria de Secrets & Variáveis de Ambiente
+
+**Problema:** Credenciais podem vazar em commits ou documentação.
+
+**Ações:**
+- Criar `.env.example` com todas as variáveis necessárias (sem valores reais):
+```bash
+# .env.example
+VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
+VITE_VAPID_PUBLIC_KEY=sua_vapid_public_key_aqui
+VAPID_PRIVATE_KEY=<NUNCA expor no frontend — só no Edge Function>
+```
+- Verificar que `.env` e `.env.local` estão no `.gitignore` ✅ (já está)
+- Rotacionar VAPID keys se já foram expostas em commits/documentação
+- Nunca documentar valores reais em `Contexto.md`, `Plan.md` ou qualquer `.md`
+- Adicionar `git-secrets` ou similar ao workflow para prevenir commits acidentais
+
+**Comando para checar histórico git por leaks:**
+```bash
+git log --all --full-history -- "**/.env*"
+git grep -i "private_key\|secret\|password" -- "*.md" "*.json"
+```
+
+---
+
+### 0.2 Row Level Security (RLS) — Auditoria Completa
+
+**Problema:** RLS incorreto pode expor dados de um usuário para outro.
+
+**Verificar todas as tabelas no schema `medcontrol`:**
+```sql
+-- Listar tabelas e se têm RLS ativo
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'medcontrol';
+
+-- Listar policies existentes
+SELECT tablename, policyname, cmd, qual
+FROM pg_policies
+WHERE schemaname = 'medcontrol';
+```
+
+**Tabelas críticas a verificar:**
+- `patients` — usuário vê apenas seus próprios pacientes?
+- `treatments` — usuário acessa apenas tratamentos dos seus pacientes?
+- `doses` — idem
+- `push_subscriptions` — **crítico**: usuário só lê/modifica suas próprias subs?
+- `subscriptions` — tier do usuário, não pode ser alterado pelo próprio user
+- `sos_rules` / `sos_doses` — idem patients
+
+**Política mínima esperada para cada tabela:**
+```sql
+-- Exemplo para push_subscriptions (verificar se existe)
+CREATE POLICY "Users own their push subs"
+  ON medcontrol.push_subscriptions
+  FOR ALL
+  USING (auth.uid() = "userId")
+  WITH CHECK (auth.uid() = "userId");
+```
+
+---
+
+### 0.3 Proteger RPCs Administrativas
+
+**Problema:** `admin_grant_tier` pode ser chamado diretamente pelo frontend se não tiver verificação server-side.
+
+**Solução:** Garantir que a RPC verifique papel do chamador:
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.admin_grant_tier(
+  target_user uuid,
+  new_tier text,
+  expires timestamptz DEFAULT NULL,
+  src text DEFAULT 'manual'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Verificar se chamador é admin (não confiar no frontend)
+  IF NOT EXISTS (
+    SELECT 1 FROM medcontrol.admins WHERE user_id = auth.uid()
+  ) THEN
+    -- Permitir apenas chamadas de Edge Function autenticada (service_role)
+    -- ou verificar via JWT claim
+    IF current_setting('request.jwt.claims', true)::jsonb->>'role' != 'service_role' THEN
+      RAISE EXCEPTION 'Unauthorized';
+    END IF;
+  END IF;
+
+  UPDATE medcontrol.subscriptions
+  SET tier = new_tier, tier_expires = expires, source = src
+  WHERE user_id = target_user;
+END;
+$$;
+```
+
+Também remover o email hardcoded de admin — usar tabela `medcontrol.admins` ou claim JWT.
+
+---
+
+### 0.4 Content Security Policy (CSP)
+
+**Problema:** Sem CSP, XSS pode roubar tokens de sessão do localStorage.
+
+**Adicionar em `vercel.json`:**
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fcm.googleapis.com; frame-src https://googleads.g.doubleclick.net;"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 0.5 Sanitização de Inputs no PDF
+
+**Problema:** `Reports.jsx` injeta strings do banco diretamente em HTML via `innerHTML` para gerar PDF. Se um nome de medicamento ou paciente contiver HTML/JS, há risco de XSS.
+
+**Adicionar função de sanitização:**
+```javascript
+// src/utils/sanitize.js
+export function escapeHtml(str) {
+  if (!str) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+```
+
+**Usar em todos os template strings do PDF:**
+```javascript
+// Reports.jsx — em TODOS os lugares onde dados do banco vão pro HTML
+`<td>${escapeHtml(d.medName)}</td>`
+`<td>${escapeHtml(patient.name)}</td>`
+`<td>${escapeHtml(d.unit)}</td>`
+```
+
+---
+
+### 0.6 Segurança da Autenticação
+
+**Problema:** Supabase gerencia senhas com bcrypt (seguro), mas o app não impõe requisitos de força de senha no cadastro.
+
+**Adicionar validação no formulário de cadastro:**
+```javascript
+// src/pages/Login.jsx ou Register.jsx
+function validatePassword(pwd) {
+  const errors = []
+  if (pwd.length < 8) errors.push('Mínimo 8 caracteres')
+  if (!/[A-Z]/.test(pwd)) errors.push('Pelo menos uma letra maiúscula')
+  if (!/[0-9]/.test(pwd)) errors.push('Pelo menos um número')
+  return errors
+}
+```
+
+**Limpar sessão completamente no logout:**
+```javascript
+// src/hooks/useAuth.js — no signOut
+async function signOut() {
+  await supabase.auth.signOut()
+  // Limpar dados locais sensíveis
+  localStorage.removeItem('medcontrol_notif')
+  localStorage.removeItem('dashCollapsed')
+  // Se futuramente usar Capacitor Preferences:
+  // await Preferences.clear()
+}
+```
+
+---
+
+### 0.7 Proteção dos Dados Locais (Modo Demo)
+
+**Problema:** Modo demo armazena dados de saúde (pacientes, doses, medicamentos) em `localStorage` sem criptografia. `localStorage` é acessível por qualquer script da mesma origem.
+
+**Mitigações:**
+1. Exibir aviso claro ao usuário: dados demo não são persistidos de forma segura
+2. Limpar dados demo automaticamente ao fechar a aba (usar `sessionStorage` em vez de `localStorage` para modo demo)
+3. Para versão APK: não usar `localStorage` — usar Capacitor Preferences (que usa SharedPreferences no Android, que tem proteção sandboxed por app)
+
+```javascript
+// src/services/demoStorage.js
+// Trocar localStorage por sessionStorage no modo demo
+const storage = isDemoMode ? sessionStorage : localStorage
+```
+
+---
+
+### 0.8 LGPD — Direito de Acesso e Portabilidade (Art. 18)
+
+**Usuário tem direito de:**
+- Saber quais dados estão armazenados
+- Exportar seus dados (portabilidade)
+- Corrigir dados incorretos
+- Revogar consentimento
+
+**Implementar em `src/pages/Settings.jsx`:**
+
+```javascript
+// Exportar todos os dados do usuário
+async function exportUserData() {
+  const { data: { user } } = await supabase.auth.getUser()
+  const [patients, treatments, doses, subs] = await Promise.all([
+    supabase.schema('medcontrol').from('patients').select('*').eq('userId', user.id),
+    supabase.schema('medcontrol').from('treatments').select('*'),  // via join
+    supabase.schema('medcontrol').from('doses').select('*'),
+    supabase.schema('medcontrol').from('subscriptions').select('tier, tier_expires').eq('user_id', user.id)
+  ])
+  const dump = {
+    exportedAt: new Date().toISOString(),
+    user: { id: user.id, email: user.email, createdAt: user.created_at },
+    patients: patients.data,
+    treatments: treatments.data,
+    doses: doses.data,
+    subscription: subs.data?.[0]
+  }
+  const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `dosy-meus-dados-${Date.now()}.json`
+  a.click()
+}
+```
+
+---
+
+### 0.9 LGPD — Direito ao Esquecimento (Art. 18, VI)
+
+**Usuário tem direito de excluir TODOS os seus dados.**
+
+**Criar RPC no Supabase:**
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.delete_my_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_patient_ids uuid[];
+BEGIN
+  -- Coletar IDs dos pacientes do usuário
+  SELECT ARRAY(SELECT id FROM medcontrol.patients WHERE "userId" = v_user_id)
+  INTO v_patient_ids;
+
+  -- Deletar em cascata
+  DELETE FROM medcontrol.push_subscriptions WHERE "userId" = v_user_id;
+  DELETE FROM medcontrol.doses WHERE "patientId" = ANY(v_patient_ids);
+  DELETE FROM medcontrol.sos_doses WHERE "patientId" = ANY(v_patient_ids);
+  DELETE FROM medcontrol.sos_rules WHERE "patientId" = ANY(v_patient_ids);
+  DELETE FROM medcontrol.treatments WHERE "patientId" = ANY(v_patient_ids);
+  DELETE FROM medcontrol.patients WHERE "userId" = v_user_id;
+  DELETE FROM medcontrol.subscriptions WHERE user_id = v_user_id;
+
+  -- Deletar a conta no auth (via admin API — chamar via Edge Function)
+  -- A deleção do auth.users deve ser feita pela Edge Function com service_role key
+END;
+$$;
+```
+
+**Edge Function `delete-account`:**
+```typescript
+// supabase/functions/delete-account/index.ts
+import { createClient } from '@supabase/supabase-js'
+
+const adminClient = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!  // service_role — nunca expor no frontend
+)
+
+Deno.serve(async (req) => {
+  // Verificar JWT do usuário logado
+  const jwt = req.headers.get('Authorization')?.replace('Bearer ', '')
+  const { data: { user }, error } = await adminClient.auth.getUser(jwt)
+  if (error || !user) return new Response('Unauthorized', { status: 401 })
+
+  // Deletar dados do schema
+  await adminClient.rpc('delete_my_account')
+
+  // Deletar conta do auth
+  await adminClient.auth.admin.deleteUser(user.id)
+
+  return new Response(JSON.stringify({ ok: true }))
+})
+```
+
+**Botão em Settings:**
+```jsx
+<button onClick={handleDeleteAccount} className="btn-danger w-full">
+  🗑️ Excluir minha conta e todos os dados
+</button>
+```
+
+---
+
+### 0.10 LGPD — Consentimento Explícito no Cadastro (Art. 7, I)
+
+**Problema:** Cadastro atual não coleta consentimento explícito para tratamento de dados de saúde.
+
+**Adicionar checkbox no formulário de cadastro:**
+```jsx
+<label className="flex items-start gap-2 text-sm">
+  <input
+    type="checkbox"
+    required
+    checked={consent}
+    onChange={(e) => setConsent(e.target.checked)}
+    className="mt-0.5"
+  />
+  <span>
+    Li e aceito a{' '}
+    <a href="/privacidade" className="text-brand-600 underline">Política de Privacidade</a>
+    {' '}e consinto com o tratamento dos meus dados de saúde conforme a LGPD.
+  </span>
+</label>
+```
+
+Registrar o consentimento com timestamp no Supabase:
+```sql
+ALTER TABLE medcontrol.subscriptions
+  ADD COLUMN consent_at timestamptz,
+  ADD COLUMN consent_version text DEFAULT '1.0';
+```
+
+---
+
+### 0.11 LGPD — Retenção de Dados (Art. 15)
+
+**Política:** Dados devem ser retidos apenas enquanto necessário para a finalidade.
+
+**Implementar:**
+1. Usuários inativos há +2 anos → enviar email de aviso antes de deletar
+2. Doses com status `done`/`skipped` mais antigas que 3 anos → podem ser anonimizadas
+3. Logs de auditoria → reter por 1 ano (requisito legal)
+
+**Criar Scheduled Job no Supabase (pg_cron):**
+```sql
+-- Anonimizar doses muito antigas (preserva histórico sem PII linkável)
+SELECT cron.schedule(
+  'anonymize-old-doses',
+  '0 3 * * 0',  -- toda domingo 3h
+  $$
+    UPDATE medcontrol.doses
+    SET observation = '[anonimizado]'
+    WHERE "scheduledAt" < NOW() - INTERVAL '3 years'
+      AND observation IS NOT NULL
+      AND observation != '[anonimizado]'
+  $$
+);
+```
+
+---
+
+### 0.12 Rate Limiting & Proteção Anti-Abuse
+
+**Problema:** Edge Functions sem rate limiting podem ser abusadas.
+
+**Supabase já oferece rate limiting básico no auth** (configurável no Dashboard).
+
+**Para Edge Functions, adicionar via upstash/redis ou lógica simples:**
+```typescript
+// Verificar frequência de chamadas na função notify-doses
+// Máximo: 1 chamada por usuário por minuto
+const rateLimitKey = `rate:${user.id}:notify`
+// Usar KV store do Deno Deploy ou tabela no Supabase
+```
+
+**No Supabase Auth (Dashboard → Authentication → Settings):**
+- Habilitar proteção contra bots
+- Configurar rate limit de signup (evitar abuso)
+- Ativar email confirmation obrigatório
+
+---
+
+### 0.13 Logging de Eventos de Segurança
+
+**Para auditoria LGPD e detecção de anomalias:**
+
+```sql
+CREATE TABLE medcontrol.security_events (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid REFERENCES auth.users(id),
+  event_type  text NOT NULL,  -- 'login', 'logout', 'data_export', 'account_delete', 'subscription_change'
+  ip_address  text,
+  user_agent  text,
+  metadata    jsonb,
+  created_at  timestamptz DEFAULT now()
+);
+
+-- RLS: usuário só vê seus próprios eventos
+ALTER TABLE medcontrol.security_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own events"
+  ON medcontrol.security_events FOR SELECT
+  USING (auth.uid() = user_id);
+-- INSERT apenas via service_role (Edge Functions)
+```
 
 ---
 
@@ -792,9 +1230,13 @@ jobs:
 | Risco | Probabilidade | Impacto | Mitigação |
 |---|---|---|---|
 | Google rejeitar app (categoria saúde) | Média | Alto | Política de privacidade robusta + não mencionar diagnóstico médico |
+| Vazamento de dados (LGPD) | Baixa | Crítico | RLS completo, CSP, sanitização de inputs, sem secrets no frontend |
+| Multa LGPD por falta de consentimento | Média | Alto | Checkbox de consentimento no cadastro, política de privacidade publicada |
+| XSS via dados do banco no PDF | Baixa | Alto | `escapeHtml` em todos os template strings antes de injetar no HTML |
 | Keystore perdido/corrompido | Baixa | Crítico | Backup em 3 locais seguros (HD externo, nuvem criptografada, cofre físico) |
 | Push FCM falhar no background | Média | Médio | LocalNotifications como fallback |
 | Revenuecat billing error | Baixa | Alto | Testar extensivamente em ambiente de teste antes de lançar |
+| `admin_grant_tier` chamado por usuário malicioso | Baixa | Alto | Verificação server-side obrigatória na RPC — rejeitar chamadas sem service_role |
 | Supabase auth token expirar offline | Média | Médio | `autoRefreshToken: true` + capturar erro e redirecionar para Login |
 | WebView lenta vs app nativo | Alta | Médio | Testar performance; considerar Capacitor Ionic para componentes críticos |
 
@@ -804,17 +1246,46 @@ jobs:
 
 | Fase | Estimativa | Dependências externas |
 |---|---|---|
+| Fase 0 — Segurança & LGPD | 3-5 dias | Advogado/consultoria LGPD (opcional) |
 | Fase 1 — Fundação Capacitor | 1-2 dias | Android Studio instalado |
 | Fase 2 — FCM Notifications | 2-3 dias | Conta Firebase |
 | Fase 3 — In-App Purchase | 3-4 dias | Conta RevenueCat + Play Console + produtos criados |
 | Fase 4 — Polimento nativo | 2-3 dias | — |
 | Fase 5 — Preparação Play Store | 2-3 dias | Conta desenvolvedor Google (USD 25) |
 | Fase 6 — Publicação | 1-2 dias + revisão Google (1-7 dias) | — |
-| **Total estimado** | **11-17 dias de desenvolvimento** | + tempo de aprovação Google |
+| **Total estimado** | **14-22 dias de desenvolvimento** | + tempo de aprovação Google |
 
 ---
 
 ## Checklist Geral
+
+### FASE 0 — Segurança & LGPD
+- [ ] Criar `.env.example` com todas as variáveis (sem valores reais)
+- [ ] Rotacionar VAPID keys (foram expostas em documentação anterior)
+- [ ] Rodar `git grep` no histórico para verificar vazamento de secrets
+- [ ] Auditar RLS em todas as tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules`, `sos_doses`
+- [ ] Criar/verificar policy RLS em `push_subscriptions` para isolar por usuário
+- [ ] Proteger `admin_grant_tier` RPC com verificação server-side (rejeitar chamadas do frontend)
+- [ ] Remover email hardcoded de admin — usar tabela `admins` ou JWT claim
+- [ ] Criar `vercel.json` com headers CSP, X-Frame-Options, X-Content-Type-Options
+- [ ] Criar `src/utils/sanitize.js` com função `escapeHtml`
+- [ ] Aplicar `escapeHtml` em todos os template strings do PDF em `Reports.jsx`
+- [ ] Adicionar validação de senha forte no cadastro (mín. 8 chars, maiúscula, número)
+- [ ] Limpar localStorage de dados sensíveis no `signOut`
+- [ ] Trocar `localStorage` por `sessionStorage` no modo demo
+- [ ] Implementar exportação de dados do usuário em `Settings.jsx` (portabilidade LGPD)
+- [ ] Criar RPC `delete_my_account` no Supabase (cascata em todas as tabelas)
+- [ ] Criar Edge Function `delete-account` com service_role para deletar do `auth.users`
+- [ ] Adicionar botão "Excluir minha conta" na tela de Settings
+- [ ] Adicionar checkbox de consentimento explícito no formulário de cadastro
+- [ ] Adicionar colunas `consent_at` e `consent_version` na tabela `subscriptions`
+- [ ] Criar rota `/privacidade` com política de privacidade completa (LGPD)
+- [ ] Criar rota `/termos` com termos de uso
+- [ ] Configurar pg_cron para anonimizar doses antigas (+3 anos)
+- [ ] Ativar rate limiting no Supabase Auth (Dashboard → Settings)
+- [ ] Habilitar confirmação de email obrigatória no cadastro
+- [ ] Criar tabela `security_events` para log de auditoria
+- [ ] Registrar eventos: login, logout, exportação, exclusão, mudança de assinatura
 
 ### FASE 1 — Fundação Capacitor
 - [ ] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`

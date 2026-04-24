@@ -37,21 +37,23 @@ PWA mobile-first de **gestão de medicamentos** em pt-BR, rebrandeado de MedCont
 
 ## 3. Variáveis de ambiente
 
-### `.env` local (NÃO commitado — criar manualmente):
+### `.env` local (NÃO commitado — criar manualmente a partir do `.env.example`):
 ```
-VITE_SUPABASE_URL=https://oubmmyitpahbcsjrhcxr.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_5b24Pif5mVp23rBsLhhDWg_2NhKVrJp
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key do painel Supabase>
 VITE_SUPABASE_SCHEMA=medcontrol
-VITE_VAPID_PUBLIC_KEY=BEIoP8V9460uEZZuR2DPDIuhCmeJeM44AwAWa5VFKseCAaqhnNgayDge4miebCKFwWvcCaUlLj5G_xkwsM9CbjA
+VITE_VAPID_PUBLIC_KEY=<chave pública VAPID — gerada via web-push generate-vapid-keys>
 ```
+
+> **NUNCA commitar valores reais no repositório. Use o painel Vercel e .env local.**
 
 ### Vercel production (configurar no painel):
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_SCHEMA`, `VITE_VAPID_PUBLIC_KEY`
 
 ### Supabase Edge Function secrets (painel Supabase → Edge Functions → Secrets):
 ```
-VAPID_PUBLIC_KEY=BEIoP8V9460uEZZuR2DPDIuhCmeJeM44AwAWa5VFKseCAaqhnNgayDge4miebCKFwWvcCaUlLj5G_xkwsM9CbjA
-VAPID_PRIVATE_KEY=PR7ZLbquZGTBFIw3z12b9MbncImlXschupvapYt4xQQ
+VAPID_PUBLIC_KEY=<mesma chave pública>
+VAPID_PRIVATE_KEY=<chave PRIVADA — NUNCA documentar ou commitar>
 VAPID_SUBJECT=mailto:lhenrique.pda@gmail.com
 ```
 
