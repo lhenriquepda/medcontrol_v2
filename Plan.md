@@ -469,6 +469,303 @@ CREATE POLICY "Users see own events"
 
 ---
 
+### 0.14 Mover Lógica de Negócio Sensível para o Servidor
+
+> **Contexto:** Atualmente várias regras de negócio críticas são validadas apenas no cliente (JavaScript). Um atacante que envie requisições diretamente para a API do Supabase (via `curl`, Postman, ou script) **bypassa completamente** essas validações. O banco aceita qualquer INSERT/UPDATE que passe no RLS — sem saber que a regra de negócio foi violada.
+
+---
+
+#### 0.14.1 — CRÍTICO: Validação SOS não existe no servidor
+
+**Problema:** `validateSos()` em `dosesService.js` verifica intervalo mínimo e máximo de doses SOS **só no frontend**. A inserção em seguida é um `INSERT` direto na tabela `doses`. Qualquer requisição direta à API ignora a validação.
+
+```
+// Atacante pode fazer isso diretamente:
+POST /rest/v1/doses
+{ type: 'sos', medName: 'Morfina', patientId: '...', status: 'done', ... }
+// → Inserido sem checar minIntervalHours nem maxDosesIn24h
+```
+
+**Solução:** Criar RPC `register_sos_dose` que valida as regras antes de inserir:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.register_sos_dose(
+  p_patient_id  uuid,
+  p_med_name    text,
+  p_unit        text,
+  p_scheduled_at timestamptz,
+  p_observation text DEFAULT ''
+)
+RETURNS medcontrol.doses
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rule        medcontrol.sos_rules%ROWTYPE;
+  v_last_dose   timestamptz;
+  v_count_24h   int;
+  v_diff_hours  float;
+  v_new_dose    medcontrol.doses%ROWTYPE;
+BEGIN
+  -- 1. Verificar que o paciente pertence ao usuário logado
+  IF NOT EXISTS (
+    SELECT 1 FROM medcontrol.patients
+    WHERE id = p_patient_id AND "userId" = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'PACIENTE_NAO_AUTORIZADO';
+  END IF;
+
+  -- 2. Buscar regra de segurança para o medicamento
+  SELECT * INTO v_rule
+  FROM medcontrol.sos_rules
+  WHERE "patientId" = p_patient_id
+    AND lower(med_name) = lower(p_med_name)
+  LIMIT 1;
+
+  IF FOUND THEN
+    -- 3. Verificar intervalo mínimo
+    IF v_rule.min_interval_hours IS NOT NULL THEN
+      SELECT MAX(actual_time) INTO v_last_dose
+      FROM medcontrol.doses
+      WHERE "patientId" = p_patient_id
+        AND lower(med_name) = lower(p_med_name)
+        AND status = 'done';
+
+      IF v_last_dose IS NOT NULL THEN
+        v_diff_hours := EXTRACT(EPOCH FROM (p_scheduled_at - v_last_dose)) / 3600;
+        IF v_diff_hours < v_rule.min_interval_hours THEN
+          RAISE EXCEPTION 'INTERVALO_MINIMO_NAO_RESPEITADO: %h', v_rule.min_interval_hours;
+        END IF;
+      END IF;
+    END IF;
+
+    -- 4. Verificar máximo de doses em 24h
+    IF v_rule.max_doses_in_24h IS NOT NULL THEN
+      SELECT COUNT(*) INTO v_count_24h
+      FROM medcontrol.doses
+      WHERE "patientId" = p_patient_id
+        AND lower(med_name) = lower(p_med_name)
+        AND status = 'done'
+        AND actual_time >= (p_scheduled_at - INTERVAL '24 hours');
+
+      IF v_count_24h >= v_rule.max_doses_in_24h THEN
+        RAISE EXCEPTION 'LIMITE_24H_ATINGIDO: %', v_rule.max_doses_in_24h;
+      END IF;
+    END IF;
+  END IF;
+
+  -- 5. Inserir dose SOS
+  INSERT INTO medcontrol.doses
+    ("patientId", med_name, unit, scheduled_at, actual_time, status, type, observation, "treatmentId")
+  VALUES
+    (p_patient_id, p_med_name, p_unit, p_scheduled_at, p_scheduled_at, 'done', 'sos', p_observation, NULL)
+  RETURNING * INTO v_new_dose;
+
+  RETURN v_new_dose;
+END;
+$$;
+```
+
+**Frontend:** Substituir `supabase.from('doses').insert(...)` por `supabase.rpc('register_sos_dose', {...})` em `dosesService.js`.
+
+---
+
+#### 0.14.2 — CRÍTICO: `admin_grant_tier` acessível por qualquer usuário autenticado
+
+**Problema:** `grantTier()` em `subscriptionService.js` chama `supabase.rpc('admin_grant_tier', ...)` diretamente do frontend. Se a RPC não verificar server-side que o chamador é admin, qualquer usuário pode executar:
+
+```
+POST /rest/v1/rpc/admin_grant_tier
+Authorization: Bearer <token_de_qualquer_usuario>
+{ "target_user": "meu_proprio_id", "new_tier": "pro" }
+// → Upgrade gratuito para PRO
+```
+
+**Solução:** A RPC deve verificar o papel antes de executar (ver seção 0.3). Garantir que a verificação existe e está funcionando. Testar com usuário não-admin via Postman/curl.
+
+---
+
+#### 0.14.3 — ALTO: Geração e inserção de doses é client-side e não-atômica
+
+**Problema:** `createTreatmentWithDoses()` em `treatmentsService.js`:
+1. Insere o treatment no DB
+2. Chama `generateDoses()` no cliente (JavaScript puro)
+3. Insere as doses em bulk
+
+Problemas:
+- **Não é atômico:** se o browser fechar entre os passos 1 e 3, o tratamento fica sem doses
+- **Sem limite:** atacante pode enviar `durationDays: 9999` gerando 100k+ doses de uma vez (DoS do banco)
+- A mesma operação de regenerar doses em `updateTreatment` tem os mesmos problemas
+
+**Solução:** Criar RPC `create_treatment_with_doses(payload jsonb)` que executa tudo em uma transação e valida limites:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.create_treatment_with_doses(payload jsonb)
+RETURNS medcontrol.treatments
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_treatment  medcontrol.treatments%ROWTYPE;
+  v_duration   int;
+  v_max_doses  int := 1000; -- limite de segurança
+BEGIN
+  -- Validar que patientId pertence ao usuário
+  IF NOT EXISTS (
+    SELECT 1 FROM medcontrol.patients
+    WHERE id = (payload->>'patientId')::uuid
+      AND "userId" = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'PACIENTE_NAO_AUTORIZADO';
+  END IF;
+
+  -- Limitar duração máxima (evitar DoS)
+  v_duration := LEAST(COALESCE((payload->>'durationDays')::int, 90), 365);
+
+  -- Inserir treatment
+  INSERT INTO medcontrol.treatments (...) VALUES (...) RETURNING * INTO v_treatment;
+
+  -- Gerar doses via função SQL (lógica de generateDoses migrada para plpgsql)
+  -- Verificar que total de doses não excede v_max_doses
+  -- Inserir doses em bloco
+
+  RETURN v_treatment;
+END;
+$$;
+```
+
+---
+
+#### 0.14.4 — ALTO: DELETE de doses e tratamentos não é atômico
+
+**Problema:** `deleteTreatment()` faz dois DELETEs separados do cliente:
+```js
+await supabase.from('doses').delete().eq('treatmentId', id)
+await supabase.from('treatments').delete().eq('id', id)
+```
+Se o primeiro DELETE passar e o segundo falhar, ficam doses órfãs. Se o atacante abortar a requisição entre as duas chamadas, o estado fica inconsistente.
+
+**Solução:** Adicionar `ON DELETE CASCADE` na FK de `doses.treatmentId → treatments.id` no banco, ou criar RPC `delete_treatment(p_id uuid)` que faz tudo em uma transação.
+
+```sql
+-- Opção 1: FK cascade (mais simples, preferida)
+ALTER TABLE medcontrol.doses
+  DROP CONSTRAINT IF EXISTS doses_treatment_id_fkey,
+  ADD CONSTRAINT doses_treatment_id_fkey
+    FOREIGN KEY ("treatmentId") REFERENCES medcontrol.treatments(id)
+    ON DELETE CASCADE;
+
+-- Com isso, deletar o treatment já deleta as doses automaticamente.
+```
+
+---
+
+#### 0.14.5 — MÉDIO: Transições de status de dose sem máquina de estados no servidor
+
+**Problema:** `confirmDose`, `skipDose` e `undoDose` fazem UPDATE direto na tabela:
+```js
+await supabase.from('doses').update({ status: 'done' }).eq('id', id)
+```
+Sem verificação server-side:
+- Atacante pode confirmar uma dose que não é dele (depende do RLS)
+- Pode confirmar uma dose já `done` ou `skipped` (status inválido)
+- Pode fazer `undoDose` em dose de 6 meses atrás (sem limite de tempo)
+
+**Solução:** Criar RPCs com validação de transição:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.confirm_dose(
+  p_dose_id uuid,
+  p_actual_time timestamptz DEFAULT now(),
+  p_observation text DEFAULT ''
+)
+RETURNS medcontrol.doses
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE v_dose medcontrol.doses%ROWTYPE;
+BEGIN
+  SELECT * INTO v_dose FROM medcontrol.doses WHERE id = p_dose_id;
+
+  -- Verificar ownership via patient
+  IF NOT EXISTS (
+    SELECT 1 FROM medcontrol.patients p
+    JOIN medcontrol.doses d ON d."patientId" = p.id
+    WHERE d.id = p_dose_id AND (p."userId" = auth.uid() OR EXISTS (
+      SELECT 1 FROM medcontrol.patient_shares
+      WHERE patient_id = p.id AND shared_with = auth.uid()
+    ))
+  ) THEN
+    RAISE EXCEPTION 'SEM_ACESSO';
+  END IF;
+
+  -- Transição válida: somente pending/overdue → done
+  IF v_dose.status NOT IN ('pending', 'overdue') THEN
+    RAISE EXCEPTION 'TRANSICAO_INVALIDA: % -> done', v_dose.status;
+  END IF;
+
+  UPDATE medcontrol.doses
+  SET status = 'done', actual_time = p_actual_time, observation = p_observation
+  WHERE id = p_dose_id
+  RETURNING * INTO v_dose;
+
+  RETURN v_dose;
+END;
+$$;
+```
+
+---
+
+#### 0.14.6 — MÉDIO: `patientId` nos INSERTs vem do cliente sem verificação explícita
+
+**Problema:** Em `registerSos`, `createTreatmentWithDoses` e outros, o `patientId` é enviado pelo cliente. Se o RLS da tabela `doses`/`treatments` não verificar que o paciente pertence ao usuário logado, um atacante pode inserir dados em pacientes de outros usuários.
+
+**Verificação necessária:** Confirmar que as políticas RLS nas tabelas `doses` e `treatments` incluem:
+```sql
+-- Para INSERT em doses:
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM medcontrol.patients p
+    WHERE p.id = "patientId"
+      AND (p."userId" = auth.uid() OR EXISTS (
+        SELECT 1 FROM medcontrol.patient_shares
+        WHERE patient_id = p.id AND shared_with = auth.uid()
+      ))
+  )
+)
+```
+
+---
+
+#### 0.14.7 — BAIXO: `select('*')` expõe todas as colunas
+
+**Problema:** Todos os services usam `.select('*')`. Se uma coluna sensível for adicionada ao schema no futuro (ex: `internal_flag`, `admin_notes`), ela virá automaticamente para o cliente.
+
+**Solução:** Usar colunas explícitas ou criar views com apenas os campos necessários:
+```js
+// Antes:
+supabase.from('doses').select('*')
+
+// Depois:
+supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation, treatmentId')
+```
+
+---
+
+#### Resumo das Prioridades
+
+| # | Problema | Severidade | Bypass possível? |
+|---|---|---|---|
+| 0.14.1 | Validação SOS só no frontend | 🔴 CRÍTICO | Sim — POST direto à API |
+| 0.14.2 | `admin_grant_tier` sem auth server-side | 🔴 CRÍTICO | Sim — RPC direta |
+| 0.14.3 | Geração de doses não-atômica + sem limite | 🟠 ALTO | Sim — DoS + inconsistência |
+| 0.14.4 | DELETE de tratamento não-atômico | 🟠 ALTO | Sim — dados órfãos |
+| 0.14.5 | Transições de status sem validação | 🟡 MÉDIO | Parcial (depende do RLS) |
+| 0.14.6 | `patientId` sem verificação de ownership | 🟡 MÉDIO | Depende do RLS |
+| 0.14.7 | `select('*')` em todos os services | 🟢 BAIXO | Não (mas risco futuro) |
+
+---
+
 ## FASE 1 — Fundação Capacitor
 
 **Objetivo:** App abre no Android sem erros. Navegação funciona. Auth funciona.
@@ -1236,7 +1533,10 @@ jobs:
 | Keystore perdido/corrompido | Baixa | Crítico | Backup em 3 locais seguros (HD externo, nuvem criptografada, cofre físico) |
 | Push FCM falhar no background | Média | Médio | LocalNotifications como fallback |
 | Revenuecat billing error | Baixa | Alto | Testar extensivamente em ambiente de teste antes de lançar |
-| `admin_grant_tier` chamado por usuário malicioso | Baixa | Alto | Verificação server-side obrigatória na RPC — rejeitar chamadas sem service_role |
+| `admin_grant_tier` chamado por usuário malicioso | **Alta** | **Crítico** | Verificação server-side obrigatória na RPC — testar via curl com token de user comum |
+| Bypass de regras SOS via requisição direta | Alta | Alto | Mover `validateSos` para RPC server-side (0.14.1) |
+| DoS via `durationDays` enorme → 100k doses | Média | Alto | Validar e limitar duração máxima server-side na RPC (0.14.3) |
+| Dados órfãos por DELETE parcial | Média | Médio | FK ON DELETE CASCADE no schema (0.14.4) |
 | Supabase auth token expirar offline | Média | Médio | `autoRefreshToken: true` + capturar erro e redirecionar para Login |
 | WebView lenta vs app nativo | Alta | Médio | Testar performance; considerar Capacitor Ionic para componentes críticos |
 
@@ -1286,6 +1586,20 @@ jobs:
 - [ ] Habilitar confirmação de email obrigatória no cadastro
 - [ ] Criar tabela `security_events` para log de auditoria
 - [ ] Registrar eventos: login, logout, exportação, exclusão, mudança de assinatura
+
+#### FASE 0.14 — Lógica de Negócio no Servidor
+- [ ] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h
+- [ ] **[CRÍTICO]** Substituir `supabase.from('doses').insert(sos)` por `supabase.rpc('register_sos_dose')` no `dosesService.js`
+- [ ] **[CRÍTICO]** Testar via curl/Postman que INSERT direto em `doses` (type=sos) é bloqueado ou não passa nas regras
+- [ ] **[CRÍTICO]** Verificar e testar que `admin_grant_tier` rejeita chamadas de usuário não-admin (ver 0.3)
+- [ ] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365)
+- [ ] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação
+- [ ] **[ALTO]** Adicionar `ON DELETE CASCADE` na FK `doses."treatmentId" → treatments.id`
+- [ ] **[ALTO]** Adicionar `ON DELETE CASCADE` nas FKs de `treatments`, `doses`, `sos_rules` → `patients.id`
+- [ ] **[MÉDIO]** Criar RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status e ownership
+- [ ] **[MÉDIO]** Substituir os 3 UPDATEs diretos em `dosesService.js` pelos novos RPCs
+- [ ] **[MÉDIO]** Verificar RLS policies em `doses` e `treatments` incluem check de ownership via `patientId → patients."userId"`
+- [ ] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services
 
 ### FASE 1 — Fundação Capacitor
 - [ ] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`
