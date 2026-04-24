@@ -9,7 +9,8 @@ import { useIsAdmin, useIsPro, useMyTier } from '../hooks/useSubscription'
 import { TIER_LABELS, TIER_COLORS_BOLD as TIER_COLORS } from '../utils/tierUtils'
 
 const ITEMS = [
-  { to: '/tratamentos', icon: '💊', label: 'Tratamentos', hint: 'Lista e histórico', pro: false },
+  { to: '/historico', icon: '📅', label: 'Histórico', hint: 'Doses por dia, adesão', pro: false },
+  { to: '/tratamentos', icon: '💊', label: 'Tratamentos', hint: 'Lista e gerenciamento', pro: false },
   { to: '/relatorios-analise', icon: '📊', label: 'Análises', hint: 'Adesão e calendários', pro: true },
   { to: '/relatorios', icon: '📄', label: 'Relatórios', hint: 'Exportar PDF / CSV', pro: true },
   { to: '/ajustes', icon: '⚙️', label: 'Ajustes', hint: 'Tema, notificações, conta', pro: false }

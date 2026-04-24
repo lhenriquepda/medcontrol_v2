@@ -10,6 +10,7 @@ import TreatmentList from './pages/TreatmentList'
 import SOS from './pages/SOS'
 import More from './pages/More'
 import Analytics from './pages/Analytics'
+import DoseHistory from './pages/DoseHistory'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/tratamentos" element={<TreatmentList />} />
         <Route path="/sos" element={<SOS />} />
         <Route path="/mais" element={<More />} />
+        <Route path="/historico" element={<DoseHistory />} />
         <Route path="/relatorios-analise" element={<Analytics />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/ajustes" element={<Settings />} />
