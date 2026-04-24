@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
@@ -13,7 +13,18 @@ import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
   const { data: patients = [] } = usePatients()
-  const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => {
+    const f = searchParams.get('filter')
+    return f === 'overdue'
+      ? { range: 'all', patientId: null, status: 'overdue', type: null }
+      : { range: '24h', patientId: null, status: null, type: null }
+  })
+
+  // Limpa query param depois de aplicar, evita re-trigger no back
+  useEffect(() => {
+    if (searchParams.get('filter')) setSearchParams({}, { replace: true })
+  }, [])
 
   const { from, to } = useMemo(() => rangeNow(filters.range), [filters.range])
   const query = { from, to, patientId: filters.patientId, status: filters.status, type: filters.type }

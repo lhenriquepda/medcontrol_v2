@@ -81,7 +81,9 @@ export default function FilterBar({ filters, setFilters, patients }) {
             className="relative shrink-0 w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm active:scale-95 transition"
             aria-label="Abrir filtros"
           >
-            <span className="text-base">⚙</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-slate-600 dark:text-slate-300" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 01.8 1.6L13 9.67V15a1 1 0 01-.447.894l-4 2.5A1 1 0 017 17.5V9.67L3.2 4.6A1 1 0 013 4V3z" clipRule="evenodd" />
+            </svg>
             {activeCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center">
                 {activeCount}

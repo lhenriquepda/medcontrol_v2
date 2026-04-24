@@ -28,7 +28,7 @@ export default function AppHeader() {
       <div className="max-w-md mx-auto px-4 pt-2 pb-3 flex items-center gap-3">
         {/* Logo — clicável → volta pro Dashboard */}
         <Link to="/" className="flex-shrink-0">
-          <img src="/dosy-logo.png" alt="Dosy" className="h-10 w-auto object-contain" />
+          <img src="/dosy-logo-light.png" alt="Dosy" className="h-10 w-auto object-contain" />
         </Link>
 
         {/* Saudação */}
@@ -42,7 +42,7 @@ export default function AppHeader() {
         {/* Badge doses atrasadas */}
         {overdueNow > 0 && (
           <button
-            onClick={() => nav('/')}
+            onClick={() => nav('/?filter=overdue')}
             aria-label="Ver doses atrasadas"
             className="text-[11px] font-semibold bg-rose-500 px-2 py-1 rounded-full animate-pulse active:scale-95 hover:bg-rose-400 transition flex-shrink-0"
           >

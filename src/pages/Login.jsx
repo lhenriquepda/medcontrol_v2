@@ -28,7 +28,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src="/dosy-logo.png" alt="Dosy" className="h-20 w-auto mx-auto mb-4 object-contain" />
+          <img src="/dosy-logo-light.png" alt="Dosy" className="h-20 w-auto mx-auto mb-4 object-contain" />
           <p className="text-sm text-white/60 mt-1">Gestão simples de medicamentos</p>
         </div>
 
