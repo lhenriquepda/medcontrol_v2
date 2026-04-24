@@ -56,20 +56,21 @@ export default function Reports() {
     const overdue = doses.filter((d) => d.status === 'overdue').length
     const adherence = total > 0 ? Math.round((done / total) * 100) : 0
 
+    const origin = window.location.origin
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
 <title>Dosy — Relatório de adesão</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#0f172a;font-size:13px}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#0f172a;font-size:13px;
+       -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{max-width:860px;margin:0 auto;background:#fff;min-height:100vh}
 
   /* Header */
-  .header{background:linear-gradient(135deg,#0d1535 0%,#1a2660 100%);padding:28px 36px;display:flex;align-items:center;justify-content:space-between}
-  .brand{display:flex;align-items:center;gap:14px}
-  .pill-logo{width:44px;height:44px}
-  .brand-text{color:#fff}
-  .brand-name{font-size:26px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,#7eb3ff,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-  .brand-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px}
+  .header{background:linear-gradient(135deg,#0d1535 0%,#1a2660 100%);padding:28px 36px;display:flex;align-items:center;justify-content:space-between;
+          -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .brand{display:flex;align-items:center;gap:16px}
+  .brand img{height:48px;width:auto}
+  .brand-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px}
   .header-meta{text-align:right;color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7}
   .header-meta strong{color:#fff;font-size:13px;display:block;margin-bottom:2px}
 
@@ -85,41 +86,31 @@ export default function Reports() {
   .section{padding:24px 36px}
   .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:12px}
   table{width:100%;border-collapse:collapse}
-  th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:8px 10px;background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left}
+  th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:8px 10px;background:#f8fafc;
+     border-bottom:2px solid #e2e8f0;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   td{padding:9px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
   tr:last-child td{border-bottom:none}
-  tr:hover td{background:#fafbff}
-  .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600}
+  .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;
+         -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .badge-done{background:#d1fae5;color:#065f46}
   .badge-skipped{background:#fef3c7;color:#92400e}
   .badge-overdue{background:#fee2e2;color:#991b1b}
   .badge-pending{background:#dbeafe;color:#1e40af}
-  .sos{font-size:10px;color:#7c3aed;background:#ede9fe;padding:1px 5px;border-radius:4px;margin-left:4px}
+  .sos{font-size:10px;color:#7c3aed;background:#ede9fe;padding:1px 5px;border-radius:4px;margin-left:4px;
+       -webkit-print-color-adjust:exact;print-color-adjust:exact}
 
   /* Footer */
-  .footer{padding:16px 36px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc}
+  .footer{padding:16px 36px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;
+          -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .footer-brand{font-size:11px;font-weight:700;color:#2B3EDF}
   .footer-note{font-size:10px;color:#94a3b8}
-  @media print{body{background:#fff}.page{box-shadow:none}}
 </style></head><body>
 <div class="page">
 
   <div class="header">
     <div class="brand">
-      <svg class="pill-logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#7eb3ff"/>
-            <stop offset="100%" stop-color="#c084fc"/>
-          </linearGradient>
-        </defs>
-        <rect width="512" height="512" rx="100" fill="rgba(255,255,255,0.08)"/>
-        <rect x="56" y="156" width="400" height="200" rx="100" fill="url(#g)"/>
-        <circle cx="156" cy="256" r="58" fill="#0d1535"/>
-        <path d="M248,194 L248,318 L300,318 Q386,318 386,256 Q386,194 300,194 Z" fill="#0d1535"/>
-      </svg>
-      <div class="brand-text">
-        <div class="brand-name">dosy</div>
+      <img src="${origin}/dosy-logo-light.png" alt="Dosy" />
+      <div style="border-left:1px solid rgba(255,255,255,0.2);padding-left:14px">
         <div class="brand-sub">Relatório de adesão</div>
       </div>
     </div>
