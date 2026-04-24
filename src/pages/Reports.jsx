@@ -48,26 +48,124 @@ export default function Reports() {
   }
 
   function exportPDF() {
+    if (doses.length === 0) { toast.show({ message: 'Sem doses no período.', kind: 'warn' }); return }
+    const showPatient = !patientId
+    const total = doses.length
+    const done = doses.filter((d) => d.status === 'done').length
+    const skipped = doses.filter((d) => d.status === 'skipped').length
+    const overdue = doses.filter((d) => d.status === 'overdue').length
+    const adherence = total > 0 ? Math.round((done / total) * 100) : 0
+
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
-<title>Relatório de adesão</title>
+<title>Dosy — Relatório de adesão</title>
 <style>
-body{font-family:system-ui,sans-serif;margin:24px;color:#111}
-h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:16px 0 8px;color:#555}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee}
-.done{color:#059669}.skipped{color:#b45309}.overdue{color:#dc2626}.pending{color:#2563eb}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#0f172a;font-size:13px}
+  .page{max-width:860px;margin:0 auto;background:#fff;min-height:100vh}
+
+  /* Header */
+  .header{background:linear-gradient(135deg,#0d1535 0%,#1a2660 100%);padding:28px 36px;display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:14px}
+  .pill-logo{width:44px;height:44px}
+  .brand-text{color:#fff}
+  .brand-name{font-size:26px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,#7eb3ff,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .brand-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px}
+  .header-meta{text-align:right;color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7}
+  .header-meta strong{color:#fff;font-size:13px;display:block;margin-bottom:2px}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #e2e8f0}
+  .stat{padding:16px 20px;text-align:center;border-right:1px solid #e2e8f0}
+  .stat:last-child{border-right:none}
+  .stat-val{font-size:24px;font-weight:700;line-height:1}
+  .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-top:4px}
+  .green{color:#059669}.red{color:#dc2626}.amber{color:#d97706}.blue{color:#2563eb}
+
+  /* Table */
+  .section{padding:24px 36px}
+  .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:8px 10px;background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left}
+  td{padding:9px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafbff}
+  .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600}
+  .badge-done{background:#d1fae5;color:#065f46}
+  .badge-skipped{background:#fef3c7;color:#92400e}
+  .badge-overdue{background:#fee2e2;color:#991b1b}
+  .badge-pending{background:#dbeafe;color:#1e40af}
+  .sos{font-size:10px;color:#7c3aed;background:#ede9fe;padding:1px 5px;border-radius:4px;margin-left:4px}
+
+  /* Footer */
+  .footer{padding:16px 36px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc}
+  .footer-brand{font-size:11px;font-weight:700;color:#2B3EDF}
+  .footer-note{font-size:10px;color:#94a3b8}
+  @media print{body{background:#fff}.page{box-shadow:none}}
 </style></head><body>
-<h1>Relatório de adesão — MedControl</h1>
-<p><strong>Paciente:</strong> ${patient?.name || 'Todos'} · <strong>Período:</strong> ${formatDate(from)} a ${formatDate(to)}</p>
-<table><thead><tr><th>Medicamento</th><th>Dose</th><th>Agendada</th><th>Real</th><th>Status</th></tr></thead><tbody>
-${doses.map((d) => `<tr>
-<td>${esc(d.medName)}${d.type === 'sos' ? ' <small>(S.O.S)</small>' : ''}</td>
-<td>${esc(d.unit)}</td>
-<td>${formatDate(d.scheduledAt)} ${formatTime(d.scheduledAt)}</td>
-<td>${d.actualTime ? formatDate(d.actualTime) + ' ' + formatTime(d.actualTime) : '—'}</td>
-<td class="${d.status}">${statusLabel(d.status)}</td>
-</tr>`).join('')}
-</tbody></table>
+<div class="page">
+
+  <div class="header">
+    <div class="brand">
+      <svg class="pill-logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7eb3ff"/>
+            <stop offset="100%" stop-color="#c084fc"/>
+          </linearGradient>
+        </defs>
+        <rect width="512" height="512" rx="100" fill="rgba(255,255,255,0.08)"/>
+        <rect x="56" y="156" width="400" height="200" rx="100" fill="url(#g)"/>
+        <circle cx="156" cy="256" r="58" fill="#0d1535"/>
+        <path d="M248,194 L248,318 L300,318 Q386,318 386,256 Q386,194 300,194 Z" fill="#0d1535"/>
+      </svg>
+      <div class="brand-text">
+        <div class="brand-name">dosy</div>
+        <div class="brand-sub">Relatório de adesão</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      <strong>${esc(patient?.name || 'Todos os pacientes')}</strong>
+      ${formatDate(from)} → ${formatDate(to)}<br/>
+      Gerado em ${formatDate(new Date().toISOString())}
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Total doses</div></div>
+    <div class="stat"><div class="stat-val green">${adherence}%</div><div class="stat-lbl">Adesão</div></div>
+    <div class="stat"><div class="stat-val amber">${skipped}</div><div class="stat-lbl">Puladas</div></div>
+    <div class="stat"><div class="stat-val red">${overdue}</div><div class="stat-lbl">Atrasadas</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Detalhamento por dose</div>
+    <table>
+      <thead><tr>
+        ${showPatient ? '<th>Paciente</th>' : ''}
+        <th>Medicamento</th><th>Dose</th><th>Agendada</th><th>Tomada em</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${doses.map((d) => {
+          const p = patients.find((x) => x.id === d.patientId)
+          return `<tr>
+            ${showPatient ? `<td>${esc(p?.name || '—')}</td>` : ''}
+            <td>${esc(d.medName)}${d.type === 'sos' ? '<span class="sos">S.O.S</span>' : ''}</td>
+            <td>${esc(d.unit)}</td>
+            <td>${formatDate(d.scheduledAt)} ${formatTime(d.scheduledAt)}</td>
+            <td>${d.actualTime ? formatDate(d.actualTime) + ' ' + formatTime(d.actualTime) : '<span style="color:#94a3b8">—</span>'}</td>
+            <td><span class="badge badge-${d.status}">${statusLabel(d.status)}</span></td>
+          </tr>`
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span class="footer-brand">dosy.vercel.app</span>
+    <span class="footer-note">${total} doses · ${formatDate(from)} a ${formatDate(to)}</span>
+  </div>
+
+</div>
 <script>window.onload=()=>window.print()</script>
 </body></html>`
     const w = window.open('', '_blank')
@@ -94,8 +192,37 @@ ${doses.map((d) => `<tr>
           </Field>
         </div>
 
-        <div className="card p-4 text-sm text-slate-500">
-          {doses.length} dose(s) no período.
+        {/* Preview */}
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{doses.length} dose(s)</span>
+            {doses.length > 0 && (() => {
+              const done = doses.filter((d) => d.status === 'done').length
+              const pct = Math.round((done / doses.length) * 100)
+              return <span className="text-xs font-bold text-emerald-600">{pct}% adesão</span>
+            })()}
+          </div>
+          {doses.length === 0
+            ? <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhuma dose no período.</p>
+            : <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
+                {doses.slice(0, 50).map((d) => {
+                  const p = patients.find((x) => x.id === d.patientId)
+                  const statusColors = { done: 'text-emerald-600', skipped: 'text-amber-500', overdue: 'text-rose-500', pending: 'text-blue-500' }
+                  return (
+                    <li key={d.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{d.medName}
+                          {!patientId && p && <span className="ml-1.5 text-[11px] text-slate-400">· {p.name.split(' ')[0]}</span>}
+                        </p>
+                        <p className="text-[11px] text-slate-400">{formatDate(d.scheduledAt)} {formatTime(d.scheduledAt)}</p>
+                      </div>
+                      <span className={`text-[11px] font-semibold shrink-0 ${statusColors[d.status] || 'text-slate-500'}`}>{statusLabel(d.status)}</span>
+                    </li>
+                  )
+                })}
+                {doses.length > 50 && <li className="px-4 py-2 text-center text-xs text-slate-400">+{doses.length - 50} mais no export</li>}
+              </ul>
+          }
         </div>
 
         {!isPro && (
