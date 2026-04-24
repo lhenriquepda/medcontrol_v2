@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -7,7 +7,28 @@ import { usePatient, useCreatePatient, useUpdatePatient, useDeletePatient } from
 import { usePatientLimitReached, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 
-const AVATARS = ['👩', '👨', '👵', '👴', '🧒', '👧', '👦', '🧑', '🐶', '🐱']
+const AVATAR_GROUPS = [
+  {
+    label: 'Bolinhas',
+    items: ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪',
+            '🔶','🔷','🔸','🔹','🟥','🟧','🟨','🟩','🟦','🟪','🟫']
+  },
+  {
+    label: 'Pessoas',
+    items: ['👶','🧒','👧','👦','🧑','👩','👨','🧔','👱','🧓','👵','👴',
+            '👩‍⚕️','👨‍⚕️','🧑‍⚕️','👩‍🦯','👨‍🦯','🧑‍🦽','👩‍🦽','🧑‍🦼']
+  },
+  {
+    label: 'Animais',
+    items: ['🐶','🐱','🐰','🐻','🐼','🐨','🐯','🦁','🐮','🐷',
+            '🐸','🐵','🦊','🐺','🦝','🐱‍👤','🦋','🐧','🦜']
+  },
+  {
+    label: 'Símbolos',
+    items: ['⭐','🌟','💫','✨','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍',
+            '🏠','🌸','🌺','🍀','🌈','☀️','🌙','⚡','🎯','🎀','🎗️']
+  }
+]
 
 export default function PatientForm() {
   const { id } = useParams()
@@ -21,6 +42,8 @@ export default function PatientForm() {
   const [confirm, setConfirm] = useState(false)
   const limitReached = usePatientLimitReached()
   const [paywall, setPaywall] = useState(false)
+
+  const [avatarGroup, setAvatarGroup] = useState(0)
 
   const [form, setForm] = useState({
     name: '', age: '', avatar: '👤', weight: '', condition: '', doctor: '', allergies: '', photo_url: ''
@@ -89,10 +112,34 @@ export default function PatientForm() {
             </label>
             {form.photo_url && <button type="button" className="text-xs text-rose-600" onClick={() => set('photo_url', '')}>Remover</button>}
           </div>
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {AVATARS.map((a) => (
-              <button type="button" key={a} onClick={() => set('avatar', a)}
-                      className={`w-10 h-10 rounded-full text-xl flex items-center justify-center ${form.avatar === a ? 'ring-2 ring-brand-500 bg-brand-50 dark:bg-brand-500/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
+          {/* Category tabs */}
+          <div className="flex gap-1 mt-3 overflow-x-auto no-scrollbar">
+            {AVATAR_GROUPS.map((g, i) => (
+              <button
+                type="button" key={g.label}
+                onClick={() => setAvatarGroup(i)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition ${
+                  avatarGroup === i
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          {/* Emoji grid */}
+          <div className="mt-2 grid grid-cols-8 gap-1.5 max-h-32 overflow-y-auto">
+            {AVATAR_GROUPS[avatarGroup].items.map((a) => (
+              <button
+                type="button" key={a}
+                onClick={() => { set('avatar', a); set('photo_url', '') }}
+                className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition active:scale-95 ${
+                  form.avatar === a && !form.photo_url
+                    ? 'ring-2 ring-brand-500 bg-brand-50 dark:bg-brand-500/10'
+                    : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
                 {a}
               </button>
             ))}
