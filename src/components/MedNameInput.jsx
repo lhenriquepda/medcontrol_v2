@@ -1,15 +1,9 @@
 import { useRef, useState } from 'react'
 import { suggestMedication } from '../data/medications'
 
-/**
- * Input com ghost-text autocomplete para nomes de medicamentos.
- * - Digitou "Des" → mostra "Desloratadina" com "loratadina" em cinza
- * - Tab / ArrowRight / Enter aceita sugestão
- * - Qualquer outro caractere continua digitando
- */
 export default function MedNameInput({ value, onChange, required = true }) {
   const [suggestion, setSuggestion] = useState(null)
-  const inputRef = useRef(null)
+  const acceptingRef = useRef(false)
 
   function handleChange(e) {
     const v = e.target.value
@@ -25,7 +19,8 @@ export default function MedNameInput({ value, onChange, required = true }) {
   }
 
   function handleKeyDown(e) {
-    if (suggestion && (e.key === 'Tab' || e.key === 'ArrowRight')) {
+    if (!suggestion) return
+    if (e.key === 'Tab' || e.key === 'ArrowRight') {
       e.preventDefault()
       accept()
     } else if (e.key === 'Escape') {
@@ -33,51 +28,79 @@ export default function MedNameInput({ value, onChange, required = true }) {
     }
   }
 
-  // Ghost suffix = parte da sugestão que ainda não foi digitada
-  const ghostSuffix =
-    suggestion && suggestion.toLowerCase().startsWith(value.toLowerCase())
-      ? suggestion.slice(value.length)
-      : null
+  function handleBlur() {
+    setTimeout(() => {
+      if (!acceptingRef.current) setSuggestion(null)
+      acceptingRef.current = false
+    }, 150)
+  }
+
+  // Ghost suffix: only when suggestion starts with what user typed
+  const showGhost =
+    suggestion &&
+    suggestion.toLowerCase().startsWith(value.toLowerCase()) &&
+    suggestion.length > value.length
 
   return (
-    <div className="relative">
-      {/* Ghost text layer — fica atrás do input real */}
-      {ghostSuffix && (
+    // Wrapper carries the visual input styling (bg, border, radius)
+    // Input itself is transparent so ghost layer shows through
+    <div className="relative w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-brand-500 overflow-hidden">
+      {/* Ghost text — sits behind transparent input */}
+      {showGhost && (
         <div
           aria-hidden="true"
-          className="absolute inset-0 px-3 py-2 text-sm pointer-events-none overflow-hidden whitespace-nowrap"
-          style={{ fontFamily: 'inherit' }}
+          className="absolute inset-0 flex items-center px-4 text-sm pointer-events-none"
         >
-          <span className="invisible">{value}</span>
-          <span className="text-slate-400 dark:text-slate-500">{ghostSuffix}</span>
+          <span className="invisible whitespace-pre">{value}</span>
+          <span className="text-slate-400 dark:text-slate-500 whitespace-pre">
+            {suggestion.slice(value.length)}
+          </span>
         </div>
       )}
 
       <input
-        ref={inputRef}
         required={required}
         type="text"
         autoComplete="off"
         autoCorrect="off"
+        autoCapitalize="words"
         spellCheck={false}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onBlur={() => setSuggestion(null)}
+        onBlur={handleBlur}
         placeholder="Ex: Paracetamol"
-        className="input w-full bg-transparent relative z-10"
-        style={{ caretColor: 'auto' }}
+        className="w-full px-4 py-3 text-sm bg-transparent relative z-10 focus:outline-none placeholder-slate-400"
       />
 
-      {/* Chip clicável com sugestão completa (quando não há ghost — contém match) */}
-      {suggestion && !ghostSuffix && (
+      {/* Chip for "contains" match (no prefix ghost possible) */}
+      {suggestion && !showGhost && (
         <button
           type="button"
-          onMouseDown={(e) => { e.preventDefault(); accept() }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 max-w-[55%] truncate"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            acceptingRef.current = true
+            accept()
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 max-w-[55%] truncate z-20"
         >
           {suggestion}
         </button>
+      )}
+
+      {/* Invisible tap zone on right side to accept ghost suggestion (mobile) */}
+      {showGhost && (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Aceitar sugestão"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            acceptingRef.current = true
+            accept()
+          }}
+          className="absolute inset-y-0 right-0 w-10 z-20"
+        />
       )}
     </div>
   )
