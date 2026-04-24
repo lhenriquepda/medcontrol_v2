@@ -3,6 +3,7 @@ import { supabase, hasSupabase } from '../services/supabase'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 const NOTIF_KEY = 'medcontrol_notif'
+const MS_IN_24H = 24 * 3600 * 1000
 
 function loadPrefs() {
   try { return JSON.parse(localStorage.getItem(NOTIF_KEY)) || {} } catch { return {} }
@@ -124,7 +125,7 @@ export function usePushNotifications() {
     const sw = reg.active || reg.waiting || reg.installing
     if (!sw) return
     const now = Date.now()
-    const window24h = now + 24 * 3600 * 1000
+    const window24h = now + MS_IN_24H
     const upcoming = (doses || [])
       .filter((d) => {
         if (d.status !== 'pending') return false

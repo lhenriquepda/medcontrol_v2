@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
+import Field from '../components/Field'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule } from '../hooks/useDoses'
 import { validateSos } from '../services/dosesService'
@@ -114,11 +115,3 @@ export default function SOS() {
   )
 }
 
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <span className="block text-xs font-medium mb-1">{label}</span>
-      {children}
-    </label>
-  )
-}

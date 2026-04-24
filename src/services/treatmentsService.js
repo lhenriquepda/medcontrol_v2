@@ -2,7 +2,7 @@ import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
 import { generateDoses } from '../utils/generateDoses'
 
-const CONTINUOUS_DAYS = 90
+export const CONTINUOUS_DAYS = 90
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 

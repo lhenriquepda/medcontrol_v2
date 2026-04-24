@@ -23,10 +23,13 @@ export default function Dashboard() {
       setFilters({ range: 'all', patientId: null, status: 'overdue', type: null })
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams])
+  }, [searchParams, setSearchParams])
 
   const { from, to } = useMemo(() => rangeNow(filters.range), [filters.range])
-  const query = { from, to, patientId: filters.patientId, status: filters.status, type: filters.type }
+  const query = useMemo(
+    () => ({ from, to, patientId: filters.patientId, status: filters.status, type: filters.type }),
+    [from, to, filters.patientId, filters.status, filters.type]
+  )
   const { data: doses = [], isLoading } = useDoses(query)
 
   const [selected, setSelected] = useState(null)

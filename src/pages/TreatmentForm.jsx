@@ -9,6 +9,7 @@ import { useToast } from '../hooks/useToast'
 import { toDatetimeLocalInput, fromDatetimeLocalInput, pad } from '../utils/dateUtils'
 import Field from '../components/Field'
 import MedNameInput from '../components/MedNameInput'
+import { CONTINUOUS_DAYS } from '../services/treatmentsService'
 
 // [horas, rótulo]
 const INTERVALS = [
@@ -24,8 +25,6 @@ const INTERVALS = [
   [720, '1x/mês'],
 ]
 
-// Dias gerados para tratamentos contínuos (janela inicial)
-const CONTINUOUS_DAYS = 90
 
 export default function TreatmentForm() {
   const { id } = useParams()
