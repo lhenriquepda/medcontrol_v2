@@ -43,52 +43,67 @@ export async function listDoses({ from, to, patientId, status, type } = {}) {
 }
 
 export async function confirmDose(id, { actualTime, observation } = {}) {
-  const patch = {
+  if (hasSupabase) {
+    const { data, error } = await supabase.rpc('confirm_dose', {
+      p_dose_id:     id,
+      p_actual_time: actualTime || new Date().toISOString(),
+      p_observation: observation || ''
+    })
+    if (error) throw error
+    return data
+  }
+  return mock.update('doses', id, {
     status: 'done',
     actualTime: actualTime || new Date().toISOString(),
     observation: observation || ''
-  }
-  if (hasSupabase) {
-    const { data, error } = await supabase.from('doses').update(patch).eq('id', id).select().single()
-    if (error) throw error
-    return data
-  }
-  return mock.update('doses', id, patch)
+  })
 }
 
 export async function skipDose(id, { observation } = {}) {
-  const patch = { status: 'skipped', actualTime: new Date().toISOString(), observation: observation || '' }
   if (hasSupabase) {
-    const { data, error } = await supabase.from('doses').update(patch).eq('id', id).select().single()
+    const { data, error } = await supabase.rpc('skip_dose', {
+      p_dose_id:    id,
+      p_observation: observation || ''
+    })
     if (error) throw error
     return data
   }
-  return mock.update('doses', id, patch)
+  return mock.update('doses', id, {
+    status: 'skipped',
+    actualTime: new Date().toISOString(),
+    observation: observation || ''
+  })
 }
 
 export async function undoDose(id) {
-  const patch = { status: 'pending', actualTime: null }
   if (hasSupabase) {
-    const { data, error } = await supabase.from('doses').update(patch).eq('id', id).select().single()
+    const { data, error } = await supabase.rpc('undo_dose', { p_dose_id: id })
     if (error) throw error
     return data
   }
-  return mock.update('doses', id, patch)
+  return mock.update('doses', id, { status: 'pending', actualTime: null })
 }
 
 export async function registerSos({ patientId, medName, unit, scheduledAt, observation }) {
-  const payload = {
+  if (hasSupabase) {
+    // Usa RPC server-side: valida regras SOS (minIntervalHours, maxDosesIn24h) antes de inserir
+    const { data, error } = await supabase.rpc('register_sos_dose', {
+      p_patient_id:   patientId,
+      p_med_name:     medName,
+      p_unit:         unit,
+      p_scheduled_at: scheduledAt || new Date().toISOString(),
+      p_observation:  observation || ''
+    })
+    if (error) throw error
+    return data
+  }
+  // Mock: insert direto (demo mode sem validação server-side)
+  return mock.insert('doses', {
     treatmentId: null, patientId, medName, unit,
     scheduledAt: scheduledAt || new Date().toISOString(),
     actualTime: scheduledAt || new Date().toISOString(),
     status: 'done', type: 'sos', observation: observation || ''
-  }
-  if (hasSupabase) {
-    const { data, error } = await supabase.from('doses').insert(payload).select().single()
-    if (error) throw error
-    return data
-  }
-  return mock.insert('doses', payload)
+  })
 }
 
 export async function listSosRules(patientId) {
