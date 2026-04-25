@@ -1925,50 +1925,50 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 ## Checklist Geral
 
 ### FASE 0 — Segurança & LGPD
-- [ ] Criar `.env.example` com todas as variáveis (sem valores reais)
-- [ ] Rotacionar VAPID keys (foram expostas em documentação anterior)
-- [ ] Rodar `git grep` no histórico para verificar vazamento de secrets
-- [ ] Auditar RLS em todas as tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules`, `sos_doses`
-- [ ] Criar/verificar policy RLS em `push_subscriptions` para isolar por usuário
-- [ ] Proteger `admin_grant_tier` RPC com verificação server-side (rejeitar chamadas do frontend)
-- [ ] Remover email hardcoded de admin — usar tabela `admins` ou JWT claim
-- [ ] Criar `vercel.json` com headers CSP, X-Frame-Options, X-Content-Type-Options
-- [ ] Criar `src/utils/sanitize.js` com função `escapeHtml`
-- [ ] Aplicar `escapeHtml` em todos os template strings do PDF em `Reports.jsx`
-- [ ] Adicionar validação de senha forte no cadastro (mín. 8 chars, maiúscula, número)
-- [ ] Limpar localStorage de dados sensíveis no `signOut`
-- [ ] Trocar `localStorage` por `sessionStorage` no modo demo
-- [ ] Implementar exportação de dados do usuário em `Settings.jsx` (portabilidade LGPD)
-- [ ] Criar RPC `delete_my_account` no Supabase (cascata em todas as tabelas)
-- [ ] Criar Edge Function `delete-account` com service_role para deletar do `auth.users`
-- [ ] Adicionar botão "Excluir minha conta" na tela de Settings
-- [ ] Adicionar checkbox de consentimento explícito no formulário de cadastro
-- [ ] Adicionar colunas `consent_at` e `consent_version` na tabela `subscriptions`
-- [ ] Criar rota `/privacidade` com política de privacidade completa (LGPD)
-- [ ] Criar rota `/termos` com termos de uso
-- [ ] Configurar pg_cron para anonimizar doses antigas (+3 anos)
-- [ ] Ativar rate limiting no Supabase Auth (Dashboard → Settings)
-- [ ] Habilitar confirmação de email obrigatória no cadastro
-- [ ] Criar tabela `security_events` para log de auditoria
-- [ ] Registrar eventos: login, logout, exportação, exclusão, mudança de assinatura
-- [ ] Criar índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)`
-- [ ] Limitar campo `observation` a 500 chars (Data Minimization LGPD)
-- [ ] Trocar `userAgent` completo em push_subscriptions por plataforma simplificada (`Android/iOS/Web`)
-- [ ] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar)
+- [x] Criar `.env.example` com todas as variáveis (sem valores reais)
+- [ ] Rotacionar VAPID keys (foram expostas em documentação anterior) ← fazer manualmente no Supabase Dashboard
+- [ ] Rodar `git grep` no histórico para verificar vazamento de secrets ← fazer manualmente
+- [x] Auditar RLS em todas as tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules` — todas com RLS ativo ✅
+- [x] Criar/verificar policy RLS em `push_subscriptions` para isolar por usuário — policy `push_own_all` já existe ✅
+- [x] Proteger `admin_grant_tier` RPC com verificação server-side — usa `is_admin()` reescrito ✅
+- [x] Remover email hardcoded de admin — criada tabela `admins`, `is_admin()` e `effective_tier()` reescritas ✅
+- [x] Criar `vercel.json` com headers CSP, X-Frame-Options, X-Content-Type-Options ✅
+- [x] Criar `src/utils/sanitize.js` com função `escapeHtml` ✅
+- [x] Aplicar `escapeHtml` em todos os template strings do PDF em `Reports.jsx` ✅
+- [x] Adicionar validação de senha forte no cadastro (mín. 8 chars, maiúscula, número) ✅
+- [x] Limpar localStorage de dados sensíveis no `signOut` ✅
+- [x] Trocar `localStorage` por `sessionStorage` no modo demo ✅
+- [x] Implementar exportação de dados do usuário em `Settings.jsx` (portabilidade LGPD) ✅
+- [x] Criar RPC `delete_my_account` no Supabase (cascata em todas as tabelas) ✅
+- [ ] Criar Edge Function `delete-account` com service_role para deletar do `auth.users` ← pendente
+- [x] Adicionar botão "Excluir minha conta" na tela de Settings ✅
+- [x] Adicionar checkbox de consentimento explícito no formulário de cadastro ✅
+- [x] Adicionar colunas `consentAt` e `consentVersion` na tabela `subscriptions` ✅
+- [ ] Criar rota `/privacidade` com política de privacidade completa (LGPD) ← pendente
+- [ ] Criar rota `/termos` com termos de uso ← pendente
+- [ ] Configurar pg_cron para anonimizar doses antigas (+3 anos) ← pendente
+- [ ] Ativar rate limiting no Supabase Auth (Dashboard → Settings) ← fazer manualmente
+- [ ] Habilitar confirmação de email obrigatória no cadastro ← fazer manualmente no Dashboard
+- [x] Criar tabela `security_events` para log de auditoria ✅
+- [x] Registrar eventos de mudança de tier em `admin_grant_tier` ✅ / exclusão de conta em `delete_my_account` ✅
+- [x] Criar índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)` ✅
+- [x] Limitar campo `observation` a 500 chars (Data Minimization LGPD) ✅
+- [x] Trocar `userAgent` completo em push_subscriptions por plataforma simplificada — coluna `platform` adicionada ✅
+- [ ] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar) ← pendente
 
 #### FASE 0.14 — Lógica de Negócio no Servidor
-- [ ] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h
-- [ ] **[CRÍTICO]** Substituir `supabase.from('doses').insert(sos)` por `supabase.rpc('register_sos_dose')` no `dosesService.js`
-- [ ] **[CRÍTICO]** Testar via curl/Postman que INSERT direto em `doses` (type=sos) é bloqueado ou não passa nas regras
-- [ ] **[CRÍTICO]** Verificar e testar que `admin_grant_tier` rejeita chamadas de usuário não-admin (ver 0.3)
-- [ ] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365)
-- [ ] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação
-- [ ] **[ALTO]** Adicionar `ON DELETE CASCADE` na FK `doses."treatmentId" → treatments.id`
-- [ ] **[ALTO]** Adicionar `ON DELETE CASCADE` nas FKs de `treatments`, `doses`, `sos_rules` → `patients.id`
-- [ ] **[MÉDIO]** Criar RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status e ownership
-- [ ] **[MÉDIO]** Substituir os 3 UPDATEs diretos em `dosesService.js` pelos novos RPCs
-- [ ] **[MÉDIO]** Verificar RLS policies em `doses` e `treatments` incluem check de ownership via `patientId → patients."userId"`
-- [ ] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services
+- [x] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h ✅
+- [x] **[CRÍTICO]** Substituir `supabase.from('doses').insert(sos)` por `supabase.rpc('register_sos_dose')` no `dosesService.js` ✅
+- [ ] **[CRÍTICO]** Testar via curl/Postman que INSERT direto em `doses` (type=sos) é bloqueado ou não passa nas regras ← pendente teste manual
+- [x] **[CRÍTICO]** `admin_grant_tier` rejeita chamadas de usuário não-admin — `is_admin()` usa tabela `admins` ✅
+- [ ] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365) ← pendente
+- [ ] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação ← pendente
+- [x] **[ALTO]** Adicionar `ON DELETE CASCADE` na FK `doses."treatmentId" → treatments.id` ✅
+- [x] **[ALTO]** Adicionar `ON DELETE CASCADE` nas FKs de `treatments`, `doses`, `sos_rules`, `patient_shares` → `patients.id` ✅
+- [x] **[MÉDIO]** Criar RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status e ownership ✅
+- [x] **[MÉDIO]** Substituir os 3 UPDATEs diretos em `dosesService.js` pelos novos RPCs ✅
+- [x] **[MÉDIO]** RLS policies em `doses` e `treatments` incluem check via `has_patient_access()` — auditado ✅
+- [ ] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services ← pendente
 
 ### FASE 1 — Fundação Capacitor
 - [ ] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`
