@@ -7,6 +7,7 @@ import { useIsPro } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 import { formatDate, formatDateTime, formatTime, toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
 import { statusLabel } from '../utils/statusUtils'
+import { escapeHtml as esc } from '../utils/sanitize'
 
 export default function Reports() {
   const { data: patients = [] } = usePatients()
@@ -245,4 +246,3 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-function esc(s) { return String(s || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) }

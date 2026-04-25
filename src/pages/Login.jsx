@@ -2,6 +2,14 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 
+function validatePassword(pwd) {
+  const errors = []
+  if (pwd.length < 8) errors.push('mínimo 8 caracteres')
+  if (!/[A-Z]/.test(pwd)) errors.push('pelo menos uma letra maiúscula')
+  if (!/[0-9]/.test(pwd)) errors.push('pelo menos um número')
+  return errors
+}
+
 export default function Login() {
   const { signInEmail, signUpEmail, signInDemo, hasSupabase } = useAuth()
   const toast = useToast()
@@ -9,10 +17,20 @@ export default function Login() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function submit(e) {
     e.preventDefault()
+    if (mode === 'signup') {
+      const pwdErrors = validatePassword(password)
+      if (pwdErrors.length > 0) {
+        toast.show({ message: `Senha fraca: ${pwdErrors.join(', ')}.`, kind: 'error' }); return
+      }
+      if (!consent) {
+        toast.show({ message: 'Aceite a Política de Privacidade para continuar.', kind: 'error' }); return
+      }
+    }
     setBusy(true)
     try {
       if (mode === 'signin') await signInEmail(email, password)
@@ -48,7 +66,28 @@ export default function Login() {
             <input type="email" required placeholder="Email" className="input"
                    value={email} onChange={(e) => setEmail(e.target.value)} />
             <input type="password" required placeholder="Senha" className="input"
-                   value={password} onChange={(e) => setPassword(e.target.value)} />
+                   value={password} onChange={(e) => setPassword(e.target.value)}
+                   minLength={mode === 'signup' ? 8 : undefined} />
+            {mode === 'signup' && (
+              <>
+                <p className="text-[10px] text-slate-400">Senha: mín. 8 chars, uma maiúscula, um número.</p>
+                <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <span>
+                    Li e aceito a{' '}
+                    <a href="/privacidade" className="text-brand-600 dark:text-brand-400 underline" target="_blank" rel="noopener noreferrer">
+                      Política de Privacidade
+                    </a>
+                    {' '}e consinto com o tratamento dos meus dados de saúde conforme a LGPD.
+                  </span>
+                </label>
+              </>
+            )}
             <button type="submit" className="btn-primary w-full" disabled={busy}>
               {busy ? 'Aguarde…' : (mode === 'signin' ? 'Entrar' : 'Criar conta')}
             </button>

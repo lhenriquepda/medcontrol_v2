@@ -88,6 +88,9 @@ export function AuthProvider({ children }) {
   async function signOut() {
     if (hasSupabase) await supabase.auth.signOut()
     else await mock.signOut()
+    // Limpar dados locais sensíveis ao sair
+    localStorage.removeItem('medcontrol_notif')
+    localStorage.removeItem('dashCollapsed')
     setUser(null)
   }
 

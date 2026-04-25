@@ -540,7 +540,53 @@ const rateLimitKey = `rate:${user.id}:notify`
 
 ---
 
-### 0.13 Logging de Eventos de Segurança
+### 0.13 Índices Compostos no Banco (Performance + Segurança)
+
+**Problema:** Sem índices adequados, queries com filtros de usuário + data fazem full table scan. Em escala, isso vaza timing information e abre DoS via queries lentas.
+
+```sql
+-- Dashboard query: doses por patientId + scheduledAt
+CREATE INDEX IF NOT EXISTS doses_patient_scheduled_idx
+  ON medcontrol.doses ("patientId", "scheduledAt");
+
+-- Filtro por status + scheduledAt (overdue, pending)
+CREATE INDEX IF NOT EXISTS doses_patient_status_idx
+  ON medcontrol.doses ("patientId", status, "scheduledAt");
+
+-- Treatments por paciente
+CREATE INDEX IF NOT EXISTS treatments_patient_status_idx
+  ON medcontrol.treatments ("patientId", status);
+
+-- Push subs por userId (lookup na hora de enviar notificações)
+CREATE INDEX IF NOT EXISTS push_subs_user_idx
+  ON medcontrol.push_subscriptions ("userId");
+
+-- SOS rules lookup (medName case-insensitive)
+CREATE INDEX IF NOT EXISTS sos_rules_patient_med_idx
+  ON medcontrol.sos_rules ("patientId", lower(med_name));
+```
+
+---
+
+### 0.14 LGPD — Data Minimization & RIPD (Art. 37-38)
+
+**Data Minimization:** Avaliar campos que coletam mais dados do que necessário.
+
+- Campo `observation` em doses: texto livre — pode conter diagnósticos, histórico médico sensível. Considerar limite de caracteres (500) e aviso ao usuário de não incluir dados clínicos desnecessários.
+- `userAgent` em `push_subscriptions`: armazenado completo (até 250 chars). Guardar apenas plataforma (`Android/iOS/Web`) para minimizar PII coletada.
+
+**RIPD (Relatório de Impacto à Proteção de Dados):**
+Manter registro interno das Edge Functions e dados PII processados (obrigatório se a ANPD solicitar):
+
+```
+notify-doses     → processa: userId, medName, unit, scheduledAt
+delete-account   → processa: todos os dados do usuário (exclusão)
+admin_grant_tier → processa: userId, tier, expiry (admin only)
+```
+
+---
+
+### 0.15 Logging de Eventos de Segurança
 
 **Para auditoria LGPD e detecção de anomalias:**
 
@@ -995,7 +1041,95 @@ useEffect(() => {
 }, [])
 ```
 
-### 1.7 Build e sync
+### 1.7 Secure Storage — Android KeyStore (substituir Capacitor Preferences)
+
+**Problema:** `@capacitor/preferences` armazena dados em SharedPreferences em **texto simples**. Tokens de sessão do Supabase ficam legíveis por qualquer processo com root ou via backup ADB. Para app de saúde (dados categoria especial LGPD), inaceitável.
+
+**Solução:** Usar Android KeyStore via plugin de Secure Storage:
+
+```bash
+npm install @aparajita/capacitor-secure-storage
+```
+
+O plugin usa:
+- **Android:** `EncryptedSharedPreferences` (AES-256-GCM via Android KeyStore, protegida por hardware em dispositivos com TEE)
+- **iOS:** Keychain Services
+- **Web:** localStorage com fallback (não criptografado — exibir aviso no modo web)
+
+**Modificar `src/services/supabase.js`:**
+```javascript
+import { SecureStorage } from '@aparajita/capacitor-secure-storage'
+import { Capacitor } from '@capacitor/core'
+
+// Storage seguro: KeyStore no nativo, localStorage na web
+const SecureStorageAdapter = Capacitor.isNativePlatform() ? {
+  getItem: async (key) => {
+    try { return await SecureStorage.get(key) } catch { return null }
+  },
+  setItem: async (key, value) => {
+    await SecureStorage.set(key, value)
+  },
+  removeItem: async (key) => {
+    try { await SecureStorage.remove(key) } catch {}
+  }
+} : localStorage  // web usa localStorage como antes
+
+export const supabase = createClient(URL, KEY, {
+  auth: {
+    storage: SecureStorageAdapter,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false
+  },
+  db: { schema: SCHEMA }
+})
+```
+
+> **Nota:** Substituir `@capacitor/preferences` por `SecureStorage` para todos os dados sensíveis. Dados não-sensíveis (preferências de UI, collapsed state) podem continuar em `localStorage`.
+
+---
+
+### 1.8 SSL Pinning (Proteção contra Man-in-the-Middle)
+
+**Problema:** Em redes Wi-Fi públicas ou corporativas com proxy, um atacante pode apresentar um certificado falso e interceptar todas as requisições ao Supabase (login, dados de saúde).
+
+**Solução:** Configurar o app para aceitar **apenas** o certificado do domínio Supabase:
+
+```bash
+npm install @ionic-native/http
+# ou via capacitor-community:
+npm install @capacitor-community/http
+```
+
+**Configurar em `capacitor.config.ts`:**
+```typescript
+plugins: {
+  CapacitorHttp: {
+    enabled: true  // intercepta fetch/XHR e aplica pinning
+  }
+}
+```
+
+**Adicionar pins em `android/app/src/main/res/xml/network_security_config.xml`:**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="true">supabase.co</domain>
+    <pin-set>
+      <!-- SHA-256 do certificado intermediário da CA do Supabase -->
+      <!-- Gerar com: openssl s_client -connect SEU_PROJETO.supabase.co:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 -->
+      <pin digest="SHA-256">HASH_DO_CERTIFICADO_AQUI</pin>
+    </pin-set>
+  </domain-config>
+</network-security-config>
+```
+
+> ⚠️ **Atenção:** SSL Pinning pode quebrar o app se o certificado do Supabase for renovado sem atualizar o pin. Manter pin do certificado intermediário (mais estável) e sempre incluir um backup pin.
+
+---
+
+### 1.9 Build e sync
 
 ```bash
 npm run build
@@ -1397,7 +1531,76 @@ if (Capacitor.isNativePlatform()) {
 }
 ```
 
-### 4.6 Deep Links (para OAuth futuro)
+### 4.6 Modo Offline — Fila de Sincronização de Mutações
+
+**Contexto:** Usuário marca dose como "Tomada" no subsolo/avião sem sinal. Sem offline support, a ação é perdida silenciosamente.
+
+**Solução:** `persistQueryClient` + mutation queue com TanStack Query:
+
+```bash
+npm install @tanstack/query-persist-client-core @tanstack/query-sync-storage-persister
+```
+
+**Configurar em `src/main.jsx`:**
+```javascript
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'dosy-query-cache'
+})
+
+// No Android nativo: trocar por SecureStorage ou Capacitor Preferences
+```
+
+**Implementar mutation queue em `src/hooks/useDoses.js`:**
+```javascript
+// Optimistic update já existe — adicionar persistência offline:
+export function useConfirmDose() {
+  return useMutation({
+    mutationFn: confirmDose,
+    // UI atualiza imediatamente
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['doses'] })
+      const previous = qc.getQueryData(['doses'])
+      qc.setQueryData(['doses'], (old) =>
+        old?.map(d => d.id === id ? { ...d, status: 'done' } : d)
+      )
+      return { previous }
+    },
+    onError: (_, __, ctx) => {
+      // Reverter se falhar
+      qc.setQueryData(['doses'], ctx.previous)
+    },
+    // Retry automático quando voltar online
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000)
+  })
+}
+```
+
+**Detectar conectividade:**
+```javascript
+// src/hooks/useOnlineStatus.js
+import { Network } from '@capacitor/network'
+
+export function useOnlineStatus() {
+  const [online, setOnline] = useState(true)
+  useEffect(() => {
+    Network.getStatus().then(s => setOnline(s.connected))
+    const handler = Network.addListener('networkStatusChange', s => setOnline(s.connected))
+    return () => handler.remove()
+  }, [])
+  return online
+}
+```
+
+> Notificações locais (`LocalNotifications`) são o "mestre" para alertas críticos de dose — funcionam offline. Push FCM serve para engajamento e quando app está fechado.
+
+---
+
+### 4.7 Deep Links (para OAuth futuro)
 
 Configurar em `android/app/src/main/AndroidManifest.xml`:
 
@@ -1609,10 +1812,76 @@ jobs:
           track: internal
 ```
 
-### 6.5 Monitoramento pós-launch
+### 6.5 Sentry — Monitoramento de Erros em Produção
+
+**Contexto:** Sem monitoramento, erros em produção são invisíveis. Um crash no fluxo de SOS pode colocar usuário em risco sem que o dev saiba.
+
+```bash
+npm install @sentry/react @sentry/capacitor
+```
+
+**Configurar em `src/main.jsx`:**
+```javascript
+import * as Sentry from '@sentry/react'
+import * as SentryCapacitor from '@sentry/capacitor'
+
+SentryCapacitor.init(
+  {
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,  // 'development' | 'production'
+    // LGPD: não enviar dados pessoais para Sentry
+    beforeSend(event) {
+      // Strip PII: remover emails, nomes de pacientes, nomes de medicamentos
+      if (event.user) { delete event.user.email; delete event.user.username }
+      return event
+    },
+    tracesSampleRate: 0.1  // 10% das transações
+  },
+  Sentry.init
+)
+```
+
+**O que monitorar:**
+- Falhas em RPCs do Supabase (`register_sos_dose`, `confirm_dose`)
+- Falhas de autenticação inesperadas
+- Erros no Service Worker / push notifications
+- Crashes no fluxo de compra (RevenueCat)
+
+> ⚠️ **LGPD:** Configurar `beforeSend` para remover PII antes de enviar ao Sentry. Nomes de medicamentos são dados de saúde — categoria especial.
+
+---
+
+### 6.6 Escalabilidade Futura — Table Partitioning (pós 10k usuários)
+
+**Quando aplicar:** Tabela `doses` acima de ~5 milhões de linhas (estimativa: 10k usuários × 3 remédios × 365 dias ≈ 11M registros/ano).
+
+```sql
+-- Converter doses para tabela particionada por mês (PostgreSQL 14+)
+-- ATENÇÃO: operação destrutiva — fazer em janela de manutenção com backup
+CREATE TABLE medcontrol.doses_new (
+  LIKE medcontrol.doses INCLUDING ALL
+) PARTITION BY RANGE ("scheduledAt");
+
+-- Criar partições mensais
+CREATE TABLE medcontrol.doses_2025_01 PARTITION OF medcontrol.doses_new
+  FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+-- ... repetir para cada mês
+
+-- Migrar dados e renomear
+INSERT INTO medcontrol.doses_new SELECT * FROM medcontrol.doses;
+ALTER TABLE medcontrol.doses RENAME TO doses_old;
+ALTER TABLE medcontrol.doses_new RENAME TO doses;
+```
+
+**Benefício:** Queries de Dashboard (doses de "hoje") varrem apenas a partição do mês corrente — ordens de magnitude mais rápido.
+
+---
+
+### 6.7 Monitoramento pós-launch
 
 - Android Vitals (crashes, ANRs, battery)
-- Firebase Analytics (opcional)
+- Sentry (erros em tempo real)
+- Firebase Analytics (funil de conversão, retenção)
 - Reviews e ratings
 - RevenueCat dashboard (receita, churn, LTV)
 
@@ -1682,6 +1951,10 @@ jobs:
 - [ ] Habilitar confirmação de email obrigatória no cadastro
 - [ ] Criar tabela `security_events` para log de auditoria
 - [ ] Registrar eventos: login, logout, exportação, exclusão, mudança de assinatura
+- [ ] Criar índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)`
+- [ ] Limitar campo `observation` a 500 chars (Data Minimization LGPD)
+- [ ] Trocar `userAgent` completo em push_subscriptions por plataforma simplificada (`Android/iOS/Web`)
+- [ ] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar)
 
 #### FASE 0.14 — Lógica de Negócio no Servidor
 - [ ] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h
@@ -1702,8 +1975,8 @@ jobs:
 - [ ] Instalar `@capacitor/app`, `@capacitor/status-bar`, `@capacitor/keyboard`, `@capacitor/splash-screen`
 - [ ] Criar `capacitor.config.ts` com appId `com.dosyapp.dosy`
 - [ ] Adicionar scripts `build:android`, `open:android` no `package.json`
-- [ ] Instalar `@capacitor/preferences`
-- [ ] Migrar Supabase `auth.storage` de localStorage para Capacitor Preferences
+- [ ] Instalar `@aparajita/capacitor-secure-storage` (substitui `@capacitor/preferences` para dados sensíveis)
+- [ ] Migrar Supabase `auth.storage` de localStorage para SecureStorage (Android KeyStore)
 - [ ] Adicionar `detectSessionInUrl: false` no Supabase client
 - [ ] Implementar handler do botão Voltar Android em `App.jsx`
 - [ ] Implementar reconexão do Realtime em `useRealtime.js` (pause/resume)
@@ -1712,6 +1985,8 @@ jobs:
 - [ ] Testar app abrindo no emulador Android (API 26+)
 - [ ] Testar app em dispositivo físico
 - [ ] Confirmar Login/auth funcionando no Android
+- [ ] Implementar SSL Pinning via `network_security_config.xml` para domínio Supabase
+- [ ] Verificar que tokens de sessão estão em SecureStorage (não legíveis via ADB backup)
 
 ### FASE 2 — Notificações FCM
 - [ ] Criar projeto no Firebase Console
@@ -1745,6 +2020,9 @@ jobs:
 - [ ] Substituir `window.print()` por jsPDF em `Reports.jsx`
 - [ ] Instalar `@capacitor/filesystem` e `@capacitor/share`
 - [ ] Adaptar exportação CSV para Android (Filesystem + Share)
+- [ ] Implementar offline mutations (optimistic updates + retry) em `confirmDose`/`skipDose`
+- [ ] Instalar `@capacitor/network` para detectar conectividade
+- [ ] Criar `src/hooks/useOnlineStatus.js` com Network listener
 - [ ] Instalar `@capacitor-community/admob`
 - [ ] Criar lógica condicional AdSense (web) / AdMob (nativo) em `AdBanner.jsx`
 - [ ] Criar assets de ícone: `resources/icon.png` (1024×1024) e `resources/splash.png`
@@ -1780,5 +2058,7 @@ jobs:
 - [ ] Publicar em produção com rollout gradual (10%)
 - [ ] Expandir rollout para 100%
 - [ ] Configurar GitHub Actions para CI/CD de releases
+- [ ] Integrar Sentry (`@sentry/react` + `@sentry/capacitor`) com `beforeSend` removendo PII
+- [ ] Configurar `VITE_SENTRY_DSN` no Vercel e como secret no CI/CD
 - [ ] Monitorar Android Vitals e crashes na primeira semana
 - [ ] Responder primeiros reviews

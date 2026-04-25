@@ -6,6 +6,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { displayName } from '../utils/userDisplay'
+import { hasSupabase, supabase } from '../services/supabase'
+import { usePatients } from '../hooks/usePatients'
 
 const NOTIF_KEY = 'medcontrol_notif'
 const loadNotif = () => {
@@ -31,9 +33,11 @@ export default function Settings() {
   const { signOut, user, updateProfile } = useAuth()
   const toast = useToast()
   const { supported, permState, subscribed, loading, subscribe, unsubscribe } = usePushNotifications()
+  const { data: patients = [] } = usePatients()
 
   const [notif, setNotif] = useState(loadNotif())
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [name, setName] = useState(displayName(user))
   const [savingName, setSavingName] = useState(false)
 
@@ -86,6 +90,49 @@ export default function Settings() {
       try {
         await subscribe(val) // upsert updates advanceMins
       } catch {}
+    }
+  }
+
+  async function exportUserData() {
+    if (!hasSupabase || !user) {
+      toast.show({ message: 'Exportação disponível apenas com conta Supabase.', kind: 'warn' }); return
+    }
+    try {
+      const [dosesRes, treatmentsRes, subsRes] = await Promise.all([
+        supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'),
+        supabase.from('treatments').select('id, patientId, medName, unit, intervalHours, durationDays, startDate, status'),
+        supabase.from('subscriptions').select('tier, tier_expires').eq('user_id', user.id).maybeSingle()
+      ])
+      const dump = {
+        exportedAt: new Date().toISOString(),
+        user: { id: user.id, email: user.email, createdAt: user.created_at },
+        patients,
+        treatments: treatmentsRes.data || [],
+        doses: dosesRes.data || [],
+        subscription: subsRes.data || null
+      }
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `dosy-meus-dados-${Date.now()}.json`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.show({ message: 'Dados exportados com sucesso.', kind: 'success' })
+    } catch (err) {
+      toast.show({ message: err.message || 'Falha ao exportar dados.', kind: 'error' })
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!hasSupabase || !user) return
+    try {
+      // Chama Edge Function que deleta dados + auth.users com service_role
+      const { error } = await supabase.functions.invoke('delete-account')
+      if (error) throw error
+      await signOut()
+      toast.show({ message: 'Conta excluída. Todos os dados foram removidos.', kind: 'success' })
+    } catch (err) {
+      toast.show({ message: err.message || 'Falha ao excluir conta.', kind: 'error' })
     }
   }
 
@@ -226,6 +273,25 @@ export default function Settings() {
           <button onClick={() => setConfirmLogout(true)} className="btn-secondary w-full">Sair</button>
         </section>
 
+        {/* Dados & Privacidade */}
+        {hasSupabase && user && (
+          <section className="card p-4 space-y-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Dados & Privacidade</p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Conforme a LGPD, você pode exportar ou excluir todos os seus dados a qualquer momento.
+            </p>
+            <button onClick={exportUserData} className="btn-secondary w-full text-sm">
+              📦 Exportar meus dados (JSON)
+            </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="w-full rounded-xl border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 py-2.5 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+            >
+              🗑️ Excluir minha conta e todos os dados
+            </button>
+          </section>
+        )}
+
         <p className="text-[11px] text-center text-slate-400">Dosy v1.0 · pt-BR</p>
       </div>
 
@@ -236,6 +302,15 @@ export default function Settings() {
         message="Você precisará entrar novamente."
         confirmLabel="Sair"
         onConfirm={signOut}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Excluir conta permanentemente?"
+        message="Todos os seus dados serão deletados: pacientes, tratamentos, doses e histórico. Esta ação é irreversível."
+        confirmLabel="Excluir tudo"
+        onConfirm={handleDeleteAccount}
+        danger
       />
     </div>
   )

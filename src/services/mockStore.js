@@ -1,5 +1,7 @@
-// Store em memória persistido em localStorage. Usado quando Supabase não está configurado.
+// Store em memória persistido em sessionStorage (demo) ou localStorage (local accounts).
+// sessionStorage: dados de saúde não persistem entre abas/sessões no modo demo — reduz exposição.
 const KEY = 'medcontrol_store_v1'
+const DEMO_KEY = 'medcontrol_demo_v1'
 
 const defaultState = () => ({
   user: null,
@@ -18,9 +20,17 @@ function hash(str) {
   return String(h)
 }
 
+let _isDemo = false
+
+function getStorage() {
+  // Modo demo usa sessionStorage: dados não persistem entre sessões (reduz exposição de PII)
+  return _isDemo ? sessionStorage : localStorage
+}
+
 function load() {
   try {
-    const raw = localStorage.getItem(KEY)
+    // Tentar sessionStorage primeiro (demo ativo), depois localStorage
+    const raw = sessionStorage.getItem(DEMO_KEY) || localStorage.getItem(KEY)
     if (!raw) return defaultState()
     return { ...defaultState(), ...JSON.parse(raw) }
   } catch {
@@ -32,7 +42,9 @@ let state = load()
 const listeners = new Set()
 
 function save() {
-  localStorage.setItem(KEY, JSON.stringify(state))
+  const storage = getStorage()
+  const key = _isDemo ? DEMO_KEY : KEY
+  storage.setItem(key, JSON.stringify(state))
   listeners.forEach((fn) => fn())
 }
 
@@ -43,9 +55,10 @@ export const mock = {
   uid() { return state.user?.id || 'demo-user' },
 
   async signInDemo(name = 'Usuário Demo') {
+    _isDemo = true
+    state = defaultState()  // sessão demo sempre começa limpa
     state.user = { id: 'demo-user', email: 'demo@dosy.app', name }
-    const hasDemoData = state.patients.some((p) => p.userId === 'demo-user')
-    if (!hasDemoData) seed()
+    seed()
     save()
     return state.user
   },
@@ -72,7 +85,18 @@ export const mock = {
     return state.user
   },
 
-  async signOut() { state.user = null; save() },
+  async signOut() {
+    if (_isDemo) {
+      // Limpar sessionStorage do demo ao sair
+      sessionStorage.removeItem(DEMO_KEY)
+      state = defaultState()
+    } else {
+      state.user = null
+      save()
+    }
+    _isDemo = false
+    listeners.forEach((fn) => fn())
+  },
 
   updateProfile({ name }) {
     if (!state.user) return
