@@ -5,11 +5,46 @@ import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { Capacitor } from '@capacitor/core'
+import * as Sentry from '@sentry/react'
+import * as SentryCapacitor from '@sentry/capacitor'
 import App from './App.jsx'
 import { ToastProvider } from './hooks/useToast.jsx'
 import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
 import './index.css'
+
+// Sentry — production-only crash + error monitoring.
+// LGPD: beforeSend strips PII (emails, names, dose observations).
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN
+if (SENTRY_DSN && import.meta.env.PROD) {
+  const sentryConfig = {
+    dsn: SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+    beforeSend(event) {
+      // Strip PII (LGPD: medication data is "categoria especial")
+      if (event.user) {
+        delete event.user.email
+        delete event.user.username
+        delete event.user.ip_address
+      }
+      // Avoid logging request body (may contain medName, patientName, observation)
+      if (event.request?.data) delete event.request.data
+      return event
+    },
+    ignoreErrors: [
+      'Network request failed',
+      'NetworkError',
+      'Load failed',
+      'Failed to fetch'
+    ]
+  }
+  if (Capacitor.isNativePlatform()) {
+    SentryCapacitor.init(sentryConfig, Sentry.init)
+  } else {
+    Sentry.init(sentryConfig)
+  }
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

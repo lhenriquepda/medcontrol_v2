@@ -2091,15 +2091,17 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 - [ ] Configurar preços: gratuito (download) + PRO Mensal + PRO Anual ← manual (Play Console + RevenueCat)
 
 ### FASE 6 — Publicação
-- [ ] Upload AAB no track de Testes Internos
-- [ ] Testar com grupo de testadores internos (mínimo 2-3 dispositivos)
-- [ ] Corrigir bugs encontrados no teste interno
-- [ ] Subir para Closed Testing (beta)
-- [ ] Aguardar aprovação Google (1-7 dias)
-- [ ] Publicar em produção com rollout gradual (10%)
-- [ ] Expandir rollout para 100%
-- [ ] Configurar GitHub Actions para CI/CD de releases
-- [ ] Integrar Sentry (`@sentry/react` + `@sentry/capacitor`) com `beforeSend` removendo PII
-- [ ] Configurar `VITE_SENTRY_DSN` no Vercel e como secret no CI/CD
-- [ ] Monitorar Android Vitals e crashes na primeira semana
-- [ ] Responder primeiros reviews
+- [ ] Upload AAB no track de Testes Internos ← manual (Play Console upload primeira vez OU via workflow_dispatch GitHub Actions)
+- [ ] Testar com grupo de testadores internos (mínimo 2-3 dispositivos) ← manual
+- [ ] Corrigir bugs encontrados no teste interno ← contínuo
+- [ ] Subir para Closed Testing (beta) ← manual ou `gh workflow run android-release.yml -f track=beta`
+- [ ] Aguardar aprovação Google (1-7 dias) ← manual
+- [ ] Publicar em produção com rollout gradual (10%) ← manual (Play Console)
+- [ ] Expandir rollout para 100% ← manual
+- [x] Configurar GitHub Actions para CI/CD de releases — `.github/workflows/android-release.yml` (build signed AAB + upload Play Store, multi-track via workflow_dispatch) + `ci.yml` (build verification em PRs) ✅
+- [x] Integrar Sentry (`@sentry/react` + `@sentry/capacitor`) com `beforeSend` removendo PII (email, name, observation, request body) — só ativa em PROD ✅
+- [x] Configurar `VITE_SENTRY_DSN` no `.env.example` + workflow secrets ✅
+- [x] Setup CI docs — `docs/play-store/ci-setup.md` com lista completa secrets necessários ✅
+- [x] Whatsnew template — `docs/play-store/whatsnew/whatsnew-pt-BR` (≤500 chars) ✅
+- [ ] Monitorar Android Vitals e crashes na primeira semana ← manual pós-launch
+- [ ] Responder primeiros reviews ← manual pós-launch

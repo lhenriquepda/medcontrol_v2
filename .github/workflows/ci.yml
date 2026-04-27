@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build web bundle
+        run: npm run build
+        env:
+          # Use placeholders — CI just verifies build compiles, not e2e
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+          VITE_SUPABASE_SCHEMA: medcontrol
+          VITE_VAPID_PUBLIC_KEY: placeholder
+
+      - name: Capacitor sync
+        run: npx cap sync android

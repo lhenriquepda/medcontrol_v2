@@ -1,0 +1,9 @@
+v1.0.0 — Lançamento inicial
+
+• Cadastro de pacientes e tratamentos
+• Alarmes estilo despertador (ignoram silencioso/DND)
+• Doses SOS com regras de segurança
+• Histórico e estatísticas de adesão
+• Relatórios PDF/CSV (PRO)
+• Modo offline com sincronização automática
+• Conformidade com a LGPD

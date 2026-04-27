@@ -27,6 +27,8 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@sentry/capacitor": "^3.2.1",
+    "@sentry/react": "^10.43.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/query-sync-storage-persister": "^5.100.5",
     "@tanstack/react-query": "^5.51.0",
