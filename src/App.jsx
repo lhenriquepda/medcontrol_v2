@@ -20,10 +20,13 @@ import Settings from './pages/Settings'
 import Admin from './pages/Admin'
 import Privacidade from './pages/Privacidade'
 import Termos from './pages/Termos'
+import ResetPassword from './pages/ResetPassword'
+import Install from './pages/Install'
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import DailySummaryModal from './components/DailySummaryModal'
+import PermissionsOnboarding from './components/PermissionsOnboarding'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -161,6 +164,42 @@ export default function App() {
     return () => { listenerHandle?.remove() }
   }, [location.pathname, navigate])
 
+  // Deep link callbacks (Capacitor):
+  //   - dosy://auth/callback?code=...  (OAuth — Google/Facebook future)
+  //   - dosy://reset-password?code=... (password recovery email link)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let urlHandle
+    const setup = async () => {
+      urlHandle = await CapacitorApp.addListener('appUrlOpen', async (event) => {
+        const url = event?.url || ''
+        const isAuthCb = url.includes('auth/callback')
+        const isReset = url.includes('reset-password')
+        if (!isAuthCb && !isReset) return
+        try {
+          // Close in-app browser if open
+          const { Browser } = await import('@capacitor/browser')
+          await Browser.close().catch(() => {})
+
+          // Exchange code for session (PKCE)
+          const u = new URL(url)
+          const code = u.searchParams.get('code')
+          if (code) {
+            const { supabase: sb } = await import('./services/supabase')
+            const { error } = await sb.auth.exchangeCodeForSession(code)
+            if (error) console.error('[DeepLink] exchange error:', error.message)
+          }
+          // Route to appropriate page
+          navigate(isReset ? '/reset-password' : '/', { replace: true })
+        } catch (e) {
+          console.warn('[DeepLink] handler:', e?.message)
+        }
+      })
+    }
+    setup()
+    return () => { urlHandle?.remove() }
+  }, [navigate])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -174,6 +213,8 @@ export default function App() {
       <Routes>
         <Route path="/privacidade" element={<Privacidade />} />
         <Route path="/termos" element={<Termos />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/install" element={<Install />} />
         <Route path="*" element={<Login />} />
       </Routes>
     )
@@ -203,11 +244,14 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
         <Route path="/privacidade" element={<Privacidade />} />
         <Route path="/termos" element={<Termos />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/install" element={<Install />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!hideNav && <BottomNav />}
     </div>
     <DailySummaryModal open={showSummary} onClose={() => setShowSummary(false)} />
+    <PermissionsOnboarding />
     </>
   )
 }

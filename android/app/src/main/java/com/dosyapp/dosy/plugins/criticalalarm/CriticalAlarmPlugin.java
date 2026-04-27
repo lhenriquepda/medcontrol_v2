@@ -1,13 +1,16 @@
 package com.dosyapp.dosy.plugins.criticalalarm;
 
 import android.app.AlarmManager;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -230,6 +233,92 @@ public class CriticalAlarmPlugin extends Plugin {
             }
         }
         call.resolve();
+    }
+
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+        intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+        } catch (Exception e) {
+            call.reject("cannot open settings: " + e.getMessage());
+            return;
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openAppNotificationSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+        } catch (Exception e) {
+            call.reject("cannot open settings: " + e.getMessage());
+            return;
+        }
+        call.resolve();
+    }
+
+    /**
+     * Returns full permission status used by JS onboarding screen.
+     * Each flag tells whether a critical-alarm-related permission is granted.
+     */
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        Context ctx = getContext();
+        JSObject ret = new JSObject();
+
+        // POST_NOTIFICATIONS — Android 13+
+        boolean canPostNotifications = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            canPostNotifications = ContextCompat.checkSelfPermission(
+                ctx, "android.permission.POST_NOTIFICATIONS"
+            ) == PackageManager.PERMISSION_GRANTED;
+        }
+        ret.put("canPostNotifications", canPostNotifications);
+
+        // SCHEDULE_EXACT_ALARM — Android 12+
+        boolean canScheduleExact = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            canScheduleExact = am != null && am.canScheduleExactAlarms();
+        }
+        ret.put("canScheduleExact", canScheduleExact);
+
+        // USE_FULL_SCREEN_INTENT — Android 14+ requires user grant
+        boolean canFullScreenIntent = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            canFullScreenIntent = nm != null && nm.canUseFullScreenIntent();
+        }
+        ret.put("canFullScreenIntent", canFullScreenIntent);
+
+        // SYSTEM_ALERT_WINDOW (overlay)
+        boolean canDrawOverlay = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            canDrawOverlay = Settings.canDrawOverlays(ctx);
+        }
+        ret.put("canDrawOverlay", canDrawOverlay);
+
+        // Notifications enabled at app level (master toggle)
+        boolean notifsEnabled = true;
+        try {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) notifsEnabled = nm.areNotificationsEnabled();
+        } catch (Exception ignored) {}
+        ret.put("notifsEnabled", notifsEnabled);
+
+        // All required = ready
+        ret.put("allGranted",
+            canPostNotifications && canScheduleExact && canFullScreenIntent &&
+            canDrawOverlay && notifsEnabled
+        );
+
+        call.resolve(ret);
     }
 
     private void persistAlarm(int id, long triggerAt, JSONArray doses) {

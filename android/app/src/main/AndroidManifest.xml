@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -11,7 +10,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -19,7 +17,6 @@
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -39,7 +36,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="dosy" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -47,10 +43,14 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- AdMob App ID (Google test ID — substituir por real ID em produção) -->
+        <!-- Required by MobileAdsInitProvider. Without this, app crashes on launch. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
 
         <!-- Alarme Crítico: Activity full-screen + Receiver -->
         <activity
@@ -62,26 +62,19 @@
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+        />
 
-        <receiver
-            android:name=".plugins.criticalalarm.AlarmReceiver"
-            android:exported="false"
-            android:enabled="true" />
+        <receiver android:name=".plugins.criticalalarm.AlarmReceiver" android:exported="false" android:enabled="true" />
 
         <service
             android:name=".plugins.criticalalarm.AlarmService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="medication_reminder" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="medication_reminder" />
         </service>
 
-        <receiver
-            android:name=".plugins.criticalalarm.BootReceiver"
-            android:exported="true"
-            android:enabled="true">
+        <receiver android:name=".plugins.criticalalarm.BootReceiver" android:exported="true" android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />

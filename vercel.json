@@ -4,6 +4,14 @@
   ],
   "headers": [
     {
+      "source": "/(.*\\.apk)",
+      "headers": [
+        { "key": "Content-Type", "value": "application/vnd.android.package-archive" },
+        { "key": "Content-Disposition", "value": "attachment; filename=\"dosy.apk\"" },
+        { "key": "Cache-Control", "value": "public, max-age=300" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -24,7 +32,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://partner.googleadservices.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fcm.googleapis.com; worker-src 'self' blob:; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://partner.googleadservices.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fcm.googleapis.com; worker-src 'self' blob:; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com;"
         }
       ]
     }

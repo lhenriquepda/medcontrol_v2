@@ -1,0 +1,45 @@
+node_modules
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+Thumbs.db
+.vercel
+
+# Local notes (secrets)
+INFOS.md
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Local Android SDK install
+build-tools/
+licenses/
+platform-tools/
+platforms/
+
+# Supabase CLI temp
+supabase/.temp/
+tools/supabase.exe
+tools/supabase.tar.gz
+tools/*_dump.sql
+
+# Android keystore — NEVER deploy
+*.keystore
+*.jks
+
+# Android Studio user-specific
+android/.idea/workspace.xml
+android/.idea/usage.statistics.xml
+android/.idea/shelf/
+android/.idea/jarRepositories.xml
+
+# Android build artifacts (we copy APK to public/ explicitly)
+android/app/build/
+android/app/release/
+android/build/
+android/.gradle/
+android/local.properties
+
+# NOTE: public/*.apk IS deployed (intentionally — beta distribution)

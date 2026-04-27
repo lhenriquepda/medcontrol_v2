@@ -11,9 +11,9 @@ function validatePassword(pwd) {
 }
 
 export default function Login() {
-  const { signInEmail, signUpEmail, signInDemo, hasSupabase } = useAuth()
+  const { signInEmail, signUpEmail, resetPassword, signInDemo, hasSupabase } = useAuth()
   const toast = useToast()
-  const [mode, setMode] = useState('signin')
+  const [mode, setMode] = useState('signin')   // 'signin' | 'signup' | 'forgot'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,9 +34,14 @@ export default function Login() {
     setBusy(true)
     try {
       if (mode === 'signin') await signInEmail(email, password)
-      else await signUpEmail(email, password, name)
+      else if (mode === 'signup') await signUpEmail(email, password, name)
+      else if (mode === 'forgot') {
+        await resetPassword(email)
+        toast.show({ message: 'Email enviado. Verifique sua caixa de entrada (e spam).', kind: 'success' })
+        setMode('signin')
+      }
     } catch (err) {
-      toast.show({ message: err.message || 'Falha no login', kind: 'error' })
+      toast.show({ message: err.message || 'Falha na operação', kind: 'error' })
     } finally {
       setBusy(false)
     }
@@ -51,12 +56,32 @@ export default function Login() {
         </div>
 
         <div className="card p-5 space-y-4">
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-            <button onClick={() => setMode('signin')}
-                    className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signin' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Entrar</button>
-            <button onClick={() => setMode('signup')}
-                    className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signup' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Criar conta</button>
-          </div>
+          {mode !== 'forgot' ? (
+            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+              <button onClick={() => setMode('signin')}
+                      className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signin' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Entrar</button>
+              <button onClick={() => setMode('signup')}
+                      className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signup' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Criar conta</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('signin')}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                aria-label="Voltar"
+              >
+                ←
+              </button>
+              <h2 className="text-base font-semibold flex-1">Recuperar senha</h2>
+            </div>
+          )}
+
+          {mode === 'forgot' && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Informe seu email cadastrado. Enviaremos um link para você redefinir a senha.
+            </p>
+          )}
 
           <form onSubmit={submit} className="space-y-3">
             {mode === 'signup' && (
@@ -64,10 +89,24 @@ export default function Login() {
                      value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
             )}
             <input type="email" required placeholder="Email" className="input"
-                   value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input type="password" required placeholder="Senha" className="input"
-                   value={password} onChange={(e) => setPassword(e.target.value)}
-                   minLength={mode === 'signup' ? 8 : undefined} />
+                   value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            {mode !== 'forgot' && (
+              <input type="password" required placeholder="Senha" className="input"
+                     value={password} onChange={(e) => setPassword(e.target.value)}
+                     minLength={mode === 'signup' ? 8 : undefined}
+                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
+            )}
+            {mode === 'signin' && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setMode('forgot')}
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
+            )}
             {mode === 'signup' && (
               <>
                 <p className="text-[10px] text-slate-400">Senha: mín. 8 chars, uma maiúscula, um número.</p>
@@ -89,7 +128,11 @@ export default function Login() {
               </>
             )}
             <button type="submit" className="btn-primary w-full" disabled={busy}>
-              {busy ? 'Aguarde…' : (mode === 'signin' ? 'Entrar' : 'Criar conta')}
+              {busy ? 'Aguarde…' : (
+                mode === 'signin' ? 'Entrar' :
+                mode === 'signup' ? 'Criar conta' :
+                'Enviar link de recuperação'
+              )}
             </button>
           </form>
 

@@ -68,7 +68,7 @@ Mesmas vars do bloco acima.
 ```
 VAPID_PUBLIC_KEY
 VAPID_PRIVATE_KEY     # NUNCA documentar
-VAPID_SUBJECT=mailto:lhenrique.pda@gmail.com
+VAPID_SUBJECT=mailto:dosy.med@gmail.com
 FIREBASE_PROJECT_ID=dosy-b592e
 FIREBASE_CLIENT_EMAIL=<service account email>
 FIREBASE_PRIVATE_KEY  # NUNCA documentar
@@ -673,7 +673,7 @@ Configurar secrets — `docs/play-store/ci-setup.md`.
 
 ## 17. Conta admin
 
-**Email padrão:** `lhenrique.pda@gmail.com` (apenas para legado `admin_email()`).
+**Email padrão:** `dosy.med@gmail.com` (apenas para legado `admin_email()`).
 
 **Sistema atual (Fase 0.3):**
 - Tabela `medcontrol.admins` (sem RLS visible)

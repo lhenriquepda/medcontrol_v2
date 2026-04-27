@@ -51,6 +51,6 @@ Dosy nasceu da experiência real de cuidar de uma família com várias medicaç�
 Dosy NÃO substitui orientação médica. Sempre siga as instruções do seu médico ou farmacêutico.
 
 📧 CONTATO
-Dúvidas, sugestões ou bugs: lhenrique.pda@gmail.com
+Dúvidas, sugestões ou bugs: dosy.med@gmail.com
 Política de Privacidade: https://dosy-teal.vercel.app/privacidade
 Termos de Uso: https://dosy-teal.vercel.app/termos

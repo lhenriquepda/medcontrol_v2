@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
+
+const isNative = Capacitor.isNativePlatform()
+// Deep link Capacitor (manifest dosy:// already configured) OR https web origin
+const OAUTH_REDIRECT = isNative
+  ? 'dosy://auth/callback'
+  : (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined)
 
 const AuthCtx = createContext(null)
 
@@ -74,13 +81,57 @@ export function AuthProvider({ children }) {
     mock.updateProfile({ name })
   }
 
-  async function signInGoogle() {
-    if (hasSupabase) {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' })
-      if (error) throw new Error(traduzirErro(error))
-      return
+  // OAuth (Google/Facebook) — código mantido pra reativar quando providers
+  // estiverem configurados em Supabase Dashboard. Atualmente desabilitado da UI.
+  async function signInOAuth(provider) {
+    if (!hasSupabase) {
+      throw new Error(`Login com ${provider} requer Supabase configurado. Use email/senha ou modo demonstração.`)
     }
-    throw new Error('Login com Google requer Supabase configurado. Use email/senha ou o modo demonstração.')
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: OAUTH_REDIRECT,
+        skipBrowserRedirect: isNative
+      }
+    })
+    if (error) throw new Error(traduzirErro(error))
+    if (isNative && data?.url) {
+      const { Browser } = await import('@capacitor/browser')
+      await Browser.open({ url: data.url, presentationStyle: 'popover' })
+    }
+  }
+
+  async function signInGoogle() { return signInOAuth('google') }
+  async function signInFacebook() { return signInOAuth('facebook') }
+
+  /**
+   * Send password reset email. Email contains link to /reset-password where
+   * user types new password (page calls updatePassword).
+   */
+  async function resetPassword(email) {
+    if (!hasSupabase) {
+      throw new Error('Recuperação de senha requer Supabase configurado.')
+    }
+    if (!email || !email.includes('@')) {
+      throw new Error('Informe um email válido.')
+    }
+    const redirectTo = isNative
+      ? 'dosy://reset-password'
+      : `${window.location.origin}/reset-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) throw new Error(traduzirErro(error))
+  }
+
+  /**
+   * Update password for the currently authenticated user (used by reset-password page
+   * after the recovery link logs the user in temporarily).
+   */
+  async function updatePassword(newPassword) {
+    if (!hasSupabase) {
+      throw new Error('Atualização de senha requer Supabase configurado.')
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw new Error(traduzirErro(error))
   }
 
   async function signInDemo() { await mock.signInDemo() }
@@ -95,7 +146,15 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signInEmail, signUpEmail, signInGoogle, signInDemo, signOut, updateProfile, hasSupabase }}>
+    <AuthCtx.Provider value={{
+      user, loading,
+      signInEmail, signUpEmail,
+      signInGoogle, signInFacebook,   // disponíveis (UI desabilitada por ora)
+      signInDemo,
+      resetPassword, updatePassword,
+      signOut, updateProfile,
+      hasSupabase
+    }}>
       {children}
     </AuthCtx.Provider>
   )

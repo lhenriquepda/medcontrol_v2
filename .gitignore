@@ -33,6 +33,16 @@ tools/medcontrol_dump.sql
 *.jks
 android/keystore.properties
 
+# Built APKs distributed via Vercel public/ (12MB+ binaries, regenerated per release)
+public/*.apk
+
+# Android Studio release outputs (large binaries + metadata, regenerated per build)
+android/app/release/
+android/app/build/
+
+# Capacitor-assets sources (committed but build artifacts excluded)
+assets/icon-only.png
+
 # Android Studio user-specific (.idea kept partial; ignore the volatile bits)
 android/.idea/workspace.xml
 android/.idea/usage.statistics.xml

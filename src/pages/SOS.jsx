@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
 import Field from '../components/Field'
+import MedNameInput from '../components/MedNameInput'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule } from '../hooks/useDoses'
 import { validateSos } from '../services/dosesService'
@@ -72,7 +73,7 @@ export default function SOS() {
         </div>
 
         <Field label="Medicamento *">
-          <input required className="input" value={medName} onChange={(e) => setMedName(e.target.value)} placeholder="Ex: Dipirona" />
+          <MedNameInput value={medName} onChange={setMedName} required />
         </Field>
         <Field label="Dose *">
           <input required className="input" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Ex: 1 comprimido" />

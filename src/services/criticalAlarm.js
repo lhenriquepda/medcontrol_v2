@@ -72,7 +72,39 @@ export async function checkCriticalAlarmEnabled() {
   return CriticalAlarm.isEnabled()
 }
 
+/**
+ * Full permission audit for the critical alarm subsystem.
+ * Returns:
+ *   { canPostNotifications, canScheduleExact, canFullScreenIntent,
+ *     canDrawOverlay, notifsEnabled, allGranted }
+ */
+export async function checkAllPermissions() {
+  if (!isCriticalAlarmAvailable()) {
+    return {
+      canPostNotifications: false, canScheduleExact: false,
+      canFullScreenIntent: false, canDrawOverlay: false,
+      notifsEnabled: false, allGranted: false
+    }
+  }
+  return CriticalAlarm.checkPermissions()
+}
+
 export async function openExactAlarmSettings() {
   if (!isCriticalAlarmAvailable()) return
   return CriticalAlarm.openExactAlarmSettings()
+}
+
+export async function openFullScreenIntentSettings() {
+  if (!isCriticalAlarmAvailable()) return
+  return CriticalAlarm.openFullScreenIntentSettings()
+}
+
+export async function openOverlaySettings() {
+  if (!isCriticalAlarmAvailable()) return
+  return CriticalAlarm.openOverlaySettings()
+}
+
+export async function openAppNotificationSettings() {
+  if (!isCriticalAlarmAvailable()) return
+  return CriticalAlarm.openAppNotificationSettings()
 }

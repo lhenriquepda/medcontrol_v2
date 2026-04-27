@@ -14,6 +14,7 @@ export function useCreateTreatment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['user_medications'] })
     }
   })
 }
@@ -21,7 +22,10 @@ export function useUpdateTreatment() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, patch }) => updateTreatment(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['treatments'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['treatments'] })
+      qc.invalidateQueries({ queryKey: ['user_medications'] })
+    }
   })
 }
 export function useDeleteTreatment() {

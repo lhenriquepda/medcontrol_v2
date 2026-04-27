@@ -7,7 +7,7 @@
 const { Client } = require('pg');
 
 const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
-const TARGET_EMAIL = process.argv[2] || 'lhenrique.pda@gmail.com';
+const TARGET_EMAIL = process.argv[2] || 'dosy.med@gmail.com';
 
 (async () => {
   const c = new Client({ connectionString: DST, ssl: { rejectUnauthorized: false } });

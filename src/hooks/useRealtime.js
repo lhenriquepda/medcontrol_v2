@@ -10,7 +10,7 @@ const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
 // Mapeia tabela -> queryKeys a invalidar
 const TABLE_TO_KEYS = {
   patients: [['patients']],
-  treatments: [['treatments'], ['doses']],
+  treatments: [['treatments'], ['doses'], ['user_medications']],
   doses: [['doses']],
   sos_rules: [['sos_rules']],
   treatment_templates: [['templates']],
