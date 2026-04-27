@@ -8,12 +8,13 @@ import { usePushNotifications } from '../hooks/usePushNotifications'
 import { displayName } from '../utils/userDisplay'
 import { hasSupabase, supabase } from '../services/supabase'
 import { usePatients } from '../hooks/usePatients'
+import { useDoses } from '../hooks/useDoses'
 
 const NOTIF_KEY = 'medcontrol_notif'
 const loadNotif = () => {
   try {
     return JSON.parse(localStorage.getItem(NOTIF_KEY)) ||
-      { push: false, dailySummary: false, summaryTime: '07:00', advanceMins: 15 }
+      { push: false, criticalAlarm: true, dailySummary: false, summaryTime: '07:00', advanceMins: 15 }
   } catch {
     return { push: false, dailySummary: false, summaryTime: '07:00', advanceMins: 15 }
   }
@@ -32,8 +33,13 @@ export default function Settings() {
   const { theme, setTheme } = useTheme()
   const { signOut, user, updateProfile } = useAuth()
   const toast = useToast()
-  const { supported, permState, subscribed, loading, subscribe, unsubscribe } = usePushNotifications()
+  const { supported, permState, subscribed, loading, subscribe, unsubscribe, scheduleDoses } = usePushNotifications()
   const { data: patients = [] } = usePatients()
+  // Fetch upcoming doses (next 48h) — used to re-schedule when notification prefs change
+  const { data: upcomingDoses = [] } = useDoses({
+    from: new Date().toISOString(),
+    to: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
+  })
 
   const [notif, setNotif] = useState(loadNotif())
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -47,6 +53,11 @@ export default function Settings() {
     const next = { ...notif, ...patch }
     setNotif(next)
     localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+    // Se subscribed e mudou prefs que afetam scheduling, re-schedule
+    const triggers = ['dailySummary', 'summaryTime', 'advanceMins', 'criticalAlarm']
+    if (subscribed && triggers.some(k => k in patch)) {
+      scheduleDoses(upcomingDoses).catch(e => console.warn('reschedule:', e?.message))
+    }
   }
 
   async function saveName() {
@@ -101,7 +112,7 @@ export default function Settings() {
       const [dosesRes, treatmentsRes, subsRes] = await Promise.all([
         supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'),
         supabase.from('treatments').select('id, patientId, medName, unit, intervalHours, durationDays, startDate, status'),
-        supabase.from('subscriptions').select('tier, tier_expires').eq('user_id', user.id).maybeSingle()
+        supabase.from('subscriptions').select('tier, expiresAt').eq('userId', user.id).maybeSingle()
       ])
       const dump = {
         exportedAt: new Date().toISOString(),
@@ -219,6 +230,25 @@ export default function Settings() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Alarme crítico (estilo despertador) */}
+          {pushActive && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium">⏰ Alarme crítico</p>
+                <p className="text-xs text-slate-500 leading-tight mt-0.5">
+                  Toca som contínuo, tela cheia, ignora silencioso e modo Não Perturbe.
+                  Recomendado para doses essenciais.
+                </p>
+              </div>
+              <button
+                onClick={() => updateNotif({ criticalAlarm: !(notif.criticalAlarm !== false) })}
+                className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.criticalAlarm !== false ? 'bg-rose-500' : 'bg-slate-300'}`}
+              >
+                <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.criticalAlarm !== false ? 'translate-x-5' : ''}`} />
+              </button>
             </div>
           )}
 

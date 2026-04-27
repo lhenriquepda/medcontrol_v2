@@ -6,9 +6,11 @@ export const CONTINUOUS_DAYS = 90
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
+const TREATMENT_COLS = 'id, userId, patientId, medName, unit, intervalHours, durationDays, startDate, firstDoseTime, status, isTemplate, isContinuous, createdAt, updatedAt'
+
 export async function listTreatments(filter = {}) {
   if (hasSupabase) {
-    let q = supabase.from('treatments').select('*')
+    let q = supabase.from('treatments').select(TREATMENT_COLS)
     if (filter.patientId) q = q.eq('patientId', filter.patientId)
     if (filter.status) q = q.eq('status', filter.status)
     const { data, error } = await q
@@ -20,7 +22,7 @@ export async function listTreatments(filter = {}) {
 
 export async function getTreatment(id) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('treatments').select('*').eq('id', id).single()
+    const { data, error } = await supabase.from('treatments').select(TREATMENT_COLS).eq('id', id).single()
     if (error) throw error
     return data
   }
@@ -28,23 +30,22 @@ export async function getTreatment(id) {
 }
 
 export async function createTreatmentWithDoses(payload) {
-  // payload inclui modo, intervalo/horários etc. Gera doses atomicamente.
+  // payload inclui modo, intervalo/horários etc. Gera doses atomicamente via RPC.
   if (hasSupabase) {
-    const { data: t, error } = await supabase.from('treatments').insert({
-      patientId: payload.patientId, medName: payload.medName, unit: payload.unit,
-      intervalHours: payload.intervalHours ?? null,
-      durationDays: payload.isContinuous ? CONTINUOUS_DAYS : payload.durationDays,
-      isContinuous: !!payload.isContinuous,
-      startDate: payload.startDate, firstDoseTime: payload.firstDoseTime ?? null,
-      status: 'active', isTemplate: !!payload.isTemplate
-    }).select().single()
+    const { data, error } = await supabase.rpc('create_treatment_with_doses', {
+      p_patient_id:      payload.patientId,
+      p_med_name:        payload.medName,
+      p_unit:            payload.unit,
+      p_interval_hours:  payload.mode === 'times' ? null : (payload.intervalHours ?? null),
+      p_duration_days:   payload.isContinuous ? CONTINUOUS_DAYS : (payload.durationDays ?? 7),
+      p_is_continuous:   !!payload.isContinuous,
+      p_start_date:      payload.startDate,
+      p_first_dose_time: payload.firstDoseTime ?? '08:00',
+      p_mode:            payload.mode || 'interval',
+      p_is_template:     !!payload.isTemplate,
+    })
     if (error) throw error
-    const doses = generateDoses({ ...payload, id: t.id })
-    if (doses.length) {
-      const { error: e2 } = await supabase.from('doses').insert(doses)
-      if (e2) throw e2
-    }
-    return t
+    return data  // jsonb returned from RPC, parsed by Supabase JS client
   }
   const t = mock.insert('treatments', {
     patientId: payload.patientId, medName: payload.medName, unit: payload.unit,
@@ -61,85 +62,21 @@ export async function createTreatmentWithDoses(payload) {
 
 export async function updateTreatment(id, patch) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('treatments').update(patch).eq('id', id).select().single()
+    // Atomic RPC: applies patch + regenerates future doses if schedule changed
+    const { data, error } = await supabase.rpc('update_treatment_schedule', {
+      p_treatment_id: id,
+      p_patch:        patch,
+    })
     if (error) throw error
-
-    // Se mudou intervalo/duração/horário/data início → regerar doses futuras pendentes
-    const scheduleChanged =
-      patch.intervalHours !== undefined ||
-      patch.durationDays !== undefined ||
-      patch.firstDoseTime !== undefined ||
-      patch.startDate !== undefined
-
-    if (scheduleChanged) {
-      const now = new Date()
-      const nowIso = now.toISOString()
-
-      // Remove somente doses pending/overdue futuras (não apaga histórico done/skipped)
-      await supabase.from('doses')
-        .delete()
-        .eq('treatmentId', id)
-        .in('status', ['pending', 'overdue'])
-        .gte('scheduledAt', nowIso)
-
-      const treatment = data
-      const isTimesMode = !treatment.intervalHours && treatment.firstDoseTime?.startsWith('[')
-
-      // Calcular próxima dose alinhada ao horário original
-      // Avança em passos de intervalHours a partir de startDate até passar de now
-      let startDate = nowIso
-      if (!isTimesMode && treatment.intervalHours) {
-        const origStart = new Date(treatment.startDate)
-        const [h0, m0] = (treatment.firstDoseTime || '08:00').split(':').map(Number)
-        origStart.setHours(h0, m0, 0, 0)
-        const stepMs = treatment.intervalHours * 3600000
-        // Avança até próxima ocorrência >= now
-        let next = new Date(origStart)
-        while (next <= now) next = new Date(next.getTime() + stepMs)
-        startDate = next.toISOString()
-      }
-
-      let dailyTimes = null
-      let firstDoseTime = treatment.firstDoseTime || '08:00'
-      if (isTimesMode) {
-        try { dailyTimes = JSON.parse(treatment.firstDoseTime) } catch { dailyTimes = ['08:00'] }
-        firstDoseTime = null
-        // Remaining days from today
-        const origEnd = new Date(treatment.startDate)
-        origEnd.setDate(origEnd.getDate() + treatment.durationDays)
-        const remainDays = Math.ceil((origEnd - now) / 86400000)
-        treatment.durationDays = Math.max(1, remainDays)
-        startDate = now.toISOString()
-      }
-
-      const effectiveDays = treatment.isContinuous ? CONTINUOUS_DAYS : treatment.durationDays
-
-      const newDoses = generateDoses({
-        id: treatment.id,
-        patientId: treatment.patientId,
-        medName: treatment.medName,
-        unit: treatment.unit,
-        startDate,
-        durationDays: effectiveDays,
-        mode: isTimesMode ? 'times' : 'interval',
-        intervalHours: treatment.intervalHours,
-        firstDoseTime,
-        dailyTimes
-      })
-      if (newDoses.length) {
-        await supabase.from('doses').insert(newDoses)
-      }
-    }
-
     return data
   }
+  // Mock: simple update (schedule regeneration skipped in demo mode)
   return mock.update('treatments', id, patch)
 }
 
 export async function deleteTreatment(id) {
   if (hasSupabase) {
-    const { error: e1 } = await supabase.from('doses').delete().eq('treatmentId', id)
-    if (e1) throw e1
+    // ON DELETE CASCADE handles doses automatically
     const { error } = await supabase.from('treatments').delete().eq('id', id)
     if (error) throw error
     return
@@ -150,7 +87,9 @@ export async function deleteTreatment(id) {
 
 export async function listTemplates() {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('treatment_templates').select('*')
+    const { data, error } = await supabase.from('treatment_templates').select(
+      'id, userId, name, medName, unit, intervalHours, durationDays, createdAt, updatedAt'
+    )
     if (error) throw error
     return (data || []).sort(byCreatedDesc)
   }

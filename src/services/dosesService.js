@@ -12,9 +12,11 @@ function recomputeOverdue(rows) {
   })
 }
 
+const DOSE_COLS = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'
+
 export async function listDoses({ from, to, patientId, status, type } = {}) {
   if (hasSupabase) {
-    let q = supabase.from('doses').select('*')
+    let q = supabase.from('doses').select(DOSE_COLS)
     if (from) q = q.gte('scheduledAt', from)
     if (to) q = q.lte('scheduledAt', to)
     if (patientId) q = q.eq('patientId', patientId)
@@ -108,7 +110,10 @@ export async function registerSos({ patientId, medName, unit, scheduledAt, obser
 
 export async function listSosRules(patientId) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('sos_rules').select('*').eq('patientId', patientId)
+    const { data, error } = await supabase
+      .from('sos_rules')
+      .select('id, userId, patientId, medName, minIntervalHours, maxDosesIn24h, createdAt, updatedAt')
+      .eq('patientId', patientId)
     if (error) throw error
     return data || []
   }

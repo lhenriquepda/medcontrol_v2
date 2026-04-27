@@ -3,9 +3,11 @@ import { mock } from './mockStore'
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
+const PATIENT_COLS = 'id, userId, name, age, avatar, photo_url, weight, condition, doctor, allergies, createdAt, updatedAt'
+
 export async function listPatients() {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').select('*')
+    const { data, error } = await supabase.from('patients').select(PATIENT_COLS)
     if (error) throw error
     return (data || []).sort(byCreatedDesc)
   }
@@ -14,7 +16,7 @@ export async function listPatients() {
 
 export async function getPatient(id) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').select('*').eq('id', id).single()
+    const { data, error } = await supabase.from('patients').select(PATIENT_COLS).eq('id', id).single()
     if (error) throw error
     return data
   }
