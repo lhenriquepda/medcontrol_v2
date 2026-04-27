@@ -2054,38 +2054,41 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 - [ ] (Opcional) Configurar webhook RevenueCat → Supabase para renovações
 
 ### FASE 4 — Polimento Nativo
-- [ ] Instalar `jspdf` e `html2canvas`
-- [ ] Substituir `window.print()` por jsPDF em `Reports.jsx`
-- [ ] Instalar `@capacitor/filesystem` e `@capacitor/share`
-- [ ] Adaptar exportação CSV para Android (Filesystem + Share)
-- [ ] Implementar offline mutations (optimistic updates + retry) em `confirmDose`/`skipDose`
-- [ ] Instalar `@capacitor/network` para detectar conectividade
-- [ ] Criar `src/hooks/useOnlineStatus.js` com Network listener
-- [ ] Instalar `@capacitor-community/admob`
-- [ ] Criar lógica condicional AdSense (web) / AdMob (nativo) em `AdBanner.jsx`
-- [ ] Criar assets de ícone: `resources/icon.png` (1024×1024) e `resources/splash.png`
-- [ ] Criar `resources/icon-foreground.png` para adaptive icon (108×108)
-- [ ] Executar `npx @capacitor/assets generate --android`
-- [ ] Configurar StatusBar dark `#0d1535` na inicialização
-- [ ] Testar safe area em dispositivos com notch
-- [ ] Configurar deep links em AndroidManifest.xml
-- [ ] Testar performance geral no Android (scroll, animações)
+- [x] Instalar `jspdf` e `html2canvas` ✅
+- [x] Substituir `window.print()` por jsPDF em `Reports.jsx` (native path: html2canvas → jsPDF → Filesystem.Cache → Share). Web mantém window.print. ✅
+- [x] Instalar `@capacitor/filesystem` e `@capacitor/share` ✅
+- [x] Adaptar exportação CSV para Android (Filesystem + Share) ✅
+- [x] Implementar offline mutations + persistência cache (TanStack PersistQueryClient + retry exponential backoff 3x) ✅
+- [x] Instalar `@capacitor/network` ✅
+- [x] Criar `src/hooks/useOnlineStatus.js` com Network listener (native) + navigator.onLine (web) ✅
+- [x] Instalar `@capacitor-community/admob` ✅
+- [x] Criar lógica condicional AdSense (web) / AdMob (nativo) em `AdBanner.jsx` — test ID default, real ID via `VITE_ADMOB_BANNER_ANDROID` env ✅
+- [ ] Criar assets de ícone: `resources/icon.png` (1024×1024) e `resources/splash.png` ← design assets needed (manual)
+- [ ] Criar `resources/icon-foreground.png` para adaptive icon (108×108) ← design assets needed (manual)
+- [ ] Executar `npx @capacitor/assets generate --android` (depende dos assets acima)
+- [x] Configurar StatusBar dark `#0d1535` na inicialização (main.jsx + Capacitor StatusBar plugin) ✅
+- [ ] Testar safe area em dispositivos com notch ← device físico
+- [x] Configurar deep links em AndroidManifest.xml — `https://dosy-teal.vercel.app` + `dosy://` custom scheme ✅
+- [ ] Testar performance geral no Android (scroll, animações) ← device físico
 
 ### FASE 5 — Preparação Play Store
 - [x] Criar página de Política de Privacidade (`/privacidade`) — `src/pages/Privacidade.jsx` criado ✅
 - [x] Criar página de Termos de Uso (`/termos`) — `src/pages/Termos.jsx` criado ✅
 - [x] Adicionar rotas `/privacidade` e `/termos` no `App.jsx` como rotas públicas (antes do auth check) ✅
-- [ ] Preencher questionário IARC no Play Console
-- [ ] Preencher declaração de saúde (se aplicável)
-- [ ] Gerar keystore de release (`keytool -genkey ...`)
-- [ ] Fazer backup do keystore em 3 locais seguros
-- [ ] Configurar `android/app/build.gradle` com signingConfig
-- [ ] Gerar primeiro `.aab` de release
-- [ ] Tirar screenshots: Dashboard, DoseModal, Relatório, Settings, Pacientes (1080×1920)
-- [ ] Criar Feature Graphic (1024×500px)
-- [ ] Escrever descrição curta (máx 80 chars)
-- [ ] Escrever descrição longa (máx 4000 chars)
-- [ ] Configurar preços: gratuito (download) + PRO Mensal + PRO Anual
+- [ ] Preencher questionário IARC no Play Console ← manual (web Play Console)
+- [ ] Preencher declaração de saúde (se aplicável) ← manual (web Play Console)
+- [ ] Gerar keystore de release ← `docs/play-store/keystore-instructions.md` com comando + checklist segurança ⚠️ MANUAL CRÍTICO
+- [ ] Fazer backup do keystore em 3 locais seguros ← manual (instruções em keystore-instructions.md)
+- [x] Configurar `android/app/build.gradle` com signingConfig — env-based (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD), só ativa se keystore existir ✅
+- [x] `.keystore` + `*.jks` adicionados ao `.gitignore` ✅
+- [ ] Gerar primeiro `.aab` de release (depende keystore) ← `cd android && .\gradlew.bat bundleRelease`
+- [ ] Tirar screenshots: Dashboard, DoseModal, Relatório, Settings, Pacientes (1080×1920) ← manual
+- [ ] Criar Feature Graphic (1024×500px) ← manual (design)
+- [x] Escrever descrição curta — `docs/play-store/description-short.txt` (80 chars) ✅
+- [x] Escrever descrição longa — `docs/play-store/description-long.txt` (~3500 chars com features, LGPD, contato) ✅
+- [x] Release notes template — `docs/play-store/release-notes.md` ✅
+- [x] App title — `docs/play-store/app-title.txt` ✅
+- [ ] Configurar preços: gratuito (download) + PRO Mensal + PRO Anual ← manual (Play Console + RevenueCat)
 
 ### FASE 6 — Publicação
 - [ ] Upload AAB no track de Testes Internos

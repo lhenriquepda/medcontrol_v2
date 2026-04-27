@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +16,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    // Release signing config — keystore path + passwords from env vars.
+    // Generate keystore once via:
+    //   keytool -genkey -v -keystore dosy-release.keystore -alias dosykey -keyalg RSA -keysize 2048 -validity 10000
+    // Store securely (3 backup locations). NEVER commit the .keystore file.
+    // Env vars expected: KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'
+            def keystoreFile = file(keystorePath)
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
+                keyAlias System.getenv('KEY_ALIAS') ?: 'dosykey'
+                keyPassword System.getenv('KEY_PASSWORD') ?: ''
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Apply signing config only if keystore exists (avoid breaking debug builds)
+            def keystorePath = System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'
+            if (file(keystorePath).exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

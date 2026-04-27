@@ -1,0 +1,56 @@
+💊 Dosy — Controle de Medicamentos para Toda a Família
+
+Esqueça as doses. Esqueça os horários complicados. Esqueça as planilhas no fim da consulta.
+Dosy é o assistente diário de medicação que cuida de você e de quem você ama, com alarmes confiáveis estilo despertador, relatórios prontos para o médico e total privacidade dos seus dados.
+
+✅ POR QUE DOSY?
+• Alarme estilo despertador: ignora silencioso e Não Perturbe quando configurado, toca em loop até você confirmar
+• Vários pacientes em uma conta: filhos, pais, você mesmo — perfeito para cuidadores
+• Doses agrupadas: várias doses no mesmo horário aparecem em um único alerta
+• Modo SOS: registre doses de resgate com regras de segurança (intervalo mínimo, máximo em 24h)
+• Histórico completo: veja sua adesão dos últimos dias, semanas ou meses
+• Relatórios PDF/CSV prontos para imprimir ou enviar ao médico (PRO)
+• Funciona offline: o app continua funcionando sem internet, sincroniza quando volta
+
+🔔 LEMBRETES QUE FUNCIONAM DE VERDADE
+Dosy usa alarmes nativos do Android (não notificações simples), garantindo que o som toque mesmo com o celular silenciado, em modo Não Perturbe ou com a tela bloqueada. A tela cheia abre automaticamente quando o alarme dispara.
+
+👨‍👩‍👧‍👦 FEITO PARA CUIDADORES
+Cadastre cada membro da família como um paciente separado. Acompanhe os tratamentos, doses tomadas e atrasadas de cada um em um único dashboard. Compartilhe pacientes com outros cuidadores (cônjuge, filhos adultos, profissionais).
+
+📋 TRATAMENTOS FLEXÍVEIS
+• Intervalos comuns: 4h, 6h, 8h, 12h, 1x/dia, 2 em 2 dias, 1x/semana, quinzenal, 1x/mês
+• Tratamentos contínuos (sem data fim): geração automática de doses para 90 dias
+• Templates: salve configurações de medicamentos frequentes para reusar
+• Múltiplos horários por dia (ex: 8h, 14h, 22h)
+
+🔒 PRIVACIDADE EM PRIMEIRO LUGAR
+• Conformidade com a LGPD (Lei 13.709/2018)
+• Seus dados são criptografados (AES-256 via Android KeyStore)
+• Você pode exportar todos os seus dados quando quiser (Art. 18 LGPD)
+• Você pode deletar sua conta e todos os dados a qualquer momento (Direito ao Esquecimento)
+• Sem rastreamento de terceiros, sem venda de dados
+
+📊 RELATÓRIOS PRO
+Exporte relatórios completos de adesão em PDF ou CSV diretamente do app:
+• Tabela detalhada de todas as doses (tomadas, puladas, atrasadas)
+• Estatísticas de adesão por período
+• Filtro por paciente, status, tipo de dose
+• Pronto para enviar ao médico via WhatsApp ou email
+
+⚙️ MODO PRO
+Mais recursos com a assinatura PRO:
+• Múltiplos pacientes ilimitados
+• Relatórios PDF/CSV
+• Análises avançadas de adesão
+• Sem anúncios
+
+🚀 SOBRE O DOSY
+Dosy nasceu da experiência real de cuidar de uma família com várias medicações simultâneas. Cada feature foi pensada para resolver um problema concreto: lembretes que falham, planilhas perdidas, esquecer qual dose foi tomada, explicar tratamentos para o médico.
+
+Dosy NÃO substitui orientação médica. Sempre siga as instruções do seu médico ou farmacêutico.
+
+📧 CONTATO
+Dúvidas, sugestões ou bugs: lhenrique.pda@gmail.com
+Política de Privacidade: https://dosy-teal.vercel.app/privacidade
+Termos de Uso: https://dosy-teal.vercel.app/termos

@@ -28,6 +28,11 @@ tools/supabase.tar.gz
 tools/*_dump.sql
 tools/medcontrol_dump.sql
 
+# Android release keystore — NEVER commit (loss = cannot update app)
+*.keystore
+*.jks
+android/keystore.properties
+
 # Android Studio user-specific (.idea kept partial; ignore the volatile bits)
 android/.idea/workspace.xml
 android/.idea/usage.statistics.xml
