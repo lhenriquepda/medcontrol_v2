@@ -1,9 +1,9 @@
-/**
- * cleanup.cjs — dedup data, add PKs, add missing FKs/uniques
+﻿/**
+ * cleanup.cjs â€” dedup data, add PKs, add missing FKs/uniques
  */
 const { Client } = require('pg');
-const SRC = 'postgresql://postgres:bJkXaiMIbQlc9ZWP@db.oubmmyitpahbcsjrhcxr.supabase.co:5432/postgres';
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const SRC = process.env.LEGACY_KP_DB_URL;
+const DST = process.env.DOSY_DB_URL;
 const SCHEMA = 'medcontrol';
 
 async function main() {
@@ -12,7 +12,7 @@ async function main() {
   await src.connect();
   await dst.connect();
 
-  // ── 1. Get PK columns from source for each table ──────────────────────
+  // â”€â”€ 1. Get PK columns from source for each table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { rows: tables } = await src.query(`
     SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename
   `, [SCHEMA]);
@@ -30,7 +30,7 @@ async function main() {
       GROUP BY c.oid
     `, [SCHEMA, tablename]);
     if (pkRows.length === 0) {
-      console.log(`  ${tablename}: no PK in source — skip`);
+      console.log(`  ${tablename}: no PK in source â€” skip`);
       continue;
     }
     let pkCols = pkRows[0].cols;
@@ -62,7 +62,7 @@ async function main() {
 
     if (dups > 0) {
       // Dedup: keep oldest ctid for each PK group
-      console.log(`  ${tablename}: ${total} rows, ${dups} duplicate PK groups → dedup`);
+      console.log(`  ${tablename}: ${total} rows, ${dups} duplicate PK groups â†’ dedup`);
       await dst.query(`
         DELETE FROM ${SCHEMA}."${tablename}" a
         USING ${SCHEMA}."${tablename}" b
@@ -84,7 +84,7 @@ async function main() {
     }
   }
 
-  // ── 2. Add unique constraints from source ─────────────────────────────
+  // â”€â”€ 2. Add unique constraints from source â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('\n=== 2. Unique constraints ===\n');
   const { rows: uqs } = await src.query(`
     SELECT cl.relname AS tbl, c.conname, pg_get_constraintdef(c.oid, true) AS def
@@ -109,7 +109,7 @@ async function main() {
     }
   }
 
-  // ── 3. Add missing FKs ─────────────────────────────────────────────────
+  // â”€â”€ 3. Add missing FKs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('\n=== 3. FKs ===\n');
   await dst.query(`SET search_path TO ${SCHEMA}, public, auth`);
 
@@ -153,7 +153,7 @@ async function main() {
     }
   }
 
-  // ── 4. Final verification ──────────────────────────────────────────────
+  // â”€â”€ 4. Final verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('\n=== 4. Verification ===\n');
   for (const { tablename } of tables) {
     const r = await dst.query(`SELECT COUNT(*) AS n FROM ${SCHEMA}."${tablename}"`);
@@ -165,3 +165,4 @@ async function main() {
 }
 
 main().catch(e => { console.error('FATAL:', e); process.exit(1); });
+

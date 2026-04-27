@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sends an FCM test push to all device tokens belonging to a given user.
  * Demonstrates user isolation: token X owned by user B doesn't receive pushes targeted at user A.
  *
@@ -6,7 +6,7 @@
  */
 const { Client } = require('pg');
 
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const DST = process.env.DOSY_DB_URL;
 const TARGET_EMAIL = process.argv[2] || 'dosy.med@gmail.com';
 
 (async () => {
@@ -27,8 +27,8 @@ const TARGET_EMAIL = process.argv[2] || 'dosy.med@gmail.com';
 
   console.log(`\nFCM tokens for ${TARGET_EMAIL}: ${subs.length}`);
   if (subs.length === 0) {
-    console.log('  → No FCM destinations. Push will deliver to 0 devices.');
-    console.log('  → Emulator (logged as different user) gets nothing — correct isolation.');
+    console.log('  â†’ No FCM destinations. Push will deliver to 0 devices.');
+    console.log('  â†’ Emulator (logged as different user) gets nothing â€” correct isolation.');
     await c.end();
     return;
   }
@@ -37,10 +37,11 @@ const TARGET_EMAIL = process.argv[2] || 'dosy.med@gmail.com';
     console.log(`  - ${s.platform}: ${s.deviceToken.slice(0, 30)}...`);
   }
 
-  // Invoke deployed Edge Function — no need for FCM creds locally
-  console.log('\n→ Invoking notify-doses Edge Function with manual test payload not supported.');
+  // Invoke deployed Edge Function â€” no need for FCM creds locally
+  console.log('\nâ†’ Invoking notify-doses Edge Function with manual test payload not supported.');
   console.log('   To trigger real push, would need a pending dose for this user in 15-min window.');
   console.log('   Demonstration: only the security boundary check is needed (above).');
 
   await c.end();
 })();
+

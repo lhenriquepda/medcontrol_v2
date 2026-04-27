@@ -1,20 +1,20 @@
-/**
- * migrate.js — Full DB migration: kids-paint → dosy-app
+﻿/**
+ * migrate.js â€” Full DB migration: kids-paint â†’ dosy-app
  * Migrates: medcontrol schema (DDL + data) + auth.users + auth.identities
  * Does NOT touch: Vercel PWA (dosy-teal.vercel.app) stays on kids-paint
  */
 const { Client } = require('pg');
 
-const SRC_URL = 'postgresql://postgres:bJkXaiMIbQlc9ZWP@db.oubmmyitpahbcsjrhcxr.supabase.co:5432/postgres';
-const DST_URL = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const SRC_URL = process.env.LEGACY_KP_DB_URL;
+const DST_URL = process.env.DOSY_DB_URL;
 const SCHEMA  = 'medcontrol';
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function connect(url, label) {
   const c = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  console.log(`✔ Connected: ${label}`);
+  console.log(`âœ” Connected: ${label}`);
   return c;
 }
 
@@ -34,12 +34,12 @@ async function tryExec(client, sql, params = [], label = '') {
     await client.query(sql, params);
     return true;
   } catch (e) {
-    console.log(`  ⚠ ${label || sql.slice(0, 60)}: ${e.message}`);
+    console.log(`  âš  ${label || sql.slice(0, 60)}: ${e.message}`);
     return false;
   }
 }
 
-// ── main ───────────────────────────────────────────────────────────────────
+// â”€â”€ main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function migrate() {
   const src = await connect(SRC_URL, 'source (kids-paint)');
@@ -47,13 +47,13 @@ async function migrate() {
 
   try {
 
-    // ── 1. Schema ──────────────────────────────────────────────────────────
-    console.log('\n── 1. Creating schema ──');
+    // â”€â”€ 1. Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 1. Creating schema â”€â”€');
     await exec(dst, `CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`);
     console.log(`  + schema ${SCHEMA}`);
 
-    // ── 2. Extensions ─────────────────────────────────────────────────────
-    console.log('\n── 2. Extensions ──');
+    // â”€â”€ 2. Extensions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 2. Extensions â”€â”€');
     const { rows: exts } = await src.query(`
       SELECT extname FROM pg_extension
       WHERE extname NOT IN ('plpgsql', 'pg_net')
@@ -64,8 +64,8 @@ async function migrate() {
       console.log(`  + ${extname}`);
     }
 
-    // ── 3. Enum types ──────────────────────────────────────────────────────
-    console.log('\n── 3. Enum types ──');
+    // â”€â”€ 3. Enum types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 3. Enum types â”€â”€');
     const { rows: enums } = await src.query(`
       SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder) AS labels
       FROM pg_type t
@@ -80,8 +80,8 @@ async function migrate() {
       console.log(`  + ${typname}: [${labels.join(', ')}]`);
     }
 
-    // ── 4. Tables (without FK) ─────────────────────────────────────────────
-    console.log('\n── 4. Tables ──');
+    // â”€â”€ 4. Tables (without FK) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 4. Tables â”€â”€');
     const { rows: tables } = await src.query(`
       SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename
     `, [SCHEMA]);
@@ -124,7 +124,7 @@ async function migrate() {
         GROUP BY c.oid
       `, [SCHEMA, tablename]);
 
-      // Parse pk cols — pg may return name[] as JS array or as '{col1,col2}' string
+      // Parse pk cols â€” pg may return name[] as JS array or as '{col1,col2}' string
       let pkCols = [];
       if (pk[0]?.cols) {
         const raw = pk[0].cols;
@@ -148,8 +148,8 @@ async function migrate() {
       console.log(`  + ${tablename} (${cols.length} cols, pk: ${pkCols.join(',')||'none'})`);
     }
 
-    // ── 5. Data ────────────────────────────────────────────────────────────
-    console.log('\n── 5. Data ──');
+    // â”€â”€ 5. Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 5. Data â”€â”€');
     for (const { tablename } of tables) {
       const { rows } = await src.query(`SELECT * FROM ${SCHEMA}."${tablename}"`);
       if (rows.length === 0) { console.log(`  = ${tablename}: empty`); continue; }
@@ -176,8 +176,8 @@ async function migrate() {
       console.log(`  + ${tablename}: ${inserted}/${rows.length} rows`);
     }
 
-    // ── 6. Sequences — reset to current max ───────────────────────────────
-    console.log('\n── 6. Resetting sequences ──');
+    // â”€â”€ 6. Sequences â€” reset to current max â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 6. Resetting sequences â”€â”€');
     const { rows: seqInfo } = await src.query(`
       SELECT sequencename, last_value
       FROM pg_sequences
@@ -189,11 +189,11 @@ async function migrate() {
         `SELECT setval('${SCHEMA}."${seq.sequencename}"', ${val}, true)`,
         [], `seq: ${seq.sequencename}`
       );
-      console.log(`  + ${seq.sequencename} → ${val}`);
+      console.log(`  + ${seq.sequencename} â†’ ${val}`);
     }
 
-    // ── 6b. auth.users — migrate BEFORE FK constraints (tables ref auth.users) ──
-    console.log('\n── 6b. auth.users (needed before FK constraints) ──');
+    // â”€â”€ 6b. auth.users â€” migrate BEFORE FK constraints (tables ref auth.users) â”€â”€
+    console.log('\nâ”€â”€ 6b. auth.users (needed before FK constraints) â”€â”€');
 
     // Find which columns in DST auth.users are GENERATED (cannot be inserted)
     const { rows: generatedCols } = await dst.query(`
@@ -220,7 +220,7 @@ async function migrate() {
     }
     console.log(`  Users: ${uEarly}/${usersEarly.length}`);
 
-    // auth.identities — also check for generated columns
+    // auth.identities â€” also check for generated columns
     const { rows: genIdentCols } = await dst.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_schema = 'auth' AND table_name = 'identities'
@@ -242,8 +242,8 @@ async function migrate() {
     }
     console.log(`  Identities: ${iEarly}/${identitiesEarly.length}`);
 
-    // ── 7. Constraints (CHECK, UNIQUE, FK) ─────────────────────────────────
-    console.log('\n── 7. Constraints (check / unique / fk) ──');
+    // â”€â”€ 7. Constraints (CHECK, UNIQUE, FK) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 7. Constraints (check / unique / fk) â”€â”€');
     // Set search_path so FK references resolve to medcontrol schema
     await dst.query(`SET search_path TO ${SCHEMA}, public, auth`);
     const { rows: constraints } = await src.query(`
@@ -269,8 +269,8 @@ async function migrate() {
       if (ok) console.log(`  + ${label}`);
     }
 
-    // ── 8. Indexes ─────────────────────────────────────────────────────────
-    console.log('\n── 8. Indexes ──');
+    // â”€â”€ 8. Indexes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 8. Indexes â”€â”€');
     const { rows: indexes } = await src.query(`
       SELECT indexname, indexdef
       FROM pg_indexes
@@ -286,8 +286,8 @@ async function migrate() {
       if (ok) console.log(`  + ${indexname}`);
     }
 
-    // ── 9. Functions ───────────────────────────────────────────────────────
-    console.log('\n── 9. Functions ──');
+    // â”€â”€ 9. Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 9. Functions â”€â”€');
     const { rows: funcs } = await src.query(`
       SELECT p.proname, pg_get_functiondef(p.oid) AS def
       FROM pg_proc p
@@ -300,8 +300,8 @@ async function migrate() {
       if (ok) console.log(`  + ${proname}()`);
     }
 
-    // ── 10. Triggers ───────────────────────────────────────────────────────
-    console.log('\n── 10. Triggers ──');
+    // â”€â”€ 10. Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 10. Triggers â”€â”€');
     const { rows: triggers } = await src.query(`
       SELECT t.tgname, cl.relname AS tbl, pg_get_triggerdef(t.oid) AS def
       FROM pg_trigger t
@@ -314,8 +314,8 @@ async function migrate() {
       if (ok) console.log(`  + ${tgname} on ${tbl}`);
     }
 
-    // ── 11. RLS ────────────────────────────────────────────────────────────
-    console.log('\n── 11. RLS + Policies ──');
+    // â”€â”€ 11. RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 11. RLS + Policies â”€â”€');
     const { rows: rlsTbls } = await src.query(`
       SELECT cl.relname
       FROM pg_class cl
@@ -334,7 +334,7 @@ async function migrate() {
     `, [SCHEMA]);
     for (const p of policies) {
       const permissive = p.permissive === 'PERMISSIVE' ? 'PERMISSIVE' : 'RESTRICTIVE';
-      // pg returns name[] as JS array or as '{role1,role2}' string — handle both
+      // pg returns name[] as JS array or as '{role1,role2}' string â€” handle both
       let rolesArr = p.roles;
       if (typeof rolesArr === 'string') rolesArr = rolesArr.replace(/[{}]/g,'').split(',').filter(Boolean);
       const roles = (Array.isArray(rolesArr) && rolesArr.length) ? rolesArr.join(', ') : 'PUBLIC';
@@ -345,8 +345,8 @@ async function migrate() {
       if (ok) console.log(`  + ${p.policyname} on ${p.tablename}`);
     }
 
-    // ── 12. Grants ─────────────────────────────────────────────────────────
-    console.log('\n── 12. Grants ──');
+    // â”€â”€ 12. Grants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    console.log('\nâ”€â”€ 12. Grants â”€â”€');
     await exec(dst, `GRANT USAGE ON SCHEMA ${SCHEMA} TO anon, authenticated, service_role`);
     await exec(dst, `GRANT ALL ON ALL TABLES IN SCHEMA ${SCHEMA} TO anon, authenticated, service_role`);
     await exec(dst, `GRANT ALL ON ALL SEQUENCES IN SCHEMA ${SCHEMA} TO anon, authenticated, service_role`);
@@ -355,9 +355,9 @@ async function migrate() {
 
     // auth.users + identities already migrated in step 6b (before FK constraints)
 
-    console.log('\n══════════════════════════════');
-    console.log('✅  MIGRATION COMPLETE');
-    console.log('══════════════════════════════\n');
+    console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+    console.log('âœ…  MIGRATION COMPLETE');
+    console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n');
 
   } finally {
     await src.end();
@@ -366,6 +366,7 @@ async function migrate() {
 }
 
 migrate().catch(e => {
-  console.error('\n❌ FATAL:', e.message);
+  console.error('\nâŒ FATAL:', e.message);
   process.exit(1);
 });
+

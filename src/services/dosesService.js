@@ -16,15 +16,32 @@ const DOSE_COLS = 'id, userId, treatmentId, patientId, medName, unit, scheduledA
 
 export async function listDoses({ from, to, patientId, status, type } = {}) {
   if (hasSupabase) {
-    let q = supabase.from('doses').select(DOSE_COLS)
+    // Order desc by scheduledAt + paginate to bypass 1000-row default limit.
+    // Loop until empty page returns. Each page = 1000 rows max.
+    let q = supabase
+      .from('doses')
+      .select(DOSE_COLS)
+      .order('scheduledAt', { ascending: false })
     if (from) q = q.gte('scheduledAt', from)
     if (to) q = q.lte('scheduledAt', to)
     if (patientId) q = q.eq('patientId', patientId)
     if (type) q = q.eq('type', type)
     // Importante: NÃO filtrar por status no servidor — overdue é computado no cliente
     // e doses "overdue" ficam persistidas como 'pending' no DB.
-    const { data, error } = await q
-    if (error) throw error
+
+    const PAGE = 1000
+    const all = []
+    let page = 0
+    // Safety cap: 20 pages = 20k doses (5+ years for typical user)
+    while (page < 20) {
+      const { data, error } = await q.range(page * PAGE, (page + 1) * PAGE - 1)
+      if (error) throw error
+      if (!data || data.length === 0) break
+      all.push(...data)
+      if (data.length < PAGE) break
+      page++
+    }
+    const data = all
     const now = new Date()
     let rows = (data || []).map((d) => {
       if (d.status === 'pending' && new Date(d.scheduledAt) < now) return { ...d, status: 'overdue' }

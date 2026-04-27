@@ -5,20 +5,11 @@ import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { usePushNotifications } from '../hooks/usePushNotifications'
+import { useUserPrefs, useUpdateUserPrefs, DEFAULT_PREFS } from '../hooks/useUserPrefs'
 import { displayName } from '../utils/userDisplay'
 import { hasSupabase, supabase } from '../services/supabase'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
-
-const NOTIF_KEY = 'medcontrol_notif'
-const loadNotif = () => {
-  try {
-    return JSON.parse(localStorage.getItem(NOTIF_KEY)) ||
-      { push: false, criticalAlarm: true, dailySummary: false, summaryTime: '07:00', advanceMins: 15 }
-  } catch {
-    return { push: false, dailySummary: false, summaryTime: '07:00', advanceMins: 15 }
-  }
-}
 
 const ADVANCE_OPTIONS = [
   { value: 0,  label: 'Na hora' },
@@ -41,7 +32,10 @@ export default function Settings() {
     to: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
   })
 
-  const [notif, setNotif] = useState(loadNotif())
+  // User-level prefs synced via DB (medcontrol.user_prefs) — same view across devices
+  const { data: notif = DEFAULT_PREFS } = useUserPrefs()
+  const updatePrefsMut = useUpdateUserPrefs()
+
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [name, setName] = useState(displayName(user))
@@ -49,10 +43,13 @@ export default function Settings() {
 
   useEffect(() => { setName(displayName(user)) }, [user])
 
-  function updateNotif(patch) {
-    const next = { ...notif, ...patch }
-    setNotif(next)
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+  async function updateNotif(patch) {
+    try {
+      await updatePrefsMut.mutateAsync(patch)
+    } catch (err) {
+      toast.show({ message: err.message || 'Falha ao salvar preferência.', kind: 'error' })
+      return
+    }
     // Se subscribed e mudou prefs que afetam scheduling, re-schedule
     const triggers = ['dailySummary', 'summaryTime', 'advanceMins', 'criticalAlarm']
     if (subscribed && triggers.some(k => k in patch)) {
@@ -213,6 +210,21 @@ export default function Settings() {
               <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${pushActive ? 'translate-x-5' : ''}`} />
             </button>
           </div>
+
+          {/* Re-check Android special-access permissions (alarme estilo despertador) */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('dosy:checkPermissions'))}
+            className="w-full text-left flex items-center justify-between rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Verificar permissões do alarme</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Alarme estilo despertador exige 4 permissões especiais Android.
+              </p>
+            </div>
+            <span className="text-brand-600 dark:text-brand-400 ml-3">→</span>
+          </button>
 
           {/* Advance time — only shown when push is active */}
           {pushActive && (

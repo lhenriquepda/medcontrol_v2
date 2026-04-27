@@ -1,8 +1,8 @@
-/**
- * security-fix.cjs — Fix RLS gaps found by test-sos-bypass
+﻿/**
+ * security-fix.cjs â€” Fix RLS gaps found by test-sos-bypass
  *
- * Issue 1: own_insert/own_update/own_delete só checam userId — não checam ownership do patientId
- *          → User B pode inserir/modificar dose com userId=B, patientId=A's patient
+ * Issue 1: own_insert/own_update/own_delete sÃ³ checam userId â€” nÃ£o checam ownership do patientId
+ *          â†’ User B pode inserir/modificar dose com userId=B, patientId=A's patient
  * Issue 2: register_sos_dose RPC pode ser bypassada via INSERT direto em doses
  *
  * Fix:
@@ -11,15 +11,15 @@
  *     (register_sos_dose seta GUC pra liberar)
  */
 const { Client } = require('pg');
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const DST = process.env.DOSY_DB_URL;
 
 (async () => {
   const c = new Client({ connectionString: DST, ssl: { rejectUnauthorized: false } });
   await c.connect();
 
-  console.log('=== Fix 1: doses RLS — verificar patientId ownership em INSERT/UPDATE/DELETE ===');
+  console.log('=== Fix 1: doses RLS â€” verificar patientId ownership em INSERT/UPDATE/DELETE ===');
 
-  // Drop weak own_* policies — shared_* já cobrem owner + shared via has_patient_access
+  // Drop weak own_* policies â€” shared_* jÃ¡ cobrem owner + shared via has_patient_access
   const weak = ['own_insert', 'own_update', 'own_delete', 'own_select'];
   for (const pol of weak) {
     try {
@@ -38,10 +38,10 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     }
   }
 
-  // treatment_templates não tem patientId — manter own_* (só userId)
-  console.log('  = treatment_templates: own_* mantidas (não tem patientId)');
+  // treatment_templates nÃ£o tem patientId â€” manter own_* (sÃ³ userId)
+  console.log('  = treatment_templates: own_* mantidas (nÃ£o tem patientId)');
 
-  // patients tem userId mas é a própria entidade — manter own_*
+  // patients tem userId mas Ã© a prÃ³pria entidade â€” manter own_*
   console.log('  = patients: own_* mantidas');
 
   console.log('\n=== Fix 2: trigger bloqueia INSERT direto type=sos ===');
@@ -92,12 +92,13 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
   );
 
   if (newDef === fn[0].def) {
-    console.log('  ⚠ INSERT pattern not found — manual review needed');
+    console.log('  âš  INSERT pattern not found â€” manual review needed');
   } else {
     await c.query(newDef);
     console.log('  + register_sos_dose patched (sets GUC before INSERT)');
   }
 
   await c.end();
-  console.log('\n✅ Security fixes applied. Run test-sos-bypass.cjs to verify.');
+  console.log('\nâœ… Security fixes applied. Run test-sos-bypass.cjs to verify.');
 })();
+

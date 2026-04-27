@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Capacitor, App as CapacitorApp } from '@capacitor/core'
+import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import {
   checkAllPermissions,
@@ -32,36 +32,63 @@ const STORAGE_KEY = 'dosy_permissions_dismissed'
  *   - Once allGranted=true, dismisses + writes localStorage flag
  *   - User can skip; banner reappears in Settings/Dashboard if still missing
  */
-export default function PermissionsOnboarding({ onComplete }) {
+export default function PermissionsOnboarding({ onComplete, onClose }) {
   const [perms, setPerms] = useState(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!isNative) {
-      // Web: no special permissions needed
       setPerms({ allGranted: true })
       setOpen(false)
+      onClose?.()
       return
     }
     try {
       const status = await checkAllPermissions()
       setPerms(status)
       const dismissed = localStorage.getItem(STORAGE_KEY) === '1'
-      setOpen(!status.allGranted && !dismissed)
+      const shouldShow = !status.allGranted && !dismissed
+      setOpen(shouldShow)
       if (status.allGranted) {
         localStorage.setItem(STORAGE_KEY, '1')
         onComplete?.()
+        onClose?.()
+      } else if (!shouldShow) {
+        // Already dismissed
+        onClose?.()
       }
     } catch (e) {
       console.warn('[Permissions] check failed:', e?.message)
     }
-  }, [onComplete])
+  }, [onComplete, onClose])
 
   // Initial check
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // External trigger: Settings button OR any caller dispatches this event
+  // to force the modal open (re-check permissions on demand).
+  useEffect(() => {
+    const handler = async () => {
+      localStorage.removeItem(STORAGE_KEY)
+      if (!isNative) {
+        setPerms({ allGranted: true })
+        setOpen(false)
+        return
+      }
+      try {
+        const status = await checkAllPermissions()
+        setPerms(status)
+        setOpen(true)
+      } catch (e) {
+        console.warn('[Permissions] manual check failed:', e?.message)
+      }
+    }
+    window.addEventListener('dosy:checkPermissions', handler)
+    return () => window.removeEventListener('dosy:checkPermissions', handler)
+  }, [])
 
   // Re-check when app returns from Settings (Capacitor lifecycle)
   useEffect(() => {
@@ -124,6 +151,7 @@ export default function PermissionsOnboarding({ onComplete }) {
   function dismiss() {
     localStorage.setItem(STORAGE_KEY, '1')
     setOpen(false)
+    onClose?.()
   }
 
   return (

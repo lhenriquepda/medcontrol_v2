@@ -1,8 +1,8 @@
-/**
- * verify.cjs — verify migration state on dst, fix lingering issues
+﻿/**
+ * verify.cjs â€” verify migration state on dst, fix lingering issues
  */
 const { Client } = require('pg');
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const DST = process.env.DOSY_DB_URL;
 
 (async () => {
   const c = new Client({ connectionString: DST, ssl: { rejectUnauthorized: false } });
@@ -72,3 +72,4 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
 
   await c.end();
 })();
+

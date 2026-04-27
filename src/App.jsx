@@ -27,6 +27,7 @@ import { useRealtime } from './hooks/useRealtime'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
+import OnboardingTour from './components/OnboardingTour'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -34,6 +35,9 @@ export default function App() {
   const navigate = useNavigate()
   useRealtime()
   const [showSummary, setShowSummary] = useState(false)
+  // Tour shows after permissions modal closes (granted OR skipped). Web also shows immediately
+  // since web has no special permissions modal.
+  const [permsDone, setPermsDone] = useState(() => !Capacitor.isNativePlatform())
 
   // Auto-prompt notif permissions on first login (once per user per device)
   // Note: subscribe activates LOCAL CriticalAlarm + LocalNotifications scheduling.
@@ -251,7 +255,11 @@ export default function App() {
       {!hideNav && <BottomNav />}
     </div>
     <DailySummaryModal open={showSummary} onClose={() => setShowSummary(false)} />
-    <PermissionsOnboarding />
+    <PermissionsOnboarding
+      onComplete={() => setPermsDone(true)}
+      onClose={() => setPermsDone(true)}
+    />
+    <OnboardingTour enabled={permsDone} />
     </>
   )
 }

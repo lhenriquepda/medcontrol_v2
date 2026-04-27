@@ -1,8 +1,8 @@
-/**
- * finalize.cjs — Setup pg_cron + verify Plan.md items
+﻿/**
+ * finalize.cjs â€” Setup pg_cron + verify Plan.md items
  */
 const { Client } = require('pg');
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const DST = process.env.DOSY_DB_URL;
 
 (async () => {
   const c = new Client({ connectionString: DST, ssl: { rejectUnauthorized: false } });
@@ -42,7 +42,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     console.log(`  ! ${e.message}`);
   }
 
-  // ── Plan.md verification ──
+  // â”€â”€ Plan.md verification â”€â”€
   console.log('\n=== 3. Plan.md verification ===');
 
   // Tables
@@ -50,7 +50,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
   console.log('\n  Tables:');
   for (const t of tables) {
     const { rows } = await c.query(`SELECT 1 FROM pg_tables WHERE schemaname='medcontrol' AND tablename=$1`, [t]);
-    console.log(`    ${rows.length ? '✓' : '✗'} ${t}`);
+    console.log(`    ${rows.length ? 'âœ“' : 'âœ—'} ${t}`);
   }
 
   // Required functions (Plan.md sections 0.3, 0.9, 0.14.x)
@@ -61,7 +61,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
       SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='medcontrol' AND p.proname=$1
     `, [f]);
-    console.log(`    ${rows.length ? '✓' : '✗'} ${f}()`);
+    console.log(`    ${rows.length ? 'âœ“' : 'âœ—'} ${f}()`);
   }
 
   // Required indexes (Plan.md 0.13)
@@ -69,7 +69,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
   console.log('\n  Indexes (security):');
   for (const i of idxs) {
     const { rows } = await c.query(`SELECT 1 FROM pg_indexes WHERE schemaname='medcontrol' AND indexname=$1`, [i]);
-    console.log(`    ${rows.length ? '✓' : '✗'} ${i}`);
+    console.log(`    ${rows.length ? 'âœ“' : 'âœ—'} ${i}`);
   }
 
   // CASCADE on FKs (Plan.md 0.14.4)
@@ -89,9 +89,9 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     `, [cf.tbl, cf.fk]);
     if (rows.length) {
       const cascade = rows[0].def.includes('CASCADE');
-      console.log(`    ${cascade ? '✓' : '⚠'} ${cf.fk} ${cascade ? '' : '(no CASCADE!)'}`);
+      console.log(`    ${cascade ? 'âœ“' : 'âš '} ${cf.fk} ${cascade ? '' : '(no CASCADE!)'}`);
     } else {
-      console.log(`    ✗ ${cf.fk} missing`);
+      console.log(`    âœ— ${cf.fk} missing`);
     }
   }
 
@@ -103,7 +103,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     WHERE n.nspname='medcontrol' AND cl.relkind='r' ORDER BY cl.relname
   `);
   for (const r of rlsRows) {
-    console.log(`    ${r.relrowsecurity && r.relforcerowsecurity ? '✓' : '⚠'} ${r.relname} (rls=${r.relrowsecurity}, forced=${r.relforcerowsecurity})`);
+    console.log(`    ${r.relrowsecurity && r.relforcerowsecurity ? 'âœ“' : 'âš '} ${r.relname} (rls=${r.relrowsecurity}, forced=${r.relforcerowsecurity})`);
   }
 
   // Consent columns (Plan.md 0.10)
@@ -113,13 +113,13 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     WHERE table_schema='medcontrol' AND table_name='subscriptions'
       AND column_name IN ('consentAt','consentVersion','consent_at','consent_version')
   `);
-  console.log(`    ${consentCols.length ? '✓' : '✗'} subscriptions: ${consentCols.map(r=>r.column_name).join(', ') || 'MISSING'}`);
+  console.log(`    ${consentCols.length ? 'âœ“' : 'âœ—'} subscriptions: ${consentCols.map(r=>r.column_name).join(', ') || 'MISSING'}`);
 
   // Cron jobs
   console.log('\n  pg_cron jobs:');
   const { rows: jobs } = await c.query(`SELECT jobname, schedule FROM cron.job ORDER BY jobname`);
-  for (const j of jobs) console.log(`    ✓ ${j.jobname} (${j.schedule})`);
-  if (jobs.length === 0) console.log('    ⚠ no jobs');
+  for (const j of jobs) console.log(`    âœ“ ${j.jobname} (${j.schedule})`);
+  if (jobs.length === 0) console.log('    âš  no jobs');
 
   // observation length check (Plan.md 0.14)
   console.log('\n  observation length constraint:');
@@ -128,7 +128,8 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     FROM pg_constraint c JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=c.connamespace
     WHERE n.nspname='medcontrol' AND cl.relname='doses' AND c.conname='doses_observation_length'
   `);
-  console.log(`    ${obsCheck.length ? '✓' : '✗'} doses.observation length check`);
+  console.log(`    ${obsCheck.length ? 'âœ“' : 'âœ—'} doses.observation length check`);
 
   await c.end();
 })();
+

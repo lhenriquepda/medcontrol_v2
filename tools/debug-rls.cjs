@@ -1,5 +1,5 @@
-const { Client } = require('pg');
-const c = new Client({ connectionString: 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres', ssl: { rejectUnauthorized: false } });
+﻿const { Client } = require('pg');
+const c = new Client({ connectionString: process.env.DOSY_DB_URL, ssl: { rejectUnauthorized: false } });
 (async () => {
   await c.connect();
 
@@ -34,3 +34,4 @@ const c = new Client({ connectionString: 'postgresql://postgres:xoeDZAnfn8TvBD5m
 
   await c.end();
 })();
+

@@ -21,11 +21,16 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -127,41 +132,117 @@ public class AlarmActivity extends Activity {
     }
 
     private View buildLayout() {
+        // Vertical gradient background (#0d1535 → #1a2660) — matches AppHeader/Login web
+        GradientDrawable bg = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{ Color.parseColor("#0d1535"), Color.parseColor("#1a2660") }
+        );
+
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.parseColor("#0d1535"));
+        scroll.setBackground(bg);
+        scroll.setFillViewport(true);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(dp(24), dp(48), dp(24), dp(48));
+        root.setPadding(dp(20), dp(36), dp(20), dp(28));
 
-        TextView icon = new TextView(this);
-        icon.setText("💊");
-        icon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 64);
-        icon.setGravity(Gravity.CENTER);
-        root.addView(icon);
+        // ── Branded header ───────────────────────────────────────────
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.dosy_logo_light);
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(48)
+        );
+        logoLp.setMargins(0, 0, 0, dp(4));
+        logo.setLayoutParams(logoLp);
+        logo.setAdjustViewBounds(true);
+        root.addView(logo);
 
+        TextView tagline = new TextView(this);
+        tagline.setText("controle de medicação");
+        tagline.setTextColor(Color.parseColor("#94A3B8"));
+        tagline.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        tagline.setLetterSpacing(0.08f);
+        tagline.setAllCaps(true);
+        tagline.setGravity(Gravity.CENTER);
+        tagline.setPadding(0, 0, 0, dp(28));
+        root.addView(tagline);
+
+        // ── Status badge with pulse-style emoji + time ───────────────
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable statusBg = new GradientDrawable();
+        statusBg.setColor(Color.parseColor("#33EF4444")); // red w/ alpha
+        statusBg.setCornerRadius(dp(20));
+        statusRow.setBackground(statusBg);
+        statusRow.setPadding(dp(12), dp(6), dp(14), dp(6));
+
+        TextView dot = new TextView(this);
+        dot.setText("●");
+        dot.setTextColor(Color.parseColor("#EF4444"));
+        dot.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        dot.setPadding(0, 0, dp(8), 0);
+        statusRow.addView(dot);
+
+        TextView statusText = new TextView(this);
+        String now = new SimpleDateFormat("HH:mm", new Locale("pt", "BR")).format(new Date());
+        statusText.setText("ALARME · " + now);
+        statusText.setTextColor(Color.parseColor("#FCA5A5"));
+        statusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        statusText.setLetterSpacing(0.05f);
+        statusText.setTypeface(null, android.graphics.Typeface.BOLD);
+        statusRow.addView(statusText);
+
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        statusLp.setMargins(0, 0, 0, dp(20));
+        root.addView(statusRow, statusLp);
+
+        // ── Title ─────────────────────────────────────────────────────
         TextView title = new TextView(this);
         title.setText(doses.size() <= 1 ? "Hora da medicação" : doses.size() + " doses agora");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        title.setPadding(0, dp(8), 0, dp(16));
+        title.setPadding(0, 0, 0, dp(20));
         root.addView(title);
 
-        // Lista de doses como cards
+        // ── Dose cards ────────────────────────────────────────────────
         for (DoseItem d : doses) {
             LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackgroundColor(Color.parseColor("#1e2750"));
-            card.setPadding(dp(16), dp(12), dp(16), dp(12));
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+
+            GradientDrawable cardBg = new GradientDrawable();
+            cardBg.setColor(Color.parseColor("#1e2750"));
+            cardBg.setCornerRadius(dp(16));
+            cardBg.setStroke(dp(1), Color.parseColor("#2B3EDF"));
+            card.setBackground(cardBg);
+            card.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+            // Pill icon
+            TextView pillIcon = new TextView(this);
+            pillIcon.setText("💊");
+            pillIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+            pillIcon.setPadding(0, 0, dp(14), 0);
+            card.addView(pillIcon);
+
+            LinearLayout textCol = new LinearLayout(this);
+            textCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams textColLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            );
+            textCol.setLayoutParams(textColLp);
 
             TextView med = new TextView(this);
             med.setText(d.medName);
-            med.setTextColor(Color.parseColor("#7DD3FC"));
-            med.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+            med.setTextColor(Color.WHITE);
+            med.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
             med.setTypeface(null, android.graphics.Typeface.BOLD);
-            card.addView(med);
+            textCol.addView(med);
 
             StringBuilder sb = new StringBuilder();
             if (!d.unit.isEmpty()) sb.append(d.unit);
@@ -172,45 +253,73 @@ public class AlarmActivity extends Activity {
             if (sb.length() > 0) {
                 TextView details = new TextView(this);
                 details.setText(sb.toString());
-                details.setTextColor(Color.parseColor("#94A3B8"));
-                details.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-                card.addView(details);
+                details.setTextColor(Color.parseColor("#7DD3FC"));
+                details.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                details.setPadding(0, dp(2), 0, 0);
+                textCol.addView(details);
             }
+
+            card.addView(textCol);
 
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             );
-            cardLp.setMargins(0, dp(6), 0, dp(6));
+            cardLp.setMargins(0, dp(5), 0, dp(5));
             root.addView(card, cardLp);
         }
 
         // Spacer
         View spacer = new View(this);
-        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dp(24)));
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dp(28)));
         root.addView(spacer);
 
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        btnLp.setMargins(0, dp(8), 0, dp(8));
+        btnLp.setMargins(0, dp(6), 0, dp(6));
+
+        // Primary button: Ciente — rounded emerald
+        GradientDrawable ackBg = new GradientDrawable();
+        ackBg.setColor(Color.parseColor("#10B981"));
+        ackBg.setCornerRadius(dp(16));
 
         Button btnAck = new Button(this);
-        btnAck.setText(doses.size() <= 1 ? "✓ Ciente" : "✓ Ciente — abrir todas");
-        btnAck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        btnAck.setText(doses.size() <= 1 ? "✓  Ciente" : "✓  Ciente — abrir todas");
+        btnAck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         btnAck.setTextColor(Color.WHITE);
-        btnAck.setBackgroundColor(Color.parseColor("#10B981"));
-        btnAck.setPadding(0, dp(20), 0, dp(20));
+        btnAck.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnAck.setBackground(ackBg);
+        btnAck.setStateListAnimator(null);
+        btnAck.setPadding(0, dp(18), 0, dp(18));
+        btnAck.setAllCaps(false);
         btnAck.setOnClickListener(v -> handleAction("acknowledge"));
         root.addView(btnAck, btnLp);
 
+        // Secondary button: Adiar — outlined ghost on dark
+        GradientDrawable snoozeBg = new GradientDrawable();
+        snoozeBg.setColor(Color.parseColor("#22FFFFFF"));
+        snoozeBg.setCornerRadius(dp(16));
+        snoozeBg.setStroke(dp(1), Color.parseColor("#33FFFFFF"));
+
         Button btnSnooze = new Button(this);
-        btnSnooze.setText("⏰ Adiar 10 min");
-        btnSnooze.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        btnSnooze.setTextColor(Color.WHITE);
-        btnSnooze.setBackgroundColor(Color.parseColor("#3B82F6"));
-        btnSnooze.setPadding(0, dp(16), 0, dp(16));
+        btnSnooze.setText("⏰  Adiar 10 minutos");
+        btnSnooze.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        btnSnooze.setTextColor(Color.parseColor("#E2E8F0"));
+        btnSnooze.setBackground(snoozeBg);
+        btnSnooze.setStateListAnimator(null);
+        btnSnooze.setPadding(0, dp(15), 0, dp(15));
+        btnSnooze.setAllCaps(false);
         btnSnooze.setOnClickListener(v -> handleAction("snooze"));
         root.addView(btnSnooze, btnLp);
+
+        // Footer hint
+        TextView hint = new TextView(this);
+        hint.setText("O alarme continua tocando até você responder.");
+        hint.setTextColor(Color.parseColor("#64748B"));
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, dp(20), 0, dp(8));
+        root.addView(hint);
 
         scroll.addView(root);
         return scroll;

@@ -1,8 +1,8 @@
-/**
- * test-sos-bypass.cjs — Verify INSERT direto em doses (type=sos) é bloqueado
+﻿/**
+ * test-sos-bypass.cjs â€” Verify INSERT direto em doses (type=sos) Ã© bloqueado
  */
 const { Client } = require('pg');
-const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres';
+const DST = process.env.DOSY_DB_URL;
 
 (async () => {
   const c = new Client({ connectionString: DST, ssl: { rejectUnauthorized: false } });
@@ -27,7 +27,7 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
 
   const claims = JSON.stringify({ sub: userId, role: 'authenticated' }).replace(/'/g, "''");
 
-  // ─── Test 1: anon ──────────────────────────────────────────────────
+  // â”€â”€â”€ Test 1: anon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('=== TEST 1: anon role INSERT direto em doses (type=sos) ===');
   try {
     await c.query('BEGIN');
@@ -36,14 +36,14 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
       INSERT INTO medcontrol.doses ("patientId", "userId", "medName", "unit", "scheduledAt", "actualTime", "status", "type")
       VALUES ($1, $2, 'TestMed', '10mg', NOW(), NOW(), 'done', 'sos')
     `, [patientId, userId]);
-    console.log('  ❌ FAIL — anon inseriu dose');
+    console.log('  âŒ FAIL â€” anon inseriu dose');
     await c.query('ROLLBACK');
   } catch (e) {
-    console.log(`  ✅ BLOCKED — ${e.message.split('\n')[0]}`);
+    console.log(`  âœ… BLOCKED â€” ${e.message.split('\n')[0]}`);
     await c.query('ROLLBACK');
   }
 
-  // ─── Test 2: authenticated direct INSERT ───────────────────────────
+  // â”€â”€â”€ Test 2: authenticated direct INSERT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('\n=== TEST 2: authenticated INSERT direto em doses (type=sos) ===');
   try {
     await c.query('BEGIN');
@@ -54,15 +54,15 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
       VALUES ($1, $2, 'BypassTest', '10mg', NOW(), NOW(), 'done', 'sos')
       RETURNING id
     `, [patientId, userId]);
-    console.log(`  ⚠ ALLOWED — id=${r.rows[0].id}`);
-    console.log(`  ⚠ Atacante autenticado bypassa register_sos_dose (sem validação de minIntervalHours)`);
+    console.log(`  âš  ALLOWED â€” id=${r.rows[0].id}`);
+    console.log(`  âš  Atacante autenticado bypassa register_sos_dose (sem validaÃ§Ã£o de minIntervalHours)`);
     await c.query('ROLLBACK');
   } catch (e) {
-    console.log(`  ✅ BLOCKED — ${e.message.split('\n')[0]}`);
+    console.log(`  âœ… BLOCKED â€” ${e.message.split('\n')[0]}`);
     await c.query('ROLLBACK');
   }
 
-  // ─── Test 3: register_sos_dose RPC ────────────────────────────────
+  // â”€â”€â”€ Test 3: register_sos_dose RPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   console.log('\n=== TEST 3: register_sos_dose RPC (caminho correto) ===');
   try {
     await c.query('BEGIN');
@@ -71,15 +71,15 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
     await c.query(`
       SELECT medcontrol.register_sos_dose($1, 'RpcTest', '5mg', NOW(), 'test')
     `, [patientId]);
-    console.log(`  ✅ RPC funciona`);
+    console.log(`  âœ… RPC funciona`);
     await c.query('ROLLBACK');
   } catch (e) {
-    console.log(`  ⚠ ${e.message.split('\n')[0]}`);
+    console.log(`  âš  ${e.message.split('\n')[0]}`);
     await c.query('ROLLBACK');
   }
 
-  // ─── Test 4: cross-user attack (type=sos) ──────────────────────
-  console.log('\n=== TEST 4a: User B → paciente de User A (type=sos) ===');
+  // â”€â”€â”€ Test 4: cross-user attack (type=sos) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  console.log('\n=== TEST 4a: User B â†’ paciente de User A (type=sos) ===');
   const { rows: others } = await c.query(`SELECT id, email FROM auth.users WHERE id != $1 LIMIT 1`, [userId]);
   if (others.length) {
     const otherId = others[0].id;
@@ -93,16 +93,16 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
         INSERT INTO medcontrol.doses ("patientId", "userId", "medName", "unit", "scheduledAt", "actualTime", "status", "type")
         VALUES ($1, $2, 'AttackTest', '99mg', NOW(), NOW(), 'done', 'sos')
       `, [patientId, otherId]);
-      console.log(`  ❌ FAIL — User B inseriu dose no paciente alheio!`);
+      console.log(`  âŒ FAIL â€” User B inseriu dose no paciente alheio!`);
       await c.query('ROLLBACK');
     } catch (e) {
-      console.log(`  ✅ BLOCKED — ${e.message.split('\n')[0]}`);
+      console.log(`  âœ… BLOCKED â€” ${e.message.split('\n')[0]}`);
       await c.query('ROLLBACK');
     }
 
-    // ─── TEST 4b: User B → patient NÃO compartilhado (type=scheduled) ───
-    console.log('\n=== TEST 4b: User B → patient de OUTRO user (sem share) ===');
-    // Fake patient_id (UUID válido mas inexistente) para simular "patient_id de outro user"
+    // â”€â”€â”€ TEST 4b: User B â†’ patient NÃƒO compartilhado (type=scheduled) â”€â”€â”€
+    console.log('\n=== TEST 4b: User B â†’ patient de OUTRO user (sem share) ===');
+    // Fake patient_id (UUID vÃ¡lido mas inexistente) para simular "patient_id de outro user"
     const fakePatient = '00000000-0000-0000-0000-000000000001';
     try {
       await c.query('BEGIN');
@@ -112,14 +112,14 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
         INSERT INTO medcontrol.doses ("patientId", "userId", "medName", "unit", "scheduledAt", "actualTime", "status", "type")
         VALUES ($1, $2, 'AttackTest', '99mg', NOW(), NOW(), 'pending', 'scheduled')
       `, [fakePatient, otherId]);
-      console.log(`  ❌ FAIL — User B inseriu dose em patient inexistente/sem acesso!`);
+      console.log(`  âŒ FAIL â€” User B inseriu dose em patient inexistente/sem acesso!`);
       await c.query('ROLLBACK');
     } catch (e) {
-      console.log(`  ✅ BLOCKED — ${e.message.split('\n')[0]}`);
+      console.log(`  âœ… BLOCKED â€” ${e.message.split('\n')[0]}`);
       await c.query('ROLLBACK');
     }
 
-    // ─── TEST 4c: has_patient_access verification ─────────────────────────
+    // â”€â”€â”€ TEST 4c: has_patient_access verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     console.log('\n=== TEST 4c: has_patient_access(fake_patient) for User B ===');
     await c.query(`SET ROLE authenticated`);
     await c.query(`SET "request.jwt.claims" = '${otherClaims}'`);
@@ -131,3 +131,4 @@ const DST = 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supa
 
   await c.end();
 })();
+

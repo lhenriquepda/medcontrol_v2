@@ -1,19 +1,55 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { hasSupabase, supabase } from '../services/supabase'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
 import EmptyState from '../components/EmptyState'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
-import { useDoses } from '../hooks/useDoses'
+import { useDoses, useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
+import { useToast } from '../hooks/useToast'
 import { usePatients } from '../hooks/usePatients'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
+  const qc = useQueryClient()
+  const toast = useToast()
   const { data: patients = [] } = usePatients()
+  const confirmMut = useConfirmDose()
+  const skipMut = useSkipDose()
+  const undoMut = useUndoDose()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // Rolling 5-day horizon for continuous treatments. RPC is idempotent +
+  // cheap (no-op when horizon already covers next 5 days). Runs once per
+  // mount; pg_cron also runs daily as backup for inactive users.
+  useEffect(() => {
+    if (!hasSupabase) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase.rpc('extend_continuous_treatments', {
+          p_days_ahead: 5
+        })
+        if (cancelled) return
+        if (error) {
+          console.warn('[extend] failed:', error.message)
+          return
+        }
+        const added = data?.dosesAdded || 0
+        if (added > 0) {
+          console.log('[extend] added', added, 'doses across', data?.treatmentsExtended, 'treatments')
+          qc.invalidateQueries({ queryKey: ['doses'] })
+        }
+      } catch (e) {
+        console.warn('[extend] exception:', e?.message)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [qc])
   const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
 
   // Notif-tap queue: array de doseIds restantes pra processar (?dose ou ?doses=A,B,C)
@@ -77,12 +113,14 @@ export default function Dashboard() {
     const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
     const overdueFrom = new Date(now); overdueFrom.setDate(overdueFrom.getDate() - 30)
     const weekFrom = new Date(now); weekFrom.setDate(weekFrom.getDate() - 7)
+    // Stats respect current patient filter — show focused data when 1 patient selected
+    const pid = filters.patientId
     return {
-      today: { from: startOfToday.toISOString(), to: endOfToday.toISOString() },
-      overdue: { from: overdueFrom.toISOString(), to: now.toISOString(), status: 'overdue' },
-      week: { from: weekFrom.toISOString(), to: now.toISOString() }
+      today: { from: startOfToday.toISOString(), to: endOfToday.toISOString(), patientId: pid },
+      overdue: { from: overdueFrom.toISOString(), to: now.toISOString(), status: 'overdue', patientId: pid },
+      week: { from: weekFrom.toISOString(), to: now.toISOString(), patientId: pid }
     }
-  }, [tick])
+  }, [tick, filters.patientId])
 
   const { data: todayDoses = [] } = useDoses(windows.today)
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
@@ -186,7 +224,33 @@ export default function Dashboard() {
                     {!isCollapsed && (
                       <div className="space-y-2">
                         {list.map((d) => (
-                          <DoseCard key={d.id} dose={d} onClick={() => setSelected(d)} />
+                          <DoseCard
+                            key={d.id}
+                            dose={d}
+                            onClick={() => setSelected(d)}
+                            onSwipeConfirm={async (dose) => {
+                              try {
+                                await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
+                                toast.show({
+                                  message: `${dose.medName} marcada como tomada.`, kind: 'success',
+                                  undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                                })
+                              } catch (e) {
+                                toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
+                              }
+                            }}
+                            onSwipeSkip={async (dose) => {
+                              try {
+                                await skipMut.mutateAsync({ id: dose.id, observation: '' })
+                                toast.show({
+                                  message: `${dose.medName} marcada como pulada.`, kind: 'warn',
+                                  undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                                })
+                              } catch (e) {
+                                toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
+                              }
+                            }}
+                          />
                         ))}
                       </div>
                     )}

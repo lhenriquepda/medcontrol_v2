@@ -1,5 +1,5 @@
-const { Client } = require('pg');
-const c = new Client({ connectionString: 'postgresql://postgres:xoeDZAnfn8TvBD5m@db.guefraaqbkcehofchnrc.supabase.co:5432/postgres', ssl: { rejectUnauthorized: false } });
+﻿const { Client } = require('pg');
+const c = new Client({ connectionString: process.env.DOSY_DB_URL, ssl: { rejectUnauthorized: false } });
 (async () => {
   await c.connect();
 
@@ -43,10 +43,11 @@ const c = new Client({ connectionString: 'postgresql://postgres:xoeDZAnfn8TvBD5m
     END;
     $func$;
   `);
-  console.log('✓ medcontrol.upsert_push_subscription created');
+  console.log('âœ“ medcontrol.upsert_push_subscription created');
 
   await c.query(`GRANT EXECUTE ON FUNCTION medcontrol.upsert_push_subscription(text, text, int, text) TO authenticated`);
-  console.log('✓ granted to authenticated');
+  console.log('âœ“ granted to authenticated');
 
   await c.end();
 })();
+
