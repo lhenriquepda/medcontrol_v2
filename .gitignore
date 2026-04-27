@@ -8,3 +8,24 @@ dist
 Thumbs.db
 
 .vercel
+
+# Secrets / local notes (NEVER commit)
+INFOS.md
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Local Android SDK install (machine-specific, not project)
+build-tools/
+licenses/
+platform-tools/
+platforms/
+
+# Supabase CLI temp
+supabase/.temp/
+
+# Android Studio user-specific (.idea kept partial; ignore the volatile bits)
+android/.idea/workspace.xml
+android/.idea/usage.statistics.xml
+android/.idea/shelf/
+android/.idea/jarRepositories.xml
