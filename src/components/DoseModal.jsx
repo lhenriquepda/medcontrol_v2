@@ -4,7 +4,7 @@ import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '..
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
 
-export default function DoseModal({ dose, open, onClose, patientName }) {
+export default function DoseModal({ dose, open, onClose, patientName, queueRemaining = 0 }) {
   const confirmMut = useConfirmDose()
   const skipMut = useSkipDose()
   const undoMut = useUndoDose()
@@ -54,6 +54,11 @@ export default function DoseModal({ dose, open, onClose, patientName }) {
   return (
     <BottomSheet open={open} onClose={onClose} title={dose.medName}>
       <div className="space-y-4">
+        {queueRemaining > 0 && (
+          <div className="text-xs text-brand-600 dark:text-brand-400 font-medium">
+            +{queueRemaining} dose{queueRemaining === 1 ? '' : 's'} na fila após esta
+          </div>
+        )}
         <div className="text-sm text-slate-500">
           {patientName && <p>Paciente: <span className="text-slate-800 dark:text-slate-200 font-medium">{patientName}</span></p>}
           <p>Agendada para: <span className="text-slate-800 dark:text-slate-200 font-medium">{formatDateTime(dose.scheduledAt)}</span></p>
@@ -79,9 +84,28 @@ export default function DoseModal({ dose, open, onClose, patientName }) {
               <textarea className="input" rows={3} placeholder="Ex: tomou com comida"
                         value={observation} onChange={(e) => setObservation(e.target.value)} />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button className="btn-secondary flex-1" onClick={handleSkip} disabled={skipMut.isPending}>Pular</button>
-              <button className="btn-primary flex-1" onClick={handleConfirm} disabled={confirmMut.isPending}>Confirmar</button>
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              <button
+                className="rounded-xl py-3 text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                onClick={onClose}
+                disabled={skipMut.isPending || confirmMut.isPending}
+              >
+                Ignorar
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={handleSkip}
+                disabled={skipMut.isPending}
+              >
+                Pular
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleConfirm}
+                disabled={confirmMut.isPending}
+              >
+                Tomada
+              </button>
             </div>
           </>
         ) : (

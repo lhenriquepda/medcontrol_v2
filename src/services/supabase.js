@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
+import { SecureStorage } from '@aparajita/capacitor-secure-storage'
 
 const URL = import.meta.env.VITE_SUPABASE_URL
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -6,9 +8,36 @@ const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
 
 export const hasSupabase = Boolean(URL && KEY)
 
+// Storage adapter: KeyStore (Android) / Keychain (iOS) / localStorage (web fallback)
+const isNative = Capacitor.isNativePlatform()
+
+const SecureStorageAdapter = {
+  getItem: async (key) => {
+    try {
+      const v = await SecureStorage.get(key)
+      return v ?? null
+    } catch {
+      return null
+    }
+  },
+  setItem: async (key, value) => {
+    try { await SecureStorage.set(key, value) } catch {}
+  },
+  removeItem: async (key) => {
+    try { await SecureStorage.remove(key) } catch {}
+  }
+}
+
 export const supabase = hasSupabase
   ? createClient(URL, KEY, {
-      auth: { persistSession: true, autoRefreshToken: true },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        // Native: encrypted KeyStore. Web: default localStorage (browser session-isolated)
+        ...(isNative ? { storage: SecureStorageAdapter } : {}),
+        // Required on native — no URL redirect for OAuth in WebView
+        detectSessionInUrl: !isNative
+      },
       db: { schema: SCHEMA }
     })
   : null

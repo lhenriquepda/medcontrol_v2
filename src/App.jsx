@@ -1,4 +1,7 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
+import { App as CapacitorApp } from '@capacitor/app'
 import AppHeader from './components/AppHeader'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
@@ -15,13 +18,148 @@ import DoseHistory from './pages/DoseHistory'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
+import Privacidade from './pages/Privacidade'
+import Termos from './pages/Termos'
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
+import { usePushNotifications } from './hooks/usePushNotifications'
+import DailySummaryModal from './components/DailySummaryModal'
 
 export default function App() {
   const { user, loading } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   useRealtime()
+  const [showSummary, setShowSummary] = useState(false)
+
+  // Auto-prompt notif permissions on first login (once per user per device)
+  // Note: subscribe activates LOCAL CriticalAlarm + LocalNotifications scheduling.
+  // FCM register happens inside but server-side push is suppressed (no foreground
+  // redisplay, see pushNotificationReceived listener below).
+  const { subscribe, isNative, supported } = usePushNotifications()
+  useEffect(() => {
+    if (!user || !supported) return
+    const key = `dosy_push_asked_${user.id}`
+    if (localStorage.getItem(key)) return
+    localStorage.setItem(key, '1')
+    subscribe(0).catch((e) => {
+      console.log('[Auto-subscribe] skipped:', e?.message)
+    })
+  }, [user, supported, subscribe])
+
+  // ─── Notification tap handlers (LocalNotifications + FCM) ─────────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !user) return
+    let localTapHandle, pushTapHandle, pushFgHandle
+
+    const setupListeners = async () => {
+      const { LocalNotifications } = await import('@capacitor/local-notifications')
+      const { PushNotifications } = await import('@capacitor/push-notifications')
+
+      // Helper: route based on notification extra/data
+      const handleTap = (extra) => {
+        if (!extra) return
+        if (extra.type === 'dailySummary') {
+          setShowSummary(true)
+          if (location.pathname !== '/') navigate('/')
+        } else if (extra.doseIds) {
+          // Grouped (multi) — open queue
+          navigate(`/?doses=${extra.doseIds}`)
+        } else if (extra.doseId) {
+          // Single (legacy or single-dose group)
+          navigate(`/?dose=${extra.doseId}`)
+        }
+      }
+
+      // LocalNotifications tap (alarmes agendados — doses + resumo)
+      localTapHandle = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+        console.log('[LocalNotif] tap:', action?.notification?.extra)
+        handleTap(action?.notification?.extra)
+      })
+
+      // FCM push tap (server-side push)
+      pushTapHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        console.log('[FCM] tap:', action?.notification?.data)
+        const data = action?.notification?.data
+        if (data) {
+          handleTap({
+            type: data.type,
+            doseId: data.doseId,
+            doseIds: data.doseIds
+          })
+        }
+      })
+
+      // FCM push received — DO NOT re-display via LocalNotifications.
+      // Local CriticalAlarm is the single source of truth for dose alerts.
+      // FCM redisplay would cause duplicate sound + tray entries.
+      pushFgHandle = await PushNotifications.addListener('pushNotificationReceived', (notif) => {
+        console.log('[FCM] foreground received (suppressed redisplay):', notif?.data)
+      })
+    }
+    setupListeners()
+    return () => {
+      localTapHandle?.remove?.()
+      pushTapHandle?.remove?.()
+      pushFgHandle?.remove?.()
+    }
+  }, [user, navigate, location.pathname])
+
+  // ─── Open DoseModal quando user toca notif persistente do alarme ──────
+  useEffect(() => {
+    if (!user) return
+    const onOpenDose = (e) => {
+      const { doseId } = e.detail || {}
+      if (!doseId) return
+      console.log('[dosy:openDose]', doseId)
+      if (window.__dosyLastDoseId === doseId) return
+      window.__dosyLastDoseId = doseId
+      navigate(`/?dose=${doseId}`)
+    }
+    const onOpenDoses = (e) => {
+      const { doseIds } = e.detail || {}
+      if (!doseIds) return
+      console.log('[dosy:openDoses]', doseIds)
+      // Track last processed to dedupe retry dispatches from MainActivity
+      if (window.__dosyLastDoseIds === doseIds) return
+      window.__dosyLastDoseIds = doseIds
+      navigate(`/?doses=${doseIds}`)
+    }
+    window.addEventListener('dosy:openDose', onOpenDose)
+    window.addEventListener('dosy:openDoses', onOpenDoses)
+    // Process any pending IDs set by MainActivity before listener was bound (cold start)
+    if (window.__dosyPendingDoseIds) {
+      const ids = window.__dosyPendingDoseIds
+      window.__dosyPendingDoseIds = null
+      onOpenDoses({ detail: { doseIds: ids } })
+    }
+    if (window.__dosyPendingDoseId) {
+      const id = window.__dosyPendingDoseId
+      window.__dosyPendingDoseId = null
+      onOpenDose({ detail: { doseId: id } })
+    }
+    return () => {
+      window.removeEventListener('dosy:openDose', onOpenDose)
+      window.removeEventListener('dosy:openDoses', onOpenDoses)
+    }
+  }, [user, navigate])
+
+  // Android hardware back button: history back if possible, else exit app
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let listenerHandle
+    const setup = async () => {
+      listenerHandle = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+        if (canGoBack && location.pathname !== '/') {
+          navigate(-1)
+        } else {
+          CapacitorApp.exitApp()
+        }
+      })
+    }
+    setup()
+    return () => { listenerHandle?.remove() }
+  }, [location.pathname, navigate])
 
   if (loading) {
     return (
@@ -34,6 +172,8 @@ export default function App() {
   if (!user) {
     return (
       <Routes>
+        <Route path="/privacidade" element={<Privacidade />} />
+        <Route path="/termos" element={<Termos />} />
         <Route path="*" element={<Login />} />
       </Routes>
     )
@@ -61,10 +201,13 @@ export default function App() {
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/ajustes" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/privacidade" element={<Privacidade />} />
+        <Route path="/termos" element={<Termos />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!hideNav && <BottomNav />}
     </div>
+    <DailySummaryModal open={showSummary} onClose={() => setShowSummary(false)} />
     </>
   )
 }

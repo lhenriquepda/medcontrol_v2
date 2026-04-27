@@ -16,9 +16,21 @@ export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
 
+  // Notif-tap queue: array de doseIds restantes pra processar (?dose ou ?doses=A,B,C)
+  const [doseQueue, setDoseQueue] = useState([])
+
   // Aplica filtro via URL param — funciona no mount E quando já está na tela
   useEffect(() => {
     const f = searchParams.get('filter')
+    const doseParam = searchParams.get('dose')
+    const dosesParam = searchParams.get('doses')
+    if (doseParam || dosesParam) {
+      // Notif tap → abrir modal da(s) dose(s). Range 'all' garante carregar.
+      setFilters({ range: 'all', patientId: null, status: null, type: null })
+      const ids = dosesParam ? dosesParam.split(',').filter(Boolean) : [doseParam]
+      setDoseQueue(ids)
+      return
+    }
     if (f === 'overdue') {
       setFilters({ range: 'all', patientId: null, status: 'overdue', type: null })
       setSearchParams({}, { replace: true })
@@ -33,6 +45,25 @@ export default function Dashboard() {
   const { data: doses = [], isLoading } = useDoses(query)
 
   const [selected, setSelected] = useState(null)
+
+  // Notif tap (?dose / ?doses) → abre modal da próxima dose da fila.
+  // Sempre modal (atrasada ou não) — user tocou notif, intent é agir na dose.
+  useEffect(() => {
+    if (doseQueue.length === 0 || doses.length === 0) return
+    if (selected) return // já tem modal aberto, espera fechar
+    const nextId = doseQueue[0]
+    const target = doses.find(d => d.id === nextId)
+    if (target) {
+      setSelected(target)
+    } else {
+      // Dose não encontrada (talvez foi deletada) — pula pra próxima
+      setDoseQueue(q => q.slice(1))
+    }
+    // Limpar URL params (evita re-trigger no remount)
+    if (searchParams.get('dose') || searchParams.get('doses')) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [doseQueue, doses, selected, searchParams, setSearchParams])
 
   // Janelas de tempo memoizadas (tick por minuto evita novas chaves a cada render)
   const [tick, setTick] = useState(() => Math.floor(Date.now() / 60000))
@@ -167,8 +198,17 @@ export default function Dashboard() {
         )}
       </div>
 
-      <DoseModal dose={selected} open={!!selected} onClose={() => setSelected(null)}
-                 patientName={selectedPatient?.name} />
+      <DoseModal
+        dose={selected}
+        open={!!selected}
+        onClose={() => {
+          setSelected(null)
+          // Avança fila — próxima dose abrirá via useEffect
+          setDoseQueue(q => q.slice(1))
+        }}
+        patientName={selectedPatient?.name}
+        queueRemaining={doseQueue.length > 1 ? doseQueue.length - 1 : 0}
+      />
     </div>
   )
 }
