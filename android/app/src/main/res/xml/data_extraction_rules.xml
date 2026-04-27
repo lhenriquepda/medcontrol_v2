@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Data Extraction Rules — Dosy
+
+    Excludes ALL app data from cloud backup AND device-to-device migration.
+    Required because the app stores sensitive health data + auth tokens
+    in SecureStorage / SharedPreferences. Backups are unencrypted on most
+    Android setups.
+
+    On API 31+ Android uses these rules. Older APIs use android:allowBackup="false".
+
+    Both are set to deny so a device cloned via ADB or migrated to a new
+    phone will start fresh — user must re-authenticate.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

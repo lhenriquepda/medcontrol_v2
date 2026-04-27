@@ -1,0 +1,172 @@
+package com.dosyapp.dosy.plugins.criticalalarm;
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.media.AudioAttributes;
+import android.net.Uri;
+import android.os.Build;
+import android.os.PowerManager;
+import android.media.RingtoneManager;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+
+import com.dosyapp.dosy.MainActivity;
+import com.dosyapp.dosy.R;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+/**
+ * AlarmReceiver — fired by AlarmManager at scheduled time.
+ *
+ * Posts a notification with setFullScreenIntent() (BAL workaround for Android 14+).
+ * Receives a "doses" extra (JSON array). Renders count + concatenated meds.
+ */
+public class AlarmReceiver extends BroadcastReceiver {
+
+    private static final String CHANNEL_ID = "doses_critical";
+    private static final int FS_NOTIF_OFFSET = 200_000_000;
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wl = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "Dosy:AlarmReceiver"
+        );
+        wl.acquire(10_000);
+
+        int alarmId = intent.getIntExtra("id", 0);
+        String dosesJson = intent.getStringExtra("doses");
+        if (dosesJson == null) dosesJson = "[]";
+
+        // Primary path (Android 8+): start foreground service → service launches AlarmActivity.
+        // FGS-style exemption bypasses BAL (Background Activity Launch) on Android 14+.
+        try {
+            Intent svc = new Intent(context, AlarmService.class);
+            svc.putExtra("id", alarmId);
+            svc.putExtra("doses", dosesJson);
+            ContextCompat.startForegroundService(context, svc);
+            if (wl.isHeld()) wl.release();
+            return;
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Fall through to notification-only fallback below
+        }
+
+        // Fallback: full-screen intent notification (only fires fullscreen if user
+        // granted USE_FULL_SCREEN_INTENT; otherwise reduces to heads-up).
+        // Parse doses for notification body + collect IDs for tap intent
+        int count = 0;
+        StringBuilder bodyBuilder = new StringBuilder();
+        StringBuilder idsCsv = new StringBuilder();
+        String firstMed = "Dose";
+        try {
+            JSONArray arr = new JSONArray(dosesJson);
+            count = arr.length();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject d = arr.getJSONObject(i);
+                String med = d.optString("medName", "Dose");
+                String unit = d.optString("unit", "");
+                String did = d.optString("doseId", "");
+                if (i == 0) firstMed = med;
+                if (bodyBuilder.length() > 0) bodyBuilder.append(" · ");
+                bodyBuilder.append(med);
+                if (!unit.isEmpty()) bodyBuilder.append(" (").append(unit).append(")");
+                if (!did.isEmpty()) {
+                    if (idsCsv.length() > 0) idsCsv.append(",");
+                    idsCsv.append(did);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        ensureChannel(context);
+
+        // Full-screen intent → AlarmActivity (system launches when device locked)
+        Intent activityIntent = new Intent(context, AlarmActivity.class);
+        activityIntent.setFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_NO_USER_ACTION
+        );
+        activityIntent.putExtra("id", alarmId);
+        activityIntent.putExtra("doses", dosesJson);
+
+        PendingIntent fullScreenPi = PendingIntent.getActivity(
+            context,
+            alarmId,
+            activityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // Tap (heads-up / unlocked) → MainActivity with openDoseIds → opens DoseModal queue
+        Intent tapIntent = new Intent(context, MainActivity.class);
+        tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (idsCsv.length() > 0) tapIntent.putExtra("openDoseIds", idsCsv.toString());
+
+        PendingIntent tapPi = PendingIntent.getActivity(
+            context,
+            alarmId + FS_NOTIF_OFFSET,
+            tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String title = count <= 1
+            ? "💊 Hora da medicação — " + firstMed
+            : "💊 " + count + " doses agora";
+
+        NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(bodyBuilder.toString())
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(bodyBuilder.toString()))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setContentIntent(tapPi)
+            .setFullScreenIntent(fullScreenPi, true);
+
+        NotificationManagerCompat nm = NotificationManagerCompat.from(context);
+        try {
+            nm.notify(alarmId + FS_NOTIF_OFFSET, b.build());
+        } catch (SecurityException ignored) {}
+
+        if (wl.isHeld()) wl.release();
+    }
+
+    private void ensureChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
+
+        NotificationChannel ch = new NotificationChannel(
+            CHANNEL_ID,
+            "Alarmes de Dose",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        ch.setDescription("Lembretes críticos de medicação (alarme estilo despertador)");
+        ch.enableLights(true);
+        ch.enableVibration(true);
+        ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+        ch.setBypassDnd(true);
+
+        Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+        AudioAttributes attrs = new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build();
+        ch.setSound(sound, attrs);
+
+        nm.createNotificationChannel(ch);
+    }
+}

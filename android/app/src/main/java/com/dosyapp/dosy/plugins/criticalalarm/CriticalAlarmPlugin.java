@@ -1,0 +1,271 @@
+package com.dosyapp.dosy.plugins.criticalalarm;
+
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
+
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+/**
+ * CriticalAlarmPlugin — Critical medication reminders that behave like an alarm clock.
+ *
+ * Uses AlarmManager.setAlarmClock() to bypass Doze mode and ensure delivery.
+ * AlarmReceiver posts a notification with setFullScreenIntent() — system launches
+ * AlarmActivity (BAL-exempt) on locked screen, or shows heads-up notif when unlocked.
+ *
+ * JS API:
+ *   schedule({ id, at, doseId, medName, unit, patientName })          // single dose (legacy)
+ *   scheduleGroup({ id, at, doses: [{doseId, medName, unit, patientName}, ...] })  // grouped
+ *   cancel({ id })
+ *   cancelAll()
+ *   isEnabled()
+ *   openExactAlarmSettings()
+ */
+@CapacitorPlugin(name = "CriticalAlarm")
+public class CriticalAlarmPlugin extends Plugin {
+
+    private static final String PREFS = "dosy_critical_alarms";
+    private static final String KEY_SCHEDULED = "scheduled_alarms";
+
+    @PluginMethod
+    public void schedule(PluginCall call) {
+        Integer id = call.getInt("id");
+        String at = call.getString("at");
+        String doseId = call.getString("doseId");
+        String medName = call.getString("medName", "Dose");
+        String unit = call.getString("unit", "");
+        String patientName = call.getString("patientName", "");
+
+        if (id == null || at == null || doseId == null) {
+            call.reject("missing required: id, at, doseId");
+            return;
+        }
+
+        // Wrap single dose as a 1-element group for unified handling
+        JSONArray doses = new JSONArray();
+        try {
+            JSONObject d = new JSONObject();
+            d.put("doseId", doseId);
+            d.put("medName", medName);
+            d.put("unit", unit);
+            d.put("patientName", patientName);
+            doses.put(d);
+        } catch (JSONException e) {
+            call.reject("json build error: " + e.getMessage());
+            return;
+        }
+
+        scheduleInternal(call, id, at, doses);
+    }
+
+    @PluginMethod
+    public void scheduleGroup(PluginCall call) {
+        Integer id = call.getInt("id");
+        String at = call.getString("at");
+        JSArray dosesArr = call.getArray("doses");
+
+        if (id == null || at == null || dosesArr == null || dosesArr.length() == 0) {
+            call.reject("missing required: id, at, doses[]");
+            return;
+        }
+
+        JSONArray doses = new JSONArray();
+        for (int i = 0; i < dosesArr.length(); i++) {
+            try {
+                JSONObject src = dosesArr.getJSONObject(i);
+                JSONObject d = new JSONObject();
+                d.put("doseId", src.optString("doseId", ""));
+                d.put("medName", src.optString("medName", "Dose"));
+                d.put("unit", src.optString("unit", ""));
+                d.put("patientName", src.optString("patientName", ""));
+                doses.put(d);
+            } catch (JSONException ignored) {}
+        }
+
+        scheduleInternal(call, id, at, doses);
+    }
+
+    private void scheduleInternal(PluginCall call, int id, String at, JSONArray doses) {
+        long triggerAt;
+        try {
+            triggerAt = java.time.Instant.parse(at).toEpochMilli();
+        } catch (Exception e) {
+            call.reject("invalid 'at' (expected ISO 8601): " + at);
+            return;
+        }
+
+        if (triggerAt <= System.currentTimeMillis()) {
+            call.reject("'at' must be in the future");
+            return;
+        }
+
+        Context ctx = getContext();
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+
+        Intent intent = new Intent(ctx, AlarmReceiver.class);
+        intent.putExtra("id", id);
+        intent.putExtra("doses", doses.toString());
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, id, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Intent showIntent = new Intent(ctx, AlarmActivity.class);
+        PendingIntent showPi = PendingIntent.getActivity(
+            ctx, id, showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAt, showPi);
+        am.setAlarmClock(info, pi);
+
+        persistAlarm(id, triggerAt, doses);
+
+        JSObject ret = new JSObject();
+        ret.put("scheduled", true);
+        ret.put("id", id);
+        ret.put("count", doses.length());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        Integer id = call.getInt("id");
+        if (id == null) {
+            call.reject("id required");
+            return;
+        }
+
+        Context ctx = getContext();
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(ctx, AlarmReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, id, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        am.cancel(pi);
+        pi.cancel();
+
+        removePersisted(id);
+
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelAll(PluginCall call) {
+        Context ctx = getContext();
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_SCHEDULED, "[]");
+        try {
+            JSONArray arr = new JSONArray(json);
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                int id = obj.getInt("id");
+                Intent intent = new Intent(ctx, AlarmReceiver.class);
+                PendingIntent pi = PendingIntent.getBroadcast(
+                    ctx, id, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                );
+                am.cancel(pi);
+                pi.cancel();
+            }
+        } catch (JSONException ignored) {}
+
+        prefs.edit().remove(KEY_SCHEDULED).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void isEnabled(PluginCall call) {
+        JSObject ret = new JSObject();
+        Context ctx = getContext();
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+
+        boolean canSchedule = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            canSchedule = am.canScheduleExactAlarms();
+        }
+        ret.put("canScheduleExact", canSchedule);
+        ret.put("canFullScreenIntent", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openExactAlarmSettings(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openFullScreenIntentSettings(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                getContext().startActivity(intent);
+            } catch (Exception e) {
+                call.reject("cannot open settings: " + e.getMessage());
+                return;
+            }
+        }
+        call.resolve();
+    }
+
+    private void persistAlarm(int id, long triggerAt, JSONArray doses) {
+        Context ctx = getContext();
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_SCHEDULED, "[]");
+        try {
+            JSONArray arr = new JSONArray(json);
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < arr.length(); i++) {
+                if (arr.getJSONObject(i).getInt("id") != id) {
+                    filtered.put(arr.getJSONObject(i));
+                }
+            }
+            JSONObject obj = new JSONObject();
+            obj.put("id", id);
+            obj.put("triggerAt", triggerAt);
+            obj.put("doses", doses);
+            filtered.put(obj);
+            prefs.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+        } catch (JSONException ignored) {}
+    }
+
+    private void removePersisted(int id) {
+        Context ctx = getContext();
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String json = prefs.getString(KEY_SCHEDULED, "[]");
+        try {
+            JSONArray arr = new JSONArray(json);
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < arr.length(); i++) {
+                if (arr.getJSONObject(i).getInt("id") != id) {
+                    filtered.put(arr.getJSONObject(i));
+                }
+            }
+            prefs.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+        } catch (JSONException ignored) {}
+    }
+}

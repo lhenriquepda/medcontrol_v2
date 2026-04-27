@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dosy</string>
+    <string name="title_activity_main">Dosy</string>
+    <string name="package_name">com.dosyapp.dosy</string>
+    <string name="custom_url_scheme">com.dosyapp.dosy</string>
+</resources>

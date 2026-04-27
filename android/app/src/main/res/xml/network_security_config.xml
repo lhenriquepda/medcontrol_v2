@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Config — Dosy
+
+    SSL Pinning ATIVO para guefraaqbkcehofchnrc.supabase.co (projeto dosy-app).
+    Estratégia: 3 pins (defesa em profundidade) — ataque MITM precisa fraudar TODOS:
+      1. INTERMEDIATE GTS WE1   (expira Feb 2029) — primary
+      2. GTS Root R4            (expira Jan 2028) — backup level 1
+      3. GlobalSign Root CA     (expira Jan 2028) — backup level 2
+
+    Hashes SHA-256 da SubjectPublicKeyInfo (DER) extraídos via Node.js
+    crypto.X509Certificate.publicKey.export('spki','der') em 2026-04-26.
+    Re-extrair com `node tools/extract-spki.cjs` antes de Feb 2028.
+
+    Cleartext HTTP bloqueado em todo lugar.
+-->
+<network-security-config>
+    <!-- Domínio Supabase do projeto dosy-app — pinning estrito -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">guefraaqbkcehofchnrc.supabase.co</domain>
+        <pin-set expiration="2027-12-01">
+            <!-- INTERMEDIATE: GTS WE1 (Feb 2029) — primary -->
+            <pin digest="SHA-256">kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=</pin>
+            <!-- GTS Root R4 (Jan 2028) — backup -->
+            <pin digest="SHA-256">mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=</pin>
+            <!-- GlobalSign Root CA (Jan 2028) — backup -->
+            <pin digest="SHA-256">K87oWBWM9UZfyddvDfoxL+8lpNyoUB2ptGtn0fv6G2Q=</pin>
+        </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Default: TLS obrigatório, validação CA padrão (sem pinning) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
