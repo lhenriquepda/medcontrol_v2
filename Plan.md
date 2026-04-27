@@ -25,6 +25,7 @@ React 19 (UI) + Vite (build) → dist/
 ### Fase 0 — Segurança & LGPD ⚠️ (fazer antes de publicar)
 ### Fase 1 — Fundação Capacitor
 ### Fase 2 — Notificações Nativas (FCM)
+### Fase 2.5 — Alarme Crítico Nativo ⚠️ BLOCKER PRA LAUNCH
 ### Fase 3 — Monetização Real (In-App Purchase)
 ### Fase 4 — Polimento & Experiência Nativa
 ### Fase 5 — Preparação Play Store
@@ -1926,8 +1927,8 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 
 ### FASE 0 — Segurança & LGPD
 - [x] Criar `.env.example` com todas as variáveis (sem valores reais)
-- [ ] Rotacionar VAPID keys (foram expostas em documentação anterior) ← fazer manualmente no Supabase Dashboard
-- [ ] Rodar `git grep` no histórico para verificar vazamento de secrets ← fazer manualmente
+- [x] Rotacionar VAPID keys — N/A: app migrado para novo projeto `dosy-app` com par VAPID novo gerado (`BHnTRizO...`). kids-paint não é mais usado pelo Android. ✅
+- [x] Rodar `git grep` no histórico para verificar vazamento de secrets ✅ — auditado: VAPID privada antiga do kids-paint encontrada em `Contexto.md` (commit 78f4b77, removida em 843d4d1 mas ainda no histórico). Risco baixo: app migrou para `dosy-app` com par VAPID novo. Nenhum service_role/PAT/JWT vazou.
 - [x] Auditar RLS em todas as tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules` — todas com RLS ativo ✅
 - [x] Criar/verificar policy RLS em `push_subscriptions` para isolar por usuário — policy `push_own_all` já existe ✅
 - [x] Proteger `admin_grant_tier` RPC com verificação server-side — usa `is_admin()` reescrito ✅
@@ -1940,67 +1941,104 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 - [x] Trocar `localStorage` por `sessionStorage` no modo demo ✅
 - [x] Implementar exportação de dados do usuário em `Settings.jsx` (portabilidade LGPD) ✅
 - [x] Criar RPC `delete_my_account` no Supabase (cascata em todas as tabelas) ✅
-- [ ] Criar Edge Function `delete-account` com service_role para deletar do `auth.users` ← pendente
+- [x] Criar Edge Function `delete-account` com service_role para deletar do `auth.users` ✅
 - [x] Adicionar botão "Excluir minha conta" na tela de Settings ✅
 - [x] Adicionar checkbox de consentimento explícito no formulário de cadastro ✅
 - [x] Adicionar colunas `consentAt` e `consentVersion` na tabela `subscriptions` ✅
-- [ ] Criar rota `/privacidade` com política de privacidade completa (LGPD) ← pendente
-- [ ] Criar rota `/termos` com termos de uso ← pendente
-- [ ] Configurar pg_cron para anonimizar doses antigas (+3 anos) ← pendente
-- [ ] Ativar rate limiting no Supabase Auth (Dashboard → Settings) ← fazer manualmente
-- [ ] Habilitar confirmação de email obrigatória no cadastro ← fazer manualmente no Dashboard
+- [x] Criar rota `/privacidade` com política de privacidade completa (LGPD) ✅
+- [x] Criar rota `/termos` com termos de uso ✅
+- [x] Configurar pg_cron para anonimizar doses antigas (+3 anos) — `anonymize-old-doses` agendado (Domingos 3h) no projeto `dosy-app` ✅
+- [x] Ativar rate limiting no Supabase Auth — `rate_limit_otp=5`, `rate_limit_anonymous_users=30`, `rate_limit_token_refresh=150` no projeto `dosy-app` ✅
+- [x] Habilitar confirmação de email obrigatória no cadastro — `mailer_autoconfirm=false` no projeto `dosy-app` ✅
 - [x] Criar tabela `security_events` para log de auditoria ✅
 - [x] Registrar eventos de mudança de tier em `admin_grant_tier` ✅ / exclusão de conta em `delete_my_account` ✅
 - [x] Criar índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)` ✅
 - [x] Limitar campo `observation` a 500 chars (Data Minimization LGPD) ✅
 - [x] Trocar `userAgent` completo em push_subscriptions por plataforma simplificada — coluna `platform` adicionada ✅
-- [ ] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar) ← pendente
+- [x] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar) — `docs/RIPD.md` criado com `notify-doses`, `delete-account`, `admin_grant_tier` ✅
 
 #### FASE 0.14 — Lógica de Negócio no Servidor
 - [x] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h ✅
 - [x] **[CRÍTICO]** Substituir `supabase.from('doses').insert(sos)` por `supabase.rpc('register_sos_dose')` no `dosesService.js` ✅
-- [ ] **[CRÍTICO]** Testar via curl/Postman que INSERT direto em `doses` (type=sos) é bloqueado ou não passa nas regras ← pendente teste manual
+- [x] **[CRÍTICO]** Testar que INSERT direto em `doses` (type=sos) é bloqueado ✅ — `tools/test-sos-bypass.cjs` valida: anon bloqueado por trigger, authenticated direct bloqueado por trigger `enforce_sos_via_rpc_trigger`, RPC funciona, cross-patient bloqueado por RLS. Fix aplicado: `tools/security-fix.cjs` (drop `own_*` policies inseguras + trigger).
 - [x] **[CRÍTICO]** `admin_grant_tier` rejeita chamadas de usuário não-admin — `is_admin()` usa tabela `admins` ✅
-- [ ] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365) ← pendente
-- [ ] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação ← pendente
+- [x] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365) ✅
+- [x] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação ✅
 - [x] **[ALTO]** Adicionar `ON DELETE CASCADE` na FK `doses."treatmentId" → treatments.id` ✅
 - [x] **[ALTO]** Adicionar `ON DELETE CASCADE` nas FKs de `treatments`, `doses`, `sos_rules`, `patient_shares` → `patients.id` ✅
 - [x] **[MÉDIO]** Criar RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status e ownership ✅
 - [x] **[MÉDIO]** Substituir os 3 UPDATEs diretos em `dosesService.js` pelos novos RPCs ✅
 - [x] **[MÉDIO]** RLS policies em `doses` e `treatments` incluem check via `has_patient_access()` — auditado ✅
-- [ ] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services ← pendente
+- [x] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services ✅
 
 ### FASE 1 — Fundação Capacitor
-- [ ] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`
-- [ ] Instalar `@capacitor/app`, `@capacitor/status-bar`, `@capacitor/keyboard`, `@capacitor/splash-screen`
-- [ ] Criar `capacitor.config.ts` com appId `com.dosyapp.dosy`
-- [ ] Adicionar scripts `build:android`, `open:android` no `package.json`
-- [ ] Instalar `@aparajita/capacitor-secure-storage` (substitui `@capacitor/preferences` para dados sensíveis)
-- [ ] Migrar Supabase `auth.storage` de localStorage para SecureStorage (Android KeyStore)
-- [ ] Adicionar `detectSessionInUrl: false` no Supabase client
-- [ ] Implementar handler do botão Voltar Android em `App.jsx`
-- [ ] Implementar reconexão do Realtime em `useRealtime.js` (pause/resume)
-- [ ] Executar `npx cap add android`
-- [ ] Executar `npm run build && npx cap sync android`
-- [ ] Testar app abrindo no emulador Android (API 26+)
+- [x] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` ✅
+- [x] Instalar `@capacitor/app`, `@capacitor/status-bar`, `@capacitor/keyboard`, `@capacitor/splash-screen` ✅
+- [x] Criar `capacitor.config.ts` com appId `com.dosyapp.dosy` ✅
+- [x] Adicionar scripts `build:android`, `open:android` no `package.json` ✅
+- [x] Instalar `@aparajita/capacitor-secure-storage` (substitui `@capacitor/preferences` para dados sensíveis) ✅
+- [x] Migrar Supabase `auth.storage` de localStorage para SecureStorage (Android KeyStore) — adapter condicional (web→localStorage, native→SecureStorage) ✅
+- [x] Adicionar `detectSessionInUrl: false` no Supabase client (apenas em modo native) ✅
+- [x] Implementar handler do botão Voltar Android em `App.jsx` ✅
+- [x] Implementar reconexão do Realtime em `useRealtime.js` (pause/resume) ✅
+- [x] Executar `npx cap add android` ✅
+- [x] Executar `npm run build && npx cap sync android` ✅
+- [x] Instalar JDK 17 + JDK 21 (Temurin) e Android SDK (cmdline-tools, platforms 34/35/36, build-tools 34.0.0) ✅
+- [x] Configurar `JAVA_HOME` e `ANDROID_HOME` em variáveis de usuário ✅
+- [x] Testar app abrindo no emulador Android (Pixel 10 Pro via Studio) ✅
 - [ ] Testar app em dispositivo físico
-- [ ] Confirmar Login/auth funcionando no Android
-- [ ] Implementar SSL Pinning via `network_security_config.xml` para domínio Supabase
-- [ ] Verificar que tokens de sessão estão em SecureStorage (não legíveis via ADB backup)
+- [x] Confirmar Login/auth funcionando no Android — testado no emulador Pixel 10 Pro (2026-04-26): login + logout + relogin OK contra `dosy-app` (novo projeto). SecureStorage ativo, sessão persiste. ✅
+- [x] SSL Pinning em `network_security_config.xml` ✅ — Pinning ATIVO para `guefraaqbkcehofchnrc.supabase.co` (dosy-app). Hashes SHA-256 SPKI extraídos via Node.js (`tools/extract-spki.cjs`): primary GTS WE1 (válido até Feb 2029), backup GTS Root R4 (até Jan 2028). Cleartext bloqueado, CA validation + pinning ativos.
+- [x] Bloquear ADB backup e device-to-device transfer via `allowBackup="false"` + `data_extraction_rules.xml` ✅
+- [ ] **NOTA:** Build CLI via `gradlew.bat` quebra com `Unable to establish loopback connection` (bug Win11 24H2 + JVM UnixDomainSockets). Workaround: build via Android Studio (JBR patched). CI/produção: rodar build em runner Linux (GitHub Actions) — sem o bug.
 
 ### FASE 2 — Notificações FCM
-- [ ] Criar projeto no Firebase Console
-- [ ] Adicionar app Android `com.dosyapp.dosy` no Firebase
-- [ ] Baixar `google-services.json` → colocar em `android/app/`
-- [ ] Instalar `@capacitor/push-notifications` e `@capacitor/local-notifications`
-- [ ] Configurar PushNotifications e LocalNotifications no `capacitor.config.ts`
-- [ ] Reescrever `usePushNotifications.js` com lógica isNative/web
-- [ ] Adicionar migration SQL: colunas `deviceToken` e `platform` em `push_subscriptions`
-- [ ] Reescrever Edge Function `notify-doses` para suportar FCM (Firebase Admin SDK)
-- [ ] Adicionar secrets Firebase no painel Supabase
-- [ ] Testar notificação local (LocalNotifications) no Android
-- [ ] Testar push server-side (FCM) no Android
-- [ ] Confirmar snooze funciona no nativo
+- [x] Criar projeto no Firebase Console — projeto `dosy-b592e` ✅
+- [x] Adicionar app Android `com.dosyapp.dosy` no Firebase ✅
+- [x] Baixar `google-services.json` → `android/app/` ✅
+- [x] Instalar `@capacitor/push-notifications` e `@capacitor/local-notifications` ✅
+- [x] Configurar PushNotifications e LocalNotifications no `capacitor.config.ts` ✅
+- [x] Reescrever `usePushNotifications.js` com lógica isNative/web — FCM no nativo (registration listener + LocalNotifications), Web Push na web ✅
+- [x] Adicionar migration SQL: colunas `deviceToken` e `platform` em `push_subscriptions` — `tools/fcm-schema-migration.cjs` ✅
+- [x] Reescrever Edge Function `notify-doses` para suportar FCM (HTTP v1 API + JWT OAuth) ✅
+- [x] Adicionar secrets Firebase no painel Supabase — `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` ✅
+- [x] Testar notificação local (LocalNotifications) no Android — 10 doses agendadas no Pixel 10 Pro emulador, dispararam no horário ✅
+- [x] Testar push server-side (FCM) no Android — token persistido, FCM HTTP v1 API retornou 200, notificação visual apareceu ✅
+- [ ] Confirmar snooze funciona no nativo ← validar quando precisar (não-bloqueante)
+- [x] **EXTRA:** Multi-device test — 2 emuladores, 2 users, push direcionado entrega só pro alvo correto ✅
+- [x] **EXTRA:** Edge Function `send-test-push` deployada para testes admin (POST com email do alvo)
+- [x] **EXTRA:** Notification channel `doses` criado no app (Android 8+ requer)
+- [x] **EXTRA:** Payload FCM corrigido — `priority: 'HIGH'` (uppercase), `notification_priority: 'PRIORITY_HIGH'`, `default_sound: true`
+- [x] **EXTRA:** Criar RPC `upsert_push_subscription` SECURITY DEFINER — solução pra cross-user device ownership transfer (mesmo device, user A logout → user B login → token vai pro user B sem RLS bloquear)
+- [x] **EXTRA:** Trocar partial unique index por UNIQUE constraint em `deviceToken` — partial index não funciona com `ON CONFLICT`
+
+### FASE 2.5 — Alarme Crítico Nativo (BLOCKER PRA LAUNCH)
+> Notificação push padrão (Capacitor LocalNotifications) toca som 1x e não bypassa silencioso/DND.
+> Pra app de medicação, lembretes precisam comportar-se como **alarme do despertador**: tela cheia, som em loop até dismiss, ignora silencioso, mostra na lock screen.
+> Requer plugin Android nativo custom (não existe plugin Capacitor maintained pra isso).
+
+- [x] Criar plugin Capacitor Android `CriticalAlarmPlugin` (Java) ✅
+- [x] Criar `AlarmReceiver` (BroadcastReceiver disparado por AlarmManager) ✅
+- [x] Criar `AlarmActivity` full-screen com FLAG_SHOW_WHEN_LOCKED + TURN_SCREEN_ON, MediaPlayer USAGE_ALARM loop, botões Ciente / Adiar 10min, vibração contínua ✅
+- [x] Adicionar permissão `USE_FULL_SCREEN_INTENT` no AndroidManifest ✅
+- [x] Adicionar permissão `ACCESS_NOTIFICATION_POLICY` ✅
+- [x] Adicionar `SYSTEM_ALERT_WINDOW` para BAL bypass Android 14+ ✅ (granted via adb appops)
+- [ ] Adicionar `dosy_alarm.mp3` em `res/raw/` (custom — fallback usa default RingtoneManager.TYPE_ALARM) ← opcional
+- [x] Registrar plugin em `MainActivity.java` ✅
+- [x] Bridge JS: `src/services/criticalAlarm.js` ✅
+- [x] Atualizar `usePushNotifications.scheduleDoses` — agrupa doses por minuto, agenda 1 critical alarm por grupo ✅
+- [x] Toggle "criticalAlarm" em prefs (default ON) — controlado em Settings ✅
+- [x] Quando OFF/falha: fallback LocalNotifications ✅
+- [x] **EXTRA:** `AlarmService` foreground service (BAL workaround Android 14+ — MediaPlayer loop em service, BAL exempt via SYSTEM_ALERT_WINDOW) ✅
+- [x] **EXTRA:** Agrupamento doses mesmo horário — 1 alarme único + 1 notif single com lista, vs N alarmes simultâneos ✅
+- [x] **EXTRA:** Modal queue — tap notif abre fila Ignorar/Pular/Tomada por dose ✅
+- [x] Tap em notif tray → MainActivity → modal queue (Ignorar/Pular/Tomada via RPC) ✅
+- [x] Re-agendar alarmes após reboot (`BootReceiver` registrado AndroidManifest, BOOT_COMPLETED + LOCKED_BOOT_COMPLETED + MY_PACKAGE_REPLACED) ✅
+- [x] Testar: device bloqueado → tela cheia liga + som ✅ (validado emulador Pixel 10 Pro 2026-04-27)
+- [x] Testar: app killed (home Android) → alarme dispara fullscreen ✅
+- [ ] Testar: dose com alarme crítico ATIVO → silenciar device → ainda tocar (USAGE_ALARM bypassa silencioso, validar em device físico)
+- [ ] Testar: dose com alarme crítico ATIVO → DND mode → ainda tocar (após permissão ACCESS_NOTIFICATION_POLICY granted)
+- [ ] Testar: tap "Adiar 10 min" → re-agenda pra +10min (re-test após mudança de implementação)
 
 ### FASE 3 — Monetização
 - [ ] Criar conta RevenueCat
@@ -2034,9 +2072,9 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 - [ ] Testar performance geral no Android (scroll, animações)
 
 ### FASE 5 — Preparação Play Store
-- [ ] Criar/hospedar página de Política de Privacidade (`/privacidade`)
-- [ ] Criar/hospedar página de Termos de Uso (`/termos`)
-- [ ] Adicionar rotas `/privacidade` e `/termos` no `App.jsx`
+- [x] Criar página de Política de Privacidade (`/privacidade`) — `src/pages/Privacidade.jsx` criado ✅
+- [x] Criar página de Termos de Uso (`/termos`) — `src/pages/Termos.jsx` criado ✅
+- [x] Adicionar rotas `/privacidade` e `/termos` no `App.jsx` como rotas públicas (antes do auth check) ✅
 - [ ] Preencher questionário IARC no Play Console
 - [ ] Preencher declaração de saúde (se aplicável)
 - [ ] Gerar keystore de release (`keytool -genkey ...`)
