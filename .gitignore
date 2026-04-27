@@ -21,8 +21,12 @@ licenses/
 platform-tools/
 platforms/
 
-# Supabase CLI temp
+# Supabase CLI temp + local binaries + DB dumps (may contain PII)
 supabase/.temp/
+tools/supabase.exe
+tools/supabase.tar.gz
+tools/*_dump.sql
+tools/medcontrol_dump.sql
 
 # Android Studio user-specific (.idea kept partial; ignore the volatile bits)
 android/.idea/workspace.xml
