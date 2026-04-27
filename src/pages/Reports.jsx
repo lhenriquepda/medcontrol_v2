@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import Header from '../components/Header'
 import PaywallModal from '../components/PaywallModal'
 import { usePatients } from '../hooks/usePatients'
@@ -8,6 +9,8 @@ import { useToast } from '../hooks/useToast'
 import { formatDate, formatDateTime, formatTime, toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
 import { statusLabel } from '../utils/statusUtils'
 import { escapeHtml as esc } from '../utils/sanitize'
+
+const isNative = Capacitor.isNativePlatform()
 
 export default function Reports() {
   const { data: patients = [] } = usePatients()
@@ -43,9 +46,37 @@ export default function Reports() {
       ]
     })
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    downloadBlob(blob, `dosy_${Date.now()}.csv`)
-    toast.show({ message: 'CSV exportado.', kind: 'success' })
+    const csvWithBom = '\ufeff' + csv
+    const filename = `dosy_${Date.now()}.csv`
+
+    if (isNative) {
+      // Native: write to cache dir + share via system sheet
+      ;(async () => {
+        try {
+          const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
+          const { Share } = await import('@capacitor/share')
+          await Filesystem.writeFile({
+            path: filename,
+            data: csvWithBom,
+            directory: Directory.Cache,
+            encoding: Encoding.UTF8
+          })
+          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
+          await Share.share({
+            title: 'Relat\u00f3rio Dosy',
+            url: uri,
+            dialogTitle: 'Compartilhar relat\u00f3rio'
+          })
+          toast.show({ message: 'CSV pronto.', kind: 'success' })
+        } catch (e) {
+          toast.show({ message: 'Falha ao exportar CSV: ' + (e?.message || e), kind: 'error' })
+        }
+      })()
+    } else {
+      const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8' })
+      downloadBlob(blob, filename)
+      toast.show({ message: 'CSV exportado.', kind: 'success' })
+    }
   }
 
   function exportPDF() {
@@ -160,6 +191,54 @@ export default function Reports() {
 </div>
 <script>window.onload=()=>window.print()</script>
 </body></html>`
+    if (isNative) {
+      // Native: render HTML offscreen → html2canvas → jsPDF → save + share
+      ;(async () => {
+        try {
+          const [{ default: html2canvas }, jsPDFmod, { Filesystem, Directory }, { Share }] = await Promise.all([
+            import('html2canvas'),
+            import('jspdf'),
+            import('@capacitor/filesystem'),
+            import('@capacitor/share')
+          ])
+          const { jsPDF } = jsPDFmod
+
+          const container = document.createElement('div')
+          container.style.cssText = 'position:fixed;top:0;left:0;z-index:-1;width:860px;background:#fff;'
+          container.innerHTML = html
+          document.body.appendChild(container)
+
+          await new Promise(r => setTimeout(r, 250))
+          const canvas = await html2canvas(container.firstElementChild, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+          document.body.removeChild(container)
+
+          const pdf = new jsPDF('p', 'mm', 'a4')
+          const pageW = pdf.internal.pageSize.getWidth()
+          const imgH = (canvas.height * pageW) / canvas.width
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, imgH)
+
+          const filename = `dosy_relatorio_${Date.now()}.pdf`
+          const base64 = pdf.output('datauristring').split(',')[1]
+          await Filesystem.writeFile({
+            path: filename,
+            data: base64,
+            directory: Directory.Cache
+          })
+          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
+          await Share.share({
+            title: 'Relatório Dosy',
+            url: uri,
+            dialogTitle: 'Compartilhar PDF'
+          })
+          toast.show({ message: 'PDF pronto.', kind: 'success' })
+        } catch (e) {
+          toast.show({ message: 'Falha ao exportar PDF: ' + (e?.message || e), kind: 'error' })
+        }
+      })()
+      return
+    }
+
+    // Web: legacy window.print() flow
     const w = window.open('', '_blank')
     if (!w) { toast.show({ message: 'Permita pop-ups para exportar PDF.', kind: 'error' }); return }
     w.document.open(); w.document.write(html); w.document.close()
