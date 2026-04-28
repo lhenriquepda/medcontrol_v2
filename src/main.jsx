@@ -8,6 +8,7 @@ import { Capacitor } from '@capacitor/core'
 import * as Sentry from '@sentry/react'
 import * as SentryCapacitor from '@sentry/capacitor'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { ToastProvider } from './hooks/useToast.jsx'
 import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
@@ -87,23 +88,25 @@ if (Capacitor.isNativePlatform()) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister,
-        maxAge: 1000 * 60 * 60 * 24, // 24h
-        buster: 'v1' // bump to invalidate persisted cache on schema change
-      }}
-    >
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </PersistQueryClientProvider>
+    <ErrorBoundary>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          maxAge: 1000 * 60 * 60 * 24, // 24h
+          buster: 'v1' // bump to invalidate persisted cache on schema change
+        }}
+      >
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </PersistQueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 )

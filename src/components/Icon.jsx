@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Pill,
   AlarmClock,
@@ -151,7 +152,9 @@ function getStyle() {
   return localStorage.getItem(STYLE_KEY) || DEFAULT_STYLE
 }
 
-export default function Icon({ name, size = 18, className = '', strokeWidth = 2, style }) {
+// Aud 4.5.5 G5 — Icon usado centenas de vezes por render. memo evita re-render
+// quando name/size/className/style permanecem iguais.
+function IconComponent({ name, size = 18, className = '', strokeWidth = 2, style }) {
   const map = ICONS[name]
   if (!map) {
     // unknown icon — render `?` placeholder
@@ -183,6 +186,9 @@ export default function Icon({ name, size = 18, className = '', strokeWidth = 2,
     />
   )
 }
+
+const Icon = memo(IconComponent)
+export default Icon
 
 /**
  * Convenience wrapper for inline emoji-only legacy usage.

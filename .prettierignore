@@ -1,0 +1,7 @@
+dist
+android
+node_modules
+.vercel
+supabase/migrations
+package-lock.json
+*.md

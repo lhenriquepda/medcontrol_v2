@@ -6,10 +6,10 @@ on:
   pull_request:
 
 jobs:
-  build:
-    name: Build + lint
+  test:
+    name: Lint + Test + Build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -19,16 +19,31 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - run: npm ci
+      - name: Install
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test (Vitest)
+        run: npm test
+
+      - name: Security audit (high+)
+        run: npm audit --audit-level=high
+        continue-on-error: true # devDeps com vulns conhecidas (Capacitor assets chain)
 
       - name: Build web bundle
         run: npm run build
         env:
-          # Use placeholders — CI just verifies build compiles, not e2e
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder
           VITE_SUPABASE_SCHEMA: medcontrol
           VITE_VAPID_PUBLIC_KEY: placeholder
+          # Sentry source maps upload (Aud 5.7 G1) — só dispara se 3 secrets setados
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       - name: Capacitor sync
         run: npx cap sync android

@@ -1,27 +1,29 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import AppHeader from './components/AppHeader'
 import BottomNav from './components/BottomNav'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Patients from './pages/Patients'
-import PatientForm from './pages/PatientForm'
-import PatientDetail from './pages/PatientDetail'
-import TreatmentForm from './pages/TreatmentForm'
-import TreatmentList from './pages/TreatmentList'
-import SOS from './pages/SOS'
-import More from './pages/More'
-import Analytics from './pages/Analytics'
-import DoseHistory from './pages/DoseHistory'
-import Reports from './pages/Reports'
-import Settings from './pages/Settings'
-import Admin from './pages/Admin'
-import Privacidade from './pages/Privacidade'
-import Termos from './pages/Termos'
-import ResetPassword from './pages/ResetPassword'
-import Install from './pages/Install'
+// Aud 4.5.5 G1: route-level code splitting com React.lazy.
+// Pages carregam sob demanda — bundle main reduz, time-to-interactive cai em rotas leves.
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Patients = lazy(() => import('./pages/Patients'))
+const PatientForm = lazy(() => import('./pages/PatientForm'))
+const PatientDetail = lazy(() => import('./pages/PatientDetail'))
+const TreatmentForm = lazy(() => import('./pages/TreatmentForm'))
+const TreatmentList = lazy(() => import('./pages/TreatmentList'))
+const SOS = lazy(() => import('./pages/SOS'))
+const More = lazy(() => import('./pages/More'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const DoseHistory = lazy(() => import('./pages/DoseHistory'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Admin = lazy(() => import('./pages/Admin'))
+const Privacidade = lazy(() => import('./pages/Privacidade'))
+const Termos = lazy(() => import('./pages/Termos'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Install = lazy(() => import('./pages/Install'))
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
 import { usePushNotifications } from './hooks/usePushNotifications'
@@ -29,6 +31,15 @@ import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
 import UpdateBanner from './components/UpdateBanner'
+
+// Fallback minimalista enquanto chunk carrega
+function PageSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-sm text-slate-500">Carregando…</div>
+    </div>
+  )
+}
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -215,13 +226,15 @@ export default function App() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/privacidade" element={<Privacidade />} />
-        <Route path="/termos" element={<Termos />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/install" element={<Install />} />
-        <Route path="*" element={<Login />} />
-      </Routes>
+      <Suspense fallback={<PageSkeleton />}>
+        <Routes>
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="*" element={<Login />} />
+        </Routes>
+      </Suspense>
     )
   }
 
@@ -232,28 +245,30 @@ export default function App() {
     <UpdateBanner />
     <AppHeader />
     <div className="min-h-screen">
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/pacientes" element={<Patients />} />
-        <Route path="/pacientes/novo" element={<PatientForm />} />
-        <Route path="/pacientes/:id" element={<PatientDetail />} />
-        <Route path="/pacientes/:id/editar" element={<PatientForm />} />
-        <Route path="/tratamento/novo" element={<TreatmentForm />} />
-        <Route path="/tratamento/:id" element={<TreatmentForm />} />
-        <Route path="/tratamentos" element={<TreatmentList />} />
-        <Route path="/sos" element={<SOS />} />
-        <Route path="/mais" element={<More />} />
-        <Route path="/historico" element={<DoseHistory />} />
-        <Route path="/relatorios-analise" element={<Analytics />} />
-        <Route path="/relatorios" element={<Reports />} />
-        <Route path="/ajustes" element={<Settings />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/privacidade" element={<Privacidade />} />
-        <Route path="/termos" element={<Termos />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/install" element={<Install />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageSkeleton />}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/pacientes" element={<Patients />} />
+          <Route path="/pacientes/novo" element={<PatientForm />} />
+          <Route path="/pacientes/:id" element={<PatientDetail />} />
+          <Route path="/pacientes/:id/editar" element={<PatientForm />} />
+          <Route path="/tratamento/novo" element={<TreatmentForm />} />
+          <Route path="/tratamento/:id" element={<TreatmentForm />} />
+          <Route path="/tratamentos" element={<TreatmentList />} />
+          <Route path="/sos" element={<SOS />} />
+          <Route path="/mais" element={<More />} />
+          <Route path="/historico" element={<DoseHistory />} />
+          <Route path="/relatorios-analise" element={<Analytics />} />
+          <Route path="/relatorios" element={<Reports />} />
+          <Route path="/ajustes" element={<Settings />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
       {!hideNav && <BottomNav />}
     </div>
     <DailySummaryModal open={showSummary} onClose={() => setShowSummary(false)} />

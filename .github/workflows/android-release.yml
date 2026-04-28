@@ -52,6 +52,10 @@ jobs:
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_ADMOB_BANNER_ANDROID: ${{ secrets.VITE_ADMOB_BANNER_ANDROID }}
+          # Sentry source maps upload (Aud 5.7 G1)
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
       - name: Capacitor sync
         run: npx cap sync android
