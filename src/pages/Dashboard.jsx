@@ -306,10 +306,10 @@ export default function Dashboard() {
 
 function Stat({ label, value, tone = 'slate', alert }) {
   const tones = {
-    brand: 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300',
-    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
-    rose: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
-    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+    brand: 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 dark:ring-1 dark:ring-brand-700/30',
+    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-1 dark:ring-emerald-700/30',
+    rose: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 dark:ring-1 dark:ring-rose-700/30',
+    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300 dark:ring-1 dark:ring-slate-700/40'
   }
   return (
     <div className={`rounded-2xl p-3 ${tones[tone]} ${alert ? 'ring-2 ring-rose-400' : ''}`}>

@@ -11,7 +11,7 @@ const RANGES = [
   { key: 'all', label: 'Tudo' }
 ]
 const STATUS = [
-  { key: 'pending', label: 'Pendente', icon: 'pending', tone: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
+  { key: 'pending', label: 'Pendente', icon: 'pending', tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
   { key: 'overdue', label: 'Atrasada', icon: 'warning', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
   { key: 'done', label: 'Tomada', icon: 'success', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
   { key: 'skipped', label: 'Pulada', icon: 'skip', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }
@@ -60,7 +60,10 @@ export default function FilterBar({ filters, setFilters, patients }) {
   }
 
   return (
-    <div className="sticky top-[78px] z-20 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
+    <div
+      className="sticky z-30 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur border-b border-slate-100 dark:border-slate-800"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 78px)' }}
+    >
       <div className="max-w-md mx-auto px-4 py-2.5 space-y-2">
         {/* Linha 1: segmented period + botão Filtros */}
         <div className="flex items-center gap-2">

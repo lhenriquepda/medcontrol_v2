@@ -50,6 +50,19 @@
   --color-brand-900: #19438f;
   /* dark navy - app header, splash bg */
 
+  /* RGB triplets — necessário pra Tailwind opacity modifier (bg-brand-500/10).
+     Quando editar hex acima, atualizar triplets aqui também. */
+  --color-brand-50-rgb: 238 247 255;
+  --color-brand-100-rgb: 217 237 255;
+  --color-brand-200-rgb: 188 224 255;
+  --color-brand-300-rgb: 142 205 255;
+  --color-brand-400-rgb: 89 177 255;
+  --color-brand-500-rgb: 47 145 255;
+  --color-brand-600-rgb: 24 115 245;
+  --color-brand-700-rgb: 20 92 225;
+  --color-brand-800-rgb: 23 76 182;
+  --color-brand-900-rgb: 25 67 143;
+
   /* Cor de fundo do AppHeader / Login / AlarmActivity (gradient top) */
   --color-header-bg: #0d1535;
   --color-header-bg-end: #1a2660;

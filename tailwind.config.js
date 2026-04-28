@@ -10,17 +10,19 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Channel format: rgb(<vars> / <alpha-value>) → habilita Tailwind opacity modifier
+        // ex: bg-brand-500/10 → rgb(47 145 255 / 0.1). RGB triplets em theme.css.
         brand: {
-          50:  'var(--color-brand-50)',
-          100: 'var(--color-brand-100)',
-          200: 'var(--color-brand-200)',
-          300: 'var(--color-brand-300)',
-          400: 'var(--color-brand-400)',
-          500: 'var(--color-brand-500)',
-          600: 'var(--color-brand-600)',
-          700: 'var(--color-brand-700)',
-          800: 'var(--color-brand-800)',
-          900: 'var(--color-brand-900)'
+          50:  'rgb(var(--color-brand-50-rgb) / <alpha-value>)',
+          100: 'rgb(var(--color-brand-100-rgb) / <alpha-value>)',
+          200: 'rgb(var(--color-brand-200-rgb) / <alpha-value>)',
+          300: 'rgb(var(--color-brand-300-rgb) / <alpha-value>)',
+          400: 'rgb(var(--color-brand-400-rgb) / <alpha-value>)',
+          500: 'rgb(var(--color-brand-500-rgb) / <alpha-value>)',
+          600: 'rgb(var(--color-brand-600-rgb) / <alpha-value>)',
+          700: 'rgb(var(--color-brand-700-rgb) / <alpha-value>)',
+          800: 'rgb(var(--color-brand-800-rgb) / <alpha-value>)',
+          900: 'rgb(var(--color-brand-900-rgb) / <alpha-value>)'
         }
       },
       fontFamily: {
