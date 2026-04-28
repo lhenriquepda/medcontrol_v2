@@ -146,11 +146,13 @@ export default function Dashboard() {
   }, [collapsed])
   const toggleCollapse = (id) => setCollapsed((s) => ({ ...s, [id]: !s[id] }))
 
-  // Schedule push notifications for upcoming doses in the next 24h
+  // Schedule push notifications for upcoming doses + daily summary.
+  // SEMPRE roda (mesmo sem doses hoje) — daily summary é independente e precisa
+  // ser agendado mesmo quando não há doses programadas.
   const { scheduleDoses } = usePushNotifications()
   useEffect(() => {
-    if (todayDoses.length) scheduleDoses(todayDoses, { patients })
-  }, [todayDoses, scheduleDoses])
+    scheduleDoses(todayDoses, { patients })
+  }, [todayDoses, patients, scheduleDoses])
 
   // Pull-to-refresh — overlay bar (não wrapa content, preserva sticky FilterBar)
   const handleRefresh = async () => {

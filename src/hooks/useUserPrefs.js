@@ -19,7 +19,12 @@ export const DEFAULT_PREFS = {
   criticalAlarm: true,
   dailySummary: false,
   summaryTime: '07:00',
-  advanceMins: 15
+  advanceMins: 15,
+  // DND (Não perturbe) — durante janela: doses geram apenas push notif silenciosa,
+  // sem alarme tocando. Suporta janelas que cruzam meia-noite (ex: 23:00 → 07:00).
+  dndEnabled: false,
+  dndStart: '23:00',
+  dndEnd: '07:00'
 }
 
 function readLocal() {

@@ -13,13 +13,15 @@ export default function AppHeader() {
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
   const name = firstName(user)
 
-  // Overdue window: doses pendentes atrasadas nos últimos 30 dias
+  // Overdue window: doses pendentes nos últimos 90 dias.
+  // SEM `to` — service computa overdue client-side (scheduledAt < now). Se `to` for fixado
+  // no mount, doses agendadas DEPOIS do mount nunca entram no fetch (mobile bg-alive sofre).
+  // refetchInterval 60s + listDoses usa `new Date()` interno → status atualiza a cada tick.
   const overdueFilter = useMemo(() => {
-    const now = new Date()
-    const from = new Date(now)
-    from.setDate(from.getDate() - 30)
-    return { from: from.toISOString(), to: now.toISOString(), status: 'overdue' }
-  }, []) // stable key — query refetches every 60s automatically
+    const from = new Date()
+    from.setDate(from.getDate() - 90)
+    return { from: from.toISOString(), status: 'overdue' }
+  }, [])
 
   const { data: overdueDoses = [] } = useDoses(overdueFilter)
   const overdueNow = overdueDoses.length

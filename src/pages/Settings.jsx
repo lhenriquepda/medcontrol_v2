@@ -55,9 +55,11 @@ export default function Settings() {
       toast.show({ message: err.message || 'Falha ao salvar preferência.', kind: 'error' })
       return
     }
-    // Se subscribed e mudou prefs que afetam scheduling, re-schedule
-    const triggers = ['dailySummary', 'summaryTime', 'advanceMins', 'criticalAlarm']
-    if (subscribed && triggers.some(k => k in patch)) {
+    // Re-schedule sempre que pref relevante mudar — daily summary é independente
+    // do estado `subscribed`, então não gated. scheduleDoses internamente respeita
+    // prefs.push pra decidir sobre dose notifs/alarms.
+    const triggers = ['push', 'dailySummary', 'summaryTime', 'advanceMins', 'criticalAlarm', 'dndEnabled', 'dndStart', 'dndEnd']
+    if (triggers.some(k => k in patch)) {
       scheduleDoses(upcomingDoses).catch(e => console.warn('reschedule:', e?.message))
     }
   }
@@ -288,6 +290,49 @@ export default function Settings() {
                 <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.criticalAlarm !== false ? 'translate-x-5' : ''}`} />
               </button>
             </div>
+          )}
+
+          {/* Não perturbe (janela silenciosa — sem alarme tocando) */}
+          {pushActive && (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium inline-flex items-center gap-1.5"><Icon name="bell-off" size={14} /> Não perturbe</p>
+                  <p className="text-xs text-slate-500 leading-tight mt-0.5">
+                    Durante esse período, doses só geram notificação push (sem alarme tocando).
+                    Útil pra noite/madrugada.
+                  </p>
+                </div>
+                <button
+                  onClick={() => updateNotif({ dndEnabled: !notif.dndEnabled })}
+                  className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.dndEnabled ? 'bg-indigo-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.dndEnabled ? 'translate-x-5' : ''}`} />
+                </button>
+              </div>
+              {notif.dndEnabled && (
+                <div className="grid grid-cols-2 gap-2 pl-1">
+                  <label className="block">
+                    <span className="block text-[11px] font-medium mb-1 text-slate-500">De</span>
+                    <input
+                      type="time"
+                      value={notif.dndStart || '23:00'}
+                      onChange={(e) => updateNotif({ dndStart: e.target.value })}
+                      className="input text-sm py-1.5"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] font-medium mb-1 text-slate-500">Até</span>
+                    <input
+                      type="time"
+                      value={notif.dndEnd || '07:00'}
+                      onChange={(e) => updateNotif({ dndEnd: e.target.value })}
+                      className="input text-sm py-1.5"
+                    />
+                  </label>
+                </div>
+              )}
+            </>
           )}
 
           {/* Resumo diário */}
