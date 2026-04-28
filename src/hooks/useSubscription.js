@@ -17,16 +17,38 @@ export function useIsAdmin() {
   return tier === 'admin'
 }
 
+/**
+ * Tier model:
+ *   free  — limite 1 paciente, ads, sem analytics/relatórios/share
+ *   plus  — features ilimitadas (= pro), MAS continua com ads
+ *           Concedido só por admin (não vendido). Goodwill pra early adopters/testers.
+ *   pro   — features ilimitadas, sem ads
+ *   admin — pro + acesso painel admin
+ */
+const PRO_FEATURE_TIERS = ['plus', 'pro', 'admin']
+
+/**
+ * Acesso a features Premium (multi-paciente, analytics, relatórios, share, etc).
+ * Inclui plus + pro + admin.
+ */
 export function useIsPro() {
   const { data: tier } = useMyTier()
-  return tier === 'pro' || tier === 'admin'
+  return PRO_FEATURE_TIERS.includes(tier)
+}
+
+/**
+ * Anúncios visíveis: free + plus. Pro/admin não veem ads.
+ */
+export function useShowAds() {
+  const { data: tier } = useMyTier()
+  return tier !== 'pro' && tier !== 'admin'
 }
 
 // Retorna true se user free atingiu limite de pacientes
 export function usePatientLimitReached() {
   const { data: tier } = useMyTier()
   const { data: patients = [] } = usePatients()
-  if (tier === 'pro' || tier === 'admin') return false
+  if (PRO_FEATURE_TIERS.includes(tier)) return false
   return patients.length >= FREE_PATIENT_LIMIT
 }
 

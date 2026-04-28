@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
+import AdBanner from '../components/AdBanner'
+import PatientPicker from '../components/PatientPicker'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
 import { usePatients } from '../hooks/usePatients'
@@ -88,6 +90,7 @@ export default function DoseHistory() {
       <Header back title="Histórico de doses" />
 
       <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+        <AdBanner />
         {/* Period selector */}
         <div className="flex items-center gap-2">
           <div className="flex p-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">
@@ -121,18 +124,13 @@ export default function DoseHistory() {
 
         {/* Patient filter */}
         {patients.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 no-scrollbar">
-            <button onClick={() => setPatientId(null)}
-              className={`chip whitespace-nowrap flex-shrink-0 ${!patientId ? 'chip-active' : ''}`}>
-              Todos
-            </button>
-            {patients.map((p) => (
-              <button key={p.id} onClick={() => setPatientId(p.id)}
-                className={`chip whitespace-nowrap flex-shrink-0 ${patientId === p.id ? 'chip-active' : ''}`}>
-                {p.avatar || '👤'} {p.name.split(' ')[0]}
-              </button>
-            ))}
-          </div>
+          <PatientPicker
+            patients={patients}
+            value={patientId}
+            onChange={setPatientId}
+            allowAll
+            placeholder="Todos pacientes"
+          />
         )}
 
         {/* Summary bar */}

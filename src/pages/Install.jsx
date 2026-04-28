@@ -4,8 +4,12 @@
  * Hosts a "Download APK" button + step-by-step install instructions for testers.
  * APK file is served directly from Vercel at /dosy-beta.apk (built into public/).
  */
+/* eslint-disable no-undef */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+/* eslint-enable no-undef */
+import Icon from '../components/Icon'
 const APK_URL = '/dosy-beta.apk'
-const APK_VERSION = '1.0.0-beta.1'
+const APK_VERSION = `${APP_VERSION}-beta`
 
 export default function Install() {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
@@ -21,8 +25,8 @@ export default function Install() {
         </div>
 
         {!isAndroid && (
-          <div className="bg-amber-500/20 border border-amber-400/40 rounded-xl p-4 mb-6 text-sm">
-            ⚠️ Esta página é para <strong>celular Android</strong>. Abra <code>/install</code> no celular pra instalar o app.
+          <div className="bg-amber-500/20 border border-amber-400/40 rounded-xl p-4 mb-6 text-sm flex items-start gap-2">
+            <Icon name="warning" size={16} className="shrink-0 mt-0.5" /> <span>Esta página é para <strong>celular Android</strong>. Abra <code>/install</code> no celular pra instalar o app.</span>
           </div>
         )}
 
@@ -32,7 +36,7 @@ export default function Install() {
           download="dosy.apk"
           className="block w-full text-center py-4 mb-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold shadow-lg active:scale-95 transition"
         >
-          ⬇️ Baixar APK ({APK_VERSION})
+          <span className="inline-flex items-center justify-center gap-2"><Icon name="download" size={18} /> Baixar APK ({APK_VERSION})</span>
         </a>
 
         <div className="bg-white/5 backdrop-blur rounded-2xl p-5 space-y-5">

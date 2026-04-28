@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import Icon from './Icon'
 
 /* eslint-disable no-undef */
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
@@ -19,37 +20,37 @@ const STORAGE_KEY = 'dosy_tour_seen_version'
  */
 const SLIDES = [
   {
-    icon: '👋',
+    icon: 'hand',
     title: 'Bem-vindo ao Dosy',
     body: 'Seu assistente de medicação para toda a família. Esqueça doses esquecidas — o alarme funciona como um despertador, mesmo no silencioso.',
     accent: 'from-brand-500/20 to-brand-700/10'
   },
   {
-    icon: '👨‍👩‍👧',
+    icon: 'users',
     title: 'Múltiplos pacientes',
     body: 'Cadastre filhos, pais, você mesmo. Cada um com seus tratamentos, histórico e alertas. Compartilhe pacientes com outros cuidadores.',
     accent: 'from-emerald-500/20 to-emerald-700/10'
   },
   {
-    icon: '⏰',
+    icon: 'alarm',
     title: 'Alarme que toca de verdade',
     body: 'Tela cheia, som contínuo, vibração — até você confirmar ou adiar. Funciona com app fechado, tela bloqueada, em silencioso (com permissão).',
     accent: 'from-rose-500/20 to-rose-700/10'
   },
   {
-    icon: '💊',
+    icon: 'pill',
     title: 'Confirme em 1 toque',
     body: 'Quando o alarme toca, você marca a dose como Tomada, Pular ou Ignorar. Várias doses no mesmo horário aparecem juntas em uma fila rápida.',
     accent: 'from-blue-500/20 to-blue-700/10'
   },
   {
-    icon: '🚨',
+    icon: 'sos',
     title: 'Doses SOS quando precisar',
     body: 'Registre doses de resgate fora do agendamento — com regras de segurança automáticas (intervalo mínimo, máximo em 24h).',
     accent: 'from-amber-500/20 to-amber-700/10'
   },
   {
-    icon: '📊',
+    icon: 'bar-chart',
     title: 'Histórico + Relatórios',
     body: 'Acompanhe sua adesão, exporte relatórios em PDF/CSV prontos pra mostrar ao médico. Dados sempre seus, criptografados, conforme a LGPD.',
     accent: 'from-purple-500/20 to-purple-700/10'
@@ -104,7 +105,7 @@ export default function OnboardingTour({ enabled = true }) {
         {/* Slide content */}
         <div className="flex-1 px-7 py-6 flex flex-col items-center text-center overflow-y-auto">
           <div className={`w-28 h-28 rounded-3xl bg-gradient-to-br ${slide.accent} flex items-center justify-center mb-6 ring-1 ring-white/10`}>
-            <span className="text-6xl" role="img" aria-hidden="true">{slide.icon}</span>
+            <Icon name={slide.icon} size={72} className="text-white" strokeWidth={1.5} />
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-3 leading-tight">
@@ -140,13 +141,13 @@ export default function OnboardingTour({ enabled = true }) {
                 : 'text-white/70 hover:bg-white/5'
             }`}
           >
-            ← Anterior
+<span className="inline-flex items-center justify-center gap-1"><Icon name="back" size={14} /> Anterior</span>
           </button>
           <button
             onClick={next}
             className="flex-[1.5] py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-semibold shadow-lg active:scale-[0.98] transition"
           >
-            {isLast ? '🚀  Começar' : `Próximo →`}
+            {isLast ? <span className="inline-flex items-center gap-1.5"><Icon name="party" size={16} /> Começar</span> : <span className="inline-flex items-center gap-1">Próximo <Icon name="forward" size={14} /></span>}
           </button>
         </div>
       </div>

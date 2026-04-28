@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PaywallModal from '../components/PaywallModal'
+import AdBanner from '../components/AdBanner'
 import { usePatient, useCreatePatient, useUpdatePatient, useDeletePatient } from '../hooks/usePatients'
 import { usePatientLimitReached, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
@@ -98,6 +99,7 @@ export default function PatientForm() {
     <div className="pb-28">
       <Header back title={editing ? 'Editar paciente' : 'Novo paciente'} />
       <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
+        <AdBanner />
         <div className="card p-4">
           <p className="text-xs font-medium mb-2">Avatar</p>
           <div className="flex items-center gap-3">

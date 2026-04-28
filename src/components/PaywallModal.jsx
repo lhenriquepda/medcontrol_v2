@@ -1,12 +1,13 @@
 import BottomSheet from './BottomSheet'
+import Icon from './Icon'
 
 const FEATURES = [
-  { icon: '👨‍👩‍👧‍👦', title: 'Pacientes ilimitados', desc: 'Cadastre toda a família num só lugar.' },
-  { icon: '📄', title: 'Relatórios PDF/CSV', desc: 'Leve ao médico ou exporte histórico completo.' },
-  { icon: '📊', title: 'Análises avançadas', desc: 'Adesão, heatmap e uso de S.O.S.' },
-  { icon: '🔔', title: 'Resumo diário', desc: 'Notificação com todas as doses do dia.' },
-  { icon: '☁️', title: 'Backup na nuvem', desc: 'Sincroniza entre dispositivos.' },
-  { icon: '🚫', title: 'Sem anúncios', desc: 'Foco total no que importa.' }
+  { icon: 'users', title: 'Pacientes ilimitados', desc: 'Cadastre toda a família num só lugar.' },
+  { icon: 'file-text', title: 'Relatórios PDF/CSV', desc: 'Leve ao médico ou exporte histórico completo.' },
+  { icon: 'bar-chart', title: 'Análises avançadas', desc: 'Adesão, heatmap e uso de S.O.S.' },
+  { icon: 'bell', title: 'Resumo diário', desc: 'Notificação com todas as doses do dia.' },
+  { icon: 'upload', title: 'Backup na nuvem', desc: 'Sincroniza entre dispositivos.' },
+  { icon: 'bell-off', title: 'Sem anúncios', desc: 'Foco total no que importa.' }
 ]
 
 export default function PaywallModal({ open, onClose, reason }) {
@@ -19,8 +20,10 @@ export default function PaywallModal({ open, onClose, reason }) {
       )}
       <div className="space-y-3 mb-5">
         {FEATURES.map((f) => (
-          <div key={f.title} className="flex gap-3">
-            <span className="text-2xl">{f.icon}</span>
+          <div key={f.title} className="flex gap-3 items-start">
+            <span className="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0">
+              <Icon name={f.icon} size={18} />
+            </span>
             <div>
               <p className="font-medium text-sm">{f.title}</p>
               <p className="text-xs text-slate-500">{f.desc}</p>

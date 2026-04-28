@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
+import Icon from '../components/Icon'
+import AdBanner from '../components/AdBanner'
 import Field from '../components/Field'
+import PatientPicker from '../components/PatientPicker'
 import MedNameInput from '../components/MedNameInput'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule } from '../hooks/useDoses'
@@ -60,16 +63,15 @@ export default function SOS() {
     <div className="pb-28 bg-rose-50/60 dark:bg-rose-950/30 min-h-screen">
       <Header title="S.O.S" subtitle="Dose extra fora do agendado" />
       <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
+        <AdBanner />
         <div>
           <p className="text-xs font-medium mb-1">Paciente *</p>
-          <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
-            {patients.map((p) => (
-              <button type="button" key={p.id} onClick={() => setPatientId(p.id)}
-                      className={`chip whitespace-nowrap ${patientId === p.id ? 'chip-active' : ''}`}>
-                <span>{p.avatar || '👤'}</span> {p.name.split(' ')[0]}
-              </button>
-            ))}
-          </div>
+          <PatientPicker
+            patients={patients}
+            value={patientId}
+            onChange={setPatientId}
+            placeholder="Selecione paciente"
+          />
         </div>
 
         <Field label="Medicamento *">
@@ -109,7 +111,7 @@ export default function SOS() {
         )}
 
         <button type="submit" className="btn-danger w-full" disabled={register.isPending}>
-          🆘 Registrar S.O.S
+          <span className="inline-flex items-center justify-center gap-2"><Icon name="sos" size={18} /> Registrar S.O.S</span>
         </button>
       </form>
     </div>

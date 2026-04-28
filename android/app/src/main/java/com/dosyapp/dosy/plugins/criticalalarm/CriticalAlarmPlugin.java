@@ -95,6 +95,7 @@ public class CriticalAlarmPlugin extends Plugin {
                 d.put("medName", src.optString("medName", "Dose"));
                 d.put("unit", src.optString("unit", ""));
                 d.put("patientName", src.optString("patientName", ""));
+                d.put("scheduledAt", src.optString("scheduledAt", ""));
                 doses.put(d);
             } catch (JSONException ignored) {}
         }

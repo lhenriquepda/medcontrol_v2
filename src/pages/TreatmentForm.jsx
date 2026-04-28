@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/Header'
+import AdBanner from '../components/AdBanner'
 import ConfirmDialog from '../components/ConfirmDialog'
 import BottomSheet from '../components/BottomSheet'
 import { usePatients } from '../hooks/usePatients'
@@ -163,6 +164,7 @@ export default function TreatmentForm() {
                 <button onClick={() => setShowTemplates(true)} className="btn-ghost h-9 px-3 text-sm">📋</button>
               )} />
       <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
+        <AdBanner />
         <Field label="Paciente *">
           <select required className="input" value={form.patientId} onChange={(e) => set('patientId', e.target.value)} disabled={editing}>
             <option value="">Selecione…</option>

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import Icon from '../components/Icon'
 
 export default function Termos() {
   const navigate = useNavigate()
@@ -44,7 +45,7 @@ export default function Termos() {
         <section className="space-y-3">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">3. Aviso médico importante</h2>
           <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">
-            <p className="font-semibold text-amber-800 dark:text-amber-300">⚠️ O Dosy NÃO é um dispositivo médico</p>
+            <p className="font-semibold text-amber-800 dark:text-amber-300 inline-flex items-center gap-1.5"><Icon name="warning" size={16} /> O Dosy NÃO é um dispositivo médico</p>
             <ul className="list-disc list-inside space-y-1 ml-2 text-amber-700 dark:text-amber-400">
               <li>Não substitui prescrição ou orientação médica</li>
               <li>Não realiza diagnósticos nem recomenda tratamentos</li>

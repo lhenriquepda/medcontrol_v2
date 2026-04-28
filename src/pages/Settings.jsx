@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import Header from '../components/Header'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Icon from '../components/Icon'
+import AdBanner from '../components/AdBanner'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { useUserPrefs, useUpdateUserPrefs, DEFAULT_PREFS } from '../hooks/useUserPrefs'
+import { useAppUpdate } from '../hooks/useAppUpdate'
+import { Capacitor } from '@capacitor/core'
 import { displayName } from '../utils/userDisplay'
 import { hasSupabase, supabase } from '../services/supabase'
 import { usePatients } from '../hooks/usePatients'
@@ -35,6 +39,7 @@ export default function Settings() {
   // User-level prefs synced via DB (medcontrol.user_prefs) — same view across devices
   const { data: notif = DEFAULT_PREFS } = useUserPrefs()
   const updatePrefsMut = useUpdateUserPrefs()
+  const update = useAppUpdate()
 
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -163,11 +168,12 @@ export default function Settings() {
   return (
     <div className="pb-28">
       <Header back title="Ajustes" />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+      <div className="max-w-md mx-auto px-4 pt-3 space-y-1">
+        <AdBanner />
 
         {/* Aparência */}
-        <section className="card p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Aparência</p>
+        <section className="card p-4 space-y-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Aparência</p>
           <div className="flex items-center justify-between">
             <span className="text-sm">Modo escuro</span>
             <button
@@ -176,6 +182,26 @@ export default function Settings() {
             >
               <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${theme === 'dark' ? 'translate-x-5' : ''}`} />
             </button>
+          </div>
+
+          {/* Estilo de ícones (flat lucide vs emojis legado) */}
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Estilo de ícones</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Flat = visual moderno · Emoji = legado colorido</p>
+            </div>
+            <select
+              defaultValue={typeof window !== 'undefined' ? (localStorage.getItem('dosy_icon_style') || 'flat') : 'flat'}
+              onChange={(e) => {
+                if (e.target.value === 'flat') localStorage.removeItem('dosy_icon_style')
+                else localStorage.setItem('dosy_icon_style', e.target.value)
+                window.location.reload()
+              }}
+              className="text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
+            >
+              <option value="flat">Flat</option>
+              <option value="emoji">Emoji</option>
+            </select>
           </div>
         </section>
 
@@ -249,7 +275,7 @@ export default function Settings() {
           {pushActive && (
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
-                <p className="text-sm font-medium">⏰ Alarme crítico</p>
+                <p className="text-sm font-medium inline-flex items-center gap-1.5"><Icon name="alarm" size={14} /> Alarme crítico</p>
                 <p className="text-xs text-slate-500 leading-tight mt-0.5">
                   Toca som contínuo, tela cheia, ignora silencioso e modo Não Perturbe.
                   Recomendado para doses essenciais.
@@ -329,12 +355,47 @@ export default function Settings() {
               onClick={() => setConfirmDelete(true)}
               className="w-full rounded-xl border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 py-2.5 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
             >
-              🗑️ Excluir minha conta e todos os dados
+              <span className="inline-flex items-center justify-center gap-1.5"><Icon name="trash" size={14} /> Excluir minha conta e todos os dados</span>
             </button>
           </section>
         )}
 
-        <p className="text-[11px] text-center text-slate-400">Dosy v1.0 · pt-BR</p>
+        <section className="card p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs">
+              <p className="font-semibold text-slate-700 dark:text-slate-200">Versão</p>
+              <p className="text-slate-500 dark:text-slate-400 mt-0.5">
+                Dosy v{update.current} · pt-BR
+              </p>
+            </div>
+            {update.available ? (
+              <button
+                onClick={async () => {
+                  if (Capacitor.isNativePlatform()) {
+                    try {
+                      const { Browser } = await import('@capacitor/browser')
+                      await Browser.open({ url: window.location.origin + (update.latest?.installUrl || '/install') })
+                    } catch {
+                      window.open(update.latest?.installUrl || '/install', '_blank')
+                    }
+                  } else {
+                    window.location.reload()
+                  }
+                }}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95"
+              >
+                ↑ Atualizar v{update.latest?.version}
+              </button>
+            ) : (
+              <span className="text-[11px] text-slate-400">Atualizado</span>
+            )}
+          </div>
+          {update.available && (
+            <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+              Nova versão disponível com correções e melhorias.
+            </p>
+          )}
+        </section>
       </div>
 
       <ConfirmDialog

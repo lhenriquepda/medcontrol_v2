@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSwipeable } from 'react-swipeable'
+import Icon from './Icon'
 import { formatTime, relativeLabel } from '../utils/dateUtils'
 import { STATUS_CONFIG } from '../utils/statusUtils'
 
@@ -79,12 +80,20 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const showRight = delta > 4  // user swiping right (confirm)
   const showLeft = delta < -4  // user swiping left (skip)
 
-  const cardInner = (
+  // bare=true: inner sem border/radius/shadow — outer wrapper assume papel visual do card
+  // (usado quando wrapper actionable adiciona border/radius/overflow-hidden)
+  const renderInner = (bare = false) => (
     <button
       onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
-      className={`w-full text-left card p-4 flex items-center gap-3 transition active:scale-[0.99] ${isOverdue ? 'border-rose-300 dark:border-rose-500/40' : ''}`}
+      className={`w-full text-left p-4 flex items-center gap-3 transition active:scale-[0.99] ${
+        bare
+          ? 'bg-[var(--color-bg-elevated)]'
+          : `card ${isOverdue ? 'border-rose-300 dark:border-rose-500/40' : ''}`
+      }`}
     >
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s.color}`}>{s.icon}</div>
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s.color}`}>
+        <Icon name={s.iconName} size={18} />
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="font-semibold truncate">{dose.medName}</p>
@@ -105,15 +114,18 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   )
 
   // Non-actionable doses → plain card, no swipe
-  if (!isActionable) return cardInner
+  if (!isActionable) return renderInner(false)
 
-  // Actionable → wrap with swipe handlers + reveal layers
-  // touch-action: pan-y → browser allows native vertical scroll;
-  // horizontal swipe goes through JS handlers without blocking page scroll
+  // Actionable → wrap. Outer wrapper assume border/radius/shadow (.card-like)
+  // → evita stroke clipping em corner curva (overflow-hidden + 2 radii diferentes).
   return (
     <div
-      className="relative overflow-hidden rounded-2xl select-none"
-      style={{ touchAction: 'pan-y' }}
+      className={`relative overflow-hidden select-none border shadow-sm ${
+        isOverdue
+          ? 'border-rose-300 dark:border-rose-500/40'
+          : 'border-[var(--color-border)]'
+      }`}
+      style={{ touchAction: 'pan-y', borderRadius: 'var(--radius-lg)' }}
       {...handlers}
     >
       {/* Reveal layer — confirm (right swipe) — green bg, icon left */}
@@ -122,7 +134,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         className="absolute inset-0 flex items-center justify-start px-6 bg-emerald-500 text-white font-semibold transition-opacity"
         style={{ opacity: showRight ? Math.max(0.45, dragRatio) : 0 }}
       >
-        <span className="text-2xl mr-2">✓</span>
+        <Icon name="check" size={24} className="mr-2" />
         <span>Tomada</span>
       </div>
 
@@ -133,7 +145,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         style={{ opacity: showLeft ? Math.max(0.45, dragRatio) : 0 }}
       >
         <span>Pular</span>
-        <span className="text-2xl ml-2">⏭</span>
+        <Icon name="skip" size={24} className="ml-2" />
       </div>
 
       {/* Card slides on top */}
@@ -143,7 +155,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
           transition: delta === 0 ? 'transform 0.2s ease-out' : busy ? 'transform 0.15s ease-in' : 'none'
         }}
       >
-        {cardInner}
+        {renderInner(true)}
       </div>
     </div>
   )

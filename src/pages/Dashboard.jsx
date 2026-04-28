@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { hasSupabase, supabase } from '../services/supabase'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
+import MultiDoseModal from '../components/MultiDoseModal'
 import EmptyState from '../components/EmptyState'
+import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 import { useDoses, useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
@@ -52,8 +55,8 @@ export default function Dashboard() {
   }, [qc])
   const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
 
-  // Notif-tap queue: array de doseIds restantes pra processar (?dose ou ?doses=A,B,C)
-  const [doseQueue, setDoseQueue] = useState([])
+  // Notif-tap → IDs pra abrir em modal multi-dose
+  const [multiDoseIds, setMultiDoseIds] = useState([])
 
   // Aplica filtro via URL param — funciona no mount E quando já está na tela
   useEffect(() => {
@@ -61,10 +64,10 @@ export default function Dashboard() {
     const doseParam = searchParams.get('dose')
     const dosesParam = searchParams.get('doses')
     if (doseParam || dosesParam) {
-      // Notif tap → abrir modal da(s) dose(s). Range 'all' garante carregar.
       setFilters({ range: 'all', patientId: null, status: null, type: null })
       const ids = dosesParam ? dosesParam.split(',').filter(Boolean) : [doseParam]
-      setDoseQueue(ids)
+      setMultiDoseIds(ids)
+      setSearchParams({}, { replace: true })
       return
     }
     if (f === 'overdue') {
@@ -82,24 +85,11 @@ export default function Dashboard() {
 
   const [selected, setSelected] = useState(null)
 
-  // Notif tap (?dose / ?doses) → abre modal da próxima dose da fila.
-  // Sempre modal (atrasada ou não) — user tocou notif, intent é agir na dose.
-  useEffect(() => {
-    if (doseQueue.length === 0 || doses.length === 0) return
-    if (selected) return // já tem modal aberto, espera fechar
-    const nextId = doseQueue[0]
-    const target = doses.find(d => d.id === nextId)
-    if (target) {
-      setSelected(target)
-    } else {
-      // Dose não encontrada (talvez foi deletada) — pula pra próxima
-      setDoseQueue(q => q.slice(1))
-    }
-    // Limpar URL params (evita re-trigger no remount)
-    if (searchParams.get('dose') || searchParams.get('doses')) {
-      setSearchParams({}, { replace: true })
-    }
-  }, [doseQueue, doses, selected, searchParams, setSearchParams])
+  // MultiDoseModal — derived from multiDoseIds + loaded doses
+  const multiDoseList = useMemo(
+    () => multiDoseIds.map(id => doses.find(d => d.id === id)).filter(Boolean),
+    [multiDoseIds, doses]
+  )
 
   // Janelas de tempo memoizadas (tick por minuto evita novas chaves a cada render)
   const [tick, setTick] = useState(() => Math.floor(Date.now() / 60000))
@@ -159,10 +149,43 @@ export default function Dashboard() {
   // Schedule push notifications for upcoming doses in the next 24h
   const { scheduleDoses } = usePushNotifications()
   useEffect(() => {
-    if (todayDoses.length) scheduleDoses(todayDoses)
+    if (todayDoses.length) scheduleDoses(todayDoses, { patients })
   }, [todayDoses, scheduleDoses])
 
+  // Pull-to-refresh — overlay bar (não wrapa content, preserva sticky FilterBar)
+  const handleRefresh = async () => {
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ['doses'] }),
+      qc.refetchQueries({ queryKey: ['patients'] }),
+      qc.refetchQueries({ queryKey: ['user_prefs'] }),
+      qc.refetchQueries({ queryKey: ['my_tier'] }),
+      hasSupabase
+        ? supabase.rpc('extend_continuous_treatments', { p_days_ahead: 5 }).catch(() => null)
+        : Promise.resolve()
+    ])
+  }
+  const ptr = usePullToRefresh(handleRefresh)
+  const ptrVisible = ptr.pulling || ptr.refreshing
+
   return (
+    <>
+    {ptrVisible && (
+      <div
+        className="fixed left-0 right-0 z-50 flex items-center justify-center pointer-events-none"
+        style={{
+          top: 0,
+          height: ptr.pullDistance,
+          transition: ptr.refreshing ? 'height 0.2s ease-out' : 'none',
+          background: 'linear-gradient(to bottom, rgba(13,21,53,0.95), rgba(13,21,53,0))'
+        }}
+      >
+        <span className="text-xs font-medium text-white">
+          {ptr.refreshing
+            ? '↻ Atualizando…'
+            : ptr.pullDistance >= ptr.threshold ? 'Solte pra atualizar' : 'Puxe pra atualizar'}
+        </span>
+      </div>
+    )}
     <div className="pb-28">
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
@@ -178,7 +201,7 @@ export default function Dashboard() {
         {isLoading ? <SkeletonList count={4} /> : (
           patients.length === 0 ? (
             <div className="card p-5 mt-2">
-              <div className="text-4xl mb-2">👋</div>
+              <Icon name="hand" size={40} className="mb-2 text-brand-600" />
               <h3 className="font-semibold text-lg">Bem-vindo ao Dosy!</h3>
               <p className="text-sm text-slate-500 mt-1 mb-4">
                 Comece cadastrando as pessoas que você vai acompanhar — você, seus filhos, familiares…
@@ -188,10 +211,10 @@ export default function Dashboard() {
                 <li className="flex gap-2"><span className="font-bold text-brand-600">2.</span> Crie um tratamento para cada medicamento</li>
                 <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Acompanhe as doses por aqui</li>
               </ol>
-              <Link to="/pacientes/novo" className="btn-primary w-full">➕ Cadastrar primeiro paciente</Link>
+              <Link to="/pacientes/novo" className="btn-primary w-full inline-flex items-center justify-center gap-1.5"><Icon name="add" size={16} /> Cadastrar primeiro paciente</Link>
             </div>
           ) : doses.length === 0 ? (
-            <EmptyState icon="💊" title="Nenhuma dose neste período"
+            <EmptyState icon="pill" title="Nenhuma dose neste período"
                         description="Ajuste os filtros ou crie um novo tratamento."
                         action={<Link to="/tratamento/novo" className="btn-primary">+ Novo tratamento</Link>} />
           ) : (
@@ -222,7 +245,7 @@ export default function Dashboard() {
                       <span className={`ml-auto text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
                     </button>
                     {!isCollapsed && (
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {list.map((d) => (
                           <DoseCard
                             key={d.id}
@@ -265,15 +288,18 @@ export default function Dashboard() {
       <DoseModal
         dose={selected}
         open={!!selected}
-        onClose={() => {
-          setSelected(null)
-          // Avança fila — próxima dose abrirá via useEffect
-          setDoseQueue(q => q.slice(1))
-        }}
+        onClose={() => setSelected(null)}
         patientName={selectedPatient?.name}
-        queueRemaining={doseQueue.length > 1 ? doseQueue.length - 1 : 0}
+      />
+
+      <MultiDoseModal
+        open={multiDoseList.length > 0}
+        onClose={() => setMultiDoseIds([])}
+        doses={multiDoseList}
+        patients={patients}
       />
     </div>
+    </>
   )
 }
 

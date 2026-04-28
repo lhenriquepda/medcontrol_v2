@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import Icon from '../components/Icon'
 
 function validatePassword(pwd) {
   const errors = []
@@ -80,8 +81,8 @@ export default function ResetPassword() {
         <div className="card p-5 space-y-4">
           {!user ? (
             <div className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p className="mb-3">
-                ⚠️ Link inválido ou expirado.
+              <p className="mb-3 inline-flex items-center gap-1.5">
+                <Icon name="warning" size={16} className="text-amber-600" /> Link inválido ou expirado.
               </p>
               <p className="text-xs text-slate-500">
                 Solicite um novo link de recuperação na tela de login.

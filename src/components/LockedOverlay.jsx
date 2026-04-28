@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import PaywallModal from './PaywallModal'
+import Icon from './Icon'
 import { useIsPro } from '../hooks/useSubscription'
 
 /**
@@ -18,7 +19,7 @@ export default function LockedOverlay({ children, reason, label = 'Recurso PRO' 
       <button onClick={() => setOpen(true)}
               className="absolute inset-0 flex items-center justify-center">
         <span className="flex items-center gap-2 rounded-full bg-slate-900/90 text-white text-xs font-semibold px-4 py-2 shadow-lg backdrop-blur">
-          🔒 {label}
+          <Icon name="lock" size={14} /> {label}
         </span>
       </button>
       <PaywallModal open={open} onClose={() => setOpen(false)} reason={reason} />

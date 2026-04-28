@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { usePatients } from '../hooks/usePatients'
+import Icon from './Icon'
 
 const tabs = [
-  { to: '/', label: 'Início', icon: '🏠', end: true },
-  { to: '/pacientes', label: 'Pacientes', icon: '👥' },
-  { to: '__fab__', label: 'Novo', icon: '＋' },
-  { to: '/sos', label: 'S.O.S', icon: '🆘' },
-  { to: '/mais', label: 'Mais', icon: '⋯' }
+  { to: '/', label: 'Início', icon: 'home', end: true },
+  { to: '/pacientes', label: 'Pacientes', icon: 'users' },
+  { to: '__fab__', label: 'Novo', icon: 'add' },
+  { to: '/sos', label: 'S.O.S', icon: 'sos' },
+  { to: '/mais', label: 'Mais', icon: 'more' }
 ]
 
 export default function BottomNav() {
@@ -20,8 +21,8 @@ export default function BottomNav() {
           if (t.to === '__fab__') {
             return (
               <button key="fab" onClick={() => nav(fabTarget)} className="flex justify-center">
-                <span className="-mt-6 w-14 h-14 rounded-full bg-brand-600 text-white text-3xl flex items-center justify-center shadow-lg active:scale-95">
-                  {t.icon}
+                <span className="-mt-6 w-14 h-14 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg active:scale-95">
+                  <Icon name={t.icon} size={28} strokeWidth={2.5} />
                 </span>
               </button>
             )
@@ -33,7 +34,7 @@ export default function BottomNav() {
                   isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 dark:text-slate-400'
                 }`
               }>
-              <span className="text-xl leading-none">{t.icon}</span>
+              <Icon name={t.icon} size={22} />
               <span>{t.label}</span>
             </NavLink>
           )

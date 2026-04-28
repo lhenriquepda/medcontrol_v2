@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import EmptyState from '../components/EmptyState'
+import Icon from '../components/Icon'
+import AdBanner from '../components/AdBanner'
 import SharePatientSheet from '../components/SharePatientSheet'
 import { usePatient } from '../hooks/usePatients'
 import { useTreatments } from '../hooks/useTreatments'
 import { useDoses } from '../hooks/useDoses'
 import { usePatientShares } from '../hooks/useShares'
 import { useAuth } from '../hooks/useAuth'
+import { useIsPro } from '../hooks/useSubscription'
+import PaywallModal from '../components/PaywallModal'
 
 export default function PatientDetail() {
   const { id } = useParams()
@@ -15,7 +19,9 @@ export default function PatientDetail() {
   const { data: patient } = usePatient(id)
   const { data: treatments = [] } = useTreatments({ patientId: id })
   const { data: shares = [] } = usePatientShares(id)
+  const isPro = useIsPro()
   const [shareOpen, setShareOpen] = useState(false)
+  const [paywallOpen, setPaywallOpen] = useState(false)
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
   const { data: todayDoses = [] } = useDoses({ patientId: id, from: startOfToday.toISOString(), to: endOfToday.toISOString() })
@@ -37,6 +43,7 @@ export default function PatientDetail() {
         <Link to={`/pacientes/${id}/editar`} className="btn-ghost h-9 px-3 text-sm">Editar</Link>
       } />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+        <AdBanner />
         <div className="card p-4 flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-3xl flex items-center justify-center overflow-hidden">
             {patient.photo_url
@@ -51,13 +58,13 @@ export default function PatientDetail() {
             </p>
             {patient.condition && <p className="text-xs mt-1">{patient.condition}</p>}
             {patient.doctor && <p className="text-xs text-slate-500">Médico: {patient.doctor}</p>}
-            {patient.allergies && <p className="text-xs text-rose-600 mt-1">⚠ Alergias: {patient.allergies}</p>}
+            {patient.allergies && <p className="text-xs text-rose-600 mt-1 inline-flex items-start gap-1"><Icon name="warning" size={12} className="shrink-0 mt-0.5" /> Alergias: {patient.allergies}</p>}
           </div>
         </div>
 
         {isOwner ? (
           <button
-            onClick={() => setShareOpen(true)}
+            onClick={() => isPro ? setShareOpen(true) : setPaywallOpen(true)}
             className="w-full card p-3 flex items-center gap-3 active:scale-[0.99] transition text-left"
           >
             <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 flex items-center justify-center text-lg">
@@ -100,7 +107,7 @@ export default function PatientDetail() {
             <Link to={`/tratamento/novo?patientId=${id}`} className="text-xs text-brand-600">+ Novo</Link>
           </div>
           {active.length === 0 ? (
-            <EmptyState icon="💊" title="Sem tratamentos ativos" />
+            <EmptyState icon="pill" title="Sem tratamentos ativos" />
           ) : (
             <div className="space-y-2">
               {active.map((t) => (
@@ -116,6 +123,11 @@ export default function PatientDetail() {
         </div>
       </div>
       <SharePatientSheet open={shareOpen} onClose={() => setShareOpen(false)} patient={patient} />
+      <PaywallModal
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        reason="Compartilhar pacientes com outros cuidadores é um recurso PRO. Trabalhe em conjunto em tempo real."
+      />
     </div>
   )
 }

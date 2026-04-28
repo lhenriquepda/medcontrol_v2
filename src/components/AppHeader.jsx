@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import TierBadge from './TierBadge'
+import Icon from './Icon'
 import { useAuth } from '../hooks/useAuth'
 import { useDoses } from '../hooks/useDoses'
 import { firstName } from '../utils/userDisplay'
@@ -25,7 +26,7 @@ export default function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-[#0d1535] text-white shadow-lg safe-top">
-      <div className="max-w-md mx-auto px-4 pt-2 pb-3 flex items-center gap-3">
+      <div className="max-w-md mx-auto px-4 pt-3 pb-[18px] flex items-center gap-3">
         {/* Logo — clicável → volta pro Dashboard */}
         <Link to="/" className="flex-shrink-0">
           <img src="/dosy-logo-light.png" alt="Dosy" className="h-10 w-auto object-contain" />
@@ -56,7 +57,7 @@ export default function AppHeader() {
           aria-label="Ajustes"
           className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center flex-shrink-0"
         >
-          <span className="text-lg">⚙</span>
+          <Icon name="settings" size={18} className="text-white" />
         </Link>
       </div>
     </header>

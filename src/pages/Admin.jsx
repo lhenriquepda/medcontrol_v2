@@ -83,11 +83,13 @@ function GrantSheet({ user, onClose }) {
 
   const TIERS = [
     { key: 'free', label: 'Free', desc: 'Sem PRO', tone: 'slate' },
-    { key: 'pro', label: 'PRO', desc: 'Tudo liberado', tone: 'emerald' },
+    { key: 'plus', label: 'PLUS', desc: 'Tudo + ads', tone: 'amber' },
+    { key: 'pro', label: 'PRO', desc: 'Tudo, sem ads', tone: 'emerald' },
     { key: 'admin', label: 'Admin', desc: 'Painel total', tone: 'rose' }
   ]
   const TONE_ACTIVE = {
     slate: 'bg-slate-700 text-white ring-2 ring-slate-400',
+    amber: 'bg-amber-600 text-white ring-2 ring-amber-300',
     emerald: 'bg-emerald-600 text-white ring-2 ring-emerald-300',
     rose: 'bg-rose-600 text-white ring-2 ring-rose-300'
   }
@@ -103,7 +105,7 @@ function GrantSheet({ user, onClose }) {
 
         <div>
           <p className="text-xs font-medium mb-2">Escolher plano</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {TIERS.map((t) => {
               const active = tier === t.key
               return (

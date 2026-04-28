@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { useIsPro } from '../hooks/useSubscription'
+import { useShowAds } from '../hooks/useSubscription'
 
 const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT || ''
 const ADSENSE_SLOT = import.meta.env.VITE_ADSENSE_SLOT || ''
@@ -18,14 +18,18 @@ const isNative = Capacitor.isNativePlatform()
  * Fallback (no IDs): placeholder card.
  */
 export default function AdBanner({ className = '' }) {
-  const isPro = useIsPro()
+  const showAds = useShowAds()
   const ref = useRef(null)
   const [adsenseLoaded, setAdsenseLoaded] = useState(false)
   const [admobLoaded, setAdmobLoaded] = useState(false)
 
-  // AdMob (native)
+  // AdMob (native) — singleton via window flag, evita flicker em nav entre páginas
   useEffect(() => {
-    if (isPro || !isNative || admobLoaded) return
+    if (!showAds || !isNative) return
+    if (typeof window !== 'undefined' && window.__dosyAdMobShown) {
+      setAdmobLoaded(true)
+      return
+    }
     let cancelled = false
     ;(async () => {
       try {
@@ -35,39 +39,39 @@ export default function AdBanner({ className = '' }) {
         await AdMob.showBanner({
           adId: ADMOB_BANNER_ANDROID,
           adSize: BannerAdSize.ADAPTIVE_BANNER,
-          position: BannerAdPosition.BOTTOM_CENTER,
-          margin: 56  // above BottomNav (~56dp)
+          position: BannerAdPosition.TOP_CENTER,
+          margin: 56  // abaixo do AppHeader (~56dp)
         })
-        if (!cancelled) setAdmobLoaded(true)
+        if (!cancelled) {
+          window.__dosyAdMobShown = true
+          setAdmobLoaded(true)
+        }
       } catch (e) {
         console.warn('[AdMob] init/show failed:', e?.message)
       }
     })()
-    return () => {
-      cancelled = true
-      ;(async () => {
-        try {
-          const { AdMob } = await import('@capacitor-community/admob')
-          await AdMob.removeBanner()
-        } catch {}
-      })()
-    }
-  }, [isPro, admobLoaded])
+    return () => { cancelled = true }
+    // No removeBanner on unmount — singleton persists across navigation
+  }, [showAds])
 
   // AdSense (web)
   useEffect(() => {
-    if (isPro || isNative || adsenseLoaded) return
+    if (!showAds || isNative || adsenseLoaded) return
     if (!ADSENSE_CLIENT || !ADSENSE_SLOT) return
     try {
       ;(window.adsbygoogle = window.adsbygoogle || []).push({})
       setAdsenseLoaded(true)
     } catch {}
-  }, [isPro, adsenseLoaded])
+  }, [showAds, adsenseLoaded])
 
-  if (isPro) return null
+  if (!showAds) return null
 
-  // Native: banner is rendered as overlay by AdMob — placeholder reserves no in-flow space
-  if (isNative) return null
+  // Native + AdMob real ad: rendered as overlay by AdMob plugin (BOTTOM_CENTER, margin 56dp).
+  // Show a small in-flow card so user knows where ad space lives + visual continuity with web.
+  if (isNative) {
+    // AdMob banner é overlay TOP_CENTER global. Não renderizar in-flow no native.
+    return null
+  }
 
   // Web: AdSense or placeholder
   if (!ADSENSE_CLIENT || !ADSENSE_SLOT) {

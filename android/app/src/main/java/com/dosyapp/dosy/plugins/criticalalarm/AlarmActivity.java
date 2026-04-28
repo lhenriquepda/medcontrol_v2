@@ -66,8 +66,10 @@ public class AlarmActivity extends Activity {
     private List<DoseItem> doses = new ArrayList<>();
 
     private static class DoseItem {
-        String doseId, medName, unit, patientName;
+        String doseId, medName, unit, patientName, scheduledAt;
     }
+
+    private boolean muted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,26 +128,33 @@ public class AlarmActivity extends Activity {
                 item.medName = o.optString("medName", "Dose");
                 item.unit = o.optString("unit", "");
                 item.patientName = o.optString("patientName", "");
+                item.scheduledAt = o.optString("scheduledAt", "");
                 doses.add(item);
             }
         } catch (Exception ignored) {}
     }
 
+    private Button muteButtonRef;
+
     private View buildLayout() {
-        // Vertical gradient background (#0d1535 → #1a2660) — matches AppHeader/Login web
+        // Outer container fills screen — gradient bg, vertical column
         GradientDrawable bg = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{ Color.parseColor("#0d1535"), Color.parseColor("#1a2660") }
         );
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackground(bg);
-        scroll.setFillViewport(true);
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackground(bg);
+        outer.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT
+        ));
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(dp(20), dp(36), dp(20), dp(28));
+        // ── HEADER (fixed top) ───────────────────────────────────────
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setGravity(Gravity.CENTER_HORIZONTAL);
+        header.setPadding(dp(20), dp(28), dp(20), dp(12));
 
         // ── Branded header ───────────────────────────────────────────
         ImageView logo = new ImageView(this);
@@ -156,7 +165,7 @@ public class AlarmActivity extends Activity {
         logoLp.setMargins(0, 0, 0, dp(4));
         logo.setLayoutParams(logoLp);
         logo.setAdjustViewBounds(true);
-        root.addView(logo);
+        header.addView(logo);
 
         TextView tagline = new TextView(this);
         tagline.setText("controle de medicação");
@@ -166,7 +175,8 @@ public class AlarmActivity extends Activity {
         tagline.setAllCaps(true);
         tagline.setGravity(Gravity.CENTER);
         tagline.setPadding(0, 0, 0, dp(28));
-        root.addView(tagline);
+        tagline.setPadding(0, 0, 0, dp(16));
+        header.addView(tagline);
 
         // ── Status badge with pulse-style emoji + time ───────────────
         LinearLayout statusRow = new LinearLayout(this);
@@ -197,20 +207,37 @@ public class AlarmActivity extends Activity {
         LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        statusLp.setMargins(0, 0, 0, dp(20));
-        root.addView(statusRow, statusLp);
+        statusLp.setMargins(0, 0, 0, dp(14));
+        header.addView(statusRow, statusLp);
 
         // ── Title ─────────────────────────────────────────────────────
         TextView title = new TextView(this);
         title.setText(doses.size() <= 1 ? "Hora da medicação" : doses.size() + " doses agora");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, dp(20));
-        root.addView(title);
+        header.addView(title);
 
-        // ── Dose cards ────────────────────────────────────────────────
+        outer.addView(header, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        // ── SCROLLABLE DOSE LIST (fills available space) ─────────────
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        );
+        outer.addView(scroll, scrollLp);
+
+        LinearLayout cardList = new LinearLayout(this);
+        cardList.setOrientation(LinearLayout.VERTICAL);
+        cardList.setPadding(dp(20), dp(8), dp(20), dp(8));
+        scroll.addView(cardList);
+
+        SimpleDateFormat hhmm = new SimpleDateFormat("HH:mm", new Locale("pt", "BR"));
+
         for (DoseItem d : doses) {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.HORIZONTAL);
@@ -221,13 +248,13 @@ public class AlarmActivity extends Activity {
             cardBg.setCornerRadius(dp(16));
             cardBg.setStroke(dp(1), Color.parseColor("#2B3EDF"));
             card.setBackground(cardBg);
-            card.setPadding(dp(16), dp(14), dp(16), dp(14));
+            card.setPadding(dp(14), dp(12), dp(14), dp(12));
 
             // Pill icon
             TextView pillIcon = new TextView(this);
             pillIcon.setText("💊");
-            pillIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
-            pillIcon.setPadding(0, 0, dp(14), 0);
+            pillIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
+            pillIcon.setPadding(0, 0, dp(12), 0);
             card.addView(pillIcon);
 
             LinearLayout textCol = new LinearLayout(this);
@@ -237,54 +264,122 @@ public class AlarmActivity extends Activity {
             );
             textCol.setLayoutParams(textColLp);
 
+            // Patient name (top, small caps style)
+            TextView patient = new TextView(this);
+            patient.setText(d.patientName.isEmpty() ? "Sem paciente" : d.patientName);
+            patient.setTextColor(Color.parseColor("#94A3B8"));
+            patient.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+            patient.setLetterSpacing(0.04f);
+            patient.setAllCaps(true);
+            textCol.addView(patient);
+
+            // Med name (bold white)
             TextView med = new TextView(this);
             med.setText(d.medName);
             med.setTextColor(Color.WHITE);
-            med.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+            med.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
             med.setTypeface(null, android.graphics.Typeface.BOLD);
+            med.setPadding(0, dp(2), 0, 0);
             textCol.addView(med);
 
-            StringBuilder sb = new StringBuilder();
-            if (!d.unit.isEmpty()) sb.append(d.unit);
-            if (!d.patientName.isEmpty()) {
-                if (sb.length() > 0) sb.append(" · ");
-                sb.append(d.patientName);
-            }
-            if (sb.length() > 0) {
-                TextView details = new TextView(this);
-                details.setText(sb.toString());
-                details.setTextColor(Color.parseColor("#7DD3FC"));
-                details.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-                details.setPadding(0, dp(2), 0, 0);
-                textCol.addView(details);
+            // Unit (teal)
+            if (!d.unit.isEmpty()) {
+                TextView unitV = new TextView(this);
+                unitV.setText(d.unit);
+                unitV.setTextColor(Color.parseColor("#7DD3FC"));
+                unitV.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+                unitV.setPadding(0, dp(1), 0, 0);
+                textCol.addView(unitV);
             }
 
             card.addView(textCol);
 
+            // Right-side scheduled time HH:mm
+            if (d.scheduledAt != null && !d.scheduledAt.isEmpty()) {
+                TextView timeV = new TextView(this);
+                try {
+                    long t = java.time.Instant.parse(d.scheduledAt).toEpochMilli();
+                    timeV.setText(hhmm.format(new Date(t)));
+                } catch (Exception e) {
+                    timeV.setText("");
+                }
+                timeV.setTextColor(Color.parseColor("#FBBF24"));
+                timeV.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+                timeV.setTypeface(null, android.graphics.Typeface.BOLD);
+                timeV.setPadding(dp(8), 0, 0, 0);
+                card.addView(timeV);
+            }
+
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             );
-            cardLp.setMargins(0, dp(5), 0, dp(5));
-            root.addView(card, cardLp);
+            cardLp.setMargins(0, dp(4), 0, dp(4));
+            cardList.addView(card, cardLp);
         }
 
-        // Spacer
-        View spacer = new View(this);
-        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dp(28)));
-        root.addView(spacer);
+        // ── BOTTOM BUTTON BAR (fixed) ────────────────────────────────
+        LinearLayout buttonBar = new LinearLayout(this);
+        buttonBar.setOrientation(LinearLayout.VERTICAL);
+        buttonBar.setPadding(dp(20), dp(10), dp(20), dp(20));
 
-        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+        // Top row: Mute + Snooze (side by side)
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        btnLp.setMargins(0, dp(6), 0, dp(6));
+        ));
 
-        // Primary button: Ciente — rounded emerald
+        // Mute button (left)
+        GradientDrawable muteBg = new GradientDrawable();
+        muteBg.setColor(Color.parseColor("#22FFFFFF"));
+        muteBg.setCornerRadius(dp(14));
+        muteBg.setStroke(dp(1), Color.parseColor("#33FFFFFF"));
+
+        muteButtonRef = new Button(this);
+        muteButtonRef.setText("🔊 Silenciar");
+        muteButtonRef.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        muteButtonRef.setTextColor(Color.parseColor("#E2E8F0"));
+        muteButtonRef.setBackground(muteBg);
+        muteButtonRef.setStateListAnimator(null);
+        muteButtonRef.setAllCaps(false);
+        muteButtonRef.setPadding(0, dp(13), 0, dp(13));
+        muteButtonRef.setOnClickListener(v -> toggleMute());
+        LinearLayout.LayoutParams muteLp = new LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        );
+        muteLp.setMarginEnd(dp(6));
+        topRow.addView(muteButtonRef, muteLp);
+
+        // Snooze (right)
+        GradientDrawable snoozeBg = new GradientDrawable();
+        snoozeBg.setColor(Color.parseColor("#22FFFFFF"));
+        snoozeBg.setCornerRadius(dp(14));
+        snoozeBg.setStroke(dp(1), Color.parseColor("#33FFFFFF"));
+
+        Button btnSnooze = new Button(this);
+        btnSnooze.setText("⏰ Adiar 10min");
+        btnSnooze.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnSnooze.setTextColor(Color.parseColor("#E2E8F0"));
+        btnSnooze.setBackground(snoozeBg);
+        btnSnooze.setStateListAnimator(null);
+        btnSnooze.setAllCaps(false);
+        btnSnooze.setPadding(0, dp(13), 0, dp(13));
+        btnSnooze.setOnClickListener(v -> handleAction("snooze"));
+        LinearLayout.LayoutParams snoozeLp = new LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        );
+        snoozeLp.setMarginStart(dp(6));
+        topRow.addView(btnSnooze, snoozeLp);
+
+        buttonBar.addView(topRow);
+
+        // Primary button: Ciente
         GradientDrawable ackBg = new GradientDrawable();
         ackBg.setColor(Color.parseColor("#10B981"));
         ackBg.setCornerRadius(dp(16));
 
         Button btnAck = new Button(this);
-        btnAck.setText(doses.size() <= 1 ? "✓  Ciente" : "✓  Ciente — abrir todas");
+        btnAck.setText(doses.size() <= 1 ? "✓  Ciente" : "✓  Marcar doses");
         btnAck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         btnAck.setTextColor(Color.WHITE);
         btnAck.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -293,36 +388,35 @@ public class AlarmActivity extends Activity {
         btnAck.setPadding(0, dp(18), 0, dp(18));
         btnAck.setAllCaps(false);
         btnAck.setOnClickListener(v -> handleAction("acknowledge"));
-        root.addView(btnAck, btnLp);
+        LinearLayout.LayoutParams ackLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        ackLp.setMargins(0, dp(10), 0, 0);
+        buttonBar.addView(btnAck, ackLp);
 
-        // Secondary button: Adiar — outlined ghost on dark
-        GradientDrawable snoozeBg = new GradientDrawable();
-        snoozeBg.setColor(Color.parseColor("#22FFFFFF"));
-        snoozeBg.setCornerRadius(dp(16));
-        snoozeBg.setStroke(dp(1), Color.parseColor("#33FFFFFF"));
+        outer.addView(buttonBar, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
 
-        Button btnSnooze = new Button(this);
-        btnSnooze.setText("⏰  Adiar 10 minutos");
-        btnSnooze.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        btnSnooze.setTextColor(Color.parseColor("#E2E8F0"));
-        btnSnooze.setBackground(snoozeBg);
-        btnSnooze.setStateListAnimator(null);
-        btnSnooze.setPadding(0, dp(15), 0, dp(15));
-        btnSnooze.setAllCaps(false);
-        btnSnooze.setOnClickListener(v -> handleAction("snooze"));
-        root.addView(btnSnooze, btnLp);
+        return outer;
+    }
 
-        // Footer hint
-        TextView hint = new TextView(this);
-        hint.setText("O alarme continua tocando até você responder.");
-        hint.setTextColor(Color.parseColor("#64748B"));
-        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, dp(20), 0, dp(8));
-        root.addView(hint);
-
-        scroll.addView(root);
-        return scroll;
+    /** Toggle alarme sound + vibration without finishing activity. */
+    private void toggleMute() {
+        muted = !muted;
+        if (muted) {
+            try {
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
+            } catch (Exception ignored) {}
+            try { if (vibrator != null) vibrator.cancel(); } catch (Exception ignored) {}
+            if (muteButtonRef != null) muteButtonRef.setText("🔇 Som off — tocar");
+        } else {
+            try {
+                if (mediaPlayer != null && !mediaPlayer.isPlaying()) mediaPlayer.start();
+            } catch (Exception ignored) {}
+            startVibration();
+            if (muteButtonRef != null) muteButtonRef.setText("🔊 Silenciar");
+        }
     }
 
     private int dp(int value) {

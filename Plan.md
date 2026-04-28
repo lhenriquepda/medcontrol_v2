@@ -2052,6 +2052,14 @@ ALTER TABLE medcontrol.doses_new RENAME TO doses;
 - [ ] Testar fluxo de compra em ambiente de teste do Play Store
 - [ ] Testar restauração de compra
 - [ ] (Opcional) Configurar webhook RevenueCat → Supabase para renovações
+- [ ] **CTA permanente "Gerenciar plano" / "Mudar plano" / "Cancelar"** — atualmente paywall só abre via fluxos pontuais (locked feature, banner home). Usuário PRO/Plus não tem onde gerenciar assinatura, e Free não tem ponto fixo de upgrade.
+  - Adicionar seção **"Assinatura"** em `Settings.jsx` (após "Aparência" ou antes de "Conta"):
+    - Free: card com tier atual + botão "Conhecer PRO" → abre PaywallModal
+    - PRO/Plus: card com tier atual + data renovação + botões "Mudar plano" (PaywallModal com toggle Mensal/Anual) e "Cancelar assinatura" (deep link Play Store: `https://play.google.com/store/account/subscriptions?sku=<sku>&package=<pkg>`)
+  - Reforçar card de tier em `More.jsx` com CTA explícito (já existe info do plano, falta botão de ação pra PRO/Plus)
+  - Adicionar botão "Restaurar compras" na seção (RevenueCat `restorePurchases()`) — obrigatório Google Play
+  - Link "Política de cobrança" → texto curto explicando renovação automática + como cancelar (compliance Play Store)
+  - Considerar badge/banner sutil pra Free em pages-chave (Dashboard hero quando tier=free, já existe; replicar em PatientDetail/TreatmentList se patient/treatment limit reached)
 
 ### FASE 4 — Polimento Nativo
 - [x] Instalar `jspdf` e `html2canvas` ✅

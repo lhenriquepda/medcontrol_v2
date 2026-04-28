@@ -4,6 +4,7 @@ import Header from '../components/Header'
 import PatientCard from '../components/PatientCard'
 import EmptyState from '../components/EmptyState'
 import PaywallModal from '../components/PaywallModal'
+import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 import { usePatients } from '../hooks/usePatients'
 import { usePatientLimitReached, useMyTier, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
@@ -26,6 +27,7 @@ export default function Patients() {
         <button onClick={handleNew} className="btn-primary h-9 px-3 text-sm">+ Novo</button>
       } />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+        <AdBanner />
         {tier === 'free' && patients.length > 0 && (
           <div className="card p-3 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
             <span>Plano grátis: {patients.length}/{FREE_PATIENT_LIMIT} paciente</span>
@@ -35,10 +37,14 @@ export default function Patients() {
 
         {isLoading ? <SkeletonList count={3} /> : (
           patients.length === 0 ? (
-            <EmptyState icon="👤" title="Nenhum paciente cadastrado"
+            <EmptyState icon="user" title="Nenhum paciente cadastrado"
                         description="Cadastre a primeira pessoa que você está acompanhando."
                         action={<Link to="/pacientes/novo" className="btn-primary">Adicionar paciente</Link>} />
-          ) : patients.map((p) => <PatientCard key={p.id} patient={p} />)
+          ) : (
+            <div className="space-y-1">
+              {patients.map((p) => <PatientCard key={p.id} patient={p} />)}
+            </div>
+          )
         )}
       </div>
 

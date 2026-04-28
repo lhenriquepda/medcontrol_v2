@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import Header from '../components/Header'
 import PaywallModal from '../components/PaywallModal'
+import Icon from '../components/Icon'
+import AdBanner from '../components/AdBanner'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
@@ -248,6 +250,7 @@ export default function Reports() {
     <div className="pb-28">
       <Header back title="Relatórios" />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+        <AdBanner />
         <Field label="Paciente">
           <select className="input" value={patientId} onChange={(e) => setPatientId(e.target.value)}>
             <option value="">Todos</option>
@@ -297,15 +300,15 @@ export default function Reports() {
         </div>
 
         {!isPro && (
-          <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 p-3 text-xs">
-            🔒 Exportar PDF/CSV é um recurso <strong>PRO</strong>. Toque em um botão para assinar.
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 p-3 text-xs flex items-start gap-1.5">
+            <Icon name="lock" size={14} className="shrink-0 mt-0.5" /> <span>Exportar PDF/CSV é um recurso <strong>PRO</strong>. Toque em um botão para assinar.</span>
           </div>
         )}
-        <button onClick={gate(exportPDF)} className={`btn-primary w-full ${!isPro ? 'opacity-60' : ''}`}>
-          {!isPro && '🔒 '}📄 Exportar PDF
+        <button onClick={gate(exportPDF)} className={`btn-primary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''}`}>
+          {!isPro && <Icon name="lock" size={14} />} <Icon name="file-text" size={16} /> Exportar PDF
         </button>
-        <button onClick={gate(exportCSV)} className={`btn-secondary w-full ${!isPro ? 'opacity-60' : ''}`}>
-          {!isPro && '🔒 '}📊 Exportar CSV
+        <button onClick={gate(exportCSV)} className={`btn-secondary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''}`}>
+          {!isPro && <Icon name="lock" size={14} />} <Icon name="bar-chart" size={16} /> Exportar CSV
         </button>
       </div>
       <PaywallModal open={paywall} onClose={() => setPaywall(false)}

@@ -1,0 +1,332 @@
+/* =============================================================================
+   DOSY THEME — DESIGN TOKENS CENTRALIZADOS
+   =============================================================================
+
+   Este arquivo controla TODA a aparência visual do app. Edite os valores aqui
+   pra trocar cores, fontes, espaçamentos, sombras, etc — sem precisar tocar
+   em componentes.
+
+   ESTRUTURA:
+   - :root              → tema CLARO (default)
+   - html.dark          → tema ESCURO (sobrescreve as vars do :root)
+
+   COMO USAR:
+   - Mude um valor → salva → app recarrega automaticamente (Vite hot-reload).
+   - Pra mudar TUDO de uma vez (ex: trocar cor brand inteira), edite só
+     a paleta de brand abaixo.
+
+   PROCURA RÁPIDA:
+   • [BRAND]      cor principal (botões, links, badges PRO)
+   • [NEUTRAL]    fundos, textos, bordas
+   • [SEMANTIC]   sucesso/aviso/perigo/info
+   • [STATUS]     cores específicas de status de dose (done/pending/overdue/skipped)
+   • [TYPO]       fontes, tamanhos, pesos
+   • [SPACING]    paddings, margens, gaps
+   • [RADIUS]     arredondamentos
+   • [SHADOW]     sombras
+   • [MOTION]     transições, animações
+   ============================================================================= */
+
+:root {
+
+  /* ===========================================================================
+     [BRAND] — Cor principal do app
+     ===========================================================================
+     Usada em: botões primários, badges PRO, links, ícones de ação principal.
+     Pra mudar a cor brand inteira, troca os 10 tons abaixo (50 = mais claro,
+     900 = mais escuro). Ferramenta útil: https://uicolors.app
+  */
+  --color-brand-50: #eef7ff;
+  --color-brand-100: #d9edff;
+  --color-brand-200: #bce0ff;
+  --color-brand-300: #8ecdff;
+  --color-brand-400: #59b1ff;
+  --color-brand-500: #2f91ff;
+  --color-brand-600: #1873f5;
+  /* botão primário, ações principais */
+  --color-brand-700: #145ce1;
+  /* hover do botão primário */
+  --color-brand-800: #174cb6;
+  --color-brand-900: #19438f;
+  /* dark navy - app header, splash bg */
+
+  /* Cor de fundo do AppHeader / Login / AlarmActivity (gradient top) */
+  --color-header-bg: #0d1535;
+  --color-header-bg-end: #1a2660;
+  /* gradient bottom */
+
+  /* ===========================================================================
+     [SEMANTIC] — Cores semânticas (status de feedback)
+     ===========================================================================
+     Tom usado pra: toasts, alertas, validação, ícones contextuais.
+  */
+  --color-success: #10b981;
+  /* verde — Tomada, confirmação */
+  --color-success-bg: #d1fae5;
+  --color-warning: #f59e0b;
+  /* âmbar — Pulada, aviso suave */
+  --color-warning-bg: #fef3c7;
+  --color-danger: #dc2626;
+  /* vermelho — Atrasada, erro, deletar */
+  --color-danger-bg: #fee2e2;
+  --color-info: #2563eb;
+  /* azul — Pendente, info neutro */
+  --color-info-bg: #dbeafe;
+
+  /* ===========================================================================
+     [STATUS] — Cores específicas de status de dose
+     ===========================================================================
+     Cores dos chips e ícones na lista de doses (DoseCard, DoseModal).
+  */
+  --color-dose-done: var(--color-success);
+  --color-dose-pending: var(--color-info);
+  --color-dose-overdue: var(--color-danger);
+  --color-dose-skipped: var(--color-warning);
+
+  /* ===========================================================================
+     [NEUTRAL] — Fundos, textos, bordas (esqueleto da UI)
+     ===========================================================================
+     Tom baixo de saturação. Define a "hierarquia visual" do app.
+  */
+  --color-bg: #f8fafc;
+  /* fundo geral da página */
+  --color-bg-elevated: #ffffff;
+  /* cards, modals, BottomSheet */
+  --color-bg-subtle: #f1f5f9;
+  /* chips, hover de botão fantasma */
+  --color-bg-strong: #e2e8f0;
+  /* divisores, separadores */
+
+  --color-text: #0f172a;
+  /* texto principal (alta legibilidade) */
+  --color-text-muted: #64748b;
+  /* texto secundário, labels */
+  --color-text-subtle: #94a3b8;
+  /* placeholders, disabled */
+  --color-text-inverse: #ffffff;
+  /* texto sobre fundos escuros */
+
+  --color-border: #e2e8f0;
+  /* bordas padrão */
+  --color-border-strong: #cbd5e1;
+  /* bordas com mais ênfase */
+  --color-ring: var(--color-brand-500);
+  /* foco em inputs */
+
+  /* ===========================================================================
+     [TYPO] — Tipografia
+     ===========================================================================
+     Fonte, tamanhos e pesos. Pra trocar fonte global, edite --font-family
+     e adicione import no index.html (link Google Fonts) ou em src/index.css.
+  */
+  --font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --font-size-xs: 0.6875rem;
+  /* 11px — labels, hints */
+  --font-size-sm: 0.8125rem;
+  /* 13px — texto secundário */
+  --font-size-base: 0.9375rem;
+  /* 15px — texto padrão */
+  --font-size-lg: 1.0625rem;
+  /* 17px — destaques */
+  --font-size-xl: 1.25rem;
+  /* 20px — títulos seção */
+  --font-size-2xl: 1.5rem;
+  /* 24px — títulos página */
+  --font-size-3xl: 1.875rem;
+  /* 30px — heroes, números stats */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ===========================================================================
+     [SPACING] — Espaçamentos consistentes
+     ===========================================================================
+     Use estas vars em paddings/margens pra manter ritmo visual coerente.
+  */
+  --space-xs: 0.25rem;
+  /* 4px  — gap muito apertado */
+  --space-sm: 0.5rem;
+  /* 8px  — gap pequeno */
+  --space-md: 1.75rem;
+  /* 12px — padding card pequeno */
+  --space-lg: 1rem;
+  /* 16px — padding card padrão */
+  --space-xl: 1.5rem;
+  /* 24px — padding seção */
+  --space-2xl: 2rem;
+  /* 32px — separação entre seções */
+  --space-3xl: 3rem;
+  /* 48px — hero spacing */
+
+  /* ===========================================================================
+     [RADIUS] — Arredondamentos
+     ===========================================================================
+     Define o "arredondado" dos elementos. Pra app mais "duro", reduza valores.
+     Pra app mais "soft/iOS-like", aumente.
+  */
+  --radius-sm: 0.35rem;
+  /* 5.6px — chips, tags (-30%) */
+  --radius-md: 0.525rem;
+  /* 8.4px — botões, inputs (-30%) */
+  --radius-lg: 0.7rem;
+  /* 11.2px — cards (-30%) */
+  --radius-xl: 1.05rem;
+  /* 16.8px — modals, BottomSheet (-30%) */
+  --radius-pill: 9999px;
+  /* pílula completa — toggles, badges (mantido) */
+
+  /* ===========================================================================
+     [SHADOW] — Sombras de elevação
+     ===========================================================================
+     Use pra criar hierarquia espacial. Cards baixos = sm, modals altos = lg.
+  */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.05), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.08), 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.10), 0 8px 10px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 25px 50px rgba(15, 23, 42, 0.25);
+  /* modals, sheets */
+
+  /* ===========================================================================
+     [MOTION] — Transições e animações
+     ===========================================================================
+     Velocidade base de interações. Reduzir = mais snappy. Aumentar = mais suave.
+  */
+  --transition-fast: 100ms ease-out;
+  --transition-base: 180ms ease-out;
+  --transition-slow: 300ms ease-out;
+
+  --easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ===========================================================================
+     [Z-INDEX] — Camadas
+     ===========================================================================
+     Padronização pra evitar z-index war.
+  */
+  --z-dropdown: 20;
+  --z-sticky-header: 40;
+  --z-bottom-nav: 40;
+  --z-modal-backdrop: 90;
+  --z-modal: 100;
+  --z-toast: 110;
+  --z-update-banner: 120;
+}
+
+
+/* =============================================================================
+   TEMA ESCURO (.dark)
+   =============================================================================
+   Sobrescreve só as vars que mudam no escuro. Vars não listadas aqui herdam do
+   :root claro (cores brand semanticas, raios, espaçamentos não mudam).
+
+   App usa class strategy do Tailwind: <html class="dark"> ativa o tema escuro.
+   useTheme.jsx alterna a class.
+   ============================================================================= */
+
+html.dark {
+  --color-bg: #020617;
+  /* slate-950 — fundo geral escuro */
+  --color-bg-elevated: #0f172a;
+  /* slate-900 — cards no escuro */
+  --color-bg-subtle: #1e293b;
+  /* slate-800 — chips */
+  --color-bg-strong: #334155;
+  /* slate-700 — divisores */
+
+  --color-text: #f1f5f9;
+  /* texto claro principal */
+  --color-text-muted: #cbd5e1;
+  /* slate-300 */
+  --color-text-subtle: #64748b;
+  --color-text-inverse: #0f172a;
+
+  --color-border: #1e293b;
+  --color-border-strong: #334155;
+
+  /* Sombras menores no escuro (efeito menos pronunciado) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.55);
+  --shadow-elevated: 0 25px 50px rgba(0, 0, 0, 0.7);
+}
+
+
+/* =============================================================================
+   ATALHOS DE CUSTOMIZAÇÃO COMUM (descomentar pra ativar)
+   =============================================================================
+
+   Casos de uso frequentes que você pode querer aplicar globalmente.
+   ============================================================================= */
+
+/* RECEITA 1 — App mais "redondo" estilo iOS:
+:root {
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+}
+*/
+
+/* RECEITA 2 — App mais denso (gente usa mais info na tela):
+:root {
+  --font-size-base: 0.875rem;
+  --space-lg: 0.75rem;
+  --space-xl: 1rem;
+}
+*/
+
+/* RECEITA 3 — Paleta brand verde saúde:
+:root {
+  --color-brand-50:  #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+}
+*/
+
+/* RECEITA 4 — Paleta brand rosa (apps femininos / saúde mulher):
+:root {
+  --color-brand-50:  #fdf2f8;
+  --color-brand-100: #fce7f3;
+  --color-brand-200: #fbcfe8;
+  --color-brand-300: #f9a8d4;
+  --color-brand-400: #f472b6;
+  --color-brand-500: #ec4899;
+  --color-brand-600: #db2777;
+  --color-brand-700: #be185d;
+  --color-brand-800: #9d174d;
+  --color-brand-900: #831843;
+}
+*/
+
+/* RECEITA 5 — Tipografia mais leve (Mac/iOS-like):
+:root {
+  --font-weight-normal: 300;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 600;
+}
+*/
+
+/* RECEITA 6 — Animações mais rápidas (snappy):
+:root {
+  --transition-fast: 50ms ease-out;
+  --transition-base: 100ms ease-out;
+  --transition-slow: 180ms ease-out;
+}
+*/

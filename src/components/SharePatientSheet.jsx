@@ -3,6 +3,7 @@ import BottomSheet from './BottomSheet'
 import { usePatientShares, useSharePatient, useUnsharePatient } from '../hooks/useShares'
 import { useMyTier } from '../hooks/useSubscription'
 import PaywallModal from './PaywallModal'
+import Icon from './Icon'
 
 export default function SharePatientSheet({ open, onClose, patient }) {
   const { data: tier } = useMyTier()
@@ -76,8 +77,8 @@ export default function SharePatientSheet({ open, onClose, patient }) {
             {err && <p className="text-xs text-rose-600">{err}</p>}
             {okMsg && <p className="text-xs text-emerald-600">{okMsg}</p>}
             {!isPro && (
-              <p className="text-[11px] text-amber-600">
-                🔒 Você está no plano Free. Assine PRO para compartilhar.
+              <p className="text-[11px] text-amber-600 inline-flex items-center gap-1">
+                <Icon name="lock" size={11} /> Você está no plano Free. Assine PRO para compartilhar.
               </p>
             )}
           </form>

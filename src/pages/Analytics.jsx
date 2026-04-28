@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
 import LockedOverlay from '../components/LockedOverlay'
+import Icon from '../components/Icon'
+import AdBanner from '../components/AdBanner'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
@@ -74,8 +76,9 @@ export default function Analytics() {
 
   return (
     <div className="pb-28">
-      <Header back title="Análises" right={!isPro && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">🔒 PRO</span>} />
+      <Header back title="Análises" right={!isPro && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 inline-flex items-center gap-1"><Icon name="lock" size={10} /> PRO</span>} />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+        <AdBanner />
         {!isPro && (
           <LockedOverlay reason="Análises detalhadas de adesão, calendário e S.O.S são exclusivas do PRO." label="Desbloquear Análises">
             <div className="card p-4 space-y-3">

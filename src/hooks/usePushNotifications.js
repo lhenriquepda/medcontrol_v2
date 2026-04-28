@@ -321,7 +321,22 @@ export function usePushNotifications() {
   }, [])
 
   // ─── Schedule upcoming doses (next 24h) ─────────────────────────────────
-  const scheduleDoses = useCallback(async (doses, advanceMins) => {
+  const scheduleDoses = useCallback(async (doses, advanceMinsOrOpts, maybeOpts) => {
+    // Backwards-compat: scheduleDoses(doses, advanceMins) OR scheduleDoses(doses, { advanceMins, patients })
+    let advanceMins, patients
+    if (typeof advanceMinsOrOpts === 'object' && advanceMinsOrOpts !== null) {
+      advanceMins = advanceMinsOrOpts.advanceMins
+      patients = advanceMinsOrOpts.patients
+    } else {
+      advanceMins = advanceMinsOrOpts
+      patients = maybeOpts?.patients
+    }
+    const patientsMap = new Map((patients || []).map(p => [p.id, p]))
+    const enrichDose = (d) => ({
+      ...d,
+      patientName: d.patientName || patientsMap.get(d.patientId)?.name || ''
+    })
+    doses = (doses || []).map(enrichDose)
     if (!supported) return
     const adv = advanceMins ?? loadPrefs().advanceMins ?? 15
     const now = Date.now()
@@ -411,7 +426,8 @@ export function usePushNotifications() {
                 doseId: d.id,
                 medName: d.medName,
                 unit: d.unit,
-                patientName: d.patientName || ''
+                patientName: d.patientName || '',
+                scheduledAt: d.scheduledAt
               }))
             })
             console.log('[CriticalAlarm] scheduled group:', group.length, 'doses at', at.toISOString(), '→', r)

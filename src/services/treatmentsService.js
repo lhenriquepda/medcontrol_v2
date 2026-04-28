@@ -32,6 +32,8 @@ export async function getTreatment(id) {
 export async function createTreatmentWithDoses(payload) {
   // payload inclui modo, intervalo/horários etc. Gera doses atomicamente via RPC.
   if (hasSupabase) {
+    // Browser timezone — RPC computes "first dose time" relative to user's local TZ
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo'
     const { data, error } = await supabase.rpc('create_treatment_with_doses', {
       p_patient_id:      payload.patientId,
       p_med_name:        payload.medName,
@@ -43,6 +45,7 @@ export async function createTreatmentWithDoses(payload) {
       p_first_dose_time: payload.firstDoseTime ?? '08:00',
       p_mode:            payload.mode || 'interval',
       p_is_template:     !!payload.isTemplate,
+      p_timezone:        tz,
     })
     if (error) throw error
     return data  // jsonb returned from RPC, parsed by Supabase JS client

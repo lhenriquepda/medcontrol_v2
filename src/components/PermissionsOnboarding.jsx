@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
+import Icon from './Icon'
 import {
   checkAllPermissions,
   openExactAlarmSettings,
@@ -158,7 +159,7 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
-          <div className="text-2xl mb-2">⏰</div>
+          <Icon name="alarm" size={28} className="mb-2 text-brand-600" />
           <h2 className="text-lg font-semibold">Configurar alarmes</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Pra você nunca esquecer uma dose, libere as permissões abaixo. O alarme funciona como um despertador.

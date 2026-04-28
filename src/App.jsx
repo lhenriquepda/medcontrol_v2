@@ -28,6 +28,7 @@ import { usePushNotifications } from './hooks/usePushNotifications'
 import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
+import UpdateBanner from './components/UpdateBanner'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -228,6 +229,7 @@ export default function App() {
 
   return (
     <>
+    <UpdateBanner />
     <AppHeader />
     <div className="min-h-screen">
       <Routes>

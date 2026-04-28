@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import BottomSheet from './BottomSheet'
+import Icon from './Icon'
+import PatientPicker from './PatientPicker'
 
 const RANGES = [
   { key: '12h', label: '12h' },
@@ -9,14 +11,14 @@ const RANGES = [
   { key: 'all', label: 'Tudo' }
 ]
 const STATUS = [
-  { key: 'pending', label: 'Pendente', icon: '⏳', tone: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
-  { key: 'overdue', label: 'Atrasada', icon: '⚠️', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
-  { key: 'done', label: 'Tomada', icon: '✅', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
-  { key: 'skipped', label: 'Pulada', icon: '⏭️', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }
+  { key: 'pending', label: 'Pendente', icon: 'pending', tone: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
+  { key: 'overdue', label: 'Atrasada', icon: 'warning', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
+  { key: 'done', label: 'Tomada', icon: 'success', tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
+  { key: 'skipped', label: 'Pulada', icon: 'skip', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }
 ]
 const TYPES = [
-  { key: 'scheduled', label: 'Horário fixo', icon: '🗓️', hint: 'Doses com horário marcado' },
-  { key: 'sos', label: 'S.O.S', icon: '🆘', hint: 'Se necessário' }
+  { key: 'scheduled', label: 'Horário fixo', icon: 'scheduled', hint: 'Doses com horário marcado' },
+  { key: 'sos', label: 'S.O.S', icon: 'sos', hint: 'Se necessário' }
 ]
 
 export default function FilterBar({ filters, setFilters, patients }) {
@@ -32,7 +34,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
     const p = patients?.find((x) => x.id === filters.patientId)
     if (p) activeChips.push({
       key: 'p',
-      label: `${p.avatar || '👤'} ${p.name.split(' ')[0]}`,
+      node: <>{p.avatar ? <span>{p.avatar}</span> : <Icon name="user" size={12} />} {p.name.split(' ')[0]}</>,
       clear: () => setFilters((f) => ({ ...f, patientId: null }))
     })
   }
@@ -40,7 +42,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
     const s = STATUS.find((x) => x.key === filters.status)
     activeChips.push({
       key: 's',
-      label: `${s.icon} ${s.label}`,
+      node: <><Icon name={s.icon} size={12} /> {s.label}</>,
       clear: () => setFilters((f) => ({ ...f, status: null }))
     })
   }
@@ -48,7 +50,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
     const t = TYPES.find((x) => x.key === filters.type)
     activeChips.push({
       key: 't',
-      label: `${t.icon} ${t.label}`,
+      node: <><Icon name={t.icon} size={12} /> {t.label}</>,
       clear: () => setFilters((f) => ({ ...f, type: null }))
     })
   }
@@ -58,7 +60,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
   }
 
   return (
-    <div className="sticky top-[68px] z-20 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
+    <div className="sticky top-[78px] z-20 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur border-b border-slate-100 dark:border-slate-800">
       <div className="max-w-md mx-auto px-4 py-2.5 space-y-2">
         {/* Linha 1: segmented period + botão Filtros */}
         <div className="flex items-center gap-2">
@@ -81,9 +83,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
             className="relative shrink-0 w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm active:scale-95 transition"
             aria-label="Abrir filtros"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-slate-600 dark:text-slate-300" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 01.8 1.6L13 9.67V15a1 1 0 01-.447.894l-4 2.5A1 1 0 017 17.5V9.67L3.2 4.6A1 1 0 013 4V3z" clipRule="evenodd" />
-            </svg>
+            <Icon name="filter" size={16} className="text-slate-600 dark:text-slate-300" />
             {activeCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center">
                 {activeCount}
@@ -101,8 +101,8 @@ export default function FilterBar({ filters, setFilters, patients }) {
                 onClick={c.clear}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 text-xs font-medium active:scale-95"
               >
-                {c.label}
-                <span className="opacity-60">✕</span>
+                {c.node}
+                <Icon name="close" size={10} className="opacity-60" />
               </button>
             ))}
             <button
@@ -126,21 +126,13 @@ export default function FilterBar({ filters, setFilters, patients }) {
         <div className="space-y-5">
           {patients && patients.length > 0 && (
             <Section title="Paciente">
-              <div className="flex gap-2 flex-wrap">
-                <PickPill
-                  active={!filters.patientId}
-                  onClick={() => setFilters((f) => ({ ...f, patientId: null }))}
-                >Todos</PickPill>
-                {patients.map((p) => (
-                  <PickPill
-                    key={p.id}
-                    active={filters.patientId === p.id}
-                    onClick={() => setFilters((f) => ({ ...f, patientId: f.patientId === p.id ? null : p.id }))}
-                  >
-                    <span className="mr-1">{p.avatar || '👤'}</span>{p.name.split(' ')[0]}
-                  </PickPill>
-                ))}
-              </div>
+              <PatientPicker
+                patients={patients}
+                value={filters.patientId}
+                onChange={(id) => setFilters((f) => ({ ...f, patientId: id }))}
+                allowAll
+                placeholder="Todos pacientes"
+              />
             </Section>
           )}
 
@@ -160,7 +152,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
                         ? `${s.tone} ring-2 ring-brand-500`
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
                   >
-                    <span className="text-base">{s.icon}</span>
+                    <Icon name={s.icon} size={18} />
                     {s.label}
                   </button>
                 )
@@ -182,7 +174,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
                   >
                     <div className="flex flex-col items-start leading-tight">
-                      <span className="flex items-center gap-1.5"><span className="text-base">{t.icon}</span>{t.label}</span>
+                      <span className="flex items-center gap-1.5"><Icon name={t.icon} size={18} />{t.label}</span>
                       <span className="text-[10px] font-normal opacity-70">{t.hint}</span>
                     </div>
                   </button>

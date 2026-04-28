@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '../components/Header'
 import EmptyState from '../components/EmptyState'
+import AdBanner from '../components/AdBanner'
 import { useTreatments, useUpdateTreatment } from '../hooks/useTreatments'
 import { usePatients } from '../hooks/usePatients'
 
@@ -29,6 +30,7 @@ export default function TreatmentList() {
         <Link to="/tratamento/novo" className="btn-primary h-9 px-3 text-sm">+ Novo</Link>
       } />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+        <AdBanner />
         <input className="input" placeholder="Buscar por medicamento…" value={q} onChange={(e) => setQ(e.target.value)} />
 
         <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
@@ -49,7 +51,7 @@ export default function TreatmentList() {
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState icon="💊" title="Nenhum tratamento" description="Crie um novo tratamento pelo botão +" />
+          <EmptyState icon="pill" title="Nenhum tratamento" description="Crie um novo tratamento pelo botão +" />
         ) : filtered.map((t) => (
           <div key={t.id} className="card p-4">
             <div className="flex items-start justify-between gap-3">

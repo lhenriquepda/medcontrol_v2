@@ -3,6 +3,7 @@ import { useDoses, useConfirmDose, useSkipDose } from '../hooks/useDoses'
 import { usePatients } from '../hooks/usePatients'
 import { useToast } from '../hooks/useToast'
 import { formatDateTime } from '../utils/dateUtils'
+import Icon from './Icon'
 
 /**
  * DailySummaryModal — overlay shown when user taps the "Resumo diário" notification.
@@ -68,7 +69,7 @@ export default function DailySummaryModal({ open, onClose }) {
         <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              📅 Resumo das próximas 24h
+              <Icon name="calendar" size={20} className="text-brand-600" /> Resumo das próximas 24h
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {pending.length} agendada{pending.length === 1 ? '' : 's'}
@@ -77,9 +78,9 @@ export default function DailySummaryModal({ open, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-2xl leading-none px-2"
+            className="text-slate-400 hover:text-slate-600 px-2"
             aria-label="Fechar"
-          >×</button>
+          ><Icon name="close" size={20} /></button>
         </div>
 
         {/* Lists */}
@@ -87,8 +88,8 @@ export default function DailySummaryModal({ open, onClose }) {
           {/* Atrasadas (prioridade) */}
           {overdue.length > 0 && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-rose-600 mb-2">
-                ⚠️ Atrasadas ({overdue.length})
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-rose-600 mb-2 flex items-center gap-1">
+                <Icon name="warning" size={14} /> Atrasadas ({overdue.length})
               </h3>
               <ul className="space-y-2">
                 {overdue.map(d => (
@@ -159,7 +160,7 @@ function DoseRow({ dose, patient, onConfirm, onSkip, overdue }) {
         <button
           onClick={onConfirm}
           className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
-        >✓ Tomada</button>
+        ><span className="inline-flex items-center gap-1"><Icon name="check" size={12} /> Tomada</span></button>
         <button
           onClick={onSkip}
           className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300"
