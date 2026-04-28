@@ -374,9 +374,9 @@ export default function Settings() {
                   if (Capacitor.isNativePlatform()) {
                     try {
                       const { Browser } = await import('@capacitor/browser')
-                      await Browser.open({ url: window.location.origin + (update.latest?.installUrl || '/install') })
+                      await Browser.open({ url: 'https://dosy-teal.vercel.app' + (update.latest?.installUrl || '/install') })
                     } catch {
-                      window.open(update.latest?.installUrl || '/install', '_blank')
+                      window.open('https://dosy-teal.vercel.app' + (update.latest?.installUrl || '/install'), '_blank')
                     }
                   } else {
                     window.location.reload()

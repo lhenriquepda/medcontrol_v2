@@ -3,6 +3,8 @@ import { useAppUpdate } from '../hooks/useAppUpdate'
 import Icon from './Icon'
 
 const isNative = Capacitor.isNativePlatform()
+// Native: window.location.origin = capacitor://localhost (bundle local). Use Vercel pra abrir browser.
+const REMOTE_ORIGIN = 'https://dosy-teal.vercel.app'
 
 /**
  * Sticky banner at top of screen when a newer app version is available.
@@ -20,10 +22,10 @@ export default function UpdateBanner() {
     if (isNative) {
       try {
         const { Browser } = await import('@capacitor/browser')
-        const url = window.location.origin + (latest?.installUrl || '/install')
+        const url = REMOTE_ORIGIN + (latest?.installUrl || '/install')
         await Browser.open({ url })
       } catch {
-        window.open(latest?.installUrl || '/install', '_blank')
+        window.open(REMOTE_ORIGIN + (latest?.installUrl || '/install'), '_blank')
       }
     } else {
       window.location.reload()
@@ -31,8 +33,8 @@ export default function UpdateBanner() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[90] bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg">
-      <div className="max-w-md mx-auto px-4 py-2.5 flex items-center gap-3">
+    <div className="fixed top-0 left-0 right-0 z-[90] bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg safe-top">
+      <div className="max-w-md mx-auto px-4 pb-2.5 flex items-center gap-3">
         <Icon name="sparkles" size={20} className="shrink-0 text-white" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold leading-tight">Nova versão disponível</p>
