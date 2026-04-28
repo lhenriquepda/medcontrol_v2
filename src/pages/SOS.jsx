@@ -100,9 +100,9 @@ export default function SOS() {
             )}
             <div className="grid grid-cols-2 gap-2">
               <input className="input" placeholder="Intervalo mín. (h)" value={ruleMin}
-                     onChange={(e) => setRuleMin(e.target.value)} type="number" min={0} />
+                     onChange={(e) => setRuleMin(e.target.value)} type="number" inputMode="decimal" min={0} />
               <input className="input" placeholder="Máx/24h" value={ruleMax}
-                     onChange={(e) => setRuleMax(e.target.value)} type="number" min={0} />
+                     onChange={(e) => setRuleMax(e.target.value)} type="number" inputMode="numeric" min={0} />
             </div>
             <button type="button" onClick={saveRule} className="btn-secondary w-full text-sm">
               {currentRule ? 'Atualizar regra' : 'Salvar regra'}

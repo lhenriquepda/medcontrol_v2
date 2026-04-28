@@ -11,7 +11,13 @@ import {
 } from '../services/criticalAlarm'
 
 const isNative = Capacitor.isNativePlatform()
-const STORAGE_KEY = 'dosy_permissions_dismissed'
+// Storage key armazena a VERSÃO em que foi dismissed.
+// Após update (APP_VERSION muda), Android reseta toggles especiais
+// (full-screen intent, overlay, etc.) → re-disparar verificação.
+const STORAGE_KEY = 'dosy_permissions_dismissed_version'
+/* eslint-disable no-undef */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+/* eslint-enable no-undef */
 
 /**
  * PermissionsOnboarding — first-launch screen guiding user through Android
@@ -48,15 +54,18 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
     try {
       const status = await checkAllPermissions()
       setPerms(status)
-      const dismissed = localStorage.getItem(STORAGE_KEY) === '1'
-      const shouldShow = !status.allGranted && !dismissed
+      // Dismissed só vale pra ESTA versão. Update do app reseta toggles
+      // especiais do Android, então re-disparamos check forçando re-prompt.
+      const dismissedVersion = localStorage.getItem(STORAGE_KEY)
+      const dismissedThisVersion = dismissedVersion === APP_VERSION
+      const shouldShow = !status.allGranted && !dismissedThisVersion
       setOpen(shouldShow)
       if (status.allGranted) {
-        localStorage.setItem(STORAGE_KEY, '1')
+        localStorage.setItem(STORAGE_KEY, APP_VERSION)
         onComplete?.()
         onClose?.()
       } else if (!shouldShow) {
-        // Already dismissed
+        // Já dismissed nesta versão
         onClose?.()
       }
     } catch (e) {
@@ -150,7 +159,8 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
   }
 
   function dismiss() {
-    localStorage.setItem(STORAGE_KEY, '1')
+    // Marca dismissed para a versão atual. Próximo update reseta automaticamente.
+    localStorage.setItem(STORAGE_KEY, APP_VERSION)
     setOpen(false)
     onClose?.()
   }

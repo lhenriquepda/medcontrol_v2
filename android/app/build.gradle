@@ -7,8 +7,8 @@ android {
         applicationId "com.dosyapp.dosy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.0.5.5"
+        versionCode 12
+        versionName "0.1.5.7"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -37,7 +37,11 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // Auditoria 4.5.4 G1 (P0): minifyEnabled true ativa ProGuard/R8.
+            // Reduz APK size + obfusca código (anti reverse-engineering).
+            // Keep rules custom em proguard-rules.pro (Capacitor + Sentry + Supabase).
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // Apply signing config only if keystore exists (avoid breaking debug builds)
             def keystorePath = System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'

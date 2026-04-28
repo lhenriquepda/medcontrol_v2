@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "1.0.5.5",
+  "version": "0.1.5.7",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -50,6 +50,7 @@
     "pg": "^8.20.0",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.7",
+    "terser": "^5.46.2",
     "typescript": "^6.0.3",
     "vite": "^5.4.0"
   }

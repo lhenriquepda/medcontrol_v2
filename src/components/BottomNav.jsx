@@ -2,6 +2,10 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { usePatients } from '../hooks/usePatients'
 import Icon from './Icon'
 
+/* eslint-disable no-undef */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''
+/* eslint-enable no-undef */
+
 const tabs = [
   { to: '/', label: 'Início', icon: 'home', end: true },
   { to: '/pacientes', label: 'Pacientes', icon: 'users' },
@@ -20,10 +24,11 @@ export default function BottomNav() {
         {tabs.map((t) => {
           if (t.to === '__fab__') {
             return (
-              <button key="fab" onClick={() => nav(fabTarget)} className="flex justify-center">
+              <button key="fab" onClick={() => nav(fabTarget)} className="flex flex-col items-center justify-center">
                 <span className="-mt-6 w-14 h-14 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg active:scale-95">
                   <Icon name={t.icon} size={28} strokeWidth={2.5} />
                 </span>
+                <span className="text-[8px] text-slate-400 dark:text-slate-600 leading-none mt-0.5 select-none">v{APP_VERSION}</span>
               </button>
             )
           }

@@ -20,6 +20,8 @@ if (SENTRY_DSN && import.meta.env.PROD) {
   const sentryConfig = {
     dsn: SENTRY_DSN,
     environment: import.meta.env.MODE,
+    // Auditoria 4.5.7 G3 — release tag pra correlacionar crashes com versão
+    release: `dosy@${__APP_VERSION__}`,
     tracesSampleRate: 0.1,
     beforeSend(event) {
       // Strip PII (LGPD: medication data is "categoria especial")

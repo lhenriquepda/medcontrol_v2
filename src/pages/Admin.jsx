@@ -131,7 +131,7 @@ function GrantSheet({ user, onClose }) {
                       className={`chip ${mode === 'until' ? 'chip-active' : ''}`}>Até data</button>
             </div>
             {mode === 'days' && (
-              <input type="number" min={1} className="input mt-2" value={days}
+              <input type="number" inputMode="numeric" min={1} className="input mt-2" value={days}
                      onChange={(e) => setDays(e.target.value)} placeholder="Dias" />
             )}
             {mode === 'until' && (

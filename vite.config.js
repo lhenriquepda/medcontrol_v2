@@ -26,10 +26,21 @@ function dosyVersionJsonPlugin() {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), dosyVersionJsonPlugin()],
   server: { host: true, port: 5173 },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version)
+  },
+  build: {
+    // Auditoria 4.5.1 G5 — strip console.log/warn/info/debug em build prod via Terser.
+    // Mantém console.error (Sentry depende). pure_funcs remove call site sem quebrar AST.
+    minify: mode === 'production' ? 'terser' : 'esbuild',
+    terserOptions: mode === 'production' ? {
+      compress: {
+        pure_funcs: ['console.log', 'console.warn', 'console.info', 'console.debug'],
+        drop_debugger: true
+      }
+    } : undefined
   }
-})
+}))

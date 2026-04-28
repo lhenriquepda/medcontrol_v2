@@ -228,7 +228,7 @@ export default function TreatmentForm() {
           <div className={`grid gap-2 ${form.isContinuous ? 'grid-cols-1' : 'grid-cols-2'}`}>
             {!form.isContinuous && (
               <Field label="Duração (dias)">
-                <input type="number" min={1} className="input" value={form.durationDays} onChange={(e) => set('durationDays', e.target.value)} />
+                <input type="number" inputMode="numeric" min={1} className="input" value={form.durationDays} onChange={(e) => set('durationDays', e.target.value)} />
               </Field>
             )}
             <Field label="Início">

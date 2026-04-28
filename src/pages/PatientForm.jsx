@@ -152,10 +152,10 @@ export default function PatientForm() {
           <input required className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome completo" />
         </Field>
         <Field label="Idade">
-          <input type="number" className="input" value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="Ex: 45" />
+          <input type="number" inputMode="numeric" className="input" value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="Ex: 45" />
         </Field>
         <Field label="Peso (kg)">
-          <input className="input" value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="Ex: 78,5" />
+          <input inputMode="decimal" className="input" value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="Ex: 78,5" />
         </Field>
         <Field label="Condição / Diagnóstico">
           <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} placeholder="Ex: Hipertensão" />

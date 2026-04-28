@@ -37,6 +37,20 @@ input, select, textarea, button {
   font-family: inherit;
 }
 
+/* Auditoria 4.5.3 G1 (P0) — :focus-visible global pra A11y.
+   Aparece apenas com keyboard nav (Tab) ou TalkBack. Não polui mouse click. */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline-offset: 3px;
+}
+
 
 /* =============================================================================
    COMPONENTES REUTILIZÁVEIS

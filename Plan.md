@@ -1,2115 +1,850 @@
-# Dosy — Plano de Migração para APK / Play Store
+# Plano — Dosy para Android (Produto)
 
-> Documento vivo. Atualizar status dos itens conforme progresso.
-> Última atualização: Abril 2026
+Roadmap em fases para transformar o Dosy (PWA + Capacitor) em produto comercial pronto para Play Store, com segurança robusta, alarme crítico estilo despertador, monetização Free/PRO/Plus e disponibilização gradual (testers internos → beta fechado → Play Store → público).
 
----
-
-## Visão Geral
-
-O app Dosy é atualmente uma PWA (React + Vite + Tailwind + Supabase) hospedada na Vercel. O objetivo é transformá-lo em um produto Android distribuído pela Google Play Store, com monetização real (assinaturas), notificações nativas e experiência de app nativo.
-
-**Ferramenta de migração:** [Capacitor](https://capacitorjs.com/) — envolve a PWA em uma shell nativa Android sem reescrever o código React.
-
-**Stack resultante:**
-```
-React 19 (UI) + Vite (build) → dist/
-  → Capacitor → Android (WebView nativo)
-    → APK/AAB → Google Play Store
-```
+> **Nota histórica:** versão detalhada anterior preservada em `Plan-detalhado-backup.md` + reorg anterior em `Plan-pre-reorg-backup.md`.
 
 ---
 
-## Fases do Projeto
+## 📌 Como usar este documento
 
-### Fase 0 — Segurança & LGPD ⚠️ (fazer antes de publicar)
-### Fase 1 — Fundação Capacitor
-### Fase 2 — Notificações Nativas (FCM)
-### Fase 2.5 — Alarme Crítico Nativo ⚠️ BLOCKER PRA LAUNCH
-### Fase 3 — Monetização Real (In-App Purchase)
-### Fase 4 — Polimento & Experiência Nativa
-### Fase 5 — Preparação Play Store
-### Fase 6 — Publicação & Pós-Launch
+Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualquer auditoria, análise ou bug deve ser inserida aqui na ordem cronológica/lógica certa (não no fim).
 
----
+**Estrutura linear em 3 partes:**
 
-## FASE 0 — Segurança & LGPD
+- **PARTE I — DESENVOLVIMENTO** (FASE 0 → 9): foundation, app build, hardening, monetization, store prep
+- **PARTE II — TESTERS** (FASE 10 → 12): beta interno, beta fechado com pen test, beta aberto Play Store
+- **PARTE III — DEPLOY & PÓS-LAUNCH** (FASE 13 → 14): produção + operação contínua
 
-**Objetivo:** App seguro, dados dos usuários protegidos, conformidade com a LGPD (Lei 13.709/2018). Obrigatório antes de qualquer publicação pública. Play Store exige para apps de saúde.
+**Para retomar trabalho em novo chat:**
+1. Identificar primeira sub-fase com itens `[ ]` abertos
+2. Conferir docs anexos `docs/audits/Auditoria-X.X.X.md` (inputs read-only)
+3. Começar pelo primeiro item aberto
 
-> Apps de saúde manipulam dados sensíveis (categoria especial pela LGPD, Art. 11). Vazamento ou negligência pode gerar multas de até 2% do faturamento (máx R$50M) e dano reputacional irreversível.
+**Convenção:**
+- `[ ]` = pendente · `[x]` = feito · `✅ CONCLUÍDA` no título quando todos itens fechados
+- Itens vindos de auditoria citam fonte (ex: "Aud 5.2 G1")
+- Cada fase tem **Validação** ao final = critério de saída
 
----
-
-### 0.1 Auditoria de Secrets & Variáveis de Ambiente
-
-**Problema:** Credenciais podem vazar em commits ou documentação.
-
-**Ações:**
-- Criar `.env.example` com todas as variáveis necessárias (sem valores reais):
-```bash
-# .env.example
-VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
-VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
-VITE_VAPID_PUBLIC_KEY=sua_vapid_public_key_aqui
-VAPID_PRIVATE_KEY=<NUNCA expor no frontend — só no Edge Function>
-```
-- Verificar que `.env` e `.env.local` estão no `.gitignore` ✅ (já está)
-- Rotacionar VAPID keys se já foram expostas em commits/documentação
-- Nunca documentar valores reais em `Contexto.md`, `Plan.md` ou qualquer `.md`
-- Adicionar `git-secrets` ou similar ao workflow para prevenir commits acidentais
-
-**Comando para checar histórico git por leaks:**
-```bash
-git log --all --full-history -- "**/.env*"
-git grep -i "private_key\|secret\|password" -- "*.md" "*.json"
-```
+**Versão atual:** 0.1.5.6 (dev — pre-1.0). v1.0 reservada pra Play Store launch.
 
 ---
 
-### 0.2 Row Level Security (RLS) — Auditoria Completa
+# PARTE I — DESENVOLVIMENTO
 
-**Problema:** RLS incorreto pode expor dados de um usuário para outro.
+## FASE 0 — Segurança & LGPD ✅ CONCLUÍDA
 
-**Verificar todas as tabelas no schema `medcontrol`:**
-```sql
--- Listar tabelas e se têm RLS ativo
-SELECT tablename, rowsecurity
-FROM pg_tables
-WHERE schemaname = 'medcontrol';
+### 0.1 RLS, secrets, auth ✅ CONCLUÍDA
+- [x] `.env.example` com todas variáveis (sem valores reais)
+- [x] Rotacionar VAPID keys (migração para projeto `dosy-app`, par novo gerado)
+- [x] `git grep` no histórico verificando vazamento de secrets (auditado, baixo risco)
+- [x] Auditar RLS em todas tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules`
+- [x] Policy RLS em `push_subscriptions` isolando por usuário (`push_own_all`)
+- [x] Proteger `admin_grant_tier` RPC com `is_admin()` server-side
+- [x] Remover email hardcoded de admin → tabela `admins`
+- [x] `vercel.json` com headers CSP, X-Frame-Options, X-Content-Type-Options
+- [x] Validação de senha forte no cadastro (8+ chars, maiúscula, número)
+- [x] Limpar localStorage de dados sensíveis no `signOut`
+- [x] `sessionStorage` no modo demo (não localStorage)
+- [x] Rate limiting Supabase Auth (`rate_limit_otp=5`, `rate_limit_anonymous_users=30`, `rate_limit_token_refresh=150`)
+- [x] Confirmação email obrigatória (`mailer_autoconfirm=false`)
+- [x] Tabela `security_events` para audit log
+- [x] Eventos de mudança de tier registrados em `admin_grant_tier`
+- [x] Eventos de exclusão de conta registrados em `delete_my_account`
+- [x] Índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)`
 
--- Listar policies existentes
-SELECT tablename, policyname, cmd, qual
-FROM pg_policies
-WHERE schemaname = 'medcontrol';
-```
+### 0.2 LGPD & Privacidade ✅ CONCLUÍDA
+- [x] `src/utils/sanitize.js` com `escapeHtml`
+- [x] Aplicar `escapeHtml` em template strings do PDF em `Reports.jsx`
+- [x] Exportação de dados do usuário em Settings (portabilidade LGPD)
+- [x] RPC `delete_my_account` (cascata em todas tabelas)
+- [x] Edge Function `delete-account` com service_role (deleta `auth.users`)
+- [x] Botão "Excluir minha conta" em Settings
+- [x] Checkbox de consentimento explícito no cadastro
+- [x] Colunas `consentAt` e `consentVersion` em `subscriptions`
+- [x] Rota `/privacidade` (política completa LGPD)
+- [x] Rota `/termos` (termos de uso)
+- [x] pg_cron `anonymize-old-doses` (Domingos 3h, anonimiza doses +3 anos)
+- [x] Limitar `observation` a 500 chars (Data Minimization)
+- [x] Trocar `userAgent` por `platform` simplificado em `push_subscriptions`
+- [x] `docs/RIPD.md` documentando Edge Functions que processam PII
 
-**Tabelas críticas a verificar:**
-- `patients` — usuário vê apenas seus próprios pacientes?
-- `treatments` — usuário acessa apenas tratamentos dos seus pacientes?
-- `doses` — idem
-- `push_subscriptions` — **crítico**: usuário só lê/modifica suas próprias subs?
-- `subscriptions` — tier do usuário, não pode ser alterado pelo próprio user
-- `sos_rules` / `sos_doses` — idem patients
+### 0.3 Lógica de Negócio Server-Side ✅ CONCLUÍDA
+- [x] **[CRÍTICO]** RPC `register_sos_dose` validando `minIntervalHours` + `maxDosesIn24h` server-side
+- [x] **[CRÍTICO]** Substituir `INSERT` direto por RPC em `dosesService.js`
+- [x] **[CRÍTICO]** Trigger `enforce_sos_via_rpc_trigger` bloqueia INSERT direto (testado via `tools/test-sos-bypass.cjs`)
+- [x] **[CRÍTICO]** Drop policies inseguras `own_*` (via `tools/security-fix.cjs`)
+- [x] **[ALTO]** RPC `create_treatment_with_doses(payload jsonb)` com ownership check + limite `durationDays` ≤365
+- [x] **[ALTO]** RPC `update_treatment_schedule` regenera doses atomicamente
+- [x] **[ALTO]** `ON DELETE CASCADE` em FKs `doses → treatments`, `treatments/doses/sos_rules/patient_shares → patients`
+- [x] **[MÉDIO]** RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status
+- [x] **[MÉDIO]** Substituir UPDATEs diretos em `dosesService.js` por RPCs
+- [x] **[MÉDIO]** RLS em `doses` e `treatments` via `has_patient_access()`
+- [x] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos services
 
-**Política mínima esperada para cada tabela:**
-```sql
--- Exemplo para push_subscriptions (verificar se existe)
-CREATE POLICY "Users own their push subs"
-  ON medcontrol.push_subscriptions
-  FOR ALL
-  USING (auth.uid() = "userId")
-  WITH CHECK (auth.uid() = "userId");
-```
-
----
-
-### 0.3 Sistema de Admin Seguro — Controle Total de Tiers
-
-**Contexto:** Como criador do app, você precisa poder:
-- Conceder PRO a qualquer usuário (mensal, anual, 2 anos, indeterminado)
-- Revogar PRO a qualquer momento
-- Ver lista de todos os usuários e seus tiers
-- Tudo isso via painel dentro do próprio app
-
-**Problema atual:** O email do admin provavelmente está hardcoded em algum lugar do código ou da RPC. Se alguém inspecionar o JS do app ou o histórico do git, descobre quem é o admin. Pior: se a RPC não verificar server-side, qualquer usuário autenticado pode chamar `admin_grant_tier` diretamente e se promover para PRO.
-
-**Design seguro completo:**
-
-#### Passo 1 — Criar tabela `admins` no banco
-
-```sql
-CREATE TABLE medcontrol.admins (
-  user_id   uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  added_at  timestamptz DEFAULT now(),
-  added_by  uuid REFERENCES auth.users(id)  -- quem adicionou (auditoria)
-);
-
--- Nenhum usuário lê essa tabela diretamente
-ALTER TABLE medcontrol.admins ENABLE ROW LEVEL SECURITY;
--- Sem policies de SELECT para usuários comuns — invisível pelo frontend
--- Apenas service_role (Edge Functions internas) pode ler/escrever
-
--- Inserir seu próprio user_id como admin (fazer UMA vez no Supabase Dashboard)
-INSERT INTO medcontrol.admins (user_id) VALUES ('SEU_USER_ID_AQUI');
-```
-
-#### Passo 2 — Reescrever `admin_grant_tier` com verificação server-side
-
-```sql
-CREATE OR REPLACE FUNCTION medcontrol.admin_grant_tier(
-  target_user uuid,
-  new_tier    text,       -- 'free' | 'pro' | 'admin'
-  expires     timestamptz DEFAULT NULL,   -- NULL = sem expiração
-  src         text        DEFAULT 'manual'
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = medcontrol, public
-AS $$
-BEGIN
-  -- ✅ Verificação server-side: quem chama é admin?
-  -- Não confia em NADA do frontend — só no JWT do Supabase
-  IF NOT EXISTS (
-    SELECT 1 FROM medcontrol.admins WHERE user_id = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'UNAUTHORIZED: caller is not an admin';
-  END IF;
-
-  -- Validar tier
-  IF new_tier NOT IN ('free', 'pro', 'admin') THEN
-    RAISE EXCEPTION 'INVALID_TIER: %', new_tier;
-  END IF;
-
-  -- Executar a mudança
-  INSERT INTO medcontrol.subscriptions (user_id, tier, tier_expires, source, updated_at)
-  VALUES (target_user, new_tier, expires, src, now())
-  ON CONFLICT (user_id) DO UPDATE
-    SET tier        = EXCLUDED.tier,
-        tier_expires = EXCLUDED.tier_expires,
-        source      = EXCLUDED.source,
-        updated_at  = now();
-
-  -- Log de auditoria
-  INSERT INTO medcontrol.security_events (user_id, event_type, metadata)
-  VALUES (
-    auth.uid(),
-    'admin_tier_change',
-    jsonb_build_object(
-      'target_user', target_user,
-      'new_tier', new_tier,
-      'expires', expires,
-      'source', src
-    )
-  );
-
-  RETURN jsonb_build_object('ok', true, 'target', target_user, 'tier', new_tier);
-END;
-$$;
-```
-
-#### Passo 3 — Frontend: nada muda para você
-
-O painel admin continua funcionando exatamente como hoje. A diferença é que se alguém tentar chamar a RPC sem ser admin, o banco rejeita:
-
-```
-// Usuário comum tentando se promover:
-POST /rest/v1/rpc/admin_grant_tier
-Authorization: Bearer <token_usuario_normal>
-{ "target_user": "...", "new_tier": "pro" }
-
-→ 400 Bad Request: "UNAUTHORIZED: caller is not an admin"
-```
-
-```
-// Você (admin) usando o painel:
-POST /rest/v1/rpc/admin_grant_tier
-Authorization: Bearer <seu_token>
-{ "target_user": "...", "new_tier": "pro", "expires": "2027-04-24T00:00:00Z" }
-
-→ 200 OK: { "ok": true, "tier": "pro" }
-```
-
-#### Exemplos de uso no painel admin
-
-```javascript
-// Dar PRO por 1 mês
-await grantTier({ userId: '...', tier: 'pro', expiresAt: addMonths(new Date(), 1) })
-
-// Dar PRO por 1 ano
-await grantTier({ userId: '...', tier: 'pro', expiresAt: addYears(new Date(), 1) })
-
-// Dar PRO por 2 anos
-await grantTier({ userId: '...', tier: 'pro', expiresAt: addYears(new Date(), 2) })
-
-// PRO vitalício (sem expiração)
-await grantTier({ userId: '...', tier: 'pro', expiresAt: null })
-
-// Revogar PRO → volta para free imediatamente
-await grantTier({ userId: '...', tier: 'free', expiresAt: null })
-```
-
-#### O que muda no código
-
-- **Remover** email hardcoded de qualquer RPC, `.env`, `Contexto.md` ou código JS
-- **Não mudar** `subscriptionService.js` — o `grantTier()` já chama a RPC corretamente
-- **Não mudar** o painel admin — UI continua igual
-- **Adicionar** a tabela `admins` com seu `user_id` inserido manualmente via Supabase Dashboard (nunca via código commitado)
+**Validação fase 0:** RLS pen test interno aprovado, todos endpoints exigem auth, sem secrets no bundle, LGPD compliance via páginas + delete + export.
 
 ---
 
-### 0.4 Content Security Policy (CSP)
+## FASE 1 — Fundação Capacitor ✅ CONCLUÍDA
 
-**Problema:** Sem CSP, XSS pode roubar tokens de sessão do localStorage.
-
-**Adicionar em `vercel.json`:**
-```json
-{
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fcm.googleapis.com; frame-src https://googleads.g.doubleclick.net;"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
-        }
-      ]
-    }
-  ]
-}
-```
+- [x] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`
+- [x] Instalar `@capacitor/app`, `@capacitor/status-bar`, `@capacitor/keyboard`, `@capacitor/splash-screen`
+- [x] `capacitor.config.ts` com `appId: com.dosyapp.dosy`
+- [x] Scripts `build:android`, `open:android` em `package.json`
+- [x] Instalar `@aparajita/capacitor-secure-storage`
+- [x] Migrar Supabase `auth.storage` localStorage → SecureStorage (Android KeyStore)
+- [x] `detectSessionInUrl: false` no Supabase client (apenas native)
+- [x] Handler do botão Voltar Android em `App.jsx`
+- [x] Reconexão Realtime em `useRealtime.js` (pause/resume)
+- [x] `npx cap add android` + `npx cap sync android`
+- [x] JDK 17 + JDK 21 (Temurin) + Android SDK
+- [x] `JAVA_HOME` + `ANDROID_HOME` em variáveis de usuário
+- [x] Testar app no emulador Android (Pixel 10 Pro)
+- [x] Login/auth funcionando no Android (validado emulador 2026-04-26)
+- [x] SSL Pinning em `network_security_config.xml` (Supabase, primary GTS WE1 + backup GTS Root R4)
+- [x] Bloquear ADB backup (`allowBackup="false"` + `data_extraction_rules.xml`)
+- [x] Testar app em dispositivo físico (FASE 1 device test concluído 2026-04-28)
+- [ ] **NOTA:** Build CLI `gradlew.bat` quebra em Win11 24H2 (`Unable to establish loopback connection`). Workaround: Studio (JBR patched). CI: Linux runner.
 
 ---
 
-### 0.5 Sanitização de Inputs no PDF
+## FASE 2 — Notificações FCM + LocalNotifications ✅ CONCLUÍDA
 
-**Problema:** `Reports.jsx` injeta strings do banco diretamente em HTML via `innerHTML` para gerar PDF. Se um nome de medicamento ou paciente contiver HTML/JS, há risco de XSS.
-
-**Adicionar função de sanitização:**
-```javascript
-// src/utils/sanitize.js
-export function escapeHtml(str) {
-  if (!str) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
-```
-
-**Usar em todos os template strings do PDF:**
-```javascript
-// Reports.jsx — em TODOS os lugares onde dados do banco vão pro HTML
-`<td>${escapeHtml(d.medName)}</td>`
-`<td>${escapeHtml(patient.name)}</td>`
-`<td>${escapeHtml(d.unit)}</td>`
-```
+- [x] Projeto Firebase `dosy-b592e` + app Android registrado
+- [x] `google-services.json` em `android/app/`
+- [x] Instalar `@capacitor/push-notifications` + `@capacitor/local-notifications`
+- [x] `usePushNotifications.js` com lógica `isNative`/web
+- [x] Migration: colunas `deviceToken` + `platform` em `push_subscriptions`
+- [x] Edge Function `notify-doses` com FCM HTTP v1 API + JWT OAuth
+- [x] Secrets Firebase no Supabase (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`)
+- [x] RPC `upsert_push_subscription` SECURITY DEFINER (cross-user device transfer)
+- [x] UNIQUE constraint em `deviceToken`
+- [x] Edge Function `send-test-push` (admin only)
+- [x] Validação: LocalNotifications + push server-side FCM no Android
+- [x] Notification channel `doses` criado (Android 8+ requer)
+- [x] Multi-device test (push direcionado funciona)
+- [x] Payload FCM correto (`priority: 'HIGH'`, `default_sound: true`)
+- [x] Push notif device físico funcionando (FASE 2 device test concluído 2026-04-28)
 
 ---
 
-### 0.6 Segurança da Autenticação
+## FASE 2.5 — Alarme Crítico Nativo ✅ CONCLUÍDA
 
-**Problema:** Supabase gerencia senhas com bcrypt (seguro), mas o app não impõe requisitos de força de senha no cadastro.
+> Push padrão toca som 1x e não bypassa silencioso/DND. App de medicação precisa **alarme do despertador**: tela cheia, som em loop até dismiss, ignora silencioso, mostra na lock screen. Plugin Android nativo custom.
 
-**Adicionar validação no formulário de cadastro:**
-```javascript
-// src/pages/Login.jsx ou Register.jsx
-function validatePassword(pwd) {
-  const errors = []
-  if (pwd.length < 8) errors.push('Mínimo 8 caracteres')
-  if (!/[A-Z]/.test(pwd)) errors.push('Pelo menos uma letra maiúscula')
-  if (!/[0-9]/.test(pwd)) errors.push('Pelo menos um número')
-  return errors
-}
-```
-
-**Limpar sessão completamente no logout:**
-```javascript
-// src/hooks/useAuth.js — no signOut
-async function signOut() {
-  await supabase.auth.signOut()
-  // Limpar dados locais sensíveis
-  localStorage.removeItem('medcontrol_notif')
-  localStorage.removeItem('dashCollapsed')
-  // Se futuramente usar Capacitor Preferences:
-  // await Preferences.clear()
-}
-```
+- [x] Plugin Capacitor Android `CriticalAlarmPlugin` (Java)
+- [x] `AlarmReceiver` (BroadcastReceiver disparado por AlarmManager)
+- [x] `AlarmActivity` full-screen (FLAG_SHOW_WHEN_LOCKED + TURN_SCREEN_ON, MediaPlayer USAGE_ALARM loop, Ciente/Adiar 10min, vibração)
+- [x] Permissões: `USE_FULL_SCREEN_INTENT`, `ACCESS_NOTIFICATION_POLICY`, `SYSTEM_ALERT_WINDOW`
+- [x] Registrar plugin em `MainActivity.java`
+- [x] Bridge JS: `src/services/criticalAlarm.js`
+- [x] `AlarmService` foreground service (BAL workaround Android 14+)
+- [x] Agrupamento doses mesmo horário (1 alarme único + lista, vs N simultâneos)
+- [x] Modal queue (tap notif abre fila Ignorar/Pular/Tomada)
+- [x] Tap notif tray → MainActivity → modal queue
+- [x] Re-agendar alarmes após reboot (`BootReceiver` + BOOT_COMPLETED + LOCKED_BOOT_COMPLETED + MY_PACKAGE_REPLACED)
+- [x] Testar device bloqueado → tela cheia + som (validado emulador 2026-04-27)
+- [x] Testar app killed → alarme dispara fullscreen
+- [ ] `dosy_alarm.mp3` custom em `res/raw/` (opcional, fallback usa default — pós-launch)
+- [x] Testar device físico: locked + app killed + silenciado + adiar 10min (concluído 2026-04-28)
+- [ ] Testar device físico: DND nativo Android (alarme bypass via `ACCESS_NOTIFICATION_POLICY`)
+- [ ] Testar device físico: após reboot (BootReceiver re-agenda)
+- [ ] Testar device físico: DND interno Dosy (janela 23:00-07:00 em Settings → alarme silencia, push notif passa)
 
 ---
 
-### 0.7 Proteção dos Dados Locais (Modo Demo)
+## FASE 3 — Sistema Notificações Centralizado ✅ CONCLUÍDA
 
-**Problema:** Modo demo armazena dados de saúde (pacientes, doses, medicamentos) em `localStorage` sem criptografia. `localStorage` é acessível por qualquer script da mesma origem.
+> Refator v1.0.5.5: toda lógica de scheduling, FCM, prefs, alarme, DND e resumo diário consolidada em `src/services/notifications.js` (single source of truth, ~430 linhas).
 
-**Mitigações:**
-1. Exibir aviso claro ao usuário: dados demo não são persistidos de forma segura
-2. Limpar dados demo automaticamente ao fechar a aba (usar `sessionStorage` em vez de `localStorage` para modo demo)
-3. Para versão APK: não usar `localStorage` — usar Capacitor Preferences (que usa SharedPreferences no Android, que tem proteção sandboxed por app)
-
-```javascript
-// src/services/demoStorage.js
-// Trocar localStorage por sessionStorage no modo demo
-const storage = isDemoMode ? sessionStorage : localStorage
-```
-
----
-
-### 0.8 LGPD — Direito de Acesso e Portabilidade (Art. 18)
-
-**Usuário tem direito de:**
-- Saber quais dados estão armazenados
-- Exportar seus dados (portabilidade)
-- Corrigir dados incorretos
-- Revogar consentimento
-
-**Implementar em `src/pages/Settings.jsx`:**
-
-```javascript
-// Exportar todos os dados do usuário
-async function exportUserData() {
-  const { data: { user } } = await supabase.auth.getUser()
-  const [patients, treatments, doses, subs] = await Promise.all([
-    supabase.schema('medcontrol').from('patients').select('*').eq('userId', user.id),
-    supabase.schema('medcontrol').from('treatments').select('*'),  // via join
-    supabase.schema('medcontrol').from('doses').select('*'),
-    supabase.schema('medcontrol').from('subscriptions').select('tier, tier_expires').eq('user_id', user.id)
-  ])
-  const dump = {
-    exportedAt: new Date().toISOString(),
-    user: { id: user.id, email: user.email, createdAt: user.created_at },
-    patients: patients.data,
-    treatments: treatments.data,
-    doses: doses.data,
-    subscription: subs.data?.[0]
-  }
-  const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `dosy-meus-dados-${Date.now()}.json`
-  a.click()
-}
-```
+- [x] Criar `src/services/notifications.js` consolidado
+- [x] Helpers puros: `loadPrefs`, `inDnd`, `groupByMinute`, `filterUpcoming`
+- [x] `rescheduleAll({ doses, patients, prefsOverride })` idempotente
+- [x] `cancelAll()` (alarms + local notifs)
+- [x] `subscribeFcm()` / `unsubscribeFcm()` com perm + FCM register + persist token
+- [x] React hook `useNotifications()` (state + callbacks)
+- [x] `usePushNotifications.js` virou re-export shim
+- [x] Regras hierárquicas: push (master) → criticalAlarm (sub) → DND (filtro alarm-only) → dailySummary (independente)
+- [x] Toggle critical OFF cancela alarmes pendentes (era bug)
+- [x] Push notif scheduled em paralelo com alarme (era bug)
+- [x] Daily summary roda mesmo sem doses hoje (era bug Dashboard)
+- [x] DND prefs: `dndEnabled`, `dndStart`, `dndEnd` (suporta wrap meia-noite)
+- [x] Settings UI: section "Não perturbe" com toggle + 2 time pickers
+- [x] AppHeader overdue badge: drop `to` cap, expand `from` 90d
+- [x] Permissions onboarding re-aparece após update (storage versionado por APP_VERSION)
 
 ---
 
-### 0.9 LGPD — Direito ao Esquecimento (Art. 18, VI)
+## FASE 4 — Polimento Nativo (parcial)
 
-**Usuário tem direito de excluir TODOS os seus dados.**
+### 4.1 Export PDF/CSV ✅ CONCLUÍDA
+- [x] Instalar `jspdf` + `html2canvas`
+- [x] Substituir `window.print()` por jsPDF (native: html2canvas → jsPDF → Filesystem.Cache → Share)
+- [x] Instalar `@capacitor/filesystem` + `@capacitor/share`
+- [x] Adaptar export CSV para Android
 
-**Criar RPC no Supabase:**
-```sql
-CREATE OR REPLACE FUNCTION medcontrol.delete_my_account()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_user_id uuid := auth.uid();
-  v_patient_ids uuid[];
-BEGIN
-  -- Coletar IDs dos pacientes do usuário
-  SELECT ARRAY(SELECT id FROM medcontrol.patients WHERE "userId" = v_user_id)
-  INTO v_patient_ids;
+### 4.2 Offline & Network ✅ CONCLUÍDA
+- [x] Offline mutations + cache persistence (TanStack PersistQueryClient + retry exponential 3x)
+- [x] Instalar `@capacitor/network`
+- [x] `src/hooks/useOnlineStatus.js`
 
-  -- Deletar em cascata
-  DELETE FROM medcontrol.push_subscriptions WHERE "userId" = v_user_id;
-  DELETE FROM medcontrol.doses WHERE "patientId" = ANY(v_patient_ids);
-  DELETE FROM medcontrol.sos_doses WHERE "patientId" = ANY(v_patient_ids);
-  DELETE FROM medcontrol.sos_rules WHERE "patientId" = ANY(v_patient_ids);
-  DELETE FROM medcontrol.treatments WHERE "patientId" = ANY(v_patient_ids);
-  DELETE FROM medcontrol.patients WHERE "userId" = v_user_id;
-  DELETE FROM medcontrol.subscriptions WHERE user_id = v_user_id;
+### 4.3 Ads ✅ CONCLUÍDA
+- [x] Instalar `@capacitor-community/admob`
+- [x] `AdBanner.jsx` condicional AdSense (web) / AdMob (nativo)
+- [x] AdMob singleton TOP_CENTER overlay
+- [x] AdBanner in-flow em todas pages internas
 
-  -- Deletar a conta no auth (via admin API — chamar via Edge Function)
-  -- A deleção do auth.users deve ser feita pela Edge Function com service_role key
-END;
-$$;
-```
+### 4.4 Visual & UX ✅ CONCLUÍDA (rodada v1.0.5)
+- [x] Design system centralizado em `src/styles/theme.css`
+- [x] Tailwind config consume CSS vars
+- [x] Border radius -30% global
+- [x] Header padding +50%
+- [x] Espaçamento card-to-card uniforme (4px)
+- [x] Ícones flat lucide em ~25 componentes
+- [x] PatientPicker dropdown searchable
+- [x] Dark mode brand opacity bug fix (RGB triplet vars)
+- [x] FilterBar sticky offset com safe-area
+- [x] DoseCard refactor (outer wrapper assume border/radius/shadow)
 
-**Edge Function `delete-account`:**
-```typescript
-// supabase/functions/delete-account/index.ts
-import { createClient } from '@supabase/supabase-js'
+### 4.5 StatusBar + Deep Links + Update Banner ✅ CONCLUÍDA
+- [x] StatusBar dark `#0d1535` na inicialização
+- [x] Deep links em AndroidManifest.xml
+- [x] `useAppUpdate` hook + `UpdateBanner` component
+- [x] Settings botão "Atualizar" com URL absoluta Vercel
+- [x] UpdateBanner safe-top
+- [x] Versão visível no BottomNav
 
-const adminClient = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!  // service_role — nunca expor no frontend
-)
-
-Deno.serve(async (req) => {
-  // Verificar JWT do usuário logado
-  const jwt = req.headers.get('Authorization')?.replace('Bearer ', '')
-  const { data: { user }, error } = await adminClient.auth.getUser(jwt)
-  if (error || !user) return new Response('Unauthorized', { status: 401 })
-
-  // Deletar dados do schema
-  await adminClient.rpc('delete_my_account')
-
-  // Deletar conta do auth
-  await adminClient.auth.admin.deleteUser(user.id)
-
-  return new Response(JSON.stringify({ ok: true }))
-})
-```
-
-**Botão em Settings:**
-```jsx
-<button onClick={handleDeleteAccount} className="btn-danger w-full">
-  🗑️ Excluir minha conta e todos os dados
-</button>
-```
+### 4.6 Assets ícone & splash ✅ CONCLUÍDA
+- [x] Criar `resources/icon.png` (1024×1024 RGBA)
+- [x] Criar `resources/splash.png` (2732×2732 RGBA)
+- [x] Criar `resources/icon-foreground.png` (1024×1024 RGBA, adaptive icon)
+- [x] Executar `npx @capacitor/assets generate --android` — 86 assets gerados (mdpi→xxxhdpi + dark mode + landscape)
 
 ---
 
-### 0.10 LGPD — Consentimento Explícito no Cadastro (Art. 7, I)
+## FASE 5 — Auditorias Read-Only ✅ CONCLUÍDA
 
-**Problema:** Cadastro atual não coleta consentimento explícito para tratamento de dados de saúde.
+> Bateria de 7 auditorias estáticas. Sem mudanças de código. Geram docs em `docs/audits/` com gaps + recomendações priorizadas. Achados consolidados nas FASES 6-9 abaixo.
 
-**Adicionar checkbox no formulário de cadastro:**
-```jsx
-<label className="flex items-start gap-2 text-sm">
-  <input
-    type="checkbox"
-    required
-    checked={consent}
-    onChange={(e) => setConsent(e.target.checked)}
-    className="mt-0.5"
-  />
-  <span>
-    Li e aceito a{' '}
-    <a href="/privacidade" className="text-brand-600 underline">Política de Privacidade</a>
-    {' '}e consinto com o tratamento dos meus dados de saúde conforme a LGPD.
-  </span>
-</label>
-```
+### 5.1 Código & arquitetura ✅
+> [`docs/audits/Auditoria-4.5.1.md`](./docs/audits/Auditoria-4.5.1.md). Score 5.5/10. 17 gaps. Top: bundle 716KB sem code-split, ZERO testes, 12 vulns npm.
 
-Registrar o consentimento com timestamp no Supabase:
-```sql
-ALTER TABLE medcontrol.subscriptions
-  ADD COLUMN consent_at timestamptz,
-  ADD COLUMN consent_version text DEFAULT '1.0';
-```
+### 5.2 DB schema + RLS ✅
+> [`docs/audits/Auditoria-4.5.2.md`](./docs/audits/Auditoria-4.5.2.md). Score 7/10. RLS sólido mas anon tem TODOS grants em 10/11 tabelas (P0 defense-in-depth).
+
+### 5.3 UX & A11y ✅
+> [`docs/audits/Auditoria-4.5.3.md`](./docs/audits/Auditoria-4.5.3.md). Score 4/10. ZERO `:focus-visible`, ZERO focus trap, 16 botões <44px, ~50 icon-buttons sem aria-label.
+
+### 5.4 Segurança mobile ✅
+> [`docs/audits/Auditoria-4.5.4.md`](./docs/audits/Auditoria-4.5.4.md). Score 6/10. **CRÍTICO:** `minifyEnabled false`, ZERO FLAG_SECURE em telas médicas, sem mask recents.
+
+### 5.5 Performance ✅
+> [`docs/audits/Auditoria-4.5.5.md`](./docs/audits/Auditoria-4.5.5.md). Score 4/10. jspdf+html2canvas 590KB eager, ZERO `React.lazy`, ZERO virtualização.
+
+### 5.6 Tests & CI ✅
+> [`docs/audits/Auditoria-4.5.6.md`](./docs/audits/Auditoria-4.5.6.md). Score 2/10. ZERO testes, sem ESLint/Prettier, CI sem lint+test+audit.
+
+### 5.7 Observability ✅
+> [`docs/audits/Auditoria-4.5.7.md`](./docs/audits/Auditoria-4.5.7.md). Score 5/10. Sentry integrado mas sem source maps, sem release tag, sem ErrorBoundary. ZERO PostHog.
+
+**Validação FASE 5:** ✅ todas 7 auditorias rodadas. Achados se propagam pras FASES 6-9.
 
 ---
 
-### 0.11 LGPD — Retenção de Dados (Art. 15)
+## FASE 6 — Migrations Versionadas (Supabase CLI) ✅ CONCLUÍDA
 
-**Política:** Dados devem ser retidos apenas enquanto necessário para a finalidade.
+> Forward-only migrations via Management API (Docker dispensável). Baseline implícito documentado em `docs/audits/Auditoria-4.5.2.md`.
 
-**Implementar:**
-1. Usuários inativos há +2 anos → enviar email de aviso antes de deletar
-2. Doses com status `done`/`skipped` mais antigas que 3 anos → podem ser anonimizadas
-3. Logs de auditoria → reter por 1 ano (requisito legal)
+- [x] Supabase CLI 2.90 instalado (via Scoop, já estava)
+- [x] `supabase init` rodado — `supabase/config.toml` criado, schema `medcontrol` adicionado
+- [x] `supabase link --project-ref guefraaqbkcehofchnrc`
+- [ ] ~~`supabase db pull`~~ — exige Docker Desktop ou DB password. Skipped (forward-only approach)
+- [x] `docs/db-migrations.md` documenta fluxo + regras + 3 caminhos de aplicação
+- [x] Pasta `supabase/migrations/` criada
+- [x] Script `tools/apply-migration.cjs` — aplica .sql via Management API (sem Docker)
+- [x] Regra documentada: ZERO edits diretos em prod schema daqui pra frente
 
-**Criar Scheduled Job no Supabase (pg_cron):**
-```sql
--- Anonimizar doses muito antigas (preserva histórico sem PII linkável)
-SELECT cron.schedule(
-  'anonymize-old-doses',
-  '0 3 * * 0',  -- toda domingo 3h
-  $$
-    UPDATE medcontrol.doses
-    SET observation = '[anonimizado]'
-    WHERE "scheduledAt" < NOW() - INTERVAL '3 years'
-      AND observation IS NOT NULL
-      AND observation != '[anonimizado]'
-  $$
-);
-```
+**Validação 6:** ✅ infraestrutura migrations pronta. FASES 7+8 podem entrar via migrations versionadas em `supabase/migrations/`.
 
 ---
 
-### 0.12 Rate Limiting & Proteção Anti-Abuse
+## FASE 7 — P0 Quick Wins ✅ CONCLUÍDA
 
-**Problema:** Edge Functions sem rate limiting podem ser abusadas.
+### 7.1 DB defense-in-depth ✅
+- [x] `20260428142412_revoke_anon_grants.sql` aplicada — anon agora 0 grants em medcontrol (Aud 5.2 G1)
+- [x] `20260428142413_force_rls_user_prefs.sql` aplicada — FORCE_RLS em user_prefs (Aud 5.2 G2)
+- [x] `20260428142414_drop_overload_create_treatment.sql` aplicada — overload V1 dropado (Aud 5.2 G4)
+- [x] Verificação via `audit-db.cjs`: anon=0 grants, user_prefs.relforcerowsecurity=true, create_treatment_with_doses count=1
 
-**Supabase já oferece rate limiting básico no auth** (configurável no Dashboard).
+### 7.2 Build & bundle ✅
+- [x] `minifyEnabled true` + `shrinkResources true` em `build.gradle` release (Aud 5.4 G1)
+- [x] `proguard-rules.pro` reescrito com keep rules pra Capacitor + plugins + Sentry + Firebase + custom CriticalAlarm
+- [x] Strip console.log/warn/info/debug via Terser `pure_funcs` em `vite.config.js` (Aud 5.1 G5). console.error preservado pra Sentry.
+- [x] Bundle 716KB → 698KB (Terser + console strip)
+- [ ] ~~`npm audit fix`~~ — 12 vulns persistem em devDeps (`@capacitor/assets` chain). Zero risco runtime, dev-only. Aceito.
 
-**Para Edge Functions, adicionar via upstash/redis ou lógica simples:**
-```typescript
-// Verificar frequência de chamadas na função notify-doses
-// Máximo: 1 chamada por usuário por minuto
-const rateLimitKey = `rate:${user.id}:notify`
-// Usar KV store do Deno Deploy ou tabela no Supabase
-```
+### 7.3 Sentry ✅
+- [x] `release: dosy@${__APP_VERSION__}` no Sentry init em `main.jsx` (Aud 5.7 G3)
 
-**No Supabase Auth (Dashboard → Authentication → Settings):**
-- Habilitar proteção contra bots
-- Configurar rate limit de signup (evitar abuso)
-- Ativar email confirmation obrigatório
+### 7.4 A11y quick wins ✅
+- [x] `:focus-visible` global em `index.css` com outline brand (Aud 5.3 G1)
+- [x] `inputMode` em campos numéricos: TreatmentForm/PatientForm/SOS/Admin (numeric/decimal conforme campo) (Aud 5.3 G5)
 
----
-
-### 0.13 Índices Compostos no Banco (Performance + Segurança)
-
-**Problema:** Sem índices adequados, queries com filtros de usuário + data fazem full table scan. Em escala, isso vaza timing information e abre DoS via queries lentas.
-
-```sql
--- Dashboard query: doses por patientId + scheduledAt
-CREATE INDEX IF NOT EXISTS doses_patient_scheduled_idx
-  ON medcontrol.doses ("patientId", "scheduledAt");
-
--- Filtro por status + scheduledAt (overdue, pending)
-CREATE INDEX IF NOT EXISTS doses_patient_status_idx
-  ON medcontrol.doses ("patientId", status, "scheduledAt");
-
--- Treatments por paciente
-CREATE INDEX IF NOT EXISTS treatments_patient_status_idx
-  ON medcontrol.treatments ("patientId", status);
-
--- Push subs por userId (lookup na hora de enviar notificações)
-CREATE INDEX IF NOT EXISTS push_subs_user_idx
-  ON medcontrol.push_subscriptions ("userId");
-
--- SOS rules lookup (medName case-insensitive)
-CREATE INDEX IF NOT EXISTS sos_rules_patient_med_idx
-  ON medcontrol.sos_rules ("patientId", lower(med_name));
-```
+**Validação 7:** ✅ DB integro defense-in-depth. APK release vai reduzir com ProGuard (validar pós Studio build). Build prod 698KB. Sentry events com release tag. Focus-visible visível em keyboard nav.
 
 ---
 
-### 0.14 LGPD — Data Minimization & RIPD (Art. 37-38)
+## FASE 8 — Hardening DB (constraints + triggers + policies refinadas)
 
-**Data Minimization:** Avaliar campos que coletam mais dados do que necessário.
+> Após 7 quick wins, fechar gaps de schema integrity. Vinda Aud 5.2.
 
-- Campo `observation` em doses: texto livre — pode conter diagnósticos, histórico médico sensível. Considerar limite de caracteres (500) e aviso ao usuário de não incluir dados clínicos desnecessários.
-- `userAgent` em `push_subscriptions`: armazenado completo (até 250 chars). Guardar apenas plataforma (`Android/iOS/Web`) para minimizar PII coletada.
+### 8.1 CHECK constraints
+- [ ] `treatments`: `intervalHours > 0`, `durationDays > 0 AND durationDays <= 365`, `length(medName) <= 200`, `length(unit) <= 100` (Aud 5.2 G6)
+- [ ] `sos_rules`: `minIntervalHours > 0`, `maxDosesIn24h > 0`, `length(medName) <= 200` (G7)
+- [ ] `patients`: `length(name) <= 200`, `length(condition) <= 500`, `length(doctor) <= 200`, `length(allergies) <= 500`, `age >= 0 AND age <= 150`, `weight > 0 AND weight < 1000` (G8)
+- [ ] `doses`: `length(medName) <= 200`, `length(unit) <= 100`
 
-**RIPD (Relatório de Impacto à Proteção de Dados):**
-Manter registro interno das Edge Functions e dados PII processados (obrigatório se a ANPD solicitar):
+### 8.2 Triggers cross-FK ownership
+- [ ] Trigger `validate_dose_treatment_match` BEFORE INSERT/UPDATE em `doses`: `treatment.patientId == dose.patientId` quando `treatmentId NOT NULL` (Aud 5.2 G5)
 
-```
-notify-doses     → processa: userId, medName, unit, scheduledAt
-delete-account   → processa: todos os dados do usuário (exclusão)
-admin_grant_tier → processa: userId, tier, expiry (admin only)
-```
+### 8.3 Policies refinadas
+- [ ] Recriar policies com `TO authenticated` explícito (todas tabelas) (Aud 5.2 G3)
+- [ ] Splitar `cmd=ALL` policies em 4 (push_subs, user_prefs, subscriptions admin, security_events admin) (G9)
 
----
+### 8.4 Pen test interno
+- [ ] User A tenta SQL/PostgREST direto contra dados user B → bloqueado em todos cenários
+- [ ] Tentar bypass triggers (SOS direct insert, dose-treatment mismatch)
+- [ ] Documentar resultado em `docs/audits/pentest-interno.md`
 
-### 0.15 Logging de Eventos de Segurança
-
-**Para auditoria LGPD e detecção de anomalias:**
-
-```sql
-CREATE TABLE medcontrol.security_events (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     uuid REFERENCES auth.users(id),
-  event_type  text NOT NULL,  -- 'login', 'logout', 'data_export', 'account_delete', 'subscription_change'
-  ip_address  text,
-  user_agent  text,
-  metadata    jsonb,
-  created_at  timestamptz DEFAULT now()
-);
-
--- RLS: usuário só vê seus próprios eventos
-ALTER TABLE medcontrol.security_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users see own events"
-  ON medcontrol.security_events FOR SELECT
-  USING (auth.uid() = user_id);
--- INSERT apenas via service_role (Edge Functions)
-```
+**Validação 8:** todas CHECKs aplicadas. Trigger valida cross-FK. Policies com role explícito. Pen test interno passa.
 
 ---
 
-### 0.14 Mover Lógica de Negócio Sensível para o Servidor
+## FASE 9 — Tests Setup (estabelece infra antes de refactors)
 
-> **Contexto:** Atualmente várias regras de negócio críticas são validadas apenas no cliente (JavaScript). Um atacante que envie requisições diretamente para a API do Supabase (via `curl`, Postman, ou script) **bypassa completamente** essas validações. O banco aceita qualquer INSERT/UPDATE que passe no RLS — sem saber que a regra de negócio foi violada.
+> CRÍTICO rodar ANTES das FASES 10-11 (refactors grandes). Tests pegam regressões antes de chegar em prod. Vinda Aud 5.6.
 
----
+### 9.1 Lint & format infra
+- [ ] Instalar ESLint + plugin React + Prettier
+- [ ] `.eslintrc.cjs` + `.prettierrc` config
+- [ ] Husky + lint-staged pre-commit
+- [ ] `npm run lint` no CI (`ci.yml`)
 
-#### 0.14.1 — CRÍTICO: Validação SOS não existe no servidor
+### 9.2 Vitest setup
+- [ ] Instalar Vitest + `@testing-library/react` + `@testing-library/jest-dom` + `@vitest/coverage-v8`
+- [ ] Config `vitest.config.js` (jsdom env, setup file, coverage v8)
+- [ ] Script `npm test` + `npm run test:coverage`
+- [ ] CI `ci.yml`: step `npm test` (falha em red)
 
-**Problema:** `validateSos()` em `dosesService.js` verifica intervalo mínimo e máximo de doses SOS **só no frontend**. A inserção em seguida é um `INSERT` direto na tabela `doses`. Qualquer requisição direta à API ignora a validação.
+### 9.3 Unit tests críticos (saúde — alto risco)
+- [ ] `utils/dateUtils.test.js` (formatTime, relativeLabel, edge cases timezone)
+- [ ] `utils/generateDoses.test.js` (mode=times + mode=interval, durationDays, edge cases meia-noite)
+- [ ] `utils/statusUtils.test.js`
+- [ ] `utils/tierUtils.test.js`
+- [ ] `services/dosesService.test.js` (`validateSos` — minInterval, maxIn24h, edge cases)
+- [ ] `services/notifications.test.js` (`inDnd` wrap meia-noite, `groupByMinute`, `filterUpcoming`, `doseIdToNumber` collision)
 
-```
-// Atacante pode fazer isso diretamente:
-POST /rest/v1/doses
-{ type: 'sos', medName: 'Morfina', patientId: '...', status: 'done', ... }
-// → Inserido sem checar minIntervalHours nem maxDosesIn24h
-```
+### 9.4 Integration tests
+- [ ] Hooks: `useDoses` com mock Supabase (confirm/skip/undo cache update)
+- [ ] Hooks: `useUserPrefs` (DB sync + localStorage cache)
 
-**Solução:** Criar RPC `register_sos_dose` que valida as regras antes de inserir:
+### 9.5 E2E mínimo viável
+- [ ] Playwright setup
+- [ ] Happy path: login → dashboard → criar treatment → ver doses
+- [ ] Happy path: dose → confirm → status update
 
-```sql
-CREATE OR REPLACE FUNCTION medcontrol.register_sos_dose(
-  p_patient_id  uuid,
-  p_med_name    text,
-  p_unit        text,
-  p_scheduled_at timestamptz,
-  p_observation text DEFAULT ''
-)
-RETURNS medcontrol.doses
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_rule        medcontrol.sos_rules%ROWTYPE;
-  v_last_dose   timestamptz;
-  v_count_24h   int;
-  v_diff_hours  float;
-  v_new_dose    medcontrol.doses%ROWTYPE;
-BEGIN
-  -- 1. Verificar que o paciente pertence ao usuário logado
-  IF NOT EXISTS (
-    SELECT 1 FROM medcontrol.patients
-    WHERE id = p_patient_id AND "userId" = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'PACIENTE_NAO_AUTORIZADO';
-  END IF;
+### 9.6 CI security & deps
+- [ ] `npm audit --audit-level=high` no CI (falha build)
+- [ ] Dependabot / Snyk config
 
-  -- 2. Buscar regra de segurança para o medicamento
-  SELECT * INTO v_rule
-  FROM medcontrol.sos_rules
-  WHERE "patientId" = p_patient_id
-    AND lower(med_name) = lower(p_med_name)
-  LIMIT 1;
-
-  IF FOUND THEN
-    -- 3. Verificar intervalo mínimo
-    IF v_rule.min_interval_hours IS NOT NULL THEN
-      SELECT MAX(actual_time) INTO v_last_dose
-      FROM medcontrol.doses
-      WHERE "patientId" = p_patient_id
-        AND lower(med_name) = lower(p_med_name)
-        AND status = 'done';
-
-      IF v_last_dose IS NOT NULL THEN
-        v_diff_hours := EXTRACT(EPOCH FROM (p_scheduled_at - v_last_dose)) / 3600;
-        IF v_diff_hours < v_rule.min_interval_hours THEN
-          RAISE EXCEPTION 'INTERVALO_MINIMO_NAO_RESPEITADO: %h', v_rule.min_interval_hours;
-        END IF;
-      END IF;
-    END IF;
-
-    -- 4. Verificar máximo de doses em 24h
-    IF v_rule.max_doses_in_24h IS NOT NULL THEN
-      SELECT COUNT(*) INTO v_count_24h
-      FROM medcontrol.doses
-      WHERE "patientId" = p_patient_id
-        AND lower(med_name) = lower(p_med_name)
-        AND status = 'done'
-        AND actual_time >= (p_scheduled_at - INTERVAL '24 hours');
-
-      IF v_count_24h >= v_rule.max_doses_in_24h THEN
-        RAISE EXCEPTION 'LIMITE_24H_ATINGIDO: %', v_rule.max_doses_in_24h;
-      END IF;
-    END IF;
-  END IF;
-
-  -- 5. Inserir dose SOS
-  INSERT INTO medcontrol.doses
-    ("patientId", med_name, unit, scheduled_at, actual_time, status, type, observation, "treatmentId")
-  VALUES
-    (p_patient_id, p_med_name, p_unit, p_scheduled_at, p_scheduled_at, 'done', 'sos', p_observation, NULL)
-  RETURNING * INTO v_new_dose;
-
-  RETURN v_new_dose;
-END;
-$$;
-```
-
-**Frontend:** Substituir `supabase.from('doses').insert(...)` por `supabase.rpc('register_sos_dose', {...})` em `dosesService.js`.
+**Validação 9:** ≥90% cobertura em utils núcleo. ≥70% no resto. CI verde 5 dias consecutivos. ESLint sem errors.
 
 ---
 
-#### 0.14.2 — CRÍTICO: `admin_grant_tier` acessível por qualquer usuário autenticado
+## FASE 10 — Quality Refactor (resilência client)
 
-**Problema:** `grantTier()` em `subscriptionService.js` chama `supabase.rpc('admin_grant_tier', ...)` diretamente do frontend. Se a RPC não verificar server-side que o chamador é admin, qualquer usuário pode executar:
+> Com tests instalados (FASE 9), refactor agora é seguro. Vinda Aud 5.1, 5.5, 5.7.
 
-```
-POST /rest/v1/rpc/admin_grant_tier
-Authorization: Bearer <token_de_qualquer_usuario>
-{ "target_user": "meu_proprio_id", "new_tier": "pro" }
-// → Upgrade gratuito para PRO
-```
+### 10.1 ErrorBoundary + source maps
+- [ ] `<Sentry.ErrorBoundary>` no `main.jsx` wrappando `<App />` + fallback amigável (Aud 5.7 G2)
+- [ ] `@sentry/vite-plugin` upload source maps no Vercel build (Aud 5.6 G4 / 5.7 G1)
+- [ ] Validar: forçar erro → Sentry mostra stack decoded com versão correta
 
-**Solução:** A RPC deve verificar o papel antes de executar (ver seção 0.3). Garantir que a verificação existe e está funcionando. Testar com usuário não-admin via Postman/curl.
+### 10.2 Code splitting & dynamic imports
+- [ ] `vite.config.js` `manualChunks` separar vendor/react/supabase (Aud 5.5 G3)
+- [ ] Code splitting routes: `React.lazy` + `<Suspense>` em todas pages do `App.jsx` (Aud 5.5 G1)
+- [ ] Dynamic import `jspdf` + `html2canvas` dentro do handler de export em `Reports.jsx` (Aud 5.5 G2)
+- [ ] Bundle alvo: ≤500KB main + chunks por rota
 
----
+### 10.3 Component refactor
+- [ ] Refatorar `Settings.jsx` (465 LOC) em sub-componentes: `SettingsAppearance`, `SettingsNotifs`, `SettingsAccount`, `SettingsAbout`, `SettingsAdmin` (Aud 5.1 G8)
+- [ ] React.memo em `DoseCard`, `PatientCard`, `Icon`, `Stat` (Aud 5.5 G5)
+- [ ] Lazy load avatares (`<img loading="lazy">` em PatientCard) (Aud 5.5 G6)
 
-#### 0.14.3 — ALTO: Geração e inserção de doses é client-side e não-atômica
-
-**Problema:** `createTreatmentWithDoses()` em `treatmentsService.js`:
-1. Insere o treatment no DB
-2. Chama `generateDoses()` no cliente (JavaScript puro)
-3. Insere as doses em bulk
-
-Problemas:
-- **Não é atômico:** se o browser fechar entre os passos 1 e 3, o tratamento fica sem doses
-- **Sem limite:** atacante pode enviar `durationDays: 9999` gerando 100k+ doses de uma vez (DoS do banco)
-- A mesma operação de regenerar doses em `updateTreatment` tem os mesmos problemas
-
-**Solução:** Criar RPC `create_treatment_with_doses(payload jsonb)` que executa tudo em uma transação e valida limites:
-
-```sql
-CREATE OR REPLACE FUNCTION medcontrol.create_treatment_with_doses(payload jsonb)
-RETURNS medcontrol.treatments
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_treatment  medcontrol.treatments%ROWTYPE;
-  v_duration   int;
-  v_max_doses  int := 1000; -- limite de segurança
-BEGIN
-  -- Validar que patientId pertence ao usuário
-  IF NOT EXISTS (
-    SELECT 1 FROM medcontrol.patients
-    WHERE id = (payload->>'patientId')::uuid
-      AND "userId" = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'PACIENTE_NAO_AUTORIZADO';
-  END IF;
-
-  -- Limitar duração máxima (evitar DoS)
-  v_duration := LEAST(COALESCE((payload->>'durationDays')::int, 90), 365);
-
-  -- Inserir treatment
-  INSERT INTO medcontrol.treatments (...) VALUES (...) RETURNING * INTO v_treatment;
-
-  -- Gerar doses via função SQL (lógica de generateDoses migrada para plpgsql)
-  -- Verificar que total de doses não excede v_max_doses
-  -- Inserir doses em bloco
-
-  RETURN v_treatment;
-END;
-$$;
-```
+**Validação 10:** bundle main ≤500KB. ErrorBoundary captura erro forçado. Source maps em Sentry decodificam stack. Tests da FASE 9 continuam green.
 
 ---
 
-#### 0.14.4 — ALTO: DELETE de doses e tratamentos não é atômico
+## FASE 11 — Mobile Security Hardening
 
-**Problema:** `deleteTreatment()` faz dois DELETEs separados do cliente:
-```js
-await supabase.from('doses').delete().eq('treatmentId', id)
-await supabase.from('treatments').delete().eq('id', id)
-```
-Se o primeiro DELETE passar e o segundo falhar, ficam doses órfãs. Se o atacante abortar a requisição entre as duas chamadas, o estado fica inconsistente.
+> Após quality refactor estável. Vinda Aud 5.4.
 
-**Solução:** Adicionar `ON DELETE CASCADE` na FK de `doses.treatmentId → treatments.id` no banco, ou criar RPC `delete_treatment(p_id uuid)` que faz tudo em uma transação.
+### 11.1 ProGuard + screens
+- [ ] Validar/escrever `proguard-rules.pro` (Capacitor + Sentry + Supabase keep rules) — testar APK release pós-minify
+- [ ] FLAG_SECURE em telas sensíveis: `DoseModal`, `PatientDetail`, `Reports`, `DoseHistory` (Aud 5.4 G2)
+  - Implementação: hook `useFlagSecure()` + plugin Capacitor custom OR `@capacitor-community/privacy-screen`
+- [ ] Plugin privacy-screen / nativo: mask em recents view (G3)
 
-```sql
--- Opção 1: FK cascade (mais simples, preferida)
-ALTER TABLE medcontrol.doses
-  DROP CONSTRAINT IF EXISTS doses_treatment_id_fkey,
-  ADD CONSTRAINT doses_treatment_id_fkey
-    FOREIGN KEY ("treatmentId") REFERENCES medcontrol.treatments(id)
-    ON DELETE CASCADE;
+### 11.2 Network & integrity
+- [ ] Cert pinning `dosy-teal.vercel.app` em `network_security_config.xml` (G5)
+- [ ] Google Play Integrity API (`@capgo/capacitor-play-integrity` ou nativo) (G6)
+- [ ] AdMob: confirmar prod ID via env, remover hardcoded test ID fallback do bundle prod (G13)
 
--- Com isso, deletar o treatment já deleta as doses automaticamente.
-```
+### 11.3 User-side security
+- [ ] Detecção root/jailbreak: plugin `capacitor-jailbreak-root-detection` + warn user (G4)
+- [ ] Biometria opcional pra abrir app: `@capacitor-community/native-biometric` + toggle Settings (G7)
+- [ ] Auto-lock após N min em background — re-autenticar via biometria/senha (G8)
 
----
-
-#### 0.14.5 — MÉDIO: Transições de status de dose sem máquina de estados no servidor
-
-**Problema:** `confirmDose`, `skipDose` e `undoDose` fazem UPDATE direto na tabela:
-```js
-await supabase.from('doses').update({ status: 'done' }).eq('id', id)
-```
-Sem verificação server-side:
-- Atacante pode confirmar uma dose que não é dele (depende do RLS)
-- Pode confirmar uma dose já `done` ou `skipped` (status inválido)
-- Pode fazer `undoDose` em dose de 6 meses atrás (sem limite de tempo)
-
-**Solução:** Criar RPCs com validação de transição:
-
-```sql
-CREATE OR REPLACE FUNCTION medcontrol.confirm_dose(
-  p_dose_id uuid,
-  p_actual_time timestamptz DEFAULT now(),
-  p_observation text DEFAULT ''
-)
-RETURNS medcontrol.doses
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE v_dose medcontrol.doses%ROWTYPE;
-BEGIN
-  SELECT * INTO v_dose FROM medcontrol.doses WHERE id = p_dose_id;
-
-  -- Verificar ownership via patient
-  IF NOT EXISTS (
-    SELECT 1 FROM medcontrol.patients p
-    JOIN medcontrol.doses d ON d."patientId" = p.id
-    WHERE d.id = p_dose_id AND (p."userId" = auth.uid() OR EXISTS (
-      SELECT 1 FROM medcontrol.patient_shares
-      WHERE patient_id = p.id AND shared_with = auth.uid()
-    ))
-  ) THEN
-    RAISE EXCEPTION 'SEM_ACESSO';
-  END IF;
-
-  -- Transição válida: somente pending/overdue → done
-  IF v_dose.status NOT IN ('pending', 'overdue') THEN
-    RAISE EXCEPTION 'TRANSICAO_INVALIDA: % -> done', v_dose.status;
-  END IF;
-
-  UPDATE medcontrol.doses
-  SET status = 'done', actual_time = p_actual_time, observation = p_observation
-  WHERE id = p_dose_id
-  RETURNING * INTO v_dose;
-
-  RETURN v_dose;
-END;
-$$;
-```
+**Validação 11:** APK release com obfuscação. Telas médicas não vazam screenshot. Device rooted = warning. Biometria opcional funcional.
 
 ---
 
-#### 0.14.6 — MÉDIO: `patientId` nos INSERTs vem do cliente sem verificação explícita
+## FASE 12 — A11y Remediation
 
-**Problema:** Em `registerSos`, `createTreatmentWithDoses` e outros, o `patientId` é enviado pelo cliente. Se o RLS da tabela `doses`/`treatments` não verificar que o paciente pertence ao usuário logado, um atacante pode inserir dados em pacientes de outros usuários.
+> WCAG AA compliance. Vinda Aud 5.3.
 
-**Verificação necessária:** Confirmar que as políticas RLS nas tabelas `doses` e `treatments` incluem:
-```sql
--- Para INSERT em doses:
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM medcontrol.patients p
-    WHERE p.id = "patientId"
-      AND (p."userId" = auth.uid() OR EXISTS (
-        SELECT 1 FROM medcontrol.patient_shares
-        WHERE patient_id = p.id AND shared_with = auth.uid()
-      ))
-  )
-)
-```
+### 12.1 Foco e navegação
+- [ ] Trap de foco em `BottomSheet` (cyclic Tab) — `focus-trap-react` ou implementação custom (Aud 5.3 G2)
+- [ ] Skip-to-content link no `<main>` (G9)
+- [ ] `aria-current="page"` em BottomNav active (G10)
 
----
+### 12.2 Touch targets & labels
+- [ ] Touch targets <44×44px → aumentar em Header back-btn, FilterBar funil, DoseHistory nav, AppHeader settings, UpdateBanner close (G3)
+- [ ] `aria-label` em ~50 botões só-ícone (audit visual + adicionar one-by-one) (G4)
 
-#### 0.14.7 — BAIXO: `select('*')` expõe todas as colunas
+### 12.3 Forms & feedback
+- [ ] Erros de validação inline próximos ao campo em forms (PatientForm, TreatmentForm, SOS, Settings name update) (G6)
+- [ ] Skeleton screens completos: TreatmentList, Reports, Analytics, SOS, PatientForm, TreatmentForm (G7)
 
-**Problema:** Todos os services usam `.select('*')`. Se uma coluna sensível for adicionada ao schema no futuro (ex: `internal_flag`, `admin_notes`), ela virá automaticamente para o cliente.
+### 12.4 Visual & typo
+- [ ] Subir contraste textos secundários no dark mode (audit com axe DevTools) (G8)
+- [ ] Hierarquia headings: h1 único por page, h2/h3 sub
+- [ ] Suportar Dynamic Type: usar `rem` em vez de `px` onde possível (G12)
 
-**Solução:** Usar colunas explícitas ou criar views com apenas os campos necessários:
-```js
-// Antes:
-supabase.from('doses').select('*')
-
-// Depois:
-supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation, treatmentId')
-```
+**Validação 12:** axe DevTools passa WCAG AA. TalkBack: fluxos críticos navegáveis. Tab + Enter funciona em todos modais.
 
 ---
 
-#### Resumo das Prioridades
+## FASE 13 — Performance Avançada
 
-| # | Problema | Severidade | Bypass possível? |
-|---|---|---|---|
-| 0.14.1 | Validação SOS só no frontend | 🔴 CRÍTICO | Sim — POST direto à API |
-| 0.14.2 | `admin_grant_tier` sem auth server-side | 🔴 CRÍTICO | Sim — RPC direta |
-| 0.14.3 | Geração de doses não-atômica + sem limite | 🟠 ALTO | Sim — DoS + inconsistência |
-| 0.14.4 | DELETE de tratamento não-atômico | 🟠 ALTO | Sim — dados órfãos |
-| 0.14.5 | Transições de status sem validação | 🟡 MÉDIO | Parcial (depende do RLS) |
-| 0.14.6 | `patientId` sem verificação de ownership | 🟡 MÉDIO | Depende do RLS |
-| 0.14.7 | `select('*')` em todos os services | 🟢 BAIXO | Não (mas risco futuro) |
+> Após code splitting básico (FASE 10). Vinda Aud 5.5.
+
+- [ ] Bundle analyzer (`rollup-plugin-visualizer`) — relatório de chunks
+- [ ] Virtualização listas longas (`@tanstack/react-virtual`) em `DoseHistory`, `Patients`, `TreatmentList` (Aud 5.5 G4)
+- [ ] Lighthouse score baseline + alvo ≥90 mobile
+
+**Validação 13:** Lighthouse mobile ≥90. 60fps scroll em 500 doses. Time-to-interactive ≤3s em 3G simulado.
 
 ---
 
-## FASE 1 — Fundação Capacitor
+## FASE 14 — Observability Avançada
 
-**Objetivo:** App abre no Android sem erros. Navegação funciona. Auth funciona.
+> Voar com instrumentos antes de Beta. Vinda Aud 5.7.
 
-### 1.1 Instalar Capacitor
+### 14.1 PostHog
+- [ ] PostHog SDK web + native (`posthog-js` + capacitor wrapper)
+- [ ] Eventos custom críticos:
+  - `dose_confirmed`, `dose_skipped`, `dose_overdue_dismissed`
+  - `alarm_fired`, `alarm_dismissed`, `alarm_snoozed`
+  - `notification_permission_granted/denied`
+  - `paywall_shown`, `paywall_clicked_plan`, `upgrade_complete`, `upgrade_failed`
+  - `share_patient_invite_sent/accepted`
+  - `treatment_created`, `patient_created`, `account_deleted`
+- [ ] Funil paywall: view → click → checkout_started → success/failure
+- [ ] Feature flags via PostHog
 
-```bash
-npm install @capacitor/core @capacitor/cli @capacitor/android
-npm install @capacitor/app @capacitor/status-bar @capacitor/keyboard @capacitor/splash-screen
-npx cap init "Dosy" "com.dosyapp.dosy" --web-dir dist
-npx cap add android
-```
+### 14.2 Sentry alerting
+- [ ] Alertas: crash spike, error rate threshold, Edge Function failures
+- [ ] (opcional) Sentry Replay pra debug visual
 
-### 1.2 `capacitor.config.ts`
+### 14.3 Dashboards launch
+- [ ] DAU, MAU, retention D1/D7/D30
+- [ ] Crash-free rate (alvo ≥99.5%)
+- [ ] ANR rate via Android Vitals export (alvo <0.5%)
+- [ ] Critical alarm enabled rate
+- [ ] Onboarding completion rate
+- [ ] Documentar métricas-alvo em `docs/launch-metrics.md`
 
-Criar na raiz do projeto:
-
-```typescript
-import { CapacitorConfig } from '@capacitor/cli'
-
-const config: CapacitorConfig = {
-  appId: 'com.dosyapp.dosy',
-  appName: 'Dosy',
-  webDir: 'dist',
-  server: {
-    androidScheme: 'https'   // necessário para Supabase auth funcionar em WebView
-  },
-  plugins: {
-    StatusBar: {
-      style: 'dark',
-      backgroundColor: '#0d1535',   // dark navy — mesmo do AppHeader
-      overlaysWebView: false
-    },
-    Keyboard: {
-      resizeOnFullScreen: true      // evita layout quebrado com teclado aberto
-    },
-    SplashScreen: {
-      launchShowDuration: 2000,
-      backgroundColor: '#0d1535',
-      androidSplashResourceName: 'splash',
-      showSpinner: false
-    }
-  }
-}
-export default config
-```
-
-### 1.3 Atualizar `package.json` scripts
-
-```json
-"scripts": {
-  "build:android": "npm run build && npx cap sync android",
-  "open:android": "npx cap open android",
-  "cap:sync": "npx cap sync"
-}
-```
-
-### 1.4 Corrigir autenticação no WebView Android
-
-O Supabase usa `localStorage` para persistir sessão. No Android nativo, `localStorage` é instável (pode ser limpo pelo sistema). Migrar para **Capacitor Preferences** (antigo Storage):
-
-```bash
-npm install @capacitor/preferences
-```
-
-Modificar `src/services/supabase.js`:
-
-```javascript
-import { Preferences } from '@capacitor/preferences'
-
-const CapacitorStorage = {
-  getItem: async (key) => {
-    const { value } = await Preferences.get({ key })
-    return value
-  },
-  setItem: async (key, value) => {
-    await Preferences.set({ key, value })
-  },
-  removeItem: async (key) => {
-    await Preferences.remove({ key })
-  }
-}
-
-export const supabase = createClient(URL, KEY, {
-  auth: {
-    storage: CapacitorStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false   // OBRIGATÓRIO no Android — sem URL redirect
-  },
-  db: { schema: 'medcontrol' }
-})
-```
-
-### 1.5 Tratar botão Voltar do Android
-
-Sem tratamento, o botão voltar fecha o app inesperadamente. Adicionar em `src/App.jsx`:
-
-```javascript
-import { App as CapacitorApp } from '@capacitor/app'
-
-useEffect(() => {
-  const handler = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-    if (canGoBack) {
-      window.history.back()
-    } else {
-      CapacitorApp.exitApp()
-    }
-  })
-  return () => handler.remove()
-}, [])
-```
-
-### 1.6 Reconexão do Realtime ao sair/voltar
-
-O Supabase Realtime desconecta quando Android coloca app em segundo plano. Adicionar em `src/hooks/useRealtime.js`:
-
-```javascript
-import { App as CapacitorApp } from '@capacitor/app'
-
-useEffect(() => {
-  const pause = CapacitorApp.addListener('pause', () => {
-    supabase.removeAllChannels()
-  })
-  const resume = CapacitorApp.addListener('resume', () => {
-    // Resubscreve e invalida queries para dados frescos
-    setupRealtimeChannel()
-    qc.invalidateQueries()
-  })
-  return () => { pause.remove(); resume.remove() }
-}, [])
-```
-
-### 1.7 Secure Storage — Android KeyStore (substituir Capacitor Preferences)
-
-**Problema:** `@capacitor/preferences` armazena dados em SharedPreferences em **texto simples**. Tokens de sessão do Supabase ficam legíveis por qualquer processo com root ou via backup ADB. Para app de saúde (dados categoria especial LGPD), inaceitável.
-
-**Solução:** Usar Android KeyStore via plugin de Secure Storage:
-
-```bash
-npm install @aparajita/capacitor-secure-storage
-```
-
-O plugin usa:
-- **Android:** `EncryptedSharedPreferences` (AES-256-GCM via Android KeyStore, protegida por hardware em dispositivos com TEE)
-- **iOS:** Keychain Services
-- **Web:** localStorage com fallback (não criptografado — exibir aviso no modo web)
-
-**Modificar `src/services/supabase.js`:**
-```javascript
-import { SecureStorage } from '@aparajita/capacitor-secure-storage'
-import { Capacitor } from '@capacitor/core'
-
-// Storage seguro: KeyStore no nativo, localStorage na web
-const SecureStorageAdapter = Capacitor.isNativePlatform() ? {
-  getItem: async (key) => {
-    try { return await SecureStorage.get(key) } catch { return null }
-  },
-  setItem: async (key, value) => {
-    await SecureStorage.set(key, value)
-  },
-  removeItem: async (key) => {
-    try { await SecureStorage.remove(key) } catch {}
-  }
-} : localStorage  // web usa localStorage como antes
-
-export const supabase = createClient(URL, KEY, {
-  auth: {
-    storage: SecureStorageAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false
-  },
-  db: { schema: SCHEMA }
-})
-```
-
-> **Nota:** Substituir `@capacitor/preferences` por `SecureStorage` para todos os dados sensíveis. Dados não-sensíveis (preferências de UI, collapsed state) podem continuar em `localStorage`.
+**Validação 14:** dashboards live. Eventos chegando. Alertas configurados. Pronto pra observar Beta.
 
 ---
 
-### 1.8 SSL Pinning (Proteção contra Man-in-the-Middle)
+## FASE 15 — UX Refinements (P2)
 
-**Problema:** Em redes Wi-Fi públicas ou corporativas com proxy, um atacante pode apresentar um certificado falso e interceptar todas as requisições ao Supabase (login, dados de saúde).
+> Não bloqueia launch mas eleva produto. Pode ir em paralelo com FASE 14 ou pós-Beta.
 
-**Solução:** Configurar o app para aceitar **apenas** o certificado do domínio Supabase:
-
-```bash
-npm install @ionic-native/http
-# ou via capacitor-community:
-npm install @capacitor-community/http
-```
-
-**Configurar em `capacitor.config.ts`:**
-```typescript
-plugins: {
-  CapacitorHttp: {
-    enabled: true  // intercepta fetch/XHR e aplica pinning
-  }
-}
-```
-
-**Adicionar pins em `android/app/src/main/res/xml/network_security_config.xml`:**
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-  <domain-config cleartextTrafficPermitted="false">
-    <domain includeSubdomains="true">supabase.co</domain>
-    <pin-set>
-      <!-- SHA-256 do certificado intermediário da CA do Supabase -->
-      <!-- Gerar com: openssl s_client -connect SEU_PROJETO.supabase.co:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 -->
-      <pin digest="SHA-256">HASH_DO_CERTIFICADO_AQUI</pin>
-    </pin-set>
-  </domain-config>
-</network-security-config>
-```
-
-> ⚠️ **Atenção:** SSL Pinning pode quebrar o app se o certificado do Supabase for renovado sem atualizar o pin. Manter pin do certificado intermediário (mais estável) e sempre incluir um backup pin.
+- [ ] Undo (5s) ao deletar paciente/tratamento (Dosy tem em doses só)
+- [ ] Busca text-search dentro de Histórico
+- [ ] Confirmação dupla ao deletar batch (>10 itens)
+- [ ] Sort configurável de pacientes (drag-and-drop ou ordem manual)
+- [ ] Anexar comprovantes/imagens em doses (foto da medicação) — feature PRO
+- [ ] Avaliar remoção de `mockStore.js` (205 LOC, modo demo) ou lazy-load
+- [ ] Mover `Plan-detalhado-backup.md` + `Plan-pre-reorg-backup.md` pra `docs/archive/`
 
 ---
 
-### 1.9 Build e sync
+## FASE 16 — Monetização Real (In-App Purchase)
 
-```bash
-npm run build
-npx cap sync android
-npx cap open android   # abre Android Studio
-```
+### 16.1 Setup contas + produtos
+- [ ] Criar conta RevenueCat
+- [ ] Criar conta Google Play Console (USD 25)
+- [ ] Criar produtos Play Console: `dosy_pro_monthly` (R$7,90) + `dosy_pro_yearly` (R$49,90)
+- [ ] Conectar Play Console ao RevenueCat via chave de serviço
+- [ ] Trial 7 dias do PRO (configurar Play Console)
 
-Testar no emulador (API 26+) e em dispositivo físico antes de avançar.
+### 16.2 Integração código
+- [ ] Instalar `@revenuecat/purchases-capacitor`
+- [ ] Criar `src/hooks/useInAppPurchase.js`
+- [ ] Atualizar `PaywallModal.jsx` com botões compra reais
+- [ ] Botão "Restaurar compras" (obrigatório Google Play)
+- [ ] Edge Function `validate-purchase` (validar receipt Google Play)
+- [ ] Webhook RevenueCat → Supabase para renovações/cancelamentos (opcional)
 
----
+### 16.3 CTA permanente "Gerenciar plano"
+- [ ] Seção **"Assinatura"** em `Settings.jsx`:
+  - Free: card tier atual + botão "Conhecer PRO" → PaywallModal
+  - PRO/Plus: card tier atual + data renovação + botões "Mudar plano" + "Cancelar" (deep link Play Store)
+- [ ] Reforçar card de tier em `More.jsx` com CTA explícito
+- [ ] Botão "Restaurar compras" na seção
+- [ ] Link "Política de cobrança"
+- [ ] Badge/banner sutil pra Free em pages-chave (quando hit limit)
 
-## FASE 2 — Notificações Nativas (FCM)
+### 16.4 Validação
+- [ ] Fluxo de compra em sandbox Play Store
+- [ ] Restauração de compra
+- [ ] Cancelamento + renovação
 
-**Objetivo:** Substituir Web Push API + VAPID por Firebase Cloud Messaging (FCM). As atuais notificações Web Push não funcionam de forma confiável em WebViews Android.
-
-### 2.1 Por que trocar Web Push por FCM?
-
-| | Web Push (atual) | FCM (necessário) |
-|---|---|---|
-| Funciona em PWA web | ✅ | ✅ |
-| Funciona em Android nativo (Capacitor) | ❌ Não confiável | ✅ |
-| Service Worker necessário | ✅ | Não |
-| Delivery garantido | Parcial | ✅ |
-| Suporte a snooze/ações nativas | Limitado | ✅ |
-
-### 2.2 Setup Firebase
-
-1. Criar projeto no [Firebase Console](https://console.firebase.google.com/)
-2. Adicionar app Android com package `com.dosyapp.dosy`
-3. Baixar `google-services.json` → colocar em `android/app/`
-4. No Firebase Console → Cloud Messaging → copiar Server Key e Sender ID
-
-### 2.3 Instalar pacotes Capacitor
-
-```bash
-npm install @capacitor/push-notifications @capacitor/local-notifications
-```
-
-Adicionar ao `capacitor.config.ts`:
-
-```typescript
-plugins: {
-  PushNotifications: {
-    presentationOptions: ['badge', 'sound', 'alert']
-  },
-  LocalNotifications: {
-    smallIcon: 'ic_stat_dosy',
-    iconColor: '#2B3EDF',    // brand color Dosy
-    sound: 'default'
-  }
-}
-```
-
-### 2.4 Reescrever `src/hooks/usePushNotifications.js`
-
-A hook atual usa a Web Push API. Criar lógica condicional: FCM no nativo, Web Push na web.
-
-```javascript
-import { PushNotifications } from '@capacitor/push-notifications'
-import { LocalNotifications } from '@capacitor/local-notifications'
-import { Capacitor } from '@capacitor/core'
-
-const isNative = Capacitor.isNativePlatform()
-
-export function usePushNotifications() {
-  // Subscribe
-  const subscribe = useCallback(async (advanceMins = 15) => {
-    if (isNative) {
-      // FCM path
-      await PushNotifications.requestPermissions()
-      await PushNotifications.register()
-      // token chegará via listener 'registration' → salvar no Supabase
-    } else {
-      // Web Push path (existente)
-      // ... código atual mantido para web/PWA
-    }
-  }, [])
-
-  // Listener: token FCM pronto
-  useEffect(() => {
-    if (!isNative) return
-    PushNotifications.addListener('registration', async ({ value: deviceToken }) => {
-      if (!hasSupabase) return
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      await supabase.schema('medcontrol').from('push_subscriptions').upsert({
-        userId: user.id,
-        deviceToken,
-        platform: 'android',
-        advanceMins,
-        userAgent: navigator.userAgent.slice(0, 250)
-      }, { onConflict: 'deviceToken' })
-    })
-    return () => PushNotifications.removeAllListeners()
-  }, [])
-
-  // Scheduling local (próximas 24h)
-  const scheduleDoses = useCallback(async (doses, advanceMins) => {
-    if (isNative) {
-      const pending = await LocalNotifications.getPending()
-      const pendingIds = pending.notifications.map(n => n.id)
-      const upcoming = doses
-        .filter(d => d.status === 'pending')
-        .filter(d => new Date(d.scheduledAt) > new Date())
-      await LocalNotifications.schedule({
-        notifications: upcoming.map(d => ({
-          id: parseInt(d.id.replace(/-/g,'').slice(0,8), 16),
-          title: `💊 ${d.medName}`,
-          body: `Hora de tomar ${d.unit}`,
-          schedule: { at: new Date(new Date(d.scheduledAt) - (advanceMins ?? 15) * 60000) },
-          extra: { doseId: d.id }
-        }))
-      })
-    } else {
-      // Web Push path (existente — via SW SCHEDULE_DOSES)
-    }
-  }, [])
-}
-```
-
-### 2.5 Migration banco de dados — `push_subscriptions`
-
-Tabela atual tem `endpoint` e `keys` (formato Web Push). Adicionar colunas para FCM:
-
-```sql
-ALTER TABLE medcontrol.push_subscriptions
-  ADD COLUMN "deviceToken" text,
-  ADD COLUMN platform text DEFAULT 'web';
-
--- Novo índice para FCM tokens
-CREATE UNIQUE INDEX push_subscriptions_device_token_idx
-  ON medcontrol.push_subscriptions("deviceToken")
-  WHERE "deviceToken" IS NOT NULL;
-```
-
-### 2.6 Reescrever Edge Function `notify-doses`
-
-Atual usa `npm:web-push` (VAPID). Reescrever para Firebase Admin SDK:
-
-```typescript
-// supabase/functions/notify-doses/index.ts
-import { initializeApp, cert } from 'firebase-admin/app'
-import { getMessaging } from 'firebase-admin/messaging'
-
-// Secrets necessários: FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL
-initializeApp({ credential: cert({ ... }) })
-
-// Para subs web (endpoint+keys), continuar usando web-push
-// Para subs android (deviceToken), usar Firebase Admin
-const androidSubs = subs.filter(s => s.platform === 'android')
-const webSubs = subs.filter(s => s.platform === 'web')
-
-// FCM multicast
-await getMessaging().sendEachForMulticast({
-  tokens: androidSubs.map(s => s.deviceToken),
-  notification: { title: `💊 ${dose.medName}`, body: `Dose: ${dose.unit}` },
-  data: { doseId: dose.id }
-})
-```
-
-**Novos secrets Supabase:**
-```
-FIREBASE_PROJECT_ID=
-FIREBASE_PRIVATE_KEY=
-FIREBASE_CLIENT_EMAIL=
-```
+**Validação 16:** fluxo completo testado em sandbox + 3 contas reais.
 
 ---
 
-## FASE 3 — Monetização Real (In-App Purchase)
+## FASE 17 — Validação Manual em Device Real (Pre-Beta Gate)
 
-**Objetivo:** Usuário pode assinar o plano PRO pela Play Store. Receita real.
+> Última checagem antes de Beta interno. Catch UX/perf issues que static audit não pega. Vinda Aud 5.3 + 5.5 device validation.
 
-### 3.1 Obrigatoriedade
+### 17.1 Devices & versões
+- [ ] 3 devices Android: baixo (Moto E ou similar), médio (Samsung A), top (Pixel) — versões 12, 13, 14
+- [ ] Confirmar app instala via APK sideload em todos
 
-Google Play **exige** Google Play Billing para compras de conteúdo digital dentro do app. Não é opcional. Usar RevenueCat como camada de abstração (suporta Play Store + App Store + Web).
+### 17.2 A11y manual
+- [ ] axe DevTools / Accessibility Scanner — confirmar WCAG AA
+- [ ] TalkBack ativo: fluxos críticos navegáveis
+- [ ] Modo escuro forçado, fonte aumentada (Dynamic Type)
+- [ ] Contraste sob luz solar real
 
-### 3.2 Setup RevenueCat
+### 17.3 Performance
+- [ ] Lighthouse mobile ≥90 (Reports, Dashboard)
+- [ ] Performance scroll lista 200+ doses sem jank
+- [ ] Teclado virtual não cobre submit
+- [ ] Notch / dynamic island / safe-area inferior
+- [ ] Pull-to-refresh
+- [ ] Sem rede + 3G simulada (TanStack persistor offline)
 
-1. Criar conta em [app.revenuecat.com](https://app.revenuecat.com)
-2. Criar projeto "Dosy"
-3. Conectar Google Play Console via chave de serviço
-4. Criar produtos no Google Play Console:
-   - `dosy_pro_monthly` — R$7,90/mês
-   - `dosy_pro_yearly` — R$49,90/ano
+### 17.4 Notificações & Alarmes
+- [ ] Alarme dispara: locked, unlocked, app killed, DND mode
+- [ ] DND respeitado (alarme silencia, push notif passa)
+- [ ] Adiar 10min funciona
+- [ ] Snooze nativo (FASE 2 carry-over)
 
-```bash
-npm install @revenuecat/purchases-capacitor
-```
+### 17.5 Mobile security
+- [ ] FLAG_SECURE: screenshot + recents view bloqueados nas telas sensíveis
+- [ ] Biometria + auto-lock funcionais
+- [ ] Detecção root: warning aparece em device rooted (testar via Magisk)
 
-### 3.3 Criar `src/hooks/useInAppPurchase.js`
-
-```javascript
-import Purchases, { LOG_LEVEL } from '@revenuecat/purchases-capacitor'
-import { Capacitor } from '@capacitor/core'
-
-const RC_API_KEY_ANDROID = 'goog_...'   // do painel RevenueCat
-
-export function useInAppPurchase() {
-  const { user } = useAuth()
-  const toast = useToast()
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !user) return
-    Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG })
-    Purchases.configure({ apiKey: RC_API_KEY_ANDROID, appUserID: user.id })
-  }, [user])
-
-  const getOfferings = useCallback(async () => {
-    const { offerings } = await Purchases.getOfferings()
-    return offerings.current
-  }, [])
-
-  const purchasePro = useCallback(async (packageType = 'MONTHLY') => {
-    try {
-      const offering = await getOfferings()
-      const pkg = offering?.availablePackages.find(p => p.packageType === packageType)
-      if (!pkg) throw new Error('Produto não encontrado')
-
-      const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg })
-
-      if (customerInfo.entitlements.active['pro']) {
-        // Sincronizar com Supabase
-        await supabase.rpc('admin_grant_tier', {
-          target_user: user.id,
-          new_tier: 'pro',
-          expires: new Date(customerInfo.entitlements.active['pro'].expirationDate),
-          src: 'play_store'
-        })
-        toast.show({ message: '🎉 Plano PRO ativado!', kind: 'success' })
-      }
-    } catch (err) {
-      if (err.code !== 'PURCHASE_CANCELLED') {
-        toast.show({ message: err.message || 'Falha na compra.', kind: 'error' })
-      }
-    }
-  }, [user])
-
-  const restorePurchases = useCallback(async () => {
-    const { customerInfo } = await Purchases.restorePurchases()
-    if (customerInfo.entitlements.active['pro']) {
-      // Sincronizar tier no Supabase
-    }
-  }, [])
-
-  return { purchasePro, restorePurchases, getOfferings }
-}
-```
-
-### 3.4 Atualizar `PaywallModal.jsx`
-
-Substituir botão disabled pelo fluxo real:
-
-```jsx
-const { purchasePro } = useInAppPurchase()
-const { isNative } = useCapacitorPlatform()
-
-// Mensal
-<button onClick={() => purchasePro('MONTHLY')} className="btn-primary w-full">
-  Assinar PRO — R$7,90/mês
-</button>
-
-// Anual
-<button onClick={() => purchasePro('ANNUAL')} className="btn-secondary w-full">
-  Assinar Anual — R$49,90/ano (−48%)
-</button>
-
-// Restaurar compras (obrigatório pela Play Store)
-<button onClick={restorePurchases} className="text-xs text-brand-600 underline mt-2">
-  Restaurar compras
-</button>
-```
-
-### 3.5 Webhook RevenueCat → Supabase (opcional mas recomendado)
-
-Configurar webhook no RevenueCat para notificar Supabase em renovações/cancelamentos automáticos:
-- RevenueCat → Event Delivery → Webhook → URL da Edge Function
-- Edge Function atualiza `subscriptions` table automaticamente
+**Validação 17:** todos checks ✓ em 3 devices. Issues → backlog ou re-abrir sub-fase relevante. App pronto pra Beta interno.
 
 ---
 
-## FASE 4 — Polimento & Experiência Nativa
+## FASE 18 — Preparação Play Store
 
-**Objetivo:** App parece nativo, não uma webpage dentro de um frame.
+### 18.1 Documentos legais ✅ CONCLUÍDA
+- [x] Política de Privacidade (`src/pages/Privacidade.jsx`)
+- [x] Termos de Uso (`src/pages/Termos.jsx`)
+- [x] Rotas `/privacidade` + `/termos` públicas
 
-### 4.1 Exportação PDF — trocar `window.print()`
+### 18.2 Play Console requirements
+- [ ] Preencher questionário IARC no Play Console
+- [ ] Preencher declaração de saúde
+- [ ] Data Safety section preenchida
+- [ ] Classificação etária
 
-`window.print()` é instável no Android. Substituir por geração client-side:
+### 18.3 Keystore + signing ✅ CONCLUÍDA (parcial)
+- [x] `android/app/build.gradle` com signingConfig env-based
+- [x] `.keystore` + `*.jks` no `.gitignore`
+- [ ] Gerar keystore release final ⚠️ MANUAL CRÍTICO
+- [ ] Backup keystore em 3 locais seguros
 
-```bash
-npm install jspdf html2canvas
-```
+### 18.4 Build AAB
+- [ ] Gerar primeiro `.aab` release (`./gradlew bundleRelease`)
 
-```javascript
-// src/pages/Reports.jsx
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
-import { Filesystem, Directory } from '@capacitor/filesystem'
+### 18.5 Assets de loja
+- [ ] Screenshots: Dashboard, DoseModal, Relatório, Settings, Pacientes (1080×1920)
+- [ ] Feature Graphic (1024×500px)
 
-async function exportPDF() {
-  const reportEl = document.getElementById('report-content')
-  const canvas = await html2canvas(reportEl, { scale: 2, useCORS: true })
-  const pdf = new jsPDF('p', 'mm', 'a4')
-  const imgData = canvas.toDataURL('image/png')
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = (canvas.height * pageWidth) / canvas.width
-  pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight)
+### 18.6 Textos de loja ✅ CONCLUÍDA
+- [x] Descrição curta (`docs/play-store/description-short.txt`)
+- [x] Descrição longa (`docs/play-store/description-long.txt`)
+- [x] Release notes template
+- [x] App title
+- [x] Whatsnew template pt-BR
 
-  if (Capacitor.isNativePlatform()) {
-    // Salvar no dispositivo Android
-    const base64 = pdf.output('datauristring').split(',')[1]
-    await Filesystem.writeFile({
-      path: `relatorio-dosy-${Date.now()}.pdf`,
-      data: base64,
-      directory: Directory.Documents
-    })
-    toast.show({ message: 'PDF salvo em Documentos.', kind: 'success' })
-  } else {
-    // Web: download normal
-    pdf.save(`relatorio-dosy.pdf`)
-  }
-}
-```
+### 18.7 Preços
+- [ ] Configurar gratuito + PRO Mensal + PRO Anual em Play Console + RevenueCat
 
-### 4.2 Exportação CSV no Android
-
-```bash
-npm install @capacitor/filesystem
-```
-
-```javascript
-// src/pages/Reports.jsx
-import { Filesystem, Directory } from '@capacitor/filesystem'
-import { Share } from '@capacitor/share'
-
-async function exportCSV() {
-  // ... gerar csv string como hoje ...
-  if (Capacitor.isNativePlatform()) {
-    const { uri } = await Filesystem.writeFile({
-      path: `dosy_${Date.now()}.csv`,
-      data: btoa(unescape(encodeURIComponent(csv))),
-      directory: Directory.Cache
-    })
-    await Share.share({ title: 'Relatório Dosy', url: uri })
-  } else {
-    downloadBlob(blob, `dosy_${Date.now()}.csv`)
-  }
-}
-```
-
-### 4.3 AdMob (substituir AdSense)
-
-AdSense não funciona em WebView. Para monetização por anúncio no app nativo:
-
-```bash
-npm install @capacitor-community/admob
-```
-
-```javascript
-// src/components/AdBanner.jsx
-import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob'
-
-// Android Banner ID: ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX
-// Substituir AdSense no plano free por banner AdMob nativo
-```
-
-> **Nota:** AdSense pode continuar sendo usado na versão web (PWA). No APK, usar AdMob. Detectar plataforma e renderizar o componente correto.
-
-### 4.4 Splash Screen & Ícones Adaptativos
-
-**Instalar:**
-```bash
-npm install @capacitor/splash-screen @capacitor/assets
-```
-
-**Assets necessários (criar):**
-- `resources/icon.png` — 1024×1024, Dosy logo, fundo transparente
-- `resources/icon-foreground.png` — 108×108, apenas o logo pill (para adaptive icon Android 8+)
-- `resources/splash.png` — 2732×2732, logo centralizado em fundo `#0d1535`
-
-**Gerar automaticamente:**
-```bash
-npx @capacitor/assets generate --android
-```
-
-Isso gera todos os tamanhos necessários em `android/app/src/main/res/`.
-
-### 4.5 Status Bar e Safe Area
-
-Header do Dosy já usa `safe-top`. Verificar em dispositivos com notch/câmera punch-hole:
-
-```javascript
-// src/main.jsx ou App.jsx
-import { StatusBar, Style } from '@capacitor/status-bar'
-
-if (Capacitor.isNativePlatform()) {
-  StatusBar.setStyle({ style: Style.Dark })
-  StatusBar.setBackgroundColor({ color: '#0d1535' })
-}
-```
-
-### 4.6 Modo Offline — Fila de Sincronização de Mutações
-
-**Contexto:** Usuário marca dose como "Tomada" no subsolo/avião sem sinal. Sem offline support, a ação é perdida silenciosamente.
-
-**Solução:** `persistQueryClient` + mutation queue com TanStack Query:
-
-```bash
-npm install @tanstack/query-persist-client-core @tanstack/query-sync-storage-persister
-```
-
-**Configurar em `src/main.jsx`:**
-```javascript
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
-
-const persister = createSyncStoragePersister({
-  storage: window.localStorage,
-  key: 'dosy-query-cache'
-})
-
-// No Android nativo: trocar por SecureStorage ou Capacitor Preferences
-```
-
-**Implementar mutation queue em `src/hooks/useDoses.js`:**
-```javascript
-// Optimistic update já existe — adicionar persistência offline:
-export function useConfirmDose() {
-  return useMutation({
-    mutationFn: confirmDose,
-    // UI atualiza imediatamente
-    onMutate: async ({ id }) => {
-      await qc.cancelQueries({ queryKey: ['doses'] })
-      const previous = qc.getQueryData(['doses'])
-      qc.setQueryData(['doses'], (old) =>
-        old?.map(d => d.id === id ? { ...d, status: 'done' } : d)
-      )
-      return { previous }
-    },
-    onError: (_, __, ctx) => {
-      // Reverter se falhar
-      qc.setQueryData(['doses'], ctx.previous)
-    },
-    // Retry automático quando voltar online
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000)
-  })
-}
-```
-
-**Detectar conectividade:**
-```javascript
-// src/hooks/useOnlineStatus.js
-import { Network } from '@capacitor/network'
-
-export function useOnlineStatus() {
-  const [online, setOnline] = useState(true)
-  useEffect(() => {
-    Network.getStatus().then(s => setOnline(s.connected))
-    const handler = Network.addListener('networkStatusChange', s => setOnline(s.connected))
-    return () => handler.remove()
-  }, [])
-  return online
-}
-```
-
-> Notificações locais (`LocalNotifications`) são o "mestre" para alertas críticos de dose — funcionam offline. Push FCM serve para engajamento e quando app está fechado.
+**Validação 18:** Play Console sem avisos, advogado revisou Termos + Política, AAB assinado pronto.
 
 ---
 
-### 4.7 Deep Links (para OAuth futuro)
+## FASE 18.5 — FAQ + Suporte In-App (pre-beta)
 
-Configurar em `android/app/src/main/AndroidManifest.xml`:
+> Reduzir suporte 1-on-1 antes do Beta. Antecipar dúvidas comuns sobre funcionamento, alarme, permissões, planos.
 
-```xml
-<intent-filter android:autoVerify="true">
-  <action android:name="android.intent.action.VIEW" />
-  <category android:name="android.intent.category.DEFAULT" />
-  <category android:name="android.intent.category.BROWSABLE" />
-  <data android:scheme="https" android:host="dosy-teal.vercel.app" />
-</intent-filter>
-```
+### 18.5.1 Conteúdo
+- [ ] Levantar perguntas previstas por categoria:
+  - **Primeiros passos:** "Como cadastrar primeiro paciente?", "Como criar tratamento?", "Como funciona dose contínua?"
+  - **Alarme & Notificações:** "Por que o alarme não toca?", "O que é o modo Não Perturbe?", "Como tocar mesmo no silencioso?", "Adiar 10min vai gerar nova dose?", "Push notif sumiu — como reativar?"
+  - **Permissões Android:** "Por que precisa de tantas permissões?", "Como liberar 'tela cheia' nas configurações?", "App não abre depois de update — re-conceder permissões"
+  - **Doses:** "Diferença entre Tomada/Pular/Ignorar?", "Como registrar dose extra (S.O.S)?", "Como editar uma dose tomada?", "Por que aparece 'atrasada'?"
+  - **Compartilhar paciente:** "Como compartilhar com cuidador?", "Compartilhar dá permissão de editar?"
+  - **Plano PRO/Plus:** "O que vem no PRO?", "Como cancelar?", "Trial 7 dias funciona como?", "Restaurar compras"
+  - **Privacidade:** "Onde meus dados ficam?", "Como exportar?", "Como excluir conta?", "App vê meus dados de saúde?"
+  - **Sincronização:** "Posso usar em 2 celulares?", "App funciona offline?", "Atualização automática?"
+  - **Bugs comuns:** "Alarme tocou 2x", "Resumo diário não chegou", "Versão desatualizada"
+- [ ] Escrever respostas concisas (3-5 linhas cada) em pt-BR
+- [ ] Revisar com advogado as respostas sobre privacidade/saúde (não dar conselho médico)
+- [ ] Salvar em `src/data/faq.js` como array `[{ category, question, answer, keywords }]`
 
----
+### 18.5.2 UI in-app
+- [ ] Criar página `src/pages/FAQ.jsx` com:
+  - Search box no topo (filtra por question + keywords)
+  - Lista por categoria, accordion expandable
+  - Empty state se busca sem resultado + CTA "Não achou? Entre em contato"
+- [ ] Rota `/faq` em `App.jsx`
+- [ ] Link "Ajuda / FAQ" em `More.jsx` (entre "Ajustes" e "Painel Admin")
+- [ ] Link "Ver FAQ" no header da `PermissionsOnboarding` (caso usuário não entenda permissão)
+- [ ] Botão "Dúvidas frequentes" no `Settings.jsx` section "Sobre"
+- [ ] Tag PostHog: `faq_opened`, `faq_search_query`, `faq_question_expanded` (após FASE 14 instrumentation)
 
-## FASE 5 — Preparação Play Store
+### 18.5.3 Onboarding hint
+- [ ] Slide adicional no `OnboardingTour` apontando pra FAQ ("Tem dúvidas? Acesse Mais → FAQ a qualquer momento")
+- [ ] OR tooltip discreto pós-1º login: "💡 FAQ disponível em Mais"
 
-**Objetivo:** Cumprir todos os requisitos do Google para publicação.
+### 18.5.4 Suporte fallback
+- [ ] Email suporte funcional: `suporte@dosyapp.com` (ou similar)
+- [ ] Botão "Falar com suporte" no FAQ que abre email com template (subject + corpo pré-preenchido com versão do app + device info)
+- [ ] Resposta SLA documentada em `docs/support-sla.md` (24h dia útil PRO, 72h Free)
 
-### 5.1 Google Play Console
-
-1. Criar conta de desenvolvedor: [play.google.com/console](https://play.google.com/console) — taxa única de USD 25
-2. Criar app → "Dosy" → "Aplicativo" → "Português (Brasil)"
-3. Configurar perfil de app
-
-### 5.2 Política de Privacidade (obrigatória)
-
-Apps de saúde são **categoria sensível** no Play Store — política de privacidade é obrigatória.
-
-Criar página de política de privacidade (pode ser no próprio site/Vercel):
-```
-https://dosy-teal.vercel.app/privacidade
-```
-
-Incluir:
-- Dados coletados (email, nome, medicamentos, doses)
-- Finalidade (gestão de saúde pessoal)
-- Compartilhamento (Supabase, Firebase, RevenueCat)
-- Direitos do usuário (exclusão de conta/dados)
-- Contato do responsável
-
-### 5.3 Termos de Uso
-
-```
-https://dosy-teal.vercel.app/termos
-```
-
-Adicionar rota `/privacidade` e `/termos` no `App.jsx` (páginas HTML simples).
-
-### 5.4 Questionário de classificação IARC
-
-Play Store exige classificação etária. Para app de saúde:
-- Sem violência, sem conteúdo adulto → classificação **Livre (L)**
-- Preencher no console: Conteúdo do app → Classificação de conteúdo
-
-### 5.5 Declaração de saúde
-
-Apps de saúde podem precisar de declaração adicional no Google Play. Confirmar se Dosy se enquadra em "aplicativo médico" ou apenas "bem-estar".
-
-### 5.6 Assinatura do app (Keystore)
-
-```bash
-# Gerar keystore (fazer UMA vez, guardar com segurança — NÃO committar no git)
-keytool -genkey -v -keystore dosy-release.keystore \
-  -alias dosykey -keyalg RSA -keysize 2048 -validity 10000
-
-# Armazenar senhas como variáveis de ambiente ou secrets do CI
-```
-
-**NUNCA commitar o `.keystore` no repositório.**
-
-Configurar `android/app/build.gradle`:
-
-```gradle
-android {
-  signingConfigs {
-    release {
-      storeFile file(System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore')
-      storePassword System.getenv('KEYSTORE_PASSWORD')
-      keyAlias System.getenv('KEY_ALIAS') ?: 'dosykey'
-      keyPassword System.getenv('KEY_PASSWORD')
-    }
-  }
-  buildTypes {
-    release {
-      minifyEnabled false
-      signingConfig signingConfigs.release
-    }
-  }
-  defaultConfig {
-    applicationId "com.dosyapp.dosy"
-    minSdk 26       // Android 8.0 — cobre 95%+ dos dispositivos ativos
-    targetSdk 34    // Android 14 — obrigatório pelo Play Store em 2024
-    versionCode 1
-    versionName "1.0.0"
-  }
-}
-```
-
-### 5.7 Build AAB (Android App Bundle)
-
-O Play Store prefere `.aab` ao `.apk`:
-
-```bash
-# Build da web
-npm run build
-
-# Sync com Android
-npx cap sync android
-
-# No Android Studio:
-Build → Generate Signed Bundle/APK → Android App Bundle
-
-# Ou via CLI (requer gradle configurado):
-cd android
-./gradlew bundleRelease
-```
-
-Arquivo gerado: `android/app/build/outputs/bundle/release/app-release.aab`
-
-### 5.8 Screenshots para Play Store
-
-**Obrigatórias:**
-- Mínimo 2 screenshots de phone (320dp – 3840dp)
-- Resolução recomendada: 1080×1920px
-- Formato: PNG ou JPEG
-
-**Recomendadas:**
-- Tablet 7" (opcional mas melhora conversão)
-- Feature graphic: 1024×500px (banner principal da loja)
-
-Tirar screenshots de:
-1. Dashboard com doses do dia
-2. Confirmação de dose (DoseModal)
-3. Relatório PDF gerado
-4. Configurações de notificação
-5. Tela de pacientes
-
-### 5.9 Descrição para Play Store
-
-**Título:** Dosy – Controle de Medicamentos (máx 50 chars)
-**Descrição curta:** Gerencie doses, tratamentos e adesão medicamentosa (máx 80 chars)
-**Descrição longa:** Detalhar funcionalidades, público-alvo, privacidade (máx 4000 chars)
-
-### 5.10 Preços e países
-
-- App gratuito (download grátis)
-- In-app: PRO Mensal (R$7,90), PRO Anual (R$49,90)
-- Países: Brasil inicialmente; expandir depois
+**Validação 18.5:** FAQ respondendo ≥30 perguntas. Search funcional. Acessível de 3 entry-points (More, Settings, OnboardingTour). Email suporte testado.
 
 ---
 
-## FASE 6 — Publicação & Pós-Launch
+# PARTE II — TESTERS
 
-### 6.1 Internal Testing Track (primeiro)
+## FASE 19 — Beta Interno (testers conhecidos)
 
-1. Upload do `.aab` → Testes internos
-2. Adicionar email de testadores (até 100)
-3. Testar todas as funcionalidades no dispositivo real
-4. Resolver bugs antes de ir para produção
+### 19.1 Preparação
+- [ ] Lista 5-10 testers (família, amigos próximos)
+- [ ] Configurar Internal Testing track no Play Console
+- [ ] Adicionar testers como licensed testers
+- [ ] Versão `0.9.x-internal` (ou seguir 0.1.x.x)
 
-### 6.2 Closed Testing (beta)
+### 19.2 Distribuição
+- [ ] Convite via Play Store (link interno)
+- [ ] Onboarding em vídeo para testers
+- [ ] Canal Telegram/WhatsApp pra feedback
+- [ ] Formulário Google estruturado (bugs, sugestões, NPS)
 
-1. Mover para Closed Testing (beta) com grupo maior
-2. Coletar feedback → corrigir issues
-3. Aguardar aprovação do Google (24-72h para apps de saúde pode ser mais lento)
+### 19.3 Coleta
+- [ ] Sentry capturando crashes (já config FASE 10)
+- [ ] PostHog registrando eventos (já config FASE 14)
+- [ ] Reuniões semanais com 2-3 testers
+- [ ] Iteração rápida (release a cada 3-5 dias)
 
-### 6.3 Production Release
-
-1. Subir para produção com rollout gradual (10% → 50% → 100%)
-2. Monitorar crashlytics / Android Vitals no Play Console
-3. Responder reviews
-
-### 6.4 CI/CD para atualizações
-
-Configurar GitHub Actions para build e upload automático:
-
-```yaml
-# .github/workflows/android-release.yml
-name: Android Release
-
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '17' }
-      - run: npm ci
-      - run: npm run build
-      - run: npx cap sync android
-      - name: Build AAB
-        run: |
-          cd android
-          ./gradlew bundleRelease \
-            -PKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
-            -PKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-      - name: Upload to Play Store
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-          packageName: com.dosyapp.dosy
-          releaseFiles: android/app/build/outputs/bundle/release/*.aab
-          track: internal
-```
-
-### 6.5 Sentry — Monitoramento de Erros em Produção
-
-**Contexto:** Sem monitoramento, erros em produção são invisíveis. Um crash no fluxo de SOS pode colocar usuário em risco sem que o dev saiba.
-
-```bash
-npm install @sentry/react @sentry/capacitor
-```
-
-**Configurar em `src/main.jsx`:**
-```javascript
-import * as Sentry from '@sentry/react'
-import * as SentryCapacitor from '@sentry/capacitor'
-
-SentryCapacitor.init(
-  {
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    environment: import.meta.env.MODE,  // 'development' | 'production'
-    // LGPD: não enviar dados pessoais para Sentry
-    beforeSend(event) {
-      // Strip PII: remover emails, nomes de pacientes, nomes de medicamentos
-      if (event.user) { delete event.user.email; delete event.user.username }
-      return event
-    },
-    tracesSampleRate: 0.1  // 10% das transações
-  },
-  Sentry.init
-)
-```
-
-**O que monitorar:**
-- Falhas em RPCs do Supabase (`register_sos_dose`, `confirm_dose`)
-- Falhas de autenticação inesperadas
-- Erros no Service Worker / push notifications
-- Crashes no fluxo de compra (RevenueCat)
-
-> ⚠️ **LGPD:** Configurar `beforeSend` para remover PII antes de enviar ao Sentry. Nomes de medicamentos são dados de saúde — categoria especial.
+### 19.4 Critérios de saída
+- [ ] Zero crashes nos últimos 7 dias
+- [ ] NPS médio ≥ 7
+- [ ] 100% bugs P0/P1 resolvidos
+- [ ] Pelo menos 1 ciclo completo testado por tester
 
 ---
 
-### 6.6 Escalabilidade Futura — Table Partitioning (pós 10k usuários)
+## FASE 20 — Beta Fechado + Pen Test Profissional
 
-**Quando aplicar:** Tabela `doses` acima de ~5 milhões de linhas (estimativa: 10k usuários × 3 remédios × 365 dias ≈ 11M registros/ano).
+### 20.1 Recrutamento
+- [ ] Contratar 1-2 QAs profissionais (freelancer ou agência)
+- [ ] Brief com escopo, fluxos críticos, áreas de risco
+- [ ] **Contratar pen tester** pra auditoria de segurança específica
+- [ ] Definir prazo (1-2 semanas)
 
-```sql
--- Converter doses para tabela particionada por mês (PostgreSQL 14+)
--- ATENÇÃO: operação destrutiva — fazer em janela de manutenção com backup
-CREATE TABLE medcontrol.doses_new (
-  LIKE medcontrol.doses INCLUDING ALL
-) PARTITION BY RANGE ("scheduledAt");
+### 20.2 Plano de teste
+- [ ] Test cases documentados (Notion/TestRail)
+- [ ] Matriz devices: 5 marcas, 3 versões Android (12, 13, 14)
+- [ ] Cenários stress (1000 doses, 50 tratamentos)
+- [ ] Cenários falha (sem rede, rede lenta, bateria fraca)
+- [ ] A11y (TalkBack ativo)
 
--- Criar partições mensais
-CREATE TABLE medcontrol.doses_2025_01 PARTITION OF medcontrol.doses_new
-  FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
--- ... repetir para cada mês
+### 20.3 Pen test profissional
+- [ ] OWASP Mobile Top 10 cobertos
+- [ ] Tentativa bypass RLS via API direta
+- [ ] Tentativa tampering APK (Play Integrity ativo da FASE 11)
+- [ ] Análise tráfego (Burp/mitmproxy) — cert pinning ativo
+- [ ] Relatório com severidades (crit/high/med/low)
 
--- Migrar dados e renomear
-INSERT INTO medcontrol.doses_new SELECT * FROM medcontrol.doses;
-ALTER TABLE medcontrol.doses RENAME TO doses_old;
-ALTER TABLE medcontrol.doses_new RENAME TO doses;
-```
+### 20.4 Correções
+- [ ] Triage com prioridades
+- [ ] Fix de tudo crit/high antes de avançar
+- [ ] Re-teste das correções
+- [ ] Documentar issues aceitos como "won't fix"
 
-**Benefício:** Queries de Dashboard (doses de "hoje") varrem apenas a partição do mês corrente — ordens de magnitude mais rápido.
-
----
-
-### 6.7 Monitoramento pós-launch
-
-- Android Vitals (crashes, ANRs, battery)
-- Sentry (erros em tempo real)
-- Firebase Analytics (funil de conversão, retenção)
-- Reviews e ratings
-- RevenueCat dashboard (receita, churn, LTV)
+**Validação 20:** zero crit/high abertos, relatório pen test aprovado.
 
 ---
 
-## Análise de Riscos
+## FASE 21 — Beta Aberto (Play Store Closed/Open Testing)
+
+### 21.1 Setup
+- [ ] Closed Testing track com até 100 testers
+- [ ] Open Testing depois de estável
+- [ ] Versão `1.0.0-beta.x`
+- [ ] Página "junte-se ao beta" no site
+
+### 21.2 Recrutamento testers
+- [ ] Post Reddit r/financasbr ou r/brasil
+- [ ] Influencer saúde/medicação (parceria)
+- [ ] Lista email de interessados
+- [ ] Meta: 50-200 testers ativos
+
+### 21.3 Monitoramento
+- [ ] Dashboards crash rate, ANR rate, retention D1/D7/D30 (já config FASE 14)
+- [ ] Alertas Sentry para regressões
+- [ ] Reviews diárias do feedback
+- [ ] Hotfixes em <48h pra bugs críticos
+
+### 21.4 Critérios de saída
+- [ ] Crash-free rate ≥99.5%
+- [ ] ANR rate <0.5%
+- [ ] Retention D7 ≥40%
+- [ ] Avaliação média (beta) ≥4.3
+- [ ] Pelo menos 50 testers ativos por 14 dias
+
+---
+
+# PARTE III — DEPLOY & PÓS-LAUNCH
+
+## FASE 22 — Lançamento Público
+
+### 22.1 Pré-lançamento
+- [ ] Versão `1.0.0` final, build assinado
+- [ ] Rollout gradual: 5% → 20% → 50% → 100% (a cada 24h se sem regressão)
+- [ ] Página Play Store finalizada (screenshots, vídeo, descrição SEO)
+- [ ] ASO (App Store Optimization): keywords título/subtítulo/descrição
+- [ ] Press kit (logo, screenshots, descrição, contato)
+
+### 22.2 Marketing
+- [ ] Site oficial publicado (landing + blog + suporte)
+- [ ] Posts redes sociais (Instagram, Twitter, LinkedIn)
+- [ ] Email pra lista de interessados
+- [ ] Product Hunt launch
+- [ ] Indicação 3-5 sites/canais tech ou saúde
+
+### 22.3 Programa de indicação
+- [ ] User ganha 1 mês PRO grátis ao indicar 3 amigos que se cadastram
+- [ ] Tracking UTMs pra medir canais
+
+### 22.4 Suporte 24/48h
+- [ ] Time de plantão na primeira semana
+- [ ] Templates de resposta prontos
+- [ ] FAQ atualizado com perguntas novas
+
+**Validação 22:** primeira semana sem incidentes críticos, instalações dentro da meta.
+
+---
+
+## FASE 23 — Pós-launch & Operação
+
+### 23.1 Monitoramento contínuo
+- [ ] Dashboards saúde (DAU, MAU, retention, churn, ARPU)
+- [ ] Funil conversão Free → PRO
+- [ ] Crash rate semanal revisado
+- [ ] Feedback in-app categorizado
+
+### 23.2 Iteração
+- [ ] Sprint quinzenal com priorização baseada em dados
+- [ ] A/B test de paywall e onboarding
+- [ ] Releases regulares (bi-semanal mínimo)
+
+### 23.3 Crescimento
+- [ ] Análise dos competidores
+- [ ] Roadmap público
+- [ ] Comunidade (Discord/Telegram)
+- [ ] Programa afiliados (5-10% recorrente)
+
+### 23.4 Operações de segurança
+- [ ] Pen test anual obrigatório
+- [ ] Review trimestral RLS + Edge Functions
+- [ ] Atualização mensal de dependências
+- [ ] Drill anual de disaster recovery
+
+### 23.5 Backlog pós-launch (vinda das auditorias 5.X — P3)
+- [ ] Audit_log abrangente (triggers em UPDATE/DELETE de doses/treatments/patients) (Aud 5.2 G12)
+- [ ] 2FA opcional via TOTP (Aud 5.4 G10)
+- [ ] Criptografia client-side de `observation` (Aud 5.4 G11)
+- [ ] Logout remoto multi-device + tela "Dispositivos conectados" (Aud 5.4 G9)
+- [ ] Notif email + push ao login em device novo
+- [ ] Session replay (Sentry Replay ou PostHog) (Aud 5.7 G8)
+- [ ] Tracing distributed (Aud 5.7 G10)
+- [ ] Logs estruturados Logflare/Axiom (Aud 5.7 G11)
+- [ ] Visual regression tests (Chromatic/Percy) (Aud 5.6 G9)
+- [ ] Performance budget em CI (size-limit/bundlesize) (Aud 5.6 G10)
+- [ ] TypeScript migration (ou JSDoc + `tsc --checkJs`) (Aud 5.1 G10)
+- [ ] `dosy_alarm.mp3` custom sound
+
+### 23.6 Expansão
+- [ ] iOS via Capacitor (mesmo código)
+- [ ] Internacionalização (en, es) se demanda confirmar
+- [ ] Plano Family (até 5 usuários compartilhando)
+- [ ] API pública para integrações (apenas PRO)
+
+---
+
+## STATUS GERAL
+
+- **Total de fases:** 23 (mais Fase 0)
+- **Concluídas (✅):** Fase 0, 1, 2, 2.5, 3, 5
+- **Em andamento:** Fase 4 (~95%)
+- **Próxima:** Fase 6 (Migrations CLI) → Fase 7 (Quick Wins) → cascata
+- **Estimativa restante até launch:** ~3-5 meses
+- **Versão atual:** 0.1.5.6 (dev — pre-1.0). v1.0 reservada pra Play Store launch.
+
+## Riscos Críticos
 
 | Risco | Probabilidade | Impacto | Mitigação |
 |---|---|---|---|
-| Google rejeitar app (categoria saúde) | Média | Alto | Política de privacidade robusta + não mencionar diagnóstico médico |
-| Vazamento de dados (LGPD) | Baixa | Crítico | RLS completo, CSP, sanitização de inputs, sem secrets no frontend |
-| Multa LGPD por falta de consentimento | Média | Alto | Checkbox de consentimento no cadastro, política de privacidade publicada |
-| XSS via dados do banco no PDF | Baixa | Alto | `escapeHtml` em todos os template strings antes de injetar no HTML |
-| Keystore perdido/corrompido | Baixa | Crítico | Backup em 3 locais seguros (HD externo, nuvem criptografada, cofre físico) |
-| Push FCM falhar no background | Média | Médio | LocalNotifications como fallback |
-| Revenuecat billing error | Baixa | Alto | Testar extensivamente em ambiente de teste antes de lançar |
-| `admin_grant_tier` chamado por usuário malicioso | **Alta** | **Crítico** | Verificação server-side obrigatória na RPC — testar via curl com token de user comum |
-| Bypass de regras SOS via requisição direta | Alta | Alto | Mover `validateSos` para RPC server-side (0.14.1) |
-| DoS via `durationDays` enorme → 100k doses | Média | Alto | Validar e limitar duração máxima server-side na RPC (0.14.3) |
-| Dados órfãos por DELETE parcial | Média | Médio | FK ON DELETE CASCADE no schema (0.14.4) |
-| Supabase auth token expirar offline | Média | Médio | `autoRefreshToken: true` + capturar erro e redirecionar para Login |
-| WebView lenta vs app nativo | Alta | Médio | Testar performance; considerar Capacitor Ionic para componentes críticos |
-
----
-
-## Estimativa de Esforço
-
-| Fase | Estimativa | Dependências externas |
-|---|---|---|
-| Fase 0 — Segurança & LGPD | 3-5 dias | Advogado/consultoria LGPD (opcional) |
-| Fase 1 — Fundação Capacitor | 1-2 dias | Android Studio instalado |
-| Fase 2 — FCM Notifications | 2-3 dias | Conta Firebase |
-| Fase 3 — In-App Purchase | 3-4 dias | Conta RevenueCat + Play Console + produtos criados |
-| Fase 4 — Polimento nativo | 2-3 dias | — |
-| Fase 5 — Preparação Play Store | 2-3 dias | Conta desenvolvedor Google (USD 25) |
-| Fase 6 — Publicação | 1-2 dias + revisão Google (1-7 dias) | — |
-| **Total estimado** | **14-22 dias de desenvolvimento** | + tempo de aprovação Google |
-
----
-
-## Checklist Geral
-
-### FASE 0 — Segurança & LGPD
-- [x] Criar `.env.example` com todas as variáveis (sem valores reais)
-- [x] Rotacionar VAPID keys — N/A: app migrado para novo projeto `dosy-app` com par VAPID novo gerado (`BHnTRizO...`). kids-paint não é mais usado pelo Android. ✅
-- [x] Rodar `git grep` no histórico para verificar vazamento de secrets ✅ — auditado: VAPID privada antiga do kids-paint encontrada em `Contexto.md` (commit 78f4b77, removida em 843d4d1 mas ainda no histórico). Risco baixo: app migrou para `dosy-app` com par VAPID novo. Nenhum service_role/PAT/JWT vazou.
-- [x] Auditar RLS em todas as tabelas: `patients`, `treatments`, `doses`, `push_subscriptions`, `subscriptions`, `sos_rules` — todas com RLS ativo ✅
-- [x] Criar/verificar policy RLS em `push_subscriptions` para isolar por usuário — policy `push_own_all` já existe ✅
-- [x] Proteger `admin_grant_tier` RPC com verificação server-side — usa `is_admin()` reescrito ✅
-- [x] Remover email hardcoded de admin — criada tabela `admins`, `is_admin()` e `effective_tier()` reescritas ✅
-- [x] Criar `vercel.json` com headers CSP, X-Frame-Options, X-Content-Type-Options ✅
-- [x] Criar `src/utils/sanitize.js` com função `escapeHtml` ✅
-- [x] Aplicar `escapeHtml` em todos os template strings do PDF em `Reports.jsx` ✅
-- [x] Adicionar validação de senha forte no cadastro (mín. 8 chars, maiúscula, número) ✅
-- [x] Limpar localStorage de dados sensíveis no `signOut` ✅
-- [x] Trocar `localStorage` por `sessionStorage` no modo demo ✅
-- [x] Implementar exportação de dados do usuário em `Settings.jsx` (portabilidade LGPD) ✅
-- [x] Criar RPC `delete_my_account` no Supabase (cascata em todas as tabelas) ✅
-- [x] Criar Edge Function `delete-account` com service_role para deletar do `auth.users` ✅
-- [x] Adicionar botão "Excluir minha conta" na tela de Settings ✅
-- [x] Adicionar checkbox de consentimento explícito no formulário de cadastro ✅
-- [x] Adicionar colunas `consentAt` e `consentVersion` na tabela `subscriptions` ✅
-- [x] Criar rota `/privacidade` com política de privacidade completa (LGPD) ✅
-- [x] Criar rota `/termos` com termos de uso ✅
-- [x] Configurar pg_cron para anonimizar doses antigas (+3 anos) — `anonymize-old-doses` agendado (Domingos 3h) no projeto `dosy-app` ✅
-- [x] Ativar rate limiting no Supabase Auth — `rate_limit_otp=5`, `rate_limit_anonymous_users=30`, `rate_limit_token_refresh=150` no projeto `dosy-app` ✅
-- [x] Habilitar confirmação de email obrigatória no cadastro — `mailer_autoconfirm=false` no projeto `dosy-app` ✅
-- [x] Criar tabela `security_events` para log de auditoria ✅
-- [x] Registrar eventos de mudança de tier em `admin_grant_tier` ✅ / exclusão de conta em `delete_my_account` ✅
-- [x] Criar índices compostos: `doses(patientId, scheduledAt)`, `doses(patientId, status, scheduledAt)`, `treatments(patientId, status)`, `push_subscriptions(userId)` ✅
-- [x] Limitar campo `observation` a 500 chars (Data Minimization LGPD) ✅
-- [x] Trocar `userAgent` completo em push_subscriptions por plataforma simplificada — coluna `platform` adicionada ✅
-- [x] Documentar quais Edge Functions processam PII (para RIPD se ANPD solicitar) — `docs/RIPD.md` criado com `notify-doses`, `delete-account`, `admin_grant_tier` ✅
-
-#### FASE 0.14 — Lógica de Negócio no Servidor
-- [x] **[CRÍTICO]** Criar RPC `register_sos_dose` com validação server-side de minIntervalHours e maxDosesIn24h ✅
-- [x] **[CRÍTICO]** Substituir `supabase.from('doses').insert(sos)` por `supabase.rpc('register_sos_dose')` no `dosesService.js` ✅
-- [x] **[CRÍTICO]** Testar que INSERT direto em `doses` (type=sos) é bloqueado ✅ — `tools/test-sos-bypass.cjs` valida: anon bloqueado por trigger, authenticated direct bloqueado por trigger `enforce_sos_via_rpc_trigger`, RPC funciona, cross-patient bloqueado por RLS. Fix aplicado: `tools/security-fix.cjs` (drop `own_*` policies inseguras + trigger).
-- [x] **[CRÍTICO]** `admin_grant_tier` rejeita chamadas de usuário não-admin — `is_admin()` usa tabela `admins` ✅
-- [x] **[ALTO]** Criar RPC `create_treatment_with_doses(payload jsonb)` com validação de ownership do paciente e limite de durationDays (máx 365) ✅
-- [x] **[ALTO]** Criar RPC `update_treatment_schedule` que regenera doses atomicamente em uma transação ✅
-- [x] **[ALTO]** Adicionar `ON DELETE CASCADE` na FK `doses."treatmentId" → treatments.id` ✅
-- [x] **[ALTO]** Adicionar `ON DELETE CASCADE` nas FKs de `treatments`, `doses`, `sos_rules`, `patient_shares` → `patients.id` ✅
-- [x] **[MÉDIO]** Criar RPCs `confirm_dose`, `skip_dose`, `undo_dose` com validação de transição de status e ownership ✅
-- [x] **[MÉDIO]** Substituir os 3 UPDATEs diretos em `dosesService.js` pelos novos RPCs ✅
-- [x] **[MÉDIO]** RLS policies em `doses` e `treatments` incluem check via `has_patient_access()` — auditado ✅
-- [x] **[BAIXO]** Substituir `select('*')` por colunas explícitas em todos os services ✅
-
-### FASE 1 — Fundação Capacitor
-- [x] Instalar `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` ✅
-- [x] Instalar `@capacitor/app`, `@capacitor/status-bar`, `@capacitor/keyboard`, `@capacitor/splash-screen` ✅
-- [x] Criar `capacitor.config.ts` com appId `com.dosyapp.dosy` ✅
-- [x] Adicionar scripts `build:android`, `open:android` no `package.json` ✅
-- [x] Instalar `@aparajita/capacitor-secure-storage` (substitui `@capacitor/preferences` para dados sensíveis) ✅
-- [x] Migrar Supabase `auth.storage` de localStorage para SecureStorage (Android KeyStore) — adapter condicional (web→localStorage, native→SecureStorage) ✅
-- [x] Adicionar `detectSessionInUrl: false` no Supabase client (apenas em modo native) ✅
-- [x] Implementar handler do botão Voltar Android em `App.jsx` ✅
-- [x] Implementar reconexão do Realtime em `useRealtime.js` (pause/resume) ✅
-- [x] Executar `npx cap add android` ✅
-- [x] Executar `npm run build && npx cap sync android` ✅
-- [x] Instalar JDK 17 + JDK 21 (Temurin) e Android SDK (cmdline-tools, platforms 34/35/36, build-tools 34.0.0) ✅
-- [x] Configurar `JAVA_HOME` e `ANDROID_HOME` em variáveis de usuário ✅
-- [x] Testar app abrindo no emulador Android (Pixel 10 Pro via Studio) ✅
-- [ ] Testar app em dispositivo físico
-- [x] Confirmar Login/auth funcionando no Android — testado no emulador Pixel 10 Pro (2026-04-26): login + logout + relogin OK contra `dosy-app` (novo projeto). SecureStorage ativo, sessão persiste. ✅
-- [x] SSL Pinning em `network_security_config.xml` ✅ — Pinning ATIVO para `guefraaqbkcehofchnrc.supabase.co` (dosy-app). Hashes SHA-256 SPKI extraídos via Node.js (`tools/extract-spki.cjs`): primary GTS WE1 (válido até Feb 2029), backup GTS Root R4 (até Jan 2028). Cleartext bloqueado, CA validation + pinning ativos.
-- [x] Bloquear ADB backup e device-to-device transfer via `allowBackup="false"` + `data_extraction_rules.xml` ✅
-- [ ] **NOTA:** Build CLI via `gradlew.bat` quebra com `Unable to establish loopback connection` (bug Win11 24H2 + JVM UnixDomainSockets). Workaround: build via Android Studio (JBR patched). CI/produção: rodar build em runner Linux (GitHub Actions) — sem o bug.
-
-### FASE 2 — Notificações FCM
-- [x] Criar projeto no Firebase Console — projeto `dosy-b592e` ✅
-- [x] Adicionar app Android `com.dosyapp.dosy` no Firebase ✅
-- [x] Baixar `google-services.json` → `android/app/` ✅
-- [x] Instalar `@capacitor/push-notifications` e `@capacitor/local-notifications` ✅
-- [x] Configurar PushNotifications e LocalNotifications no `capacitor.config.ts` ✅
-- [x] Reescrever `usePushNotifications.js` com lógica isNative/web — FCM no nativo (registration listener + LocalNotifications), Web Push na web ✅
-- [x] Adicionar migration SQL: colunas `deviceToken` e `platform` em `push_subscriptions` — `tools/fcm-schema-migration.cjs` ✅
-- [x] Reescrever Edge Function `notify-doses` para suportar FCM (HTTP v1 API + JWT OAuth) ✅
-- [x] Adicionar secrets Firebase no painel Supabase — `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` ✅
-- [x] Testar notificação local (LocalNotifications) no Android — 10 doses agendadas no Pixel 10 Pro emulador, dispararam no horário ✅
-- [x] Testar push server-side (FCM) no Android — token persistido, FCM HTTP v1 API retornou 200, notificação visual apareceu ✅
-- [ ] Confirmar snooze funciona no nativo ← validar quando precisar (não-bloqueante)
-- [x] **EXTRA:** Multi-device test — 2 emuladores, 2 users, push direcionado entrega só pro alvo correto ✅
-- [x] **EXTRA:** Edge Function `send-test-push` deployada para testes admin (POST com email do alvo)
-- [x] **EXTRA:** Notification channel `doses` criado no app (Android 8+ requer)
-- [x] **EXTRA:** Payload FCM corrigido — `priority: 'HIGH'` (uppercase), `notification_priority: 'PRIORITY_HIGH'`, `default_sound: true`
-- [x] **EXTRA:** Criar RPC `upsert_push_subscription` SECURITY DEFINER — solução pra cross-user device ownership transfer (mesmo device, user A logout → user B login → token vai pro user B sem RLS bloquear)
-- [x] **EXTRA:** Trocar partial unique index por UNIQUE constraint em `deviceToken` — partial index não funciona com `ON CONFLICT`
-
-### FASE 2.5 — Alarme Crítico Nativo (BLOCKER PRA LAUNCH)
-> Notificação push padrão (Capacitor LocalNotifications) toca som 1x e não bypassa silencioso/DND.
-> Pra app de medicação, lembretes precisam comportar-se como **alarme do despertador**: tela cheia, som em loop até dismiss, ignora silencioso, mostra na lock screen.
-> Requer plugin Android nativo custom (não existe plugin Capacitor maintained pra isso).
-
-- [x] Criar plugin Capacitor Android `CriticalAlarmPlugin` (Java) ✅
-- [x] Criar `AlarmReceiver` (BroadcastReceiver disparado por AlarmManager) ✅
-- [x] Criar `AlarmActivity` full-screen com FLAG_SHOW_WHEN_LOCKED + TURN_SCREEN_ON, MediaPlayer USAGE_ALARM loop, botões Ciente / Adiar 10min, vibração contínua ✅
-- [x] Adicionar permissão `USE_FULL_SCREEN_INTENT` no AndroidManifest ✅
-- [x] Adicionar permissão `ACCESS_NOTIFICATION_POLICY` ✅
-- [x] Adicionar `SYSTEM_ALERT_WINDOW` para BAL bypass Android 14+ ✅ (granted via adb appops)
-- [ ] Adicionar `dosy_alarm.mp3` em `res/raw/` (custom — fallback usa default RingtoneManager.TYPE_ALARM) ← opcional
-- [x] Registrar plugin em `MainActivity.java` ✅
-- [x] Bridge JS: `src/services/criticalAlarm.js` ✅
-- [x] Atualizar `usePushNotifications.scheduleDoses` — agrupa doses por minuto, agenda 1 critical alarm por grupo ✅
-- [x] Toggle "criticalAlarm" em prefs (default ON) — controlado em Settings ✅
-- [x] Quando OFF/falha: fallback LocalNotifications ✅
-- [x] **EXTRA:** `AlarmService` foreground service (BAL workaround Android 14+ — MediaPlayer loop em service, BAL exempt via SYSTEM_ALERT_WINDOW) ✅
-- [x] **EXTRA:** Agrupamento doses mesmo horário — 1 alarme único + 1 notif single com lista, vs N alarmes simultâneos ✅
-- [x] **EXTRA:** Modal queue — tap notif abre fila Ignorar/Pular/Tomada por dose ✅
-- [x] Tap em notif tray → MainActivity → modal queue (Ignorar/Pular/Tomada via RPC) ✅
-- [x] Re-agendar alarmes após reboot (`BootReceiver` registrado AndroidManifest, BOOT_COMPLETED + LOCKED_BOOT_COMPLETED + MY_PACKAGE_REPLACED) ✅
-- [x] Testar: device bloqueado → tela cheia liga + som ✅ (validado emulador Pixel 10 Pro 2026-04-27)
-- [x] Testar: app killed (home Android) → alarme dispara fullscreen ✅
-- [ ] Testar: dose com alarme crítico ATIVO → silenciar device → ainda tocar (USAGE_ALARM bypassa silencioso, validar em device físico)
-- [ ] Testar: dose com alarme crítico ATIVO → DND mode → ainda tocar (após permissão ACCESS_NOTIFICATION_POLICY granted)
-- [ ] Testar: tap "Adiar 10 min" → re-agenda pra +10min (re-test após mudança de implementação)
-
-### FASE 3 — Monetização
-- [ ] Criar conta RevenueCat
-- [ ] Criar conta Google Play Console (USD 25)
-- [ ] Criar produtos no Play Console: `dosy_pro_monthly` e `dosy_pro_yearly`
-- [ ] Conectar Play Console ao RevenueCat via chave de serviço
-- [ ] Instalar `@revenuecat/purchases-capacitor`
-- [ ] Criar `src/hooks/useInAppPurchase.js`
-- [ ] Atualizar `PaywallModal.jsx` com botões de compra reais
-- [ ] Adicionar botão "Restaurar compras" (obrigatório Google Play)
-- [ ] Testar fluxo de compra em ambiente de teste do Play Store
-- [ ] Testar restauração de compra
-- [ ] (Opcional) Configurar webhook RevenueCat → Supabase para renovações
-- [ ] **CTA permanente "Gerenciar plano" / "Mudar plano" / "Cancelar"** — atualmente paywall só abre via fluxos pontuais (locked feature, banner home). Usuário PRO/Plus não tem onde gerenciar assinatura, e Free não tem ponto fixo de upgrade.
-  - Adicionar seção **"Assinatura"** em `Settings.jsx` (após "Aparência" ou antes de "Conta"):
-    - Free: card com tier atual + botão "Conhecer PRO" → abre PaywallModal
-    - PRO/Plus: card com tier atual + data renovação + botões "Mudar plano" (PaywallModal com toggle Mensal/Anual) e "Cancelar assinatura" (deep link Play Store: `https://play.google.com/store/account/subscriptions?sku=<sku>&package=<pkg>`)
-  - Reforçar card de tier em `More.jsx` com CTA explícito (já existe info do plano, falta botão de ação pra PRO/Plus)
-  - Adicionar botão "Restaurar compras" na seção (RevenueCat `restorePurchases()`) — obrigatório Google Play
-  - Link "Política de cobrança" → texto curto explicando renovação automática + como cancelar (compliance Play Store)
-  - Considerar badge/banner sutil pra Free em pages-chave (Dashboard hero quando tier=free, já existe; replicar em PatientDetail/TreatmentList se patient/treatment limit reached)
-
-### FASE 4 — Polimento Nativo
-- [x] Instalar `jspdf` e `html2canvas` ✅
-- [x] Substituir `window.print()` por jsPDF em `Reports.jsx` (native path: html2canvas → jsPDF → Filesystem.Cache → Share). Web mantém window.print. ✅
-- [x] Instalar `@capacitor/filesystem` e `@capacitor/share` ✅
-- [x] Adaptar exportação CSV para Android (Filesystem + Share) ✅
-- [x] Implementar offline mutations + persistência cache (TanStack PersistQueryClient + retry exponential backoff 3x) ✅
-- [x] Instalar `@capacitor/network` ✅
-- [x] Criar `src/hooks/useOnlineStatus.js` com Network listener (native) + navigator.onLine (web) ✅
-- [x] Instalar `@capacitor-community/admob` ✅
-- [x] Criar lógica condicional AdSense (web) / AdMob (nativo) em `AdBanner.jsx` — test ID default, real ID via `VITE_ADMOB_BANNER_ANDROID` env ✅
-- [ ] Criar assets de ícone: `resources/icon.png` (1024×1024) e `resources/splash.png` ← design assets needed (manual)
-- [ ] Criar `resources/icon-foreground.png` para adaptive icon (108×108) ← design assets needed (manual)
-- [ ] Executar `npx @capacitor/assets generate --android` (depende dos assets acima)
-- [x] Configurar StatusBar dark `#0d1535` na inicialização (main.jsx + Capacitor StatusBar plugin) ✅
-- [ ] Testar safe area em dispositivos com notch ← device físico
-- [x] Configurar deep links em AndroidManifest.xml — `https://dosy-teal.vercel.app` + `dosy://` custom scheme ✅
-- [ ] Testar performance geral no Android (scroll, animações) ← device físico
-
-### FASE 5 — Preparação Play Store
-- [x] Criar página de Política de Privacidade (`/privacidade`) — `src/pages/Privacidade.jsx` criado ✅
-- [x] Criar página de Termos de Uso (`/termos`) — `src/pages/Termos.jsx` criado ✅
-- [x] Adicionar rotas `/privacidade` e `/termos` no `App.jsx` como rotas públicas (antes do auth check) ✅
-- [ ] Preencher questionário IARC no Play Console ← manual (web Play Console)
-- [ ] Preencher declaração de saúde (se aplicável) ← manual (web Play Console)
-- [ ] Gerar keystore de release ← `docs/play-store/keystore-instructions.md` com comando + checklist segurança ⚠️ MANUAL CRÍTICO
-- [ ] Fazer backup do keystore em 3 locais seguros ← manual (instruções em keystore-instructions.md)
-- [x] Configurar `android/app/build.gradle` com signingConfig — env-based (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD), só ativa se keystore existir ✅
-- [x] `.keystore` + `*.jks` adicionados ao `.gitignore` ✅
-- [ ] Gerar primeiro `.aab` de release (depende keystore) ← `cd android && .\gradlew.bat bundleRelease`
-- [ ] Tirar screenshots: Dashboard, DoseModal, Relatório, Settings, Pacientes (1080×1920) ← manual
-- [ ] Criar Feature Graphic (1024×500px) ← manual (design)
-- [x] Escrever descrição curta — `docs/play-store/description-short.txt` (80 chars) ✅
-- [x] Escrever descrição longa — `docs/play-store/description-long.txt` (~3500 chars com features, LGPD, contato) ✅
-- [x] Release notes template — `docs/play-store/release-notes.md` ✅
-- [x] App title — `docs/play-store/app-title.txt` ✅
-- [ ] Configurar preços: gratuito (download) + PRO Mensal + PRO Anual ← manual (Play Console + RevenueCat)
-
-### FASE 6 — Publicação
-- [ ] Upload AAB no track de Testes Internos ← manual (Play Console upload primeira vez OU via workflow_dispatch GitHub Actions)
-- [ ] Testar com grupo de testadores internos (mínimo 2-3 dispositivos) ← manual
-- [ ] Corrigir bugs encontrados no teste interno ← contínuo
-- [ ] Subir para Closed Testing (beta) ← manual ou `gh workflow run android-release.yml -f track=beta`
-- [ ] Aguardar aprovação Google (1-7 dias) ← manual
-- [ ] Publicar em produção com rollout gradual (10%) ← manual (Play Console)
-- [ ] Expandir rollout para 100% ← manual
-- [x] Configurar GitHub Actions para CI/CD de releases — `.github/workflows/android-release.yml` (build signed AAB + upload Play Store, multi-track via workflow_dispatch) + `ci.yml` (build verification em PRs) ✅
-- [x] Integrar Sentry (`@sentry/react` + `@sentry/capacitor`) com `beforeSend` removendo PII (email, name, observation, request body) — só ativa em PROD ✅
-- [x] Configurar `VITE_SENTRY_DSN` no `.env.example` + workflow secrets ✅
-- [x] Setup CI docs — `docs/play-store/ci-setup.md` com lista completa secrets necessários ✅
-- [x] Whatsnew template — `docs/play-store/whatsnew/whatsnew-pt-BR` (≤500 chars) ✅
-- [ ] Monitorar Android Vitals e crashes na primeira semana ← manual pós-launch
-- [ ] Responder primeiros reviews ← manual pós-launch
+| Google rejeitar app (categoria saúde) | Média | Alto | Política privacidade robusta + não mencionar diagnóstico médico |
+| Vazamento dados (LGPD) | Baixa | Crítico | RLS completo, CSP, sanitização, sem secrets no frontend |
+| Multa LGPD por falta consentimento | Média | Alto | Checkbox consentimento, política publicada |
+| Keystore perdido/corrompido | Baixa | Crítico | Backup em 3 locais seguros (FASE 18.3) |
+| Push FCM falhar background | Média | Médio | LocalNotifications + CriticalAlarm fallback |
+| RevenueCat billing error | Baixa | Alto | Testar extensivamente sandbox (FASE 16) |
+| `admin_grant_tier` chamado por user malicioso | **Mitigado** | **Crítico** | RPC verifica `is_admin()` server-side ✅ |
+| Bypass regras SOS via requisição direta | **Mitigado** | Alto | RPC `register_sos_dose` + trigger bloqueia INSERT direto ✅ |
+| DoS via `durationDays` enorme → 100k doses | **Mitigado** | Alto | RPC valida limite 365 dias ✅ |
+| Dados órfãos por DELETE parcial | **Mitigado** | Médio | FK ON DELETE CASCADE ✅ |
+| Anon role tem grants em 10/11 tabelas | **Pendente** | Crítico | FASE 7.1 `REVOKE ALL FROM anon` |
+| `minifyEnabled false` permite reverse-engineering | **Pendente** | Alto | FASE 7.2 ProGuard ativo |
+| FLAG_SECURE ausente — info médica vaza recents | **Pendente** | Alto | FASE 11.1 |
+| Sem testes — refactors arriscados | **Pendente** | Crítico | FASE 9 Vitest |
+| Sem source maps — crashes prod inúteis | **Pendente** | Alto | FASE 10.1 `@sentry/vite-plugin` |
+| Supabase auth token expirar offline | Média | Médio | `autoRefreshToken: true` + redirect Login |
+| Permissões especiais Android (full-screen, overlay) resetam após install | Média | Médio | PermissionsOnboarding re-aparece após APP_VERSION change ✅ |
