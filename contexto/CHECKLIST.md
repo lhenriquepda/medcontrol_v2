@@ -268,7 +268,7 @@
   - Se duvidoso: degradar para `^5.7.0` e `npm install`
 
 ### #023 — Refatorar `useDoses` para `refetchIntervalInBackground: false`
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01) — release v0.1.7.0
 - **Origem:** [Auditoria] (Dimensão 22)
 - **Esforço:** 30 min
 - **Dependências:** nenhuma
@@ -585,6 +585,177 @@
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 22.3
 
+### #075 — Reduzir agressividade React Query global (mitiga lentidão geral)
+- **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01)
+- **Origem:** [Sessão v0.1.7.0] Análise lentidão reportada pelo user
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Severidade:** alta — combina com #023 + #076 pra fix completo de lentidão/travamento
+- **Snippet:**
+  ```js
+  // src/main.jsx — defaultOptions atual:
+  // staleTime: 0
+  // refetchOnMount: 'always'
+  // refetchOnWindowFocus: true
+  //
+  // Mudar para:
+  staleTime: 30_000,           // 30s — cache fresh por 30s, evita refetch redundante
+  refetchOnMount: true,        // só se stale (não 'always')
+  refetchOnWindowFocus: true,  // mantém — útil pós-idle curto
+  ```
+- **Aceitação:**
+  - Navegação interna entre pages não dispara refetch se query foi feita há <30s
+  - Volta de aba ainda refresh (refetchOnWindowFocus mantido)
+  - DoseModal abre rápido (não espera refetch redundante)
+  - Lint passa
+- **Riscos:**
+  - Alarme/notif: zero (config TanStack ≠ alarme nativo Android que vive em SharedPreferences)
+  - Realtime: zero (websocket independente)
+  - Stale data 30s: aceitável pra healthcare; doses mudam minutos, não segundos
+
+### #076 — Refatorar useAppResume — recovery sem reload destrutivo
+- **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01) — validado live: app recupera URL+state ao voltar foco, sem cold reload. Mitigação parcial do BUG-016 (não previne perda de notif idle, só recovery UX).
+- **Origem:** [Sessão v0.1.7.0] User reportou "app trava após ficar aberto muito tempo"
+- **Esforço:** 2h
+- **Dependências:** nenhuma
+- **Severidade:** alta — causa raiz do travamento observado
+- **Causa atual:** após 5min idle, `useAppResume.js` força `window.location.href = '/'`. Isso causa cold reload + perda de URL + tela branca 1-3s + cascata de refetch. Se algo falhar nesse reload (SW velho, JWT expirado, race condition), app fica em estado quebrado até hard close de Chrome.
+- **Snippet (proposta):**
+  ```js
+  // src/hooks/useAppResume.js
+  // Antes: window.location.href = '/'  (destrutivo)
+  // Depois: cleanup + invalidate + reconnect realtime, preservando URL
+  if (inactiveMs >= STALE_RELOAD_THRESHOLD_MS) {
+    console.log('[useAppResume] long idle', inactiveMs, 'ms → soft recover')
+    // 1. Force JWT refresh (Supabase rotaciona refresh token)
+    await supabase.auth.refreshSession()
+    // 2. Force realtime reconnect (drops dead websockets)
+    supabase.removeAllChannels()
+    // 3. Invalidate all queries — refetch fresh
+    await qc.invalidateQueries()
+    // 4. Refetch active queries
+    await qc.refetchQueries({ type: 'active' })
+    // URL preservada. Sem reload.
+  }
+  ```
+- **Aceitação:**
+  - App fica aberto 15min idle → volta foco → não força reload
+  - Estado UI preservado (url, modais abertos, scroll position)
+  - Doses recentes carregam (queries refetched)
+  - Realtime resubscribe (dose tomada em outro device aparece)
+  - Manual: device físico Android + 30min idle + voltar → app responde sem cold start
+- **Riscos:**
+  - Alarme nativo: zero (vive separado em AlarmReceiver + SharedPreferences)
+  - Notif FCM: zero (background handler separado)
+  - Edge case: se `supabase.auth.refreshSession()` falhar (refresh token expirado), redirect pra login (já handled em supabase.js auth listener)
+- **Detalhe:** BUG-016 catalogado em `auditoria-live-2026-05-01/` (nova pasta criada na sessão se necessário)
+
+### #077 — Listener TOKEN_REFRESHED em useRealtime (resubscribe pós JWT rotation)
+- **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01)
+- **Origem:** [Sessão v0.1.7.0]
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Severidade:** média — robustez. Sem isso, websocket pode morrer silenciosamente após Supabase rotacionar JWT (default 1h)
+- **Snippet:**
+  ```js
+  // src/hooks/useRealtime.js — adicionar dentro do useEffect
+  const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+      unsubscribe()
+      subscribe()
+    }
+  })
+  // cleanup: authSub.subscription.unsubscribe()
+  ```
+- **Aceitação:**
+  - Forçar JWT refresh (via `supabase.auth.refreshSession()` no console) → realtime resubscribe ocorre
+  - Console log mostra resubscribe disparado
+  - Dose tomada em device A após 1h+ aparece em device B (longe-evita)
+- **Riscos:** zero — adiciona robustez
+
+### #078 — Bumpar SW cache version v5 → v6 (invalidar bundles velhos)
+- **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01)
+- **Origem:** [Sessão v0.1.7.0]
+- **Esforço:** 5 min
+- **Dependências:** nenhuma
+- **Severidade:** baixa — limpeza. SW pode estar servindo bundle velho de v0.1.6.x se cache não rotaciona
+- **Snippet:**
+  ```js
+  // public/sw.js linha 1
+  // ANTES: const CACHE = 'medcontrol-v5'
+  // DEPOIS: const CACHE = 'medcontrol-v6'
+  ```
+- **Aceitação:**
+  - Após próximo deploy, SW activate event deleta cache `medcontrol-v5` e cria `medcontrol-v6`
+  - Devices com bundle velho cached forçam download fresh
+- **Convenção:** bumpar a cada release com mudança de bundle JS (esquecer = bug serve velho). **TODO:** automatizar em vite plugin (P2 futuro).
+
+### #079 — Realtime heartbeat keep-alive (mantém websocket vivo durante idle)
+- **Status:** ⏳ Aberto
+- **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle
+- **Esforço:** 2-3h (impl + teste device físico)
+- **Dependências:** nenhuma
+- **Severidade:** P0 — healthcare-critical (dose perdida = paciente sem medicação)
+- **Causa-raiz:** websocket Supabase realtime morre silenciosamente durante idle longo Android (Doze + OS network management). Sem heartbeat, sem detecção de conexão morta. App não recebe `postgres_changes` de novas doses → não agenda alarme nativo.
+- **Snippet (proposta):**
+  ```js
+  // src/hooks/useRealtime.js — adicionar dentro do useEffect, após channel.subscribe()
+  let pingTimer, pongTimer, heartbeatActive = false
+  const startHeartbeat = () => {
+    if (heartbeatActive) return
+    heartbeatActive = true
+    const tick = () => {
+      // Ping interno do client Supabase
+      pongTimer = setTimeout(() => {
+        // Sem pong em 5s → reconnect
+        console.warn('[useRealtime] heartbeat timeout — reconnecting')
+        unsubscribe()
+        subscribe()
+        startHeartbeat()
+      }, 5_000)
+      // Trigger ping (se v2 supabase-js suportar)
+      channel?.send({ type: 'broadcast', event: 'ping', payload: {} })
+      pingTimer = setTimeout(tick, 30_000)
+    }
+    pingTimer = setTimeout(tick, 30_000)
+    channel?.on('broadcast', { event: 'pong' }, () => clearTimeout(pongTimer))
+  }
+  startHeartbeat()
+  // Cleanup: clearTimeout(pingTimer); clearTimeout(pongTimer)
+  ```
+- **Alternativa:** investigar `RealtimeClient` do supabase-js — pode já ter heartbeat configurável (`heartbeatIntervalMs`).
+- **Aceitação:**
+  - App idle por 30min em device físico: dose criada via DB direto APARECE no app sem precisar abrir
+  - Alarme nativo agendado dentro de 30s da inserção DB
+  - Reconnect automático ao detectar silent fail (logs Sentry: `[useRealtime] heartbeat timeout`)
+- **Riscos:**
+  - Battery drain — heartbeat 30s é leve mas existe. Considerar pausar em `appStateChange isActive=false` no Android nativo (já pausa hoje) e validar que retoma corretamente
+  - Network mobile flaky — ping/pong em 3G ruim pode falsar timeout. Tunear thresholds via teste real
+- **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
+
+### #080 — Investigar logs notify-doses Edge cron + retry policy + observability push
+- **Status:** ⏳ Aberto
+- **Origem:** [auditoria-live-2026-05-01] BUG-016
+- **Esforço:** 3-4h (investigação + fix + dashboard)
+- **Dependências:** acesso aos logs Edge Function (PAT precisa scope `read_logs` ou via Supabase Dashboard manual)
+- **Severidade:** P0 — fail-safe server-side falhou, healthcare-critical
+- **Sintomas observados (BUG-016):**
+  - Dose 18:55 BRT (criada 18:39 via REST direto): nem realtime, nem alarme nativo, nem push FCM
+  - Dose 18:58 BRT com user recém-ativo: push chegou normal
+  - 2 push_subscriptions registradas pro user (token rotation gerou múltiplos)
+  - advanceMins=0 → janela ±60s no Edge query
+- **Aceitação:**
+  - Logs Edge `notify-doses` últimas 24h analisados — confirmar se cron rodou pra cada dose perdida
+  - Implementar retry com exponential backoff em falha FCM transitória (`UNAVAILABLE`, `INTERNAL`)
+  - Cleanup `push_subscriptions.deviceToken` em response FCM `INVALID_ARGUMENT` / `UNREGISTERED` (token expirado)
+  - Dashboard PostHog/Sentry: alerta queda push delivery rate <99% em 1h (já item #007 + #016)
+  - Métrica `notify-doses` por execução: count enviados, count sucessos, count falhas + reason
+- **Investigação inicial:**
+  - Confirmar `pg_cron.job_run_details` mostra cron rodou às 18:54-18:56
+  - Confirmar Edge response = 200 + `sent: N` apropriado
+  - Se cron OK + Edge OK + push não chegou → problema FCM-side ou token Android
+- **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
+
 ### #074 — Habilitar upload de debug symbols no Play Console
 - **Status:** ⏳ Aberto
 - **Origem:** [Sessão v0.1.6.10] Aviso recorrente Play Console
@@ -614,8 +785,8 @@
 
 ## Resumo
 
-- **P0:** 9 itens (#001-009) · esforço estimado: ~3-5 dias-pessoa
-- **P1:** 18 itens (#010-027) · esforço estimado: ~10-15 dias-pessoa
+- **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
+- **P1:** 22 itens (#010-027 + #075-#078 v0.1.7.0) · esforço estimado: ~10-15 dias-pessoa
 - **P2:** 22 itens (#028-049) · esforço estimado: ~3-4 semanas-pessoa
 - **P3:** 25 itens (#050-073, #074) · esforço estimado: 90+ dias
 

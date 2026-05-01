@@ -6,7 +6,13 @@ export function useDoses(filter = {}) {
   return useQuery({
     queryKey: ['doses', filter],
     queryFn: () => listDoses(filter),
-    refetchInterval: 60_000
+    // Item #023 (release v0.1.7.0) — refetch só com tab ativa.
+    // Antes: refetchInterval rodava em background gerando backlog após 15min idle.
+    // Realtime (useRealtime.js) cobre updates cross-device em tempo real;
+    // alarme nativo Android é independente do cache TanStack.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000
   })
 }
 

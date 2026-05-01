@@ -58,11 +58,16 @@ if (SENTRY_DSN && import.meta.env.PROD) {
   }
 }
 
+// Item #075 (release v0.1.7.0) — config menos agressiva pra mitigar lentidão geral.
+// Antes: staleTime: 0 + refetchOnMount: 'always' fazia toda nav refetchar todas queries.
+// Agora: staleTime 30s + refetchOnMount: true (só se stale) — refetch só quando necessário.
+// refetchOnWindowFocus mantido (útil pós-idle curto sem reload).
+// Hooks individuais (ex.: useDoses) podem override se precisarem janela menor/maior.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0,
-      refetchOnMount: 'always',
+      staleTime: 30_000,
+      refetchOnMount: true,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       retry: 1,

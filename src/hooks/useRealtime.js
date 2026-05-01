@@ -58,6 +58,16 @@ export function useRealtime() {
 
     subscribe()
 
+    // Item #077 (release v0.1.7.0) — resubscribe ao Supabase rotacionar JWT.
+    // Sem isso, websocket morre silenciosamente após token rotation (default 1h)
+    // e mudanças cross-device deixam de chegar até reload manual.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        unsubscribe()
+        subscribe()
+      }
+    })
+
     // Native lifecycle: drop channel on background, resubscribe + invalidate on foreground
     let pauseHandle, resumeHandle
     if (Capacitor.isNativePlatform()) {
@@ -76,6 +86,7 @@ export function useRealtime() {
 
     return () => {
       unsubscribe()
+      authSub?.subscription?.unsubscribe?.()
       pauseHandle?.remove()
       resumeHandle?.remove()
     }
