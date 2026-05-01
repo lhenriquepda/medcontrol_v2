@@ -548,6 +548,14 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **`master` é sagrado.** Sempre reflete a última versão publicada (Play Store + Vercel produção sincronizados). Trabalho do dia-a-dia **NUNCA** vai direto pra master.
 
+**Princípio "1 sessão = 1 branch versionada = 1 release" + dual-app Android:**
+
+- Branch `release/v{X.Y.Z}` em desenvolvimento → builds Android instalam como **Dosy Dev** (`com.dosyapp.dosy.dev`) via Studio Run debug variant
+- Master + Play Store oficial → builds Android instalam como **Dosy** (`com.dosyapp.dosy`) via AAB release variant
+- **Dosy Dev e Dosy coexistem no mesmo device** — user usa Dosy oficial normalmente enquanto Dosy Dev roda testes
+- Reduz risco: nenhum teste destrutivo (force stop, idle 24h, dose injection) afeta Dosy oficial
+- Workflow padrão: agente acumula commits na release branch → user testa em Dosy Dev → quando OK, ciclo release oficial promove pra Dosy
+
 #### Modelo
 
 ```
@@ -636,14 +644,18 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 ### Ambientes de teste
 
-| Ambiente | URL / Como acessar | Reflete | Quando usar |
+| Ambiente | Pacote / URL | Reflete | Quando usar |
 |---|---|---|---|
 | **Local web (dev server)** | `npm run dev` → http://localhost:5173 | seu working tree (mudanças não-commitadas inclusas) | iteração rápida, qualquer mudança web |
-| **Local Android emulator** | `npm run build:android` → Android Studio Run | seu working tree empacotado | mudanças em plugin nativo, alarme, push, biometria |
-| **Local Android device físico** | mesmo + USB cable + USB debugging on | seu working tree empacotado | validação final mobile (FASE 17) |
-| **Vercel preview** | URL única gerada pelo Vercel para cada PR | branch `release/v*` ativa (não master) | demonstrar mudanças web acumuladas da sessão antes de release final |
+| **Dosy Dev (Android Studio Run)** | pkg `com.dosyapp.dosy.dev` · label "Dosy Dev" | branch `release/v*` ativa empacotada | **TODO trabalho de release branch em device físico/emulator vai aqui.** Coexiste lado-a-lado com Dosy oficial. Dados separados, alarme/notif/storage isolados. |
+| **Vercel preview** | URL única gerada pelo Vercel para a branch | branch `release/v*` ativa (não master) | demonstrar mudanças web acumuladas da sessão antes de release final |
 | **Vercel produção** | https://dosy-teal.vercel.app | master | validação final produção web |
-| **Play Store Internal Testing** | URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (pode estar atrás de master) | validação real Android |
+| **Dosy oficial — Play Store Internal Testing** | pkg `com.dosyapp.dosy` · URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (master ou atrás) | validação real Android **só recebe builds quando release oficial é cortada (Passo 3 do ciclo)** |
+
+**Princípio dual-app:**
+- **Dosy Dev** (`com.dosyapp.dosy.dev`): app instalado pelo Android Studio Run em debug variant. Usa Firebase entry separada (`google-services.json` em `src/debug/`) — push FCM dev funciona sem afetar prod. Reinstalado a cada Run. Use livremente pra testes destrutivos, force stop, idle longo.
+- **Dosy** (`com.dosyapp.dosy`): app oficial Play Store. Recebe builds APENAS via release oficial (release branch → AAB → Console). Nunca instalado via Studio Run no flow normal.
+- Coexistem no mesmo device. User pode usar Dosy normalmente enquanto Dosy Dev roda testes em background (force stop, idle 24h, etc).
 
 ### Decisão "onde testar" por tipo de mudança
 
@@ -652,37 +664,34 @@ Raras exceções pra master direto (sem branch + sem bump):
 | Edge Function (Supabase server-side) | Deploy em prod via `supabase functions deploy {name} --project-ref guefraaqbkcehofchnrc` (PAT em `.env.local`) → testar com `curl` direto. **Rollback:** `git checkout {tag-anterior} -- supabase/functions/{name}/` + redeploy. Edge Functions são deploy independente do AAB/Vercel; podem ser deployadas durante sessão pra testar antes do release final. |
 | Migration DB | Local web + verificar dados via Supabase Studio (cloud) |
 | UI web apenas | Local web → http://localhost:5173 |
-| UI compartilhada web+Android | Local web PRIMEIRO + Android emulator se afeta layout mobile |
-| Plugin nativo Android (alarme, biometria, push, secure storage) | Android emulator + device físico |
-| Mudança que afeta build (gradle, capacitor.config) | Build full `npm run build:android` + Android Studio |
+| UI compartilhada web+Android | Local web PRIMEIRO + **Dosy Dev** (Android Studio Run) se afeta layout mobile |
+| Plugin nativo Android (alarme, biometria, push, secure storage) | **Dosy Dev** em device físico (`com.dosyapp.dosy.dev`) |
+| Mudança que afeta build (gradle, capacitor.config) | Build full `npm run build:android` + Android Studio Run → **Dosy Dev** |
 | Mudança em config Supabase (config.toml, RLS) | Aplicar em cloud + testar via local web |
+| Validação idle ilimitado / WorkManager / alarmes nativos | **Dosy Dev** force stop + esperar (24-48h) — Dosy oficial fica intocado durante teste |
 
 ### Fluxo de teste passo-a-passo (para você, não-dev)
 
-**Cenário: agente está acumulando mudanças na branch `release/v0.1.6.10` e quer que você teste antes de seguir.**
+**Cenário web: agente está acumulando mudanças na branch `release/v0.1.7.1` e quer que você teste em browser.**
 
-1. **Agente diz:** *"Mudança X pronta na branch release/v0.1.6.10. Pra testar local:"*
+1. Agente diz: *"Mudança X pronta na branch release/v0.1.7.1. Testa local:"*
+2. Comandos exatos: `git checkout release/v0.1.7.1 && npm install && npm run dev`
+3. Abre http://localhost:5173, loga `teste03@teste.com / 123456`
+4. Reporta: "funcionou" ou "não funcionou"
 
-2. **Agente envia comandos exatos:**
-   ```
-   git checkout release/v0.1.6.10
-   npm install                    # se mudou deps
-   npm run dev
-   ```
+**Cenário Android: agente quer que você teste em device físico (alarme, idle, plugin nativo).**
 
-3. **Você abre:** http://localhost:5173
+1. Conecta cabo USB no device, **Depuração USB ON**
+2. Android Studio aberto + branch `release/v*` checked out + sync Gradle OK
+3. Click **Run ▶** — Studio compila + instala **Dosy Dev** (`com.dosyapp.dosy.dev`)
+4. **Dosy Dev** abre no celular — ícone separado de Dosy oficial
+5. Login `teste03@teste.com / 123456` (mesmo backend Supabase, mas dados isolados por package se preferir contas diferentes)
+6. Pode desconectar cabo — app instalado roda independente
+7. Faz testes (criar dose, force stop, esperar idle, etc) **APENAS no Dosy Dev**
+8. **Dosy oficial Play Store** continua funcionando paralelo, intocado, com seus dados/medicamentos reais
+9. Quando terminar testes: simplesmente desinstala **Dosy Dev** ou deixa pra próxima sessão
 
-4. **Você loga:** `teste03@teste.com / 123456`
-
-5. **Agente lista o que testar** (apenas itens da mudança em questão).
-
-6. **Você reporta:**
-   - "Funcionou" → agente segue acumulando próximos itens NA MESMA BRANCH
-   - "Não funcionou" → agente investiga + ajusta na mesma branch (novo commit)
-
-7. **Master NÃO é tocada** durante a sessão. Master só recebe merge quando você disser "publica" → ciclo de release dos 8 passos.
-
-8. **Para Android durante a sessão:** raramente necessário. Branch acumula. AAB só é gerado uma vez, no Passo 2 do release final.
+**Master NÃO é tocada** durante a sessão. Dosy oficial só recebe nova versão quando você disser "publica" → ciclo release dos 8 passos (AAB build + Console upload + merge master + tag).
 
 ### O que evitar
 
@@ -690,6 +699,8 @@ Raras exceções pra master direto (sem branch + sem bump):
 - ❌ Confiar que "Play Store já tem versão nova" só porque mergeou pra master — Android exige build/upload manual (até CI Android estar configurado)
 - ❌ Mexer em `master` direto durante a sessão — sempre via release branch
 - ❌ Criar branch nova `fix/*` ou `feature/*` no meio de uma sessão com `release/v*` ativa — tudo vai na release branch
+- ❌ **Instalar build de release branch como "Dosy" oficial** — sempre instalar como **Dosy Dev** (`com.dosyapp.dosy.dev`) via Android Studio Run debug variant. Studio Run em release variant escreveria sobre Dosy oficial — só fazer no ciclo de release final.
+- ❌ **Misturar dados entre Dosy e Dosy Dev** — se logar mesma conta nos dois apps, ambos veem o mesmo backend Supabase. OK pra teste, mas crie tratamentos teste só em Dosy Dev pra não poluir histórico real.
 
 ### Mensagem padrão do agente ao iniciar sessão
 
@@ -700,14 +711,16 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 **No ar agora (intocado):** v{atual}
 - App web: https://dosy-teal.vercel.app
-- Play Store: AAB v{atual}
+- Dosy oficial Play Store: AAB v{atual}
 
 **Branch desta sessão:** `release/v{próxima}` (todas mudanças vão aqui)
+**Onde mudanças aparecem em Android:** **Dosy Dev** (instalado via Studio Run, coexiste com Dosy oficial)
 
 **O que vou fazer:** {descrição em 1-2 linhas, português simples}
 
 **Onde você vai testar quando eu terminar uma mudança:**
-- Rodar `npm run dev` no terminal e abrir http://localhost:5173 (eu te guio passo a passo)
+- Web: `npm run dev` → http://localhost:5173 (eu te guio passo a passo)
+- Android: Android Studio Run → instala/atualiza **Dosy Dev** no device. Dosy oficial fica intocado.
 
 **Quando publicar de verdade:** só quando você disser "publica" / "terminamos" — aí faço bump de versão + AAB + Console + merge master + tag.
 
@@ -775,7 +788,9 @@ npm version {patch|minor|major} --no-git-tag-version
 
 Commit dedicado: `chore(release): bump to vX.Y.Z`
 
-#### Passo 3 — Build do AAB (Android)
+#### Passo 3 — Build do AAB (Android, vai pra Dosy oficial)
+
+> **IMPORTANTE:** AAB release variant tem `applicationId = com.dosyapp.dosy` (sem suffix `.dev`). Após upload no Console, vira atualização do **Dosy oficial** Play Store. Dosy Dev (debug variant `.dev`) NÃO é afetado e continua coexistindo no device dos testers.
 
 Agente guia step-by-step (user não-dev):
 
@@ -783,10 +798,12 @@ Agente guia step-by-step (user não-dev):
 2. *"Menu **Build** → **Generate Signed Bundle / APK** → **Android App Bundle**"*
 3. *"Selecione keystore: `dosy-release.keystore` (deve estar em `android/`)"*
 4. *"Senhas vêm de `android/keystore.properties` — Android Studio puxa automático se config OK"*
-5. *"Variant: **release**"*
+5. *"Variant: **release**"* — IMPORTANTE: release, não debug
 6. *"Aguardar build (~2-3min)"*
 7. *"AAB sai em: `android/app/release/app-release.aab`"*
 8. *"Confirma tamanho (~17-20 MB esperado) e me avisa quando estiver pronto"*
+
+**Why release variant matters:** debug variant build = pkg `com.dosyapp.dosy.dev` (Dosy Dev), release variant build = pkg `com.dosyapp.dosy` (Dosy oficial). Console aceita só release-signed AABs.
 
 #### Passo 4 — Publicar no Play Console
 
