@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.6.9` @ commit `5bb9d36` · branch `master` · sync com `origin/master`.
-**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.6.9 (espelhado com código). Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.1.6.10` (tag `v0.1.6.10`) · branch `master` · sync com `origin/master`.
+**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.6.10. Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,42 +58,50 @@
 
 ## 3. Onde paramos
 
-**Última auditoria:** 2026-05-01 (este documento).
-**Último marco fechado:** v0.1.6.9 deployed Vercel + AAB `0.1.6.1 (14)` em Internal Testing track.
+**Última release:** v0.1.6.10 publicada 2026-05-01 (Vercel + Play Store Internal Testing AAB versionCode 23).
+**Última auditoria:** 2026-05-01.
 
-**Trabalho do dev nas últimas semanas (resumo `Plan.md`):**
+**Items fechados na release v0.1.6.10:**
+- ✅ #001 Admin auth check em `send-test-push` Edge Function (deploy server-side)
+- ✅ #002 Sanitizar email enumeration em `send-test-push`
+- ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
+
+**Process improvements na release:**
+- Reorganização `contexto/` (auditoria → snapshot imutável em `auditoria/`, archive de docs históricos em `archive/`)
+- Regra 8 README — comunicação com user não-dev (vocabulário, templates de decisão/teste, auto-checagem)
+- Modelo "1 sessão = 1 release branch" — `release/v{X.Y.Z}` única, todas mudanças nela, merge → master + tag no fim
+
+**Trabalho prévio (releases anteriores resumo `archive/plan-original.md`):**
 - ✅ FASE 0-15: segurança, LGPD, alarme crítico, FCM, A11y partial, code splitting, Sentry, PostHog
-- ✅ FASE 18.4.5: hot-fixes pós-deploy (Sentry DSN, Supabase 406, RPC missing, DoseModal race)
-- ✅ FASE 18.5: FAQ in-app (35 perguntas)
+- ✅ FASE 18.4.5: hot-fixes pós-deploy
+- ✅ FASE 18.5: FAQ in-app
 - ✅ FASE 19.1: Internal Testing setup
-- ✅ Auditoria externa multidisciplinar (este documento)
+- ✅ Auditoria externa multidisciplinar 2026-05-01
 
-**Bloqueando avanço para Closed Testing:**
-1. Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE` para Play Console
-2. Screenshots phone retrabalhar
-3. Device validation FASE 17 (3 devices físicos)
-
-**Bug crítico ativo encontrado nesta auditoria:**
-- ~~`send-test-push` Edge Function sem auth admin check (BUG-002 P0)~~ → fechado #001 + #002 em 2026-05-01 (branch `security/send-test-push-admin`, deploy edge function pendente)
+**Bloqueando avanço para Closed Testing (P0 manuais user):**
+1. #003 Rotacionar senha postgres + revogar PAT + INFOS.md → vault (~30min)
+2. #004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE` (~2-3h)
+3. #006 Device validation 3 devices físicos (1-2 dias)
+4. #008 Sentry GitHub Secrets (~15min)
+5. #009 PITR + DR drill (depende upgrade Pro plan)
+6. #007 Telemetria PostHog `notification_delivered` (depende #018)
 
 ---
 
 ## 4. Próximo passo imediato
 
-**Ordem recomendada Sem 1 (prioridade absoluta):**
+**P0 restantes (todos manuais user):**
 
-| # | Tarefa | Esforço | Detalhe |
+| # | Tarefa | Esforço | Tipo |
 |---|---|---|---|
-| ~~#001~~ | ~~Adicionar admin check em `send-test-push` Edge Function~~ ✅ | ~~30 min~~ | fechado nesta sessão, release `v0.1.6.10` |
-| ~~#002~~ | ~~Sanitizar erro email enumeration (parte de #001)~~ ✅ | ~~5 min~~ | fechado nesta sessão |
-| #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min manual | [archive/security-original.md](archive/security-original.md) |
-| ~~#005~~ | ~~Investigar BUG-001 encoding UTF-8~~ ✅ | ~~1-3h~~ | data fix prod-only, sem mudança de código |
-| #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | [CHECKLIST §#008](CHECKLIST.md#008--configurar-sentry_auth_token--org--project-em-github-secrets) |
-| #007 | Telemetria PostHog `notification_delivered` (regressão silenciosa) | 1-2h | [CHECKLIST §#007](CHECKLIST.md#007--adicionar-telemetria-notification_delivered-em-posthog-regressão-silenciosa) |
-| #004 | Gravar vídeo demo FGS YouTube unlisted | 2-3h | Plan FASE 18.9.1 |
-| #006 | Device validation FASE 17 em 3 devices Android | 1-2 dias | `docs/device-validation-checklist.md` |
+| #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min | manual user |
+| #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | manual user |
+| #004 | Gravar vídeo demo FGS YouTube unlisted | 2-3h | manual user |
+| #006 | Device validation FASE 17 em 3 devices Android | 1-2 dias | manual user |
+| #007 | Telemetria PostHog `notification_delivered` | 1-2h | depende #018 manual user |
+| #009 | PITR + DR drill | 30min config + 2h drill | depende upgrade Pro plan |
 
-**Total Sem 1:** ~3-5 dias-pessoa.
+**Próxima sessão de código (sugerida):** atacar P1 batch — RLS policies refinement (#012 + #013), recriar RPC `extend_continuous_treatments` (#014), `<label>` Login (#011), `ic_stat_dosy` icon (#010), `useDoses` refactor (#023), `minimum_password_length` 6→8 (#019). Release `v0.1.7.0` minor.
 
 ---
 
@@ -381,9 +389,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 ## 12. Resumo numérico (atualize após cada item fechado)
 
 - **Total:** 73 itens
-- **Em aberto:** 70 (#001, #002, #005 fechados em 2026-05-01 — release v0.1.6.10)
+- **Em aberto:** 70 (#001, #002, #005 fechados em release v0.1.6.10 — 2026-05-01)
 - **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 24
-- **Esforço P0:** ~3-5 dias-pessoa
+- **Esforço P0 restante:** ~3-5 dias (todos manuais user)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
 

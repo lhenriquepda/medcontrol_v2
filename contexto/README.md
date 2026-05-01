@@ -13,7 +13,7 @@
 1. **Leia este README inteiro** (você está aqui).
 2. **Leia [`PROJETO.md`](PROJETO.md)** — briefing técnico canônico (stack, schema, convenções, gating Free/Plus/Pro/Admin, plugins nativos, deploy). É o "manual do operador" do código.
 3. **Leia [`ROADMAP.md`](ROADMAP.md)** — onde paramos, próximo passo, fluxo macro de release.
-4. **Skim [`updates/`](updates/)** — últimos 1-2 logs de sessão pra entender o que mudou recentemente.
+4. **Leia o último log em [`updates/`](updates/)** — geralmente `release-vX.Y.Z.md` da última release publicada. Diz o que mudou e se há `release/v*` ativa em andamento.
 5. **Conforme demanda do usuário:**
    - Pediu pra continuar desenvolvimento → ler item específico em [`CHECKLIST.md`](CHECKLIST.md)
    - Pediu detalhe técnico DB → [`auditoria/04-supabase.md`](auditoria/04-supabase.md)
@@ -227,8 +227,11 @@ Esta pasta é fonte da verdade compartilhada. Se você está rodando em paralelo
    - ❌ Tabela de 8 cenários antes de dizer se funcionou
    - ✅ *"✅ Funcionou. 6 de 8 testes passaram, 2 pulei porque exigiriam sua conta admin. Risco do não-testado é baixo. Detalhes abaixo se quiser ver."*
 
-6. **Vocabulário proibido (sem tradução):**
-   `JWT` · `Bearer` · `prod` · `deploy` · `mergear` (use "juntar" ou "publicar") · `branch` (no contexto técnico — quando crítico, dizer "versão de teste" ou "rascunho separado") · `commit` (use "salvar mudança") · `endpoint` · `payload` · `token` (no body, OK em headers explicados) · `staging` · `production` (use "servidor de teste" / "servidor real") · `IndexedDB` · `localStorage` (use "cache do navegador") · `CORS`, `CSRF` (explicar de forma curta inline)
+6. **Vocabulário proibido AO FALAR COM USER (sem tradução):**
+
+   > Esta lista se aplica APENAS a mensagens que o user vai LER. Em docs internas (`contexto/`, READMEs, comentários de código, commits, PRs) os termos técnicos são livres — o public-alvo lá é dev/agente.
+
+   `JWT` · `Bearer` · `prod` · `deploy` · `mergear` (use "juntar" ou "publicar") · `branch` (use "versão de teste" ou "rascunho separado") · `commit` (use "salvar mudança") · `endpoint` · `payload` · `token` (no body, OK em headers explicados) · `staging` · `production` (use "servidor de teste" / "servidor real") · `IndexedDB` · `localStorage` (use "cache do navegador") · `CORS`, `CSRF` (explicar de forma curta inline)
 
 7. **Vocabulário OK** (já familiar pelo PROJETO.md): paciente, dose, tratamento, alarme, push, FCM (mencionar 1x e usar "notificação"), Vercel, Play Store, Android, AAB.
 
@@ -483,9 +486,9 @@ Durante outro trabalho ou uso casual, achou bug:
 
 ### Pre-trabalho (sempre)
 
-1. `git fetch origin && git branch -v` — listar branches; verificar se já existe `release/v*` ativa
-2. **Se existe `release/v*` ativa:** `git checkout release/v*` (continuar acumulando commits da sessão anterior)
-3. **Se NÃO existe:** confirmar com user a próxima versão proposta (patch/minor/major a partir do master atual) → criar branch `release/v{versão}` a partir de master
+1. `git fetch origin && git branch --list 'release/*'` — descobrir se já existe release branch ativa
+2. **Se existe** (ex.: retornou `release/v0.1.6.10`): `git checkout release/v0.1.6.10` — continuar acumulando commits da sessão anterior. **Modelo permite só 1 ativa por vez.** Se aparecer mais de uma → erro de manutenção, reportar antes de tudo.
+3. **Se NÃO existe:** confirmar com user a próxima versão proposta (patch/minor/major a partir do master atual) → criar branch `release/v{versão}` a partir de master atualizada
 4. `git status` — working tree limpo? Branch correta?
 5. `git log -1 --format="%h %s"` — último commit conhecido
 6. **Se itens P0 ou destrutivos na fila:** confirmar com usuário antes de codar
@@ -540,6 +543,8 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 **Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
 
 ### Branch / PR — modelo "1 sessão = 1 branch versionada = 1 release"
+
+> **🌟 FONTE CANÔNICA do modelo de branch.** Outras seções (`§Padrão de fluxo`, `§Pre-trabalho`, `§Próxima sessão`, `§Geração de items` passo 7) só apontam pra cá. Mudou regra? Atualize aqui primeiro.
 
 **`master` é sagrado.** Sempre reflete a última versão publicada (Play Store + Vercel produção sincronizados). Trabalho do dia-a-dia **NUNCA** vai direto pra master.
 
@@ -625,9 +630,9 @@ Raras exceções pra master direto (sem branch + sem bump):
 ## 🧪 Como testar mudanças (guia para usuário não-dev)
 
 > **Regra ouro:** sempre que o agente mudar algo, ele DEVE dizer 3 coisas:
-> 1. **Onde estou agora** (qual branch, qual versão master segue rodando em produção)
+> 1. **Onde estou agora** (release branch ativa, qual versão master segue rodando em produção)
 > 2. **Onde você testa essa mudança** (comando exato, URL específica)
-> 3. **Como sair dessa fase de teste** (mergear pra master? descartar branch?)
+> 3. **Quando publica de verdade** (continua acumulando próximos itens nesta release OU já vai pro Play Store?)
 
 ### Ambientes de teste
 
@@ -644,7 +649,7 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 | Mudança | Teste mínimo |
 |---|---|
-| Edge Function (Supabase server-side) | Local web (chamar function via UI) OU `curl` direto pra endpoint |
+| Edge Function (Supabase server-side) | Deploy em prod via `supabase functions deploy {name} --project-ref guefraaqbkcehofchnrc` (PAT em `.env.local`) → testar com `curl` direto. **Rollback:** `git checkout {tag-anterior} -- supabase/functions/{name}/` + redeploy. Edge Functions são deploy independente do AAB/Vercel; podem ser deployadas durante sessão pra testar antes do release final. |
 | Migration DB | Local web + verificar dados via Supabase Studio (cloud) |
 | UI web apenas | Local web → http://localhost:5173 |
 | UI compartilhada web+Android | Local web PRIMEIRO + Android emulator se afeta layout mobile |
@@ -709,10 +714,6 @@ Raras exceções pra master direto (sem branch + sem bump):
 **Posso começar?** (sim / não / tenho dúvida)
 ```
 
-### Worktrees git — não usar agora
-
-Plano original mencionava worktrees pra paralelismo. **Não usar até time crescer.** Single-dev + agente = branches simples são suficientes. Worktrees podem voltar quando 2+ devs trabalharem em paralelo.
-
 ---
 
 ## 🚀 Publicar release (fim de sessão)
@@ -721,11 +722,11 @@ Plano original mencionava worktrees pra paralelismo. **Não usar até time cresc
 
 ### Princípios
 
-1. **Master = release.** A cada release: `master` recebe merge da branch + nova tag git.
-2. **3 ambientes sincronizados:** master = Vercel produção = Play Store Internal AAB. Sem desvios.
-3. **Bump de versão é parte do release**, não preparação separada.
-4. **Cada release ganha tag git** (`v0.1.6.10`) pra rollback rápido.
-5. **Próxima sessão = ciclo novo.** Mesmo chat. Nova branch. Novo bump no fim.
+1. **Release = sincronizar 3 ambientes** (master git + Vercel produção web + Play Store AAB) + tag git. Não é "só dar merge". É evento atômico cobrindo bump de versão, build AAB, upload Console, merge master, tag, deploy Vercel, atualizar `contexto/`.
+2. **3 ambientes sincronizados sempre:** master = Vercel produção = Play Store Internal AAB. Sem desvios. Exceção: release "só web/server" (sem mudança Android) pode pular Build AAB + Console — versão ainda bumpada e taggeada.
+3. **Bump de versão é parte do release**, não preparação separada. Decidido no Passo 1 com base nos commits acumulados.
+4. **Cada release ganha tag git** (`v0.1.6.10`) pra rollback rápido (`git revert {tag}`).
+5. **Próxima sessão = ciclo novo.** Mesmo chat ou novo. Nova `release/v{X.Y.Z+1}` a partir de master. Novo bump no fim.
 
 ### Pre-checks (agente roda antes de iniciar release)
 
@@ -902,9 +903,8 @@ User pede algo novo. Agente:
 
 ### Edge cases
 
-- **Mudança só docs/contexto puramente reflexiva** (ex.: corrigir typo em update antigo): pode ir direto master sem release branch. **Mas se a sessão tem `release/v*` ativa, vai nela** — não cria desvio paralelo.
 - **Hotfix urgente em produção:** branch `hotfix/{tema}` saindo direto de master (não interfere em release/v* ativa). Ciclo encurtado (skip preview Vercel, build AAB direto). Bump patch sempre. Após hotfix mergear pra master, rebase release/v* atual onto master nova.
-- **Mudança só web (sem AAB novo):** legítimo se não-mobile. Ainda vai em release branch + ainda merece bump (web também versionada). Diferença: Passo 2 (Build AAB) e Passo 3 (Console) são pulados. Reporta: *"Mudança só web. Bump vX.Y.Z, sem novo AAB."*
+- **Mudança só web/server (sem AAB novo):** legítimo se não-mobile (ex.: só Edge Function, só docs/contexto, só Vercel deploy). Ainda vai em release branch + ainda merece bump (web também versionada). Diferença: Passo 2 (Build AAB) e Passo 3 (Console) são pulados. Reporta: *"Mudança só web/server. Bump vX.Y.Z, sem novo AAB."* AAB Play Store fica atrás de master nesse caso até próximo release Android.
 - **Vercel deploy falha após merge master:** investigar dashboard Vercel. Se for transient, retry. Se for breaking, `git revert` o merge + investigar causa antes de re-tentar.
 - **AAB rejeitado pelo Play Console:** corrigir, bump patch, novo build, novo upload. Master ainda não foi tocado nesta etapa (ordem dos passos: AAB → Console → master) — exatamente pra cobrir esse cenário.
 
@@ -969,19 +969,29 @@ Template:
 
 ---
 
-## 📋 Estado atual do projeto (snapshot 2026-05-01)
+## 📋 Estado atual do projeto
+
+> **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão:** `0.1.6.9` @ commit `5bb9d36` · branch `master`
-**Vercel:** `https://dosy-teal.vercel.app/` (alinhado com código)
+**Versão atual:** `0.1.6.10` · tag `v0.1.6.10` · branch `master`
+**Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store:** Internal Testing **ativo** (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation)
+**Play Store Internal Testing:** AAB v0.1.6.10 (versionCode 23) — release web/server-only; Android behavior idêntico ao v0.1.6.9.
+
+**Última release:** v0.1.6.10 em 2026-05-01 — fechou #001, #002, #005 (P0 segurança + encoding) + processo (Regra 8 comunicação, modelo "1 sessão = 1 release branch").
 
 **Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões.
 
-**Bloqueadores P0 ativos:** 9 itens (~3-5 dias-pessoa). Ver `ROADMAP.md` §6.
+**Bloqueadores P0 ativos:** 6 itens. Todos manuais user (não tem código pra agente fazer):
+- #003 rotação senha postgres + revogar PAT (~30min)
+- #004 vídeo demo FGS Play Console (~2-3h)
+- #006 device validation 3 devices físicos (1-2 dias)
+- #007 PostHog telemetria (depende #018 manual)
+- #008 Sentry GitHub Secrets (~15min)
+- #009 PITR + DR drill (depende upgrade Pro plan)
 
-**Próximo passo concreto:** [`CHECKLIST.md` §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function) — adicionar admin auth check em `send-test-push` Edge Function (30 min).
+**Próximo passo concreto:** ver `ROADMAP.md §4`. Próxima sessão de código = atacar P1 batch (RLS migrations #012/#013/#014, label A11y #011, ic_stat_dosy #010, useDoses refactor #023) → release `v0.1.7.0` minor.
 
 ---
 
