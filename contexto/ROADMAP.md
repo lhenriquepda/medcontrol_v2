@@ -291,6 +291,9 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#072** [Plan] A/B test paywall e onboarding. Plan FASE 23.2
 - [ ] **#073** [Plan] Programa de indicação (1 mês PRO grátis). Plan FASE 22.3
 
+#### DX / Observability
+- [ ] **#074** [Sessão v0.1.6.10] Habilitar upload de debug symbols (`ndk.debugSymbolLevel = 'FULL'` em build.gradle). Aviso recorrente do Play Console em todo build. Melhora stack traces de crashes/ANRs.
+
 ---
 
 ## 7. Itens descartados pela auditoria (com justificativa)
@@ -388,9 +391,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 73 itens
-- **Em aberto:** 70 (#001, #002, #005 fechados em release v0.1.6.10 — 2026-05-01)
-- **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 24
+- **Total:** 74 itens (#074 adicionado em release v0.1.6.10)
+- **Em aberto:** 71 (#001, #002, #005 fechados em release v0.1.6.10 — 2026-05-01)
+- **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias (todos manuais user)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

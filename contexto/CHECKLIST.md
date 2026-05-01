@@ -585,6 +585,31 @@
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 22.3
 
+### #074 — Habilitar upload de debug symbols no Play Console
+- **Status:** ⏳ Aberto
+- **Origem:** [Sessão v0.1.6.10] Aviso recorrente Play Console
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Severidade:** baixa — não bloqueia release; melhora qualidade de stack traces de crashes/ANRs no Console
+- **Snippet:**
+  ```gradle
+  // android/app/build.gradle dentro de android { ... }
+  android {
+      buildTypes {
+          release {
+              ndk {
+                  debugSymbolLevel 'FULL'  // ou 'SYMBOL_TABLE' (mais leve)
+              }
+          }
+      }
+  }
+  ```
+- **Aceitação:**
+  - Próximo AAB build inclui símbolos de depuração nativos
+  - Play Console não exibe mais aviso "App Bundle contém código nativo, e você não fez upload dos símbolos de depuração"
+  - Crashes nativos no Console mostram stack traces simbolicados em vez de offsets brutos
+- **Detalhe:** Aviso aparece em todo upload AAB enquanto não habilitado. Sem impacto no usuário final; só dev observability. Tamanho AAB sobe ~5-10 MB com FULL.
+
 ---
 
 ## Resumo
@@ -592,7 +617,7 @@
 - **P0:** 9 itens (#001-009) · esforço estimado: ~3-5 dias-pessoa
 - **P1:** 18 itens (#010-027) · esforço estimado: ~10-15 dias-pessoa
 - **P2:** 22 itens (#028-049) · esforço estimado: ~3-4 semanas-pessoa
-- **P3:** 24 itens (#050-073) · esforço estimado: 90+ dias
+- **P3:** 25 itens (#050-073, #074) · esforço estimado: 90+ dias
 
 **Soft-launch (P0+P1):** ~15-20 dias-pessoa.
 **Produção pública (após Open Testing 14 dias + #001-027):** ~6 semanas total.
