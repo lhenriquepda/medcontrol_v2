@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import { TIMING, EASE } from '../animations'
 
 function validatePassword(pwd) {
   const errors = []
@@ -49,7 +51,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]">
-      <div className="w-full max-w-sm">
+      <motion.div
+        className="w-full max-w-sm"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: TIMING.base, ease: EASE.inOut }}
+      >
         <div className="text-center mb-8">
           <img src="/dosy-logo-light.png" alt="Dosy" className="h-20 w-auto mx-auto mb-4 object-contain" />
           <p className="text-sm text-white/60 mt-1">Gestão simples de medicamentos</p>
@@ -156,7 +163,7 @@ export default function Login() {
             Configure <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> em <code>.env</code>.
           </p>
         )}
-      </div>
+      </motion.div>
     </div>
   )
 }

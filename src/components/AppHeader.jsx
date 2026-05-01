@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import TierBadge from './TierBadge'
 import Icon from './Icon'
 import { useAuth } from '../hooks/useAuth'
@@ -26,19 +27,43 @@ export default function AppHeader() {
   const { data: overdueDoses = [] } = useDoses(overdueFilter)
   const overdueNow = overdueDoses.length
 
+  // Measure AppHeader height → CSS var --app-header-height. FilterBar (sticky)
+  // usa pra calcular offset correto. Padding dinâmico do header (safe-area)
+  // muda altura conforme ad/banner presentes.
+  const headerRef = useRef(null)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const update = () => {
+      const h = el.offsetHeight || 0
+      document.documentElement.style.setProperty('--app-header-height', `${h}px`)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
-    <header className="sticky top-0 z-40 bg-[#0d1535] text-white shadow-lg safe-top">
-      <div className="max-w-md mx-auto px-4 pt-3 pb-[18px] flex items-center gap-3">
+    <header
+      ref={headerRef}
+      className="sticky z-40 bg-[#0d1535] text-white shadow-lg"
+      style={{
+        // env-safe + ad-banner + update-banner. AppHeader sticky bottom of stack.
+        top: 'calc(env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px) + var(--update-banner-height, 0px))'
+      }}
+    >
+      <div className="max-w-md mx-auto px-4 py-[21px] flex items-center gap-3">
         {/* Logo — clicável → volta pro Dashboard */}
         <Link to="/" className="flex-shrink-0">
-          <img src="/dosy-logo-light.png" alt="Dosy" className="h-10 w-auto object-contain" />
+          <img src="/dosy-logo-light.png" alt="Dosy" className="h-8 w-auto object-contain" />
         </Link>
 
         {/* Saudação */}
         <div className="flex-1 min-w-0 border-l border-white/20 pl-3">
           <p className="text-[11px] text-white/60 leading-none mb-0.5">{greet}</p>
           <p className="text-sm font-semibold truncate leading-tight flex items-center gap-1.5">
-            {name || 'Olá!'} <TierBadge />
+            {name || 'Olá!'} <TierBadge variant="dot" />
           </p>
         </div>
 
@@ -54,13 +79,15 @@ export default function AppHeader() {
         )}
 
         {/* Ajustes */}
-        <Link
-          to="/ajustes"
-          aria-label="Ajustes"
-          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center flex-shrink-0"
-        >
-          <Icon name="settings" size={18} className="text-white" />
-        </Link>
+        <motion.div whileTap={{ scale: 0.85, rotate: 60 }} className="flex-shrink-0">
+          <Link
+            to="/ajustes"
+            aria-label="Ajustes"
+            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+          >
+            <Icon name="settings" size={20} className="text-white" />
+          </Link>
+        </motion.div>
       </div>
     </header>
   )

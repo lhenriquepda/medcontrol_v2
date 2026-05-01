@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import LockedOverlay from '../components/LockedOverlay'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
@@ -105,7 +107,7 @@ export default function Analytics() {
           ))}
         </div>
 
-        <section className="card p-4">
+        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
           <h3 className="font-semibold text-sm mb-3">Adesão por paciente</h3>
           {adherenceByPatient.length === 0 && <p className="text-xs text-slate-500">Sem dados no período.</p>}
           <div className="space-y-3">
@@ -121,9 +123,9 @@ export default function Analytics() {
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        <section className="card p-4">
+        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
           <h3 className="font-semibold text-sm mb-3">Calendário de adesão</h3>
           <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${period === 'week' ? 7 : 10}, minmax(0, 1fr))` }}>
             {calendar.map((c, i) => (
@@ -136,9 +138,9 @@ export default function Analytics() {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> parcial</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500 inline-block" /> nenhuma</span>
           </div>
-        </section>
+        </motion.section>
 
-        <section className="card p-4">
+        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
           <h3 className="font-semibold text-sm mb-3">Uso de S.O.S por medicamento</h3>
           {sosByMed.length === 0 && <p className="text-xs text-slate-500">Sem registros de S.O.S no período.</p>}
           <div className="space-y-2">
@@ -151,7 +153,7 @@ export default function Analytics() {
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
         </div>
       </div>
     </div>

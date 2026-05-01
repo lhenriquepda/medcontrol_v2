@@ -1,5 +1,6 @@
 // Store em memória persistido em sessionStorage (demo) ou localStorage (local accounts).
 // sessionStorage: dados de saúde não persistem entre abas/sessões no modo demo — reduz exposição.
+import { uuid } from '../utils/uuid'
 const KEY = 'medcontrol_store_v1'
 const DEMO_KEY = 'medcontrol_demo_v1'
 
@@ -68,7 +69,7 @@ export const mock = {
     if (!e || !password) throw new Error('Preencha email e senha.')
     if (password.length < 6) throw new Error('A senha precisa ter ao menos 6 caracteres.')
     if (state.accounts.some((a) => a.email === e)) throw new Error('Este email já está cadastrado.')
-    const account = { id: crypto.randomUUID(), email: e, passwordHash: hash(password), name: name || e.split('@')[0] }
+    const account = { id: uuid(), email: e, passwordHash: hash(password), name: name || e.split('@')[0] }
     state.accounts = [...state.accounts, account]
     state.user = { id: account.id, email: account.email, name: account.name }
     save()
@@ -119,7 +120,7 @@ export const mock = {
     return (state[table] || []).find((r) => r.id === id && r.userId === uid)
   },
   insert(table, row) {
-    const id = row.id || crypto.randomUUID()
+    const id = row.id || uuid()
     const now = new Date().toISOString()
     const full = { id, createdAt: now, updatedAt: now, userId: mock.uid(), ...row }
     state[table] = [...(state[table] || []), full]
@@ -132,7 +133,7 @@ export const mock = {
     return inserted
   },
   insertSilent(table, row) {
-    const id = row.id || crypto.randomUUID()
+    const id = row.id || uuid()
     const now = new Date().toISOString()
     const full = { id, createdAt: now, updatedAt: now, userId: mock.uid(), ...row }
     state[table] = [...(state[table] || []), full]

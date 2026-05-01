@@ -6,8 +6,10 @@ import android.app.KeyguardManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.media.RingtoneManager;
@@ -71,21 +73,32 @@ public class AlarmActivity extends Activity {
 
     private boolean muted = false;
 
+    /** Listens for AlarmActionReceiver finishing this activity when user resolves via notif action. */
+    private final BroadcastReceiver finishReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            int incomingId = intent.getIntExtra("id", -1);
+            if (incomingId == alarmId || incomingId == -1) {
+                stopSoundAndVibration();
+                finish();
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Show over lockscreen (NOT dismiss keyguard) — user vê alarme, decide ação
+        // sem desbloquear. Só dismiss keyguard quando user clica "Ciente" → openApp.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
-            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
-            if (km != null) km.requestDismissKeyguard(this, null);
         } else {
             getWindow().addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
             );
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -108,12 +121,19 @@ public class AlarmActivity extends Activity {
             NotificationManagerCompat.from(this).cancel(alarmId + FS_NOTIF_OFFSET);
         } catch (Exception ignored) {}
 
-        // Activity owns the experience now — stop service-level sound/vibration
-        AlarmService.stopActiveAlarm(this);
+        // Service owns sound + vibration + FG notif (with action buttons).
+        // Activity is JUST the UI. When user dismisses Activity (swipe / home),
+        // service keeps notif alive so user can re-enter via tap or resolve via actions.
 
-        postPersistentNotification();
-        startAlarmSound();
-        startVibration();
+        // Register dynamic receiver for "finish from notif action" broadcasts
+        try {
+            IntentFilter f = new IntentFilter("com.dosyapp.dosy.FINISH_ALARM_ACTIVITY");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(finishReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(finishReceiver, f);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void parseDoses(String json) {
@@ -373,6 +393,27 @@ public class AlarmActivity extends Activity {
 
         buttonBar.addView(topRow);
 
+        // Secondary "Ignorar" — dismiss sem abrir app, sem snooze
+        GradientDrawable ignoreBg = new GradientDrawable();
+        ignoreBg.setColor(Color.parseColor("#11FFFFFF"));
+        ignoreBg.setCornerRadius(dp(14));
+        ignoreBg.setStroke(dp(1), Color.parseColor("#22FFFFFF"));
+
+        Button btnIgnore = new Button(this);
+        btnIgnore.setText("Ignorar (já vi)");
+        btnIgnore.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnIgnore.setTextColor(Color.parseColor("#94A3B8"));
+        btnIgnore.setBackground(ignoreBg);
+        btnIgnore.setStateListAnimator(null);
+        btnIgnore.setAllCaps(false);
+        btnIgnore.setPadding(0, dp(12), 0, dp(12));
+        btnIgnore.setOnClickListener(v -> handleAction("ignore"));
+        LinearLayout.LayoutParams ignoreLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        ignoreLp.setMargins(0, dp(10), 0, 0);
+        buttonBar.addView(btnIgnore, ignoreLp);
+
         // Primary button: Ciente
         GradientDrawable ackBg = new GradientDrawable();
         ackBg.setColor(Color.parseColor("#10B981"));
@@ -401,21 +442,14 @@ public class AlarmActivity extends Activity {
         return outer;
     }
 
-    /** Toggle alarme sound + vibration without finishing activity. */
+    /** Toggle alarme sound + vibration via service control intent. */
     private void toggleMute() {
         muted = !muted;
-        if (muted) {
-            try {
-                if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
-            } catch (Exception ignored) {}
-            try { if (vibrator != null) vibrator.cancel(); } catch (Exception ignored) {}
-            if (muteButtonRef != null) muteButtonRef.setText("🔇 Som off — tocar");
-        } else {
-            try {
-                if (mediaPlayer != null && !mediaPlayer.isPlaying()) mediaPlayer.start();
-            } catch (Exception ignored) {}
-            startVibration();
-            if (muteButtonRef != null) muteButtonRef.setText("🔊 Silenciar");
+        Intent svc = new Intent(this, AlarmService.class);
+        svc.setAction(muted ? AlarmService.ACTION_MUTE : AlarmService.ACTION_UNMUTE);
+        try { startService(svc); } catch (Exception ignored) {}
+        if (muteButtonRef != null) {
+            muteButtonRef.setText(muted ? "🔇 Som off — tocar" : "🔊 Silenciar");
         }
     }
 
@@ -478,6 +512,8 @@ public class AlarmActivity extends Activity {
     }
 
     private void handleAction(String action) {
+        // Stop service-driven sound + FG notif
+        AlarmService.stopActiveAlarm(this);
         stopSoundAndVibration();
 
         if ("acknowledge".equals(action)) {
@@ -487,6 +523,9 @@ public class AlarmActivity extends Activity {
         } else if ("snooze".equals(action)) {
             cancelPersistentNotification();
             scheduleSnooze(10);
+        } else if ("ignore".equals(action)) {
+            // Dismiss alarm without opening app, without snooze. User saw it, will deal later.
+            cancelPersistentNotification();
         }
 
         finish();
@@ -503,6 +542,14 @@ public class AlarmActivity extends Activity {
     }
 
     private void openAppWithDoseIds() {
+        // User clicked Ciente → wants to interact with app. Now dismiss keyguard
+        // (prompts unlock if secure) before launching MainActivity.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            if (km != null) {
+                try { km.requestDismissKeyguard(this, null); } catch (Exception ignored) {}
+            }
+        }
         Intent i = new Intent(this, MainActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         String csv = getDoseIdsCsv();
@@ -609,5 +656,6 @@ public class AlarmActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         stopSoundAndVibration();
+        try { unregisterReceiver(finishReceiver); } catch (Exception ignored) {}
     }
 }

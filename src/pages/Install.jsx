@@ -7,6 +7,8 @@
 /* eslint-disable no-undef */
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 /* eslint-enable no-undef */
+import { motion } from 'framer-motion'
+import { TIMING, EASE } from '../animations'
 import Icon from '../components/Icon'
 const APK_URL = '/dosy-beta.apk'
 const APK_VERSION = `${APP_VERSION}-beta`
@@ -16,7 +18,12 @@ export default function Install() {
   const isAndroid = /android/i.test(ua)
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0d1535] to-[#1a2660] text-white">
+    <motion.div
+      className="min-h-screen bg-gradient-to-b from-[#0d1535] to-[#1a2660] text-white"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <div className="max-w-md mx-auto px-6 py-10">
         <div className="text-center mb-8">
           <img src="/dosy-logo-light.png" alt="Dosy" className="h-20 mx-auto mb-4 object-contain" />
@@ -90,7 +97,7 @@ export default function Install() {
           <a href="/termos" className="block text-white/60 underline">Termos de Uso</a>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 

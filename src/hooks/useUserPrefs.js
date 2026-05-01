@@ -15,11 +15,11 @@ import { hasSupabase, supabase } from '../services/supabase'
 export const PREFS_LOCAL_KEY = 'medcontrol_notif'
 
 export const DEFAULT_PREFS = {
-  push: false,
+  push: true,
   criticalAlarm: true,
-  dailySummary: false,
-  summaryTime: '07:00',
-  advanceMins: 15,
+  dailySummary: true,
+  summaryTime: '12:00',
+  advanceMins: 0,
   // DND (Não perturbe) — durante janela: doses geram apenas push notif silenciosa,
   // sem alarme tocando. Suporta janelas que cruzam meia-noite (ex: 23:00 → 07:00).
   dndEnabled: false,

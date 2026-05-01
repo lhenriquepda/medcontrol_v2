@@ -102,6 +102,48 @@ a:focus-visible,
   }
 
 
+  /* --- AD BANNER (AdMob native overlay) ---------------------------------
+   * Quando AdBanner mostra banner TOP_CENTER, body recebe class .has-ad-banner.
+   * Empurra todo conteúdo (header sticky inclusive) pra baixo equivalente
+   * altura do banner (~60dp). Sem isso, banner fica overlaid no header.
+   */
+  /* Base body padding-top = env-safe pra clear status bar em qualquer página
+   * native. Web (env-safe=0) não afeta. Sticky elements (UpdateBanner, AppHeader)
+   * usam env-safe em seus `top` calcs sem precisar de padding-top interno.
+   *
+   * Body background pinta a área env-safe (status bar bleed):
+   *   - default: cor do AppHeader (sangra ele pra cima quando sem ad/banner)
+   *   - .has-update-banner: verde do UpdateBanner (banner sangra pra cima)
+   *   - .has-ad-banner: cor não importa (native ad overlay cobre status bar) */
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    background-color: #0d1535;
+  }
+  /* Fixed overlay pinta env-safe + ad-banner-height na status bar SEMPRE.
+   * Sem isso, scroll move body padding pra fora e content (main bg light)
+   * vaza pra cima do header. ::before fixed permanece independente do scroll.
+   * z-index abaixo do AppHeader (40) e UpdateBanner (50) — eles ficam por cima. */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px));
+    background-color: #0d1535;
+    z-index: 30;
+    pointer-events: none;
+  }
+  body.has-update-banner::before {
+    background-color: #059669; /* emerald-600 — match UpdateBanner gradient start */
+  }
+  body.has-ad-banner {
+    /* Native AdMob banner posiciona abaixo da status bar.
+     * Body padding inclui env-safe + altura ad pra empurrar conteúdo abaixo do ad. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--ad-banner-height, 76px));
+  }
+
+
   /* --- INPUTS ----------------------------------------------------------- */
   .input {
     @apply w-full px-4 py-3 transition;

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import ConfirmDialog from '../components/ConfirmDialog'
 import BottomSheet from '../components/BottomSheet'
@@ -10,7 +12,9 @@ import { useToast } from '../hooks/useToast'
 import { toDatetimeLocalInput, fromDatetimeLocalInput, pad } from '../utils/dateUtils'
 import Field from '../components/Field'
 import MedNameInput from '../components/MedNameInput'
-import { CONTINUOUS_DAYS } from '../services/treatmentsService'
+import { CONTINUOUS_DAYS, deleteTreatment } from '../services/treatmentsService'
+import { useUndoableDelete } from '../hooks/useUndoableDelete'
+import { useQueryClient } from '@tanstack/react-query'
 
 // [horas, rótulo]
 const INTERVALS = [
@@ -42,6 +46,7 @@ export default function TreatmentForm() {
   const createTpl = useCreateTemplate()
   const toast = useToast()
   const nav = useNavigate()
+  const qc = useQueryClient()
 
   const [form, setForm] = useState({
     patientId: preselectPatient || '',
@@ -133,9 +138,23 @@ export default function TreatmentForm() {
     }
   }
 
-  async function handleDelete() {
-    await del.mutateAsync(id)
-    toast.show({ message: 'Tratamento excluído.', kind: 'info' })
+  // FASE 15 — undo 5s antes de DELETE real no servidor
+  const undoableDelete = useUndoableDelete({
+    mutationFn: deleteTreatment,
+    onOptimistic: (delId) => {
+      qc.setQueriesData({ queryKey: ['treatments'] }, (old) =>
+        Array.isArray(old) ? old.filter((t) => t.id !== delId) : old
+      )
+    },
+    onRestore: () => {
+      qc.invalidateQueries({ queryKey: ['treatments'] })
+      qc.invalidateQueries({ queryKey: ['doses'] })
+    },
+    itemLabel: 'Tratamento',
+  })
+
+  function handleDelete() {
+    undoableDelete(id)
     nav('/')
   }
 
@@ -158,7 +177,12 @@ export default function TreatmentForm() {
   }, [form])
 
   return (
-    <div className="pb-28">
+    <motion.div
+      className="pb-28"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header back title={editing ? 'Editar tratamento' : 'Novo tratamento'}
               right={!editing && templates.length > 0 && (
                 <button onClick={() => setShowTemplates(true)} className="btn-ghost h-9 px-3 text-sm">📋</button>
@@ -195,7 +219,7 @@ export default function TreatmentForm() {
                 <div className="flex gap-2 flex-wrap">
                   {INTERVALS.map(([h, label]) => (
                     <button key={h} type="button" onClick={() => set('intervalHours', h)}
-                            className={`chip ${Number(form.intervalHours) === h ? 'chip-active' : ''}`}>{label}</button>
+                            className={`chip active:scale-[0.92] transition ${Number(form.intervalHours) === h ? 'chip-active' : ''}`}>{label}</button>
                   ))}
                 </div>
               </div>
@@ -280,7 +304,7 @@ export default function TreatmentForm() {
           ))}
         </div>
       </BottomSheet>
-    </div>
+    </motion.div>
   )
 }
 

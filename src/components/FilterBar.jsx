@@ -62,7 +62,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
   return (
     <div
       className="sticky z-30 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur border-b border-slate-100 dark:border-slate-800"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 78px)' }}
+      style={{ top: 'calc(var(--ad-banner-height, 0px) + var(--update-banner-height, 0px) + var(--app-header-height, 84px))' }}
     >
       <div className="max-w-md mx-auto px-4 py-2.5 space-y-2">
         {/* Linha 1: segmented period + botão Filtros */}
@@ -83,7 +83,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
           </div>
           <button
             onClick={() => setOpen(true)}
-            className="relative shrink-0 w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm active:scale-95 transition"
+            className="relative shrink-0 w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm active:scale-95 transition"
             aria-label="Abrir filtros"
           >
             <Icon name="filter" size={16} className="text-slate-600 dark:text-slate-300" />

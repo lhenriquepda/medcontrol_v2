@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listDoses, confirmDose, skipDose, undoDose, registerSos, listSosRules, upsertSosRule } from '../services/dosesService'
+import { track, EVENTS } from '../services/analytics'
 
 export function useDoses(filter = {}) {
   return useQuery({
@@ -29,8 +30,12 @@ function rollback(qc, snapshots) {
 }
 
 function refetchDoses(qc) {
-  // Force immediate refetch of all active dose queries (not just mark stale)
-  qc.refetchQueries({ queryKey: ['doses'] })
+  // invalidate (lazy) ao invés de refetch (eager). Optimistic update já cobre
+  // a UI; refetch só roda quando query observador re-monta. Evita storm de
+  // fetches concorrentes em sequência rápida (confirm → undo → skip → undo)
+  // que apareciam como `net::ERR_FAILED` no console (request anterior abortado
+  // por cancelQueries do próximo onMutate).
+  qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
 }
 
 export function useConfirmDose() {
@@ -46,6 +51,7 @@ export function useConfirmDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSuccess: () => track(EVENTS.DOSE_CONFIRMED),
     onSettled: () => refetchDoses(qc)
   })
 }
@@ -60,6 +66,7 @@ export function useSkipDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSuccess: () => track(EVENTS.DOSE_SKIPPED),
     onSettled: () => refetchDoses(qc)
   })
 }
@@ -74,6 +81,7 @@ export function useUndoDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    onSuccess: () => track(EVENTS.DOSE_UNDONE),
     onSettled: () => refetchDoses(qc)
   })
 }
@@ -82,7 +90,10 @@ export function useRegisterSos() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: registerSos,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['doses'] })
+    onSuccess: () => {
+      track(EVENTS.SOS_DOSE_REGISTERED)
+      qc.invalidateQueries({ queryKey: ['doses'] })
+    }
   })
 }
 export function useSosRules(patientId) {

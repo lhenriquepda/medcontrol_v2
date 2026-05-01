@@ -25,10 +25,30 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
   // Track per-dose visual state: 'pending' | 'done' | 'skipped' | 'ignored'
   const [states, setStates] = useState({})
 
+  // Reset state apenas em open false→true (não em mudança de doses array,
+  // que dispara após cada mutation invalidar a query e apaga o badge visual)
   useEffect(() => {
-    // Reset state when modal reopens with new doses
     if (open) setStates({})
-  }, [open, doses])
+  }, [open])
+
+  // Auto-close quando todas doses processadas (Tomada/Pulada/Ignorar)
+  // 1500ms dá tempo user ver badge + Desfazer inline + toast
+  useEffect(() => {
+    if (!open || !doses || doses.length === 0) return
+    const handled = doses.every(d => states[d.id])
+    if (handled) {
+      const t = setTimeout(() => onClose?.(), 1500)
+      return () => clearTimeout(t)
+    }
+  }, [states, open, doses, onClose])
+
+  function handleUndo(dose) {
+    const prev = states[dose.id]
+    setStates(s => ({ ...s, [dose.id]: undefined }))
+    if (prev === 'done' || prev === 'skipped') {
+      undoMut.mutate(dose.id)
+    }
+  }
 
   if (!doses || doses.length === 0) return null
 
@@ -134,6 +154,15 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
                   </span>
                 )}
               </div>
+
+              {isHandled && (
+                <button
+                  onClick={() => handleUndo(dose)}
+                  className="w-full mt-3 rounded-lg py-2 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 inline-flex items-center justify-center gap-1.5"
+                >
+                  <Icon name="undo" size={12} /> Desfazer
+                </button>
+              )}
 
               {!isHandled && (
                 <div className="grid grid-cols-3 gap-2 mt-3">

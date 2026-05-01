@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import PaywallModal from '../components/PaywallModal'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
@@ -11,10 +13,13 @@ import { useToast } from '../hooks/useToast'
 import { formatDate, formatDateTime, formatTime, toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
 import { statusLabel } from '../utils/statusUtils'
 import { escapeHtml as esc } from '../utils/sanitize'
+import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
 const isNative = Capacitor.isNativePlatform()
 
 export default function Reports() {
+  // Aud 4.5.4 G2 — relatórios contém histórico médico completo
+  usePrivacyScreen()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState('')
   const now = new Date()
@@ -24,6 +29,7 @@ export default function Reports() {
   const toast = useToast()
   const isPro = useIsPro()
   const [paywall, setPaywall] = useState(false)
+  const [exporting, setExporting] = useState(null) // 'pdf' | 'csv' | null
   const gate = (fn) => () => { if (!isPro) { setPaywall(true); return } fn() }
 
   const { data: doses = [] } = useDoses({
@@ -33,6 +39,20 @@ export default function Reports() {
   })
 
   const patient = patients.find((p) => p.id === patientId)
+
+  function slug(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'todos'
+  }
+  function shortHash() {
+    return Math.random().toString(36).slice(2, 8)
+  }
+  function buildFilename(ext) {
+    const d = new Date()
+    const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+    const who = patient?.name ? slug(patient.name) : 'todos'
+    return `dosy-${who}-${ymd}-${shortHash()}.${ext}`
+  }
 
   function exportCSV() {
     if (doses.length === 0) { toast.show({ message: 'Sem doses no período.', kind: 'warn' }); return }
@@ -49,10 +69,11 @@ export default function Reports() {
     })
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const csvWithBom = '\ufeff' + csv
-    const filename = `dosy_${Date.now()}.csv`
+    const filename = buildFilename('csv')
 
     if (isNative) {
       // Native: write to cache dir + share via system sheet
+      setExporting('csv')
       ;(async () => {
         try {
           const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
@@ -60,18 +81,25 @@ export default function Reports() {
           await Filesystem.writeFile({
             path: filename,
             data: csvWithBom,
-            directory: Directory.Cache,
-            encoding: Encoding.UTF8
+            directory: Directory.Documents,
+            encoding: Encoding.UTF8,
+            recursive: true
           })
-          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
-          await Share.share({
+          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents })
+          toast.show({ message: `CSV salvo em Documentos · ${filename}`, kind: 'success', duration: 6000 })
+          setExporting(null)
+          Share.share({
             title: 'Relat\u00f3rio Dosy',
             url: uri,
             dialogTitle: 'Compartilhar relat\u00f3rio'
+          }).catch((shareErr) => {
+            if (!/cancel/i.test(shareErr?.message || '')) {
+              console.warn('Share failed:', shareErr)
+            }
           })
-          toast.show({ message: 'CSV pronto.', kind: 'success' })
         } catch (e) {
           toast.show({ message: 'Falha ao exportar CSV: ' + (e?.message || e), kind: 'error' })
+          setExporting(null)
         }
       })()
     } else {
@@ -195,6 +223,7 @@ export default function Reports() {
 </body></html>`
     if (isNative) {
       // Native: render HTML offscreen → html2canvas → jsPDF → save + share
+      setExporting('pdf')
       ;(async () => {
         try {
           const [{ default: html2canvas }, jsPDFmod, { Filesystem, Directory }, { Share }] = await Promise.all([
@@ -205,36 +234,86 @@ export default function Reports() {
           ])
           const { jsPDF } = jsPDFmod
 
-          const container = document.createElement('div')
-          container.style.cssText = 'position:fixed;top:0;left:0;z-index:-1;width:860px;background:#fff;'
-          container.innerHTML = html
-          document.body.appendChild(container)
-
-          await new Promise(r => setTimeout(r, 250))
-          const canvas = await html2canvas(container.firstElementChild, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-          document.body.removeChild(container)
+          // Render em iframe sandbox — DOM isolado, offscreen + opacity 0
+          const iframe = document.createElement('iframe')
+          iframe.style.cssText = 'position:fixed;top:0;left:-99999px;width:860px;height:1200px;border:0;opacity:0;pointer-events:none;'
+          iframe.setAttribute('aria-hidden', 'true')
+          // Strip auto-print script
+          const cleanedHtml = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+          document.body.appendChild(iframe)
+          await new Promise((res) => {
+            iframe.onload = res
+            iframe.srcdoc = cleanedHtml
+            setTimeout(res, 2000) // fallback timeout
+          })
+          // Resize iframe height para conteúdo full
+          const idoc = iframe.contentDocument
+          const target = idoc.querySelector('.page') || idoc.body
+          iframe.style.height = target.scrollHeight + 'px'
+          // Aguarda imagens carregarem
+          const imgs = idoc.querySelectorAll('img')
+          await Promise.all(Array.from(imgs).map((img) =>
+            img.complete ? Promise.resolve() :
+              new Promise((res) => { img.onload = res; img.onerror = res; setTimeout(res, 1500) })
+          ))
+          await new Promise(r => setTimeout(r, 200))
+          // scale 1 + JPEG = ~10x menor que scale 2 + PNG → evita OOM bridge
+          const canvas = await html2canvas(target, {
+            scale: 1, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
+            windowWidth: 860, windowHeight: target.scrollHeight,
+            // Use iframe document, não main document
+            foreignObjectRendering: false
+          })
+          document.body.removeChild(iframe)
 
           const pdf = new jsPDF('p', 'mm', 'a4')
           const pageW = pdf.internal.pageSize.getWidth()
+          const pageH = pdf.internal.pageSize.getHeight()
           const imgH = (canvas.height * pageW) / canvas.width
-          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, imgH)
+          const imgData = canvas.toDataURL('image/jpeg', 0.82)
+          if (imgH <= pageH) {
+            pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH)
+          } else {
+            // Multi-page split
+            let heightLeft = imgH
+            let position = 0
+            pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
+            heightLeft -= pageH
+            while (heightLeft > 0) {
+              position = heightLeft - imgH
+              pdf.addPage()
+              pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
+              heightLeft -= pageH
+            }
+          }
 
-          const filename = `dosy_relatorio_${Date.now()}.pdf`
+          const filename = buildFilename('pdf')
+          // Chunk write — Capacitor bridge OOM em strings >~30MB. Split base64 em chunks 512KB.
           const base64 = pdf.output('datauristring').split(',')[1]
-          await Filesystem.writeFile({
-            path: filename,
-            data: base64,
-            directory: Directory.Cache
-          })
-          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
-          await Share.share({
+          const CHUNK = 512 * 1024
+          if (base64.length <= CHUNK) {
+            await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents, recursive: true })
+          } else {
+            await Filesystem.writeFile({ path: filename, data: base64.slice(0, CHUNK), directory: Directory.Documents, recursive: true })
+            for (let i = CHUNK; i < base64.length; i += CHUNK) {
+              await Filesystem.appendFile({ path: filename, data: base64.slice(i, i + CHUNK), directory: Directory.Documents })
+            }
+          }
+          const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents })
+          toast.show({ message: `PDF salvo em Documentos · ${filename}`, kind: 'success', duration: 6000 })
+          setExporting(null)
+          Share.share({
             title: 'Relatório Dosy',
             url: uri,
             dialogTitle: 'Compartilhar PDF'
+          }).catch((shareErr) => {
+            if (!/cancel/i.test(shareErr?.message || '')) {
+              console.warn('Share failed:', shareErr)
+            }
           })
-          toast.show({ message: 'PDF pronto.', kind: 'success' })
         } catch (e) {
           toast.show({ message: 'Falha ao exportar PDF: ' + (e?.message || e), kind: 'error' })
+          setExporting(null)
         }
       })()
       return
@@ -247,7 +326,12 @@ export default function Reports() {
   }
 
   return (
-    <div className="pb-28">
+    <motion.div
+      className="pb-28"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header back title="Relatórios" />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
         <AdBanner />
@@ -304,16 +388,38 @@ export default function Reports() {
             <Icon name="lock" size={14} className="shrink-0 mt-0.5" /> <span>Exportar PDF/CSV é um recurso <strong>PRO</strong>. Toque em um botão para assinar.</span>
           </div>
         )}
-        <button onClick={gate(exportPDF)} className={`btn-primary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''}`}>
-          {!isPro && <Icon name="lock" size={14} />} <Icon name="file-text" size={16} /> Exportar PDF
+        <button
+          onClick={gate(exportPDF)}
+          disabled={!!exporting}
+          className={`btn-primary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''} ${exporting ? 'opacity-70 cursor-wait' : ''}`}
+        >
+          {exporting === 'pdf' ? (
+            <>
+              <span className="inline-block w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+              Gerando PDF…
+            </>
+          ) : (
+            <>{!isPro && <Icon name="lock" size={14} />} <Icon name="file-text" size={16} /> Exportar PDF</>
+          )}
         </button>
-        <button onClick={gate(exportCSV)} className={`btn-secondary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''}`}>
-          {!isPro && <Icon name="lock" size={14} />} <Icon name="bar-chart" size={16} /> Exportar CSV
+        <button
+          onClick={gate(exportCSV)}
+          disabled={!!exporting}
+          className={`btn-secondary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''} ${exporting ? 'opacity-70 cursor-wait' : ''}`}
+        >
+          {exporting === 'csv' ? (
+            <>
+              <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-400/40 border-t-slate-700 dark:border-t-slate-200 animate-spin" />
+              Gerando CSV…
+            </>
+          ) : (
+            <>{!isPro && <Icon name="lock" size={14} />} <Icon name="bar-chart" size={16} /> Exportar CSV</>
+          )}
         </button>
       </div>
       <PaywallModal open={paywall} onClose={() => setPaywall(false)}
                     reason="Exportar PDF e CSV é um recurso PRO. Assine para liberar relatórios completos." />
-    </div>
+    </motion.div>
   )
 }
 

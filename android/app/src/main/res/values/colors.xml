@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#4f4cc8</color>
+    <color name="colorPrimaryDark">#3a37b0</color>
+    <color name="colorAccent">#EC4899</color>
+    <!-- Splash background (matches resources/splash.png corner color, ~roxo) -->
+    <color name="dosy_splash_bg">#4f4cc8</color>
+</resources>

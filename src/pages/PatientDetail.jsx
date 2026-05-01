@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import EmptyState from '../components/EmptyState'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
@@ -12,8 +14,11 @@ import { usePatientShares } from '../hooks/useShares'
 import { useAuth } from '../hooks/useAuth'
 import { useIsPro } from '../hooks/useSubscription'
 import PaywallModal from '../components/PaywallModal'
+import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
 export default function PatientDetail() {
+  // Aud 4.5.4 G2 — info médica de paciente
+  usePrivacyScreen()
   const { id } = useParams()
   const { user } = useAuth()
   const { data: patient } = usePatient(id)
@@ -38,7 +43,12 @@ export default function PatientDetail() {
   const isOwner = user && patient.userId === user.id
 
   return (
-    <div className="pb-28">
+    <motion.div
+      className="pb-28"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header back title={patient.name} right={
         <Link to={`/pacientes/${id}/editar`} className="btn-ghost h-9 px-3 text-sm">Editar</Link>
       } />
@@ -128,6 +138,6 @@ export default function PatientDetail() {
         onClose={() => setPaywallOpen(false)}
         reason="Compartilhar pacientes com outros cuidadores é um recurso PRO. Trabalhe em conjunto em tempo real."
       />
-    </div>
+    </motion.div>
   )
 }

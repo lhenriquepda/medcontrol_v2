@@ -42,6 +42,7 @@ import {
   isCriticalAlarmAvailable,
   checkCriticalAlarmEnabled
 } from './criticalAlarm'
+import { track, EVENTS } from './analytics'
 
 // ─── CONSTANTES ────────────────────────────────────────────────────────────────
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
@@ -262,22 +263,26 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
         dndSkipped += group.length
       }
 
-      // Push notif (tray) — sempre que pushOn
-      const title = group.length === 1 ? 'Dosy 💊' : `💊 ${group.length} doses agora`
-      const body = group.length === 1
-        ? `${group[0].medName} — ${group[0].unit}`
-        : group.map(d => `${d.medName} (${d.unit})`).join(' · ')
-      localNotifs.push({
-        id: groupId,
-        title,
-        body,
-        largeBody: body,
-        summaryText: group.length === 1 ? undefined : `${group.length} doses`,
-        schedule: { at, allowWhileIdle: true },
-        extra: { type: 'dose', doseIds: doseIdsCsv, scheduledAt: group[0].scheduledAt, dnd: isDnd },
-        channelId: CHANNEL_ID,
-        autoCancel: true
-      })
+      // Push notif (tray) — só se NÃO vai tocar alarme crítico.
+      // Quando alarme toca, AlarmService já posta FG notif com 3 actions —
+      // local notif duplicaria (user vê 2 notifs iguais).
+      if (!shouldRing) {
+        const title = group.length === 1 ? 'Dosy 💊' : `💊 ${group.length} doses agora`
+        const body = group.length === 1
+          ? `${group[0].medName} — ${group[0].unit}`
+          : group.map(d => `${d.medName} (${d.unit})`).join(' · ')
+        localNotifs.push({
+          id: groupId,
+          title,
+          body,
+          largeBody: body,
+          summaryText: group.length === 1 ? undefined : `${group.length} doses`,
+          schedule: { at, allowWhileIdle: true },
+          extra: { type: 'dose', doseIds: doseIdsCsv, scheduledAt: group[0].scheduledAt, dnd: isDnd },
+          channelId: CHANNEL_ID,
+          autoCancel: true
+        })
+      }
     }
   }
 
@@ -367,6 +372,7 @@ export async function subscribeFcm(advanceMins = 15) {
     permResult = await PushNotifications.requestPermissions()
   }
   if (permResult.receive !== 'granted') {
+    track(EVENTS.NOTIF_PERM_DENIED, { platform: 'android' })
     const err = new Error('Notificações estão desativadas no Android. Toque em "Abrir Configurações" para habilitar.')
     err.code = 'NOTIFICATIONS_BLOCKED'
     throw err
@@ -375,6 +381,7 @@ export async function subscribeFcm(advanceMins = 15) {
   await PushNotifications.register()
   await ensureFcmChannel()
   savePrefs({ push: true, advanceMins })
+  track(EVENTS.NOTIF_PERM_GRANTED, { platform: 'android' })
   return { permState: permResult.receive }
 }
 

@@ -1,12 +1,17 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
 import { usePatient, useCreatePatient, useUpdatePatient, useDeletePatient } from '../hooks/usePatients'
 import { usePatientLimitReached, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
+import { useUndoableDelete } from '../hooks/useUndoableDelete'
+import { useQueryClient } from '@tanstack/react-query'
+import { deletePatient } from '../services/patientsService'
 
 const AVATAR_GROUPS = [
   {
@@ -40,6 +45,7 @@ export default function PatientForm() {
   const del = useDeletePatient()
   const nav = useNavigate()
   const toast = useToast()
+  const qc = useQueryClient()
   const [confirm, setConfirm] = useState(false)
   const limitReached = usePatientLimitReached()
   const [paywall, setPaywall] = useState(false)
@@ -81,9 +87,22 @@ export default function PatientForm() {
     }
   }
 
-  async function handleDelete() {
-    await del.mutateAsync(id)
-    toast.show({ message: 'Paciente removido.', kind: 'info' })
+  // FASE 15 — undo 5s antes de DELETE real no servidor
+  const undoableDelete = useUndoableDelete({
+    mutationFn: deletePatient,
+    onOptimistic: (delId) => {
+      // Otimisticamente esconde paciente da lista
+      qc.setQueryData(['patients'], (old) => (old || []).filter((p) => p.id !== delId))
+    },
+    onRestore: () => {
+      // Refetch do servidor — paciente ainda existe porque DELETE não foi
+      qc.invalidateQueries({ queryKey: ['patients'] })
+    },
+    itemLabel: 'Paciente',
+  })
+
+  function handleDelete() {
+    undoableDelete(id)
     nav('/pacientes')
   }
 
@@ -96,7 +115,12 @@ export default function PatientForm() {
   }
 
   return (
-    <div className="pb-28">
+    <motion.div
+      className="pb-28"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header back title={editing ? 'Editar paciente' : 'Novo paciente'} />
       <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
         <AdBanner />
@@ -185,7 +209,7 @@ export default function PatientForm() {
 
       <PaywallModal open={paywall} onClose={() => setPaywall(false)}
                     reason={`No plano grátis você pode ter até ${FREE_PATIENT_LIMIT} paciente.`} />
-    </div>
+    </motion.div>
   )
 }
 

@@ -41,12 +41,27 @@ public class BootReceiver extends BroadcastReceiver {
                 if (triggerAt <= now) continue; // alarme passou enquanto device estava off
                 int id = obj.getInt("id");
 
+                // Re-pass `doses` JSON array (current schema persisted by CriticalAlarmPlugin.persistAlarm).
+                // Legacy fallback: if `doses` ausente (upgrade de versão antiga), reconstrói a partir
+                // dos campos flat (doseId/medName/unit/patientName) que foram persistidos no schema antigo.
+                String dosesJson;
+                JSONArray doses = obj.optJSONArray("doses");
+                if (doses != null) {
+                    dosesJson = doses.toString();
+                } else {
+                    JSONArray fallback = new JSONArray();
+                    JSONObject d = new JSONObject();
+                    d.put("doseId", obj.optString("doseId", ""));
+                    d.put("medName", obj.optString("medName", "Dose"));
+                    d.put("unit", obj.optString("unit", ""));
+                    d.put("patientName", obj.optString("patientName", ""));
+                    fallback.put(d);
+                    dosesJson = fallback.toString();
+                }
+
                 Intent alarmIntent = new Intent(ctx, AlarmReceiver.class);
                 alarmIntent.putExtra("id", id);
-                alarmIntent.putExtra("doseId", obj.optString("doseId"));
-                alarmIntent.putExtra("medName", obj.optString("medName"));
-                alarmIntent.putExtra("unit", obj.optString("unit"));
-                alarmIntent.putExtra("patientName", obj.optString("patientName"));
+                alarmIntent.putExtra("doses", dosesJson);
 
                 PendingIntent pi = PendingIntent.getBroadcast(
                     ctx, id, alarmIntent,

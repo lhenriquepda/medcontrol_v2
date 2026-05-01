@@ -1,10 +1,17 @@
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { TIMING, EASE } from '../animations'
 
 export default function Privacidade() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-12">
+    <motion.div
+      className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-12"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
@@ -138,6 +145,6 @@ export default function Privacidade() {
           Dosy · Política de Privacidade v1.0 · Brasil
         </p>
       </div>
-    </div>
+    </motion.div>
   )
 }

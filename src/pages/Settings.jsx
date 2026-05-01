@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import Dropdown from '../components/Dropdown'
+import TierBadge from '../components/TierBadge'
+import { TIMING, EASE } from '../animations'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
+import { track, EVENTS } from '../services/analytics'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
@@ -45,6 +51,7 @@ export default function Settings() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [name, setName] = useState(displayName(user))
   const [savingName, setSavingName] = useState(false)
+  const [exportingData, setExportingData] = useState(false)
 
   useEffect(() => { setName(displayName(user)) }, [user])
 
@@ -112,6 +119,7 @@ export default function Settings() {
     if (!hasSupabase || !user) {
       toast.show({ message: 'Exportação disponível apenas com conta Supabase.', kind: 'warn' }); return
     }
+    setExportingData(true)
     try {
       const [dosesRes, treatmentsRes, subsRes] = await Promise.all([
         supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'),
@@ -126,15 +134,50 @@ export default function Settings() {
         doses: dosesRes.data || [],
         subscription: subsRes.data || null
       }
-      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `dosy-meus-dados-${Date.now()}.json`
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.show({ message: 'Dados exportados com sucesso.', kind: 'success' })
+      const json = JSON.stringify(dump, null, 2)
+      const d = new Date()
+      const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+      const hash = Math.random().toString(36).slice(2, 8)
+      const filename = `dosy-backup-${ymd}-${hash}.json`
+
+      if (Capacitor.isNativePlatform()) {
+        // Native: Documents dir → persistente, Share sheet → user salva via "Save to Files"
+        const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
+        const { Share } = await import('@capacitor/share')
+        await Filesystem.writeFile({
+          path: filename,
+          data: json,
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8,
+          recursive: true
+        })
+        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents })
+        toast.show({ message: `Backup salvo em Documentos · ${filename}`, kind: 'success', duration: 6000 })
+        // File saved → libera loader ANTES do share (share pode não resolver em alguns webviews)
+        setExportingData(false)
+        Share.share({
+          title: 'Meus dados Dosy',
+          url: uri,
+          dialogTitle: 'Compartilhar backup'
+        }).catch((shareErr) => {
+          if (!/cancel/i.test(shareErr?.message || '')) {
+            console.warn('Share failed:', shareErr)
+          }
+        })
+      } else {
+        // Web: blob + anchor download
+        const blob = new Blob([json], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = filename
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        toast.show({ message: 'Dados exportados com sucesso.', kind: 'success' })
+      }
     } catch (err) {
       toast.show({ message: err.message || 'Falha ao exportar dados.', kind: 'error' })
+    } finally {
+      setExportingData(false)
     }
   }
 
@@ -170,11 +213,28 @@ export default function Settings() {
   return (
     <div className="pb-28">
       <Header back title="Ajustes" />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-1">
+      <motion.div
+        className="max-w-md mx-auto px-4 pt-3 space-y-1"
+        initial="initial"
+        animate="animate"
+        variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
+      >
         <AdBanner />
 
+        {/* Tier destaque */}
+        <motion.div
+          variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}
+          className="flex items-center justify-between bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl px-4 py-3 mb-2"
+        >
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Seu plano</p>
+            <p className="text-xs text-slate-500 mt-0.5">Tier ativo da conta</p>
+          </div>
+          <TierBadge variant="large" />
+        </motion.div>
+
         {/* Aparência */}
-        <section className="card p-4 space-y-3">
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Aparência</p>
           <div className="flex items-center justify-between">
             <span className="text-sm">Modo escuro</span>
@@ -205,10 +265,10 @@ export default function Settings() {
               <option value="emoji">Emoji</option>
             </select>
           </div>
-        </section>
+        </motion.section>
 
         {/* Notificações */}
-        <section className="card p-4 space-y-4">
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Notificações</p>
 
           {/* Push toggle */}
@@ -256,21 +316,13 @@ export default function Settings() {
 
           {/* Advance time — only shown when push is active */}
           {pushActive && (
-            <div>
-              <p className="text-xs font-medium mb-2">Avisar com antecedência</p>
-              <div className="flex flex-wrap gap-2">
-                {ADVANCE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleAdvanceChange(opt.value)}
-                    className={`chip ${notif.advanceMins === opt.value ? 'chip-active' : ''}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Dropdown
+              label="Avisar com antecedência"
+              value={notif.advanceMins ?? 0}
+              onChange={(v) => handleAdvanceChange(Number(v))}
+              options={ADVANCE_OPTIONS}
+              size="sm"
+            />
           )}
 
           {/* Alarme crítico (estilo despertador) */}
@@ -284,7 +336,11 @@ export default function Settings() {
                 </p>
               </div>
               <button
-                onClick={() => updateNotif({ criticalAlarm: !(notif.criticalAlarm !== false) })}
+                onClick={() => {
+                  const next = !(notif.criticalAlarm !== false)
+                  updateNotif({ criticalAlarm: next })
+                  track(EVENTS.CRITICAL_ALARM_TOGGLED, { enabled: next })
+                }}
                 className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.criticalAlarm !== false ? 'bg-rose-500' : 'bg-slate-300'}`}
               >
                 <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.criticalAlarm !== false ? 'translate-x-5' : ''}`} />
@@ -304,7 +360,11 @@ export default function Settings() {
                   </p>
                 </div>
                 <button
-                  onClick={() => updateNotif({ dndEnabled: !notif.dndEnabled })}
+                  onClick={() => {
+                    const next = !notif.dndEnabled
+                    updateNotif({ dndEnabled: next })
+                    track(EVENTS.DND_TOGGLED, { enabled: next })
+                  }}
                   className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.dndEnabled ? 'bg-indigo-500' : 'bg-slate-300'}`}
                 >
                   <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.dndEnabled ? 'translate-x-5' : ''}`} />
@@ -359,10 +419,10 @@ export default function Settings() {
               />
             </label>
           )}
-        </section>
+        </motion.section>
 
         {/* Conta */}
-        <section className="card p-4 space-y-3">
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Conta</p>
           <label className="block">
             <span className="block text-xs font-medium mb-1">Seu nome</span>
@@ -384,17 +444,24 @@ export default function Settings() {
           </label>
           <p className="text-xs text-slate-500">{user?.email || 'Demo'}</p>
           <button onClick={() => setConfirmLogout(true)} className="btn-secondary w-full">Sair</button>
-        </section>
+        </motion.section>
 
         {/* Dados & Privacidade */}
         {hasSupabase && user && (
-          <section className="card p-4 space-y-3">
+          <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Dados & Privacidade</p>
             <p className="text-xs text-slate-500 leading-relaxed">
               Conforme a LGPD, você pode exportar ou excluir todos os seus dados a qualquer momento.
             </p>
-            <button onClick={exportUserData} className="btn-secondary w-full text-sm">
-              📦 Exportar meus dados (JSON)
+            <button onClick={exportUserData} disabled={exportingData} className={`btn-secondary w-full text-sm inline-flex items-center justify-center gap-2 ${exportingData ? 'opacity-70 cursor-wait' : ''}`}>
+              {exportingData ? (
+                <>
+                  <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-400/40 border-t-slate-700 dark:border-t-slate-200 animate-spin" />
+                  Gerando backup…
+                </>
+              ) : (
+                <>📦 {Capacitor.isNativePlatform() ? 'Compartilhar meus dados (JSON)' : 'Exportar meus dados (JSON)'}</>
+              )}
             </button>
             <button
               onClick={() => setConfirmDelete(true)}
@@ -402,10 +469,10 @@ export default function Settings() {
             >
               <span className="inline-flex items-center justify-center gap-1.5"><Icon name="trash" size={14} /> Excluir minha conta e todos os dados</span>
             </button>
-          </section>
+          </motion.section>
         )}
 
-        <section className="card p-4 space-y-2">
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-xs">
               <p className="font-semibold text-slate-700 dark:text-slate-200">Versão</p>
@@ -440,8 +507,17 @@ export default function Settings() {
               Nova versão disponível com correções e melhorias.
             </p>
           )}
-        </section>
-      </div>
+          <Link
+            to="/faq"
+            className="mt-2 flex items-center justify-between text-xs px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
+              <Icon name="info" size={14} /> Dúvidas frequentes
+            </span>
+            <Icon name="chevron" size={14} className="text-slate-400" />
+          </Link>
+        </motion.section>
+      </motion.div>
 
       <ConfirmDialog
         open={confirmLogout}

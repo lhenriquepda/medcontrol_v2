@@ -112,6 +112,11 @@ public class CriticalAlarmPlugin extends Plugin {
             return;
         }
 
+        // Floor para boundary do minuto. Doses são definidas em HH:MM exato; segundos
+        // residuais (de test inserts ou drift) forçam alarme a cruzar para próximo minuto
+        // visualmente. Floor garante alarme dispara aos :00 do minuto agendado.
+        triggerAt = (triggerAt / 60000L) * 60000L;
+
         if (triggerAt <= System.currentTimeMillis()) {
             call.reject("'at' must be in the future");
             return;
@@ -206,7 +211,18 @@ public class CriticalAlarmPlugin extends Plugin {
             canSchedule = am.canScheduleExactAlarms();
         }
         ret.put("canScheduleExact", canSchedule);
-        ret.put("canFullScreenIntent", true);
+
+        // Android 14+ (UPSIDE_DOWN_CAKE / SDK 34): full-screen intent requires explicit user grant.
+        // Without this, AlarmReceiver fullScreenIntent silently degrades to heads-up only —
+        // alarme não sobrepõe lock screen.
+        boolean canFsi = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                try { canFsi = nm.canUseFullScreenIntent(); } catch (Exception ignored) {}
+            }
+        }
+        ret.put("canFullScreenIntent", canFsi);
         call.resolve(ret);
     }
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { TIMING, EASE } from '../animations'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import Icon from '../components/Icon'
@@ -71,7 +73,12 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]">
+    <motion.div
+      className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <img src="/dosy-logo-light.png" alt="Dosy" className="h-16 w-auto mx-auto mb-3 object-contain" />
@@ -133,6 +140,6 @@ export default function ResetPassword() {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

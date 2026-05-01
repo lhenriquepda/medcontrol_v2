@@ -85,7 +85,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const renderInner = (bare = false) => (
     <button
       onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
-      className={`w-full text-left p-4 flex items-center gap-3 transition active:scale-[0.99] ${
+      className={`w-full text-left p-4 flex items-center gap-3 transition active:scale-[0.96] active:opacity-90 ${
         bare
           ? 'bg-[var(--color-bg-elevated)]'
           : `card ${isOverdue ? 'border-rose-300 dark:border-rose-500/40' : ''}`

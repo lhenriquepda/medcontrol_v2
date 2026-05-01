@@ -4,9 +4,15 @@ export const FREE_PATIENT_LIMIT = 1
 
 export async function getMyTier() {
   if (!hasSupabase) return 'pro' // modo demo libera tudo
+  // Skip query se user não autenticado (evita ad persistir na Login screen)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
   const { data, error } = await supabase.rpc('my_tier')
   if (error) throw error
-  return data || 'free'
+  // PROMO TEMPORÁRIA: durante beta/teste interno, todos free → plus.
+  // Mantém pro/admin/plus como estão. Remover quando assinatura lançar.
+  const tier = data || 'free'
+  return tier === 'free' ? 'plus' : tier
 }
 
 export async function listAllUsers() {

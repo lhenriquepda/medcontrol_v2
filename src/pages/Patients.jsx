@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import PatientCard from '../components/PatientCard'
 import EmptyState from '../components/EmptyState'
 import PaywallModal from '../components/PaywallModal'
@@ -41,9 +43,24 @@ export default function Patients() {
                         description="Cadastre a primeira pessoa que você está acompanhando."
                         action={<Link to="/pacientes/novo" className="btn-primary">Adicionar paciente</Link>} />
           ) : (
-            <div className="space-y-1">
-              {patients.map((p) => <PatientCard key={p.id} patient={p} />)}
-            </div>
+            <motion.div
+              className="space-y-1"
+              initial="initial"
+              animate="animate"
+              variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
+            >
+              {patients.map((p) => (
+                <motion.div
+                  key={p.id}
+                  variants={{
+                    initial: { opacity: 0, x: -20 },
+                    animate: { opacity: 1, x: 0, transition: { duration: TIMING.base, ease: EASE.out } },
+                  }}
+                >
+                  <PatientCard patient={p} />
+                </motion.div>
+              ))}
+            </motion.div>
           )
         )}
       </div>

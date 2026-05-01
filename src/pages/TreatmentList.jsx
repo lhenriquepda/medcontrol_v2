@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import EmptyState from '../components/EmptyState'
 import AdBanner from '../components/AdBanner'
 import { useTreatments, useUpdateTreatment } from '../hooks/useTreatments'
@@ -52,8 +54,13 @@ export default function TreatmentList() {
 
         {filtered.length === 0 ? (
           <EmptyState icon="pill" title="Nenhum tratamento" description="Crie um novo tratamento pelo botão +" />
-        ) : filtered.map((t) => (
-          <div key={t.id} className="card p-4">
+        ) : filtered.map((t, i) => (
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: TIMING.base, ease: EASE.out, delay: i * TIMING.stagger }}
+            className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-semibold truncate">{t.medName}</p>
@@ -75,7 +82,7 @@ export default function TreatmentList() {
                 <button className="btn-ghost text-sm" onClick={() => update.mutate({ id: t.id, patch: { status: 'active' } })}>Retomar</button>
               )}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

@@ -66,6 +66,7 @@
         />
 
         <receiver android:name=".plugins.criticalalarm.AlarmReceiver" android:exported="false" android:enabled="true" />
+        <receiver android:name=".plugins.criticalalarm.AlarmActionReceiver" android:exported="false" android:enabled="true" />
 
         <service
             android:name=".plugins.criticalalarm.AlarmService"

@@ -16,7 +16,9 @@ export async function listPatients() {
 
 export async function getPatient(id) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').select(PATIENT_COLS).eq('id', id).single()
+    // maybeSingle() retorna null se 0 rows (vs .single() que dispara PGRST116/406).
+    // Acontece quando paciente foi deletado mas hook ainda tem id no cache.
+    const { data, error } = await supabase.from('patients').select(PATIENT_COLS).eq('id', id).maybeSingle()
     if (error) throw error
     return data
   }

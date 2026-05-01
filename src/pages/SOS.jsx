@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
 import Icon from '../components/Icon'
+import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import Field from '../components/Field'
 import PatientPicker from '../components/PatientPicker'
@@ -60,7 +62,12 @@ export default function SOS() {
   }
 
   return (
-    <div className="pb-28 bg-rose-50/60 dark:bg-rose-950/30 min-h-screen">
+    <motion.div
+      className="pb-28 bg-rose-50/60 dark:bg-rose-950/30 min-h-screen"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header title="S.O.S" subtitle="Dose extra fora do agendado" />
       <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
         <AdBanner />
@@ -114,7 +121,7 @@ export default function SOS() {
           <span className="inline-flex items-center justify-center gap-2"><Icon name="sos" size={18} /> Registrar S.O.S</span>
         </button>
       </form>
-    </div>
+    </motion.div>
   )
 }
 

@@ -41,6 +41,8 @@ import org.json.JSONObject;
 public class AlarmService extends Service {
 
     public static final String ACTION_STOP = "com.dosyapp.dosy.STOP_ALARM";
+    public static final String ACTION_MUTE = "com.dosyapp.dosy.MUTE_ALARM";
+    public static final String ACTION_UNMUTE = "com.dosyapp.dosy.UNMUTE_ALARM";
 
     private static final String CHANNEL_ID = "doses_critical";
     private static final int FG_NOTIF_ID = 300_000_000;
@@ -76,6 +78,20 @@ public class AlarmService extends Service {
             stopAlarmInternal();
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (intent != null && ACTION_MUTE.equals(intent.getAction())) {
+            try {
+                if (activePlayer != null && activePlayer.isPlaying()) activePlayer.pause();
+            } catch (Exception ignored) {}
+            try { if (activeVibrator != null) activeVibrator.cancel(); } catch (Exception ignored) {}
+            return START_STICKY;
+        }
+        if (intent != null && ACTION_UNMUTE.equals(intent.getAction())) {
+            try {
+                if (activePlayer != null && !activePlayer.isPlaying()) activePlayer.start();
+            } catch (Exception ignored) {}
+            startVibrationLoop();
+            return START_STICKY;
         }
         if (intent == null) {
             stopSelf();
@@ -128,10 +144,15 @@ public class AlarmService extends Service {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        // Tap (heads-up / unlocked) → MainActivity → DoseModal queue
-        Intent tapIntent = new Intent(this, MainActivity.class);
-        tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (idsCsv.length() > 0) tapIntent.putExtra("openDoseIds", idsCsv.toString());
+        // Tap (heads-up / unlocked) → re-open AlarmActivity (so user can return when accidentally dismissed)
+        Intent tapIntent = new Intent(this, AlarmActivity.class);
+        tapIntent.setFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+        );
+        tapIntent.putExtra("id", alarmId);
+        tapIntent.putExtra("doses", dosesJson);
 
         PendingIntent tapPi = PendingIntent.getActivity(
             this,
@@ -140,22 +161,32 @@ public class AlarmService extends Service {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
+        // ── 3 action buttons (Ciente / Adiar / Ignorar) ─────────────────
+        PendingIntent ackPi = buildActionPi(alarmId, dosesJson, idsCsv.toString(), AlarmActionReceiver.ACTION_ACK, 1);
+        PendingIntent snoozePi = buildActionPi(alarmId, dosesJson, idsCsv.toString(), AlarmActionReceiver.ACTION_SNOOZE, 2);
+        PendingIntent ignorePi = buildActionPi(alarmId, dosesJson, idsCsv.toString(), AlarmActionReceiver.ACTION_IGNORE, 3);
+
         String title = count <= 1
-            ? "💊 Hora da medicação — " + firstMed
-            : "💊 " + count + " doses agora";
+            ? "🔔 ALARME Dosy — " + firstMed
+            : "🔔 ALARME Dosy — " + count + " doses";
+        String subtext = "Toque pra abrir · Ciente / Adiar / Ignorar";
 
         Notification fgNotif = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(bodyBuilder.toString())
+            .setSubText(subtext)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(bodyBuilder.toString()))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
-            .setAutoCancel(true)
+            .setAutoCancel(false)
             .setContentIntent(tapPi)
             .setFullScreenIntent(fullScreenPi, true)
+            .addAction(R.mipmap.ic_launcher, "Ciente", ackPi)
+            .addAction(R.mipmap.ic_launcher, "Adiar 10min", snoozePi)
+            .addAction(R.mipmap.ic_launcher, "Ignorar", ignorePi)
             .build();
 
         try {
@@ -191,6 +222,20 @@ public class AlarmService extends Service {
 
         // Service stays alive — sound + vibration loop until stopActiveAlarm() called
         return START_STICKY;
+    }
+
+    private PendingIntent buildActionPi(int alarmId, String dosesJson, String doseIdsCsv, String action, int seq) {
+        Intent i = new Intent(this, AlarmActionReceiver.class);
+        i.setAction(action);
+        i.putExtra("id", alarmId);
+        i.putExtra("doses", dosesJson);
+        i.putExtra("doseIdsCsv", doseIdsCsv);
+        // Unique requestCode per (alarmId, action) — avoids PI extras getting clobbered
+        int rc = alarmId * 10 + seq;
+        return PendingIntent.getBroadcast(
+            this, rc, i,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
     }
 
     private void startMediaPlayerLoop() {

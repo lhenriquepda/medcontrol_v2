@@ -12,7 +12,11 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { ToastProvider } from './hooks/useToast.jsx'
 import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
+import { initAnalytics } from './services/analytics'
 import './index.css'
+
+// Aud 4.5.7 G4 — PostHog analytics. No-op se VITE_POSTHOG_KEY ausente ou modo dev.
+initAnalytics()
 
 // Sentry — production-only crash + error monitoring.
 // LGPD: beforeSend strips PII (emails, names, dose observations).
@@ -23,7 +27,12 @@ if (SENTRY_DSN && import.meta.env.PROD) {
     environment: import.meta.env.MODE,
     // Auditoria 4.5.7 G3 — release tag pra correlacionar crashes com versão
     release: `dosy@${__APP_VERSION__}`,
-    tracesSampleRate: 0.1,
+    tracesSampleRate: 0,
+    // Auto-session tracking gera 1 envelope/pageload → quando ingest devolve 503
+    // (rate-limit transitório), CORS error spam no console. Ficamos só com
+    // captureException pra erros reais (sem session tracking).
+    autoSessionTracking: false,
+    sendClientReports: false,
     beforeSend(event) {
       // Strip PII (LGPD: medication data is "categoria especial")
       if (event.user) {

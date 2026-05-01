@@ -3,12 +3,15 @@ import BottomSheet from './BottomSheet'
 import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '../utils/dateUtils'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
+import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
 export default function DoseModal({ dose, open, onClose, patientName, queueRemaining = 0 }) {
   const confirmMut = useConfirmDose()
   const skipMut = useSkipDose()
   const undoMut = useUndoDose()
   const toast = useToast()
+  // Aud 4.5.4 G2 — bloqueia screenshot + mask recents enquanto modal aberto (info médica sensível)
+  usePrivacyScreen(open)
 
   const [takenAtScheduled, setTakenAtScheduled] = useState(true)
   const [actualTime, setActualTime] = useState('')
@@ -26,27 +29,34 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
 
   const isDone = dose.status === 'done' || dose.status === 'skipped'
 
-  async function handleConfirm() {
+  // Fecha modal IMEDIATAMENTE — optimistic update já atualiza UI.
+  // Servidor erra → onError do mutation rollback automático.
+  // Antes: await mutateAsync travava modal aberto se request lenta/falhava.
+  function handleConfirm() {
     const actualIso = takenAtScheduled ? dose.scheduledAt : fromDatetimeLocalInput(actualTime)
-    await confirmMut.mutateAsync({ id: dose.id, actualTime: actualIso, observation })
+    const doseId = dose.id
+    const medName = dose.medName
+    confirmMut.mutate({ id: doseId, actualTime: actualIso, observation })
     onClose?.()
     toast.show({
-      message: `Dose de ${dose.medName} confirmada.`, kind: 'success',
-      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+      message: `Dose de ${medName} confirmada.`, kind: 'success',
+      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(doseId)
     })
   }
 
-  async function handleSkip() {
-    await skipMut.mutateAsync({ id: dose.id, observation })
+  function handleSkip() {
+    const doseId = dose.id
+    const medName = dose.medName
+    skipMut.mutate({ id: doseId, observation })
     onClose?.()
     toast.show({
-      message: `Dose de ${dose.medName} marcada como pulada.`, kind: 'warn',
-      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+      message: `Dose de ${medName} marcada como pulada.`, kind: 'warn',
+      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(doseId)
     })
   }
 
-  async function handleUndo() {
-    await undoMut.mutateAsync(dose.id)
+  function handleUndo() {
+    undoMut.mutate(dose.id)
     onClose?.()
     toast.show({ message: 'Dose revertida para pendente.', kind: 'info' })
   }

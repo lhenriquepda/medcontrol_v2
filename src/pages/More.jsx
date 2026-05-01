@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import Icon from '../components/Icon'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
@@ -14,7 +16,8 @@ const ITEMS = [
   { to: '/tratamentos', icon: 'pill', label: 'Tratamentos', hint: 'Lista e gerenciamento', pro: false },
   { to: '/relatorios-analise', icon: 'bar-chart', label: 'Análises', hint: 'Adesão e calendários', pro: true },
   { to: '/relatorios', icon: 'file-text', label: 'Relatórios', hint: 'Exportar PDF / CSV', pro: true },
-  { to: '/ajustes', icon: 'settings', label: 'Ajustes', hint: 'Tema, notificações, conta', pro: false }
+  { to: '/ajustes', icon: 'settings', label: 'Ajustes', hint: 'Tema, notificações, conta', pro: false },
+  { to: '/faq', icon: 'info', label: 'Ajuda / FAQ', hint: 'Dúvidas, suporte e tutoriais', pro: false }
 ]
 
 export default function More() {
@@ -59,13 +62,25 @@ export default function More() {
           </button>
         )}
 
-        <div className="space-y-1">
+        <motion.div
+          className="space-y-1"
+          initial="initial"
+          animate="animate"
+          variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
+        >
           {ITEMS.map((it) => {
             const locked = it.pro && !isPro
             return (
-              <Link key={it.to} to={it.to}
+              <motion.div
+                key={it.to}
+                variants={{
+                  initial: { opacity: 0, x: 24 },
+                  animate: { opacity: 1, x: 0, transition: { duration: TIMING.base, ease: EASE.inOut } },
+                }}
+              >
+              <Link to={it.to}
                     onClick={(e) => handleItem(it, e)}
-                    className={`card p-4 flex items-center gap-3 active:scale-[0.99] ${locked ? 'opacity-60' : ''}`}>
+                    className={`card p-4 flex items-center gap-3 active:scale-[0.97] ${locked ? 'opacity-60' : ''}`}>
                 <span className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0">
                   <Icon name={it.icon} size={22} />
                 </span>
@@ -82,6 +97,7 @@ export default function More() {
                 </div>
                 <Icon name={locked ? 'lock' : 'chevron'} size={18} className="text-slate-400 shrink-0" />
               </Link>
+              </motion.div>
             )
           })}
 
@@ -97,7 +113,7 @@ export default function More() {
               <Icon name="chevron" size={18} className="text-slate-400 shrink-0" />
             </Link>
           )}
-        </div>
+        </motion.div>
 
       </div>
 

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { hasSupabase, supabase } from '../services/supabase'
+import { motion, AnimatePresence } from 'framer-motion'
+import { TIMING, EASE } from '../animations'
+// FASE 23 backlog: supabase + hasSupabase removidos — extend_continuous_treatments desabilitado
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
@@ -29,31 +31,15 @@ export default function Dashboard() {
   // Rolling 5-day horizon for continuous treatments. RPC is idempotent +
   // cheap (no-op when horizon already covers next 5 days). Runs once per
   // mount; pg_cron also runs daily as backup for inactive users.
-  useEffect(() => {
-    if (!hasSupabase) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { data, error } = await supabase.rpc('extend_continuous_treatments', {
-          p_days_ahead: 5
-        })
-        if (cancelled) return
-        if (error) {
-          console.warn('[extend] failed:', error.message)
-          return
-        }
-        const added = data?.dosesAdded || 0
-        if (added > 0) {
-          console.log('[extend] added', added, 'doses across', data?.treatmentsExtended, 'treatments')
-          qc.invalidateQueries({ queryKey: ['doses'] })
-        }
-      } catch (e) {
-        console.warn('[extend] exception:', e?.message)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [qc])
-  const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
+  // FASE 23 backlog: RPC `extend_continuous_treatments` foi removida do schema
+  // (migration perdida). Chamada client-side desabilitada até nova migration.
+  // pg_cron faz fallback diário; impacto = doses contínuas só renovam 1x/dia
+  // pra usuários ativos (vs sob-demanda no mount). OK pra Beta interno.
+  // useEffect(() => {
+  //   if (!hasSupabase) return
+  //   ...rpc('extend_continuous_treatments')
+  // }, [qc])
+  const [filters, setFilters] = useState({ range: '12h', patientId: null, status: null, type: null })
 
   // Notif-tap → IDs pra abrir em modal multi-dose
   const [multiDoseIds, setMultiDoseIds] = useState([])
@@ -161,9 +147,8 @@ export default function Dashboard() {
       qc.refetchQueries({ queryKey: ['patients'] }),
       qc.refetchQueries({ queryKey: ['user_prefs'] }),
       qc.refetchQueries({ queryKey: ['my_tier'] }),
-      hasSupabase
-        ? supabase.rpc('extend_continuous_treatments', { p_days_ahead: 5 }).catch(() => null)
-        : Promise.resolve()
+      // FASE 23 backlog: extend_continuous_treatments RPC removida — disabilitada.
+      Promise.resolve()
     ])
   }
   const ptr = usePullToRefresh(handleRefresh)
@@ -173,30 +158,61 @@ export default function Dashboard() {
     <>
     {ptrVisible && (
       <div
-        className="fixed left-0 right-0 z-50 flex items-center justify-center pointer-events-none"
+        className="fixed left-0 right-0 z-50 flex items-end justify-center pointer-events-none safe-top"
         style={{
           top: 0,
-          height: ptr.pullDistance,
+          height: Math.max(ptr.pullDistance, 56),
           transition: ptr.refreshing ? 'height 0.2s ease-out' : 'none',
-          background: 'linear-gradient(to bottom, rgba(13,21,53,0.95), rgba(13,21,53,0))'
         }}
       >
-        <span className="text-xs font-medium text-white">
-          {ptr.refreshing
-            ? '↻ Atualizando…'
-            : ptr.pullDistance >= ptr.threshold ? 'Solte pra atualizar' : 'Puxe pra atualizar'}
-        </span>
+        <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 backdrop-blur shadow-lg">
+          <span
+            className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white ${
+              ptr.refreshing ? 'animate-spin' : ''
+            }`}
+            style={{
+              transform: ptr.refreshing
+                ? undefined
+                : `rotate(${(ptr.pullDistance / ptr.threshold) * 360}deg)`,
+            }}
+            aria-hidden="true"
+          />
+          <span className="text-[11px] font-medium text-white">
+            {ptr.refreshing
+              ? 'Atualizando…'
+              : ptr.pullDistance >= ptr.threshold
+                ? 'Solte para atualizar'
+                : 'Puxe para atualizar'}
+          </span>
+        </div>
       </div>
     )}
     <div className="pb-28">
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
       <div className="max-w-md mx-auto px-4 pt-3">
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <Stat label="Pendentes hoje" value={pendingToday} tone="brand" />
-          <Stat label="Adesão 7d" value={adherence == null ? '—' : `${adherence}%`} tone="emerald" />
-          <Stat label="Atrasadas" value={overdueNow} tone={overdueNow > 0 ? 'rose' : 'slate'} alert={overdueNow > 0} />
-        </div>
+        <motion.div
+          className="grid grid-cols-3 gap-2 mb-4"
+          initial="initial"
+          animate="animate"
+          variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
+        >
+          {[
+            ['Pendentes hoje', pendingToday, 'brand', false],
+            ['Adesão 7d', adherence == null ? '—' : `${adherence}%`, 'emerald', false],
+            ['Atrasadas', overdueNow, overdueNow > 0 ? 'rose' : 'slate', overdueNow > 0],
+          ].map(([label, value, tone, alert]) => (
+            <motion.div
+              key={label}
+              variants={{
+                initial: { opacity: 0, y: 16, scale: 0.92 },
+                animate: { opacity: 1, y: 0, scale: 1, transition: { ...EASE.spring } },
+              }}
+            >
+              <Stat label={label} value={value} tone={tone} alert={alert} />
+            </motion.div>
+          ))}
+        </motion.div>
 
         <AdBanner className="mb-4" />
 
@@ -220,13 +236,25 @@ export default function Dashboard() {
                         description="Ajuste os filtros ou crie um novo tratamento."
                         action={<Link to="/tratamento/novo" className="btn-primary">+ Novo tratamento</Link>} />
           ) : (
-            <div className="space-y-5">
-              {grouped.map(({ patient, list }) => {
+            <motion.div
+              className="space-y-5"
+              initial="initial"
+              animate="animate"
+              variants={{ animate: { transition: { staggerChildren: TIMING.stagger, delayChildren: 0.06 } } }}
+            >
+              {grouped.map(({ patient, list }, idx) => {
                 const isCollapsed = !!collapsed[patient.id]
                 const overdueCount = list.filter((d) => d.status === 'overdue').length
                 const pendingCount = list.filter((d) => d.status === 'pending').length
                 return (
-                  <section key={patient.id}>
+                  <motion.section
+                    key={patient.id}
+                    variants={{
+                      initial: { opacity: 0, y: 18, scale: 0.98 },
+                      animate: { opacity: 1, y: 0, scale: 1, transition: { duration: TIMING.base, ease: EASE.out } },
+                    }}
+                    className={idx > 0 ? 'pt-5 border-t border-white/[0.08]' : ''}
+                  >
                     <button
                       onClick={() => toggleCollapse(patient.id)}
                       className="w-full flex items-center gap-2 mb-2 group"
@@ -246,43 +274,75 @@ export default function Dashboard() {
                       )}
                       <span className={`ml-auto text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
                     </button>
-                    {!isCollapsed && (
-                      <div className="space-y-1">
-                        {list.map((d) => (
-                          <DoseCard
-                            key={d.id}
-                            dose={d}
-                            onClick={() => setSelected(d)}
-                            onSwipeConfirm={async (dose) => {
-                              try {
-                                await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
-                                toast.show({
-                                  message: `${dose.medName} marcada como tomada.`, kind: 'success',
-                                  undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                                })
-                              } catch (e) {
-                                toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
-                              }
-                            }}
-                            onSwipeSkip={async (dose) => {
-                              try {
-                                await skipMut.mutateAsync({ id: dose.id, observation: '' })
-                                toast.show({
-                                  message: `${dose.medName} marcada como pulada.`, kind: 'warn',
-                                  undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                                })
-                              } catch (e) {
-                                toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
-                              }
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </section>
+                    <AnimatePresence initial={false}>
+                      {!isCollapsed && (
+                        <motion.div
+                          key="doses"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{
+                            opacity: 1,
+                            height: 'auto',
+                            transition: {
+                              duration: TIMING.base,
+                              ease: EASE.inOut,
+                              staggerChildren: TIMING.stagger,
+                              delayChildren: 0.05,
+                            },
+                          }}
+                          exit={{
+                            opacity: 0,
+                            height: 0,
+                            transition: { duration: TIMING.fast, ease: EASE.inOut, staggerChildren: 0.02, staggerDirection: -1 },
+                          }}
+                          className="space-y-1 overflow-hidden"
+                        >
+                          {list.map((d) => (
+                            <motion.div
+                              key={d.id}
+                              variants={{
+                                initial: { opacity: 0, y: 8 },
+                                animate: { opacity: 1, y: 0, transition: { duration: TIMING.fast, ease: EASE.inOut } },
+                                exit: { opacity: 0, y: 6, transition: { duration: 0.12, ease: EASE.inOut } },
+                              }}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                            >
+                              <DoseCard
+                                dose={d}
+                                onClick={() => setSelected(d)}
+                                onSwipeConfirm={async (dose) => {
+                                  try {
+                                    await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
+                                    toast.show({
+                                      message: `${dose.medName} marcada como tomada.`, kind: 'success',
+                                      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                                    })
+                                  } catch (e) {
+                                    toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
+                                  }
+                                }}
+                                onSwipeSkip={async (dose) => {
+                                  try {
+                                    await skipMut.mutateAsync({ id: dose.id, observation: '' })
+                                    toast.show({
+                                      message: `${dose.medName} marcada como pulada.`, kind: 'warn',
+                                      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                                    })
+                                  } catch (e) {
+                                    toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
+                                  }
+                                }}
+                              />
+                            </motion.div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.section>
                 )
               })}
-            </div>
+            </motion.div>
           )
         )}
       </div>

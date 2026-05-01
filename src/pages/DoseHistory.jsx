@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react'
 import Header from '../components/Header'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
+import Icon from '../components/Icon'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { formatTime, pad } from '../utils/dateUtils'
 import { STATUS_CONFIG } from '../utils/statusUtils'
+import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -28,11 +30,14 @@ function dayLabel(date) {
 }
 
 export default function DoseHistory() {
+  // Aud 4.5.4 G2 — histórico de doses (info médica longitudinal)
+  usePrivacyScreen()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState(null)
   const [period, setPeriod] = useState(7) // days back
   const [offset, setOffset] = useState(0)  // periods back (0 = current)
   const [selected, setSelected] = useState(null)
+  const [search, setSearch] = useState('')  // FASE 15 — text search por medName/observation
 
   // Window: [periodStart, periodEnd]
   const { periodStart, periodEnd } = useMemo(() => {
@@ -44,11 +49,22 @@ export default function DoseHistory() {
     return { periodStart: startOfDay(start), periodEnd: endOfDay(end) }
   }, [period, offset])
 
-  const { data: doses = [], isLoading } = useDoses({
+  const { data: rawDoses = [], isLoading } = useDoses({
     from: periodStart.toISOString(),
     to: periodEnd.toISOString(),
     patientId: patientId || undefined
   })
+
+  // FASE 15 — filtra client-side por search (medName / unit / observation case-insensitive)
+  const doses = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return rawDoses
+    return rawDoses.filter((d) =>
+      (d.medName || '').toLowerCase().includes(term) ||
+      (d.unit || '').toLowerCase().includes(term) ||
+      (d.observation || '').toLowerCase().includes(term)
+    )
+  }, [rawDoses, search])
 
   // Group doses by calendar day (descending)
   const days = useMemo(() => {
@@ -108,14 +124,14 @@ export default function DoseHistory() {
           {/* Navigation arrows */}
           <button
             onClick={() => setOffset((o) => o + 1)}
-            className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95"
+            className="w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95"
             aria-label="Período anterior"
           >‹</button>
           <span className="text-xs text-slate-500 min-w-[90px] text-center">{periodLabel()}</span>
           <button
             onClick={() => setOffset((o) => Math.max(0, o - 1))}
             disabled={isCurrentPeriod}
-            className={`w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95 ${
+            className={`w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95 ${
               isCurrentPeriod ? 'opacity-30' : ''
             }`}
             aria-label="Próximo período"
@@ -132,6 +148,32 @@ export default function DoseHistory() {
             placeholder="Todos pacientes"
           />
         )}
+
+        {/* FASE 15 — Text search */}
+        <div className="relative">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por medicamento ou observação…"
+            aria-label="Buscar doses"
+            className="input pl-9"
+          />
+          <Icon
+            name="search"
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              aria-label="Limpar busca"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400"
+            >
+              <Icon name="close" size={14} />
+            </button>
+          )}
+        </div>
 
         {/* Summary bar */}
         {summary.total > 0 && (
@@ -206,7 +248,7 @@ export default function DoseHistory() {
                         <button
                           key={dose.id}
                           onClick={() => setSelected(dose)}
-                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 active:scale-[0.99] transition"
+                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 active:scale-[0.97] active:opacity-90 transition"
                         >
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${s.color}`}>
                             {s.icon}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Header from '../components/Header'
+import { TIMING, EASE } from '../animations'
 import BottomSheet from '../components/BottomSheet'
 import { SkeletonList } from '../components/Skeleton'
 import { useAllUsers, useGrantTier, useIsAdmin, useMyTier } from '../hooks/useSubscription'
@@ -18,7 +20,12 @@ export default function Admin() {
   if (!isAdmin) return <Navigate to="/" replace />
 
   return (
-    <div className="pb-28">
+    <motion.div
+      className="pb-28"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: TIMING.base, ease: EASE.inOut }}
+    >
       <Header back title="Painel Admin" subtitle={`${users.length} usuário(s)`} />
       <div className="max-w-md mx-auto px-4 pt-3 space-y-2">
         {isLoading ? <SkeletonList count={4} /> : users.map((u) => (
@@ -43,7 +50,7 @@ export default function Admin() {
       </div>
 
       <GrantSheet user={selected} onClose={() => setSelected(null)} />
-    </div>
+    </motion.div>
   )
 }
 

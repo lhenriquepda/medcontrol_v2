@@ -189,11 +189,17 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 - [x] Instalar `@capacitor/network`
 - [x] `src/hooks/useOnlineStatus.js`
 
-### 4.3 Ads ✅ CONCLUÍDA
+### 4.3 Ads ✅ CONCLUÍDA (parcial — AdSense web pendente IDs)
 - [x] Instalar `@capacitor-community/admob`
 - [x] `AdBanner.jsx` condicional AdSense (web) / AdMob (nativo)
 - [x] AdMob singleton TOP_CENTER overlay
 - [x] AdBanner in-flow em todas pages internas
+- [x] **AdMob (Android native) ID real** `ca-app-pub-2350865861527931/2984960441` em `VITE_ADMOB_BANNER_ANDROID` (Vercel + .env)
+- [ ] **AdSense (web) IDs reais** — `index.html` ainda tem placeholder `ca-pub-XXXXXXXXXXXXXXXX`. Falta:
+  - Substituir publisher ID em `index.html` script tag
+  - Setar `VITE_ADSENSE_CLIENT` (ca-pub-XXX) no Vercel
+  - Setar `VITE_ADSENSE_SLOT` (ad unit ID) no Vercel
+  - Sem isso, web mostra apenas placeholder "Publicidade · Espaço reservado"
 
 ### 4.4 Visual & UX ✅ CONCLUÍDA (rodada v1.0.5)
 - [x] Design system centralizado em `src/styles/theme.css`
@@ -389,115 +395,152 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 
 ---
 
-## FASE 11 — Mobile Security Hardening
+## FASE 11 — Mobile Security Hardening ✅ CONCLUÍDA (parcial — biometria UI + Play Integrity + root detection movidos pra FASE 23 backlog)
 
-> Após quality refactor estável. Vinda Aud 5.4.
+### 11.1 FLAG_SECURE + privacy mask ✅
+- [x] Plugin `@capacitor-community/privacy-screen@8.0.0` instalado
+- [x] Hook `usePrivacyScreen` em `src/hooks/usePrivacyScreen.js` — wrapper React idiomático
+- [x] FLAG_SECURE ativo em telas com info médica (Aud 5.4 G2):
+  - `DoseModal` (open=true → enabled)
+  - `PatientDetail`
+  - `Reports`
+  - `DoseHistory`
+- [x] Mask em recents view automático via plugin (Aud 5.4 G3)
+- [x] ProGuard rules já validadas (FASE 7)
 
-### 11.1 ProGuard + screens
-- [ ] Validar/escrever `proguard-rules.pro` (Capacitor + Sentry + Supabase keep rules) — testar APK release pós-minify
-- [ ] FLAG_SECURE em telas sensíveis: `DoseModal`, `PatientDetail`, `Reports`, `DoseHistory` (Aud 5.4 G2)
-  - Implementação: hook `useFlagSecure()` + plugin Capacitor custom OR `@capacitor-community/privacy-screen`
-- [ ] Plugin privacy-screen / nativo: mask em recents view (G3)
+### 11.2 Network ✅ (parcial)
+- [x] Cert pinning Supabase já ativo (FASE 1)
+- [x] Cert pinning Vercel: `dosy-teal.vercel.app` adicionado em `network_security_config.xml` com CA validation (sem pin estrito — Vercel rotaciona LE certs frequente) (Aud 5.4 G5)
+- [x] AdMob: prod ID via `VITE_ADMOB_BANNER_ANDROID` env (já configurado FASE 4)
+- [ ] (movido pra FASE 23 backlog) Google Play Integrity API (Aud 5.4 G6) — não-crítico pra Beta
 
-### 11.2 Network & integrity
-- [ ] Cert pinning `dosy-teal.vercel.app` em `network_security_config.xml` (G5)
-- [ ] Google Play Integrity API (`@capgo/capacitor-play-integrity` ou nativo) (G6)
-- [ ] AdMob: confirmar prod ID via env, remover hardcoded test ID fallback do bundle prod (G13)
+### 11.3 User-side security (infra criada, UI integration pendente)
+- [x] Plugin `@aparajita/capacitor-biometric-auth@10.0.0` instalado (Capacitor 7+ compat)
+- [x] Hook `useAppLock` em `src/hooks/useAppLock.js` — biometric unlock + auto-lock após N min bg (Aud 5.4 G7+G8)
+- [ ] (movido pra FASE 12 ou 23) LockScreen UI + integração no `main.jsx` + toggle Settings — precisa device test antes de wire
+- [ ] (movido pra FASE 23 backlog) Detecção root/jailbreak (Aud 5.4 G4) — plugin community não maintained pra Capacitor 8
 
-### 11.3 User-side security
-- [ ] Detecção root/jailbreak: plugin `capacitor-jailbreak-root-detection` + warn user (G4)
-- [ ] Biometria opcional pra abrir app: `@capacitor-community/native-biometric` + toggle Settings (G7)
-- [ ] Auto-lock após N min em background — re-autenticar via biometria/senha (G8)
-
-**Validação 11:** APK release com obfuscação. Telas médicas não vazam screenshot. Device rooted = warning. Biometria opcional funcional.
-
----
-
-## FASE 12 — A11y Remediation
-
-> WCAG AA compliance. Vinda Aud 5.3.
-
-### 12.1 Foco e navegação
-- [ ] Trap de foco em `BottomSheet` (cyclic Tab) — `focus-trap-react` ou implementação custom (Aud 5.3 G2)
-- [ ] Skip-to-content link no `<main>` (G9)
-- [ ] `aria-current="page"` em BottomNav active (G10)
-
-### 12.2 Touch targets & labels
-- [ ] Touch targets <44×44px → aumentar em Header back-btn, FilterBar funil, DoseHistory nav, AppHeader settings, UpdateBanner close (G3)
-- [ ] `aria-label` em ~50 botões só-ícone (audit visual + adicionar one-by-one) (G4)
-
-### 12.3 Forms & feedback
-- [ ] Erros de validação inline próximos ao campo em forms (PatientForm, TreatmentForm, SOS, Settings name update) (G6)
-- [ ] Skeleton screens completos: TreatmentList, Reports, Analytics, SOS, PatientForm, TreatmentForm (G7)
-
-### 12.4 Visual & typo
-- [ ] Subir contraste textos secundários no dark mode (audit com axe DevTools) (G8)
-- [ ] Hierarquia headings: h1 único por page, h2/h3 sub
-- [ ] Suportar Dynamic Type: usar `rem` em vez de `px` onde possível (G12)
-
-**Validação 12:** axe DevTools passa WCAG AA. TalkBack: fluxos críticos navegáveis. Tab + Enter funciona em todos modais.
+**Validação 11:** ✅ APK release com obfuscação (FASE 7). Telas médicas com FLAG_SECURE. Cert pinning Supabase + Vercel. Biometria infra pronta (UI pendente). Build + tests verdes.
 
 ---
 
-## FASE 13 — Performance Avançada
+## FASE 12 — A11y Remediation ✅ CONCLUÍDA (parcial — forms/visual movidos pra 15)
 
-> Após code splitting básico (FASE 10). Vinda Aud 5.5.
+### 12.1 Foco e navegação ✅
+- [x] `focus-trap-react@latest` instalado
+- [x] `BottomSheet` com `<FocusTrap>` cyclic Tab (Aud 5.3 G2). Suporta escape via clique fora + Esc key
+- [x] Skip-to-content link em `App.jsx` — `sr-only` + `focus:not-sr-only` brand-colored (Aud 5.3 G9)
+- [x] `<main id="main-content">` wrapper com aria target
+- [x] `<nav aria-label="Navegação principal">` em BottomNav (Aud 5.3 G10)
+- [x] `NavLink` do react-router já aplica `aria-current="page"` automaticamente quando ativo
 
-- [ ] Bundle analyzer (`rollup-plugin-visualizer`) — relatório de chunks
-- [ ] Virtualização listas longas (`@tanstack/react-virtual`) em `DoseHistory`, `Patients`, `TreatmentList` (Aud 5.5 G4)
-- [ ] Lighthouse score baseline + alvo ≥90 mobile
+### 12.2 Touch targets & labels ✅
+- [x] Header back: `w-9 h-9` → `w-11 h-11` + `aria-label="Voltar"`
+- [x] AppHeader settings: `w-9 h-9` → `w-11 h-11` + `aria-label="Ajustes"` (já tinha)
+- [x] FilterBar funil: `w-10 h-10` → `w-11 h-11` + `aria-label="Abrir filtros"` (já tinha)
+- [x] DoseHistory nav buttons: `w-8 h-8` → `w-11 h-11`
+- [x] UpdateBanner close: `w-7 h-7` → `w-11 h-11` + `aria-label="Dispensar"` (já tinha)
+- [x] BottomNav FAB: `aria-label="Novo (paciente ou tratamento)"`
+- [x] BottomNav NavLinks: `aria-label={t.label}`
 
-**Validação 13:** Lighthouse mobile ≥90. 60fps scroll em 500 doses. Time-to-interactive ≤3s em 3G simulado.
+### 12.3 Forms & feedback (movido pra FASE 15 UX)
+- [ ] Erros de validação inline em forms — escopo expandido, fica em FASE 15
+- [ ] Skeleton screens completos — fica em FASE 15
 
----
+### 12.4 Visual & typo (movido pra FASE 15 UX)
+- [ ] Subir contraste textos secundários no dark mode
+- [ ] Hierarquia headings revisão
+- [ ] Dynamic Type via `rem`
 
-## FASE 14 — Observability Avançada
-
-> Voar com instrumentos antes de Beta. Vinda Aud 5.7.
-
-### 14.1 PostHog
-- [ ] PostHog SDK web + native (`posthog-js` + capacitor wrapper)
-- [ ] Eventos custom críticos:
-  - `dose_confirmed`, `dose_skipped`, `dose_overdue_dismissed`
-  - `alarm_fired`, `alarm_dismissed`, `alarm_snoozed`
-  - `notification_permission_granted/denied`
-  - `paywall_shown`, `paywall_clicked_plan`, `upgrade_complete`, `upgrade_failed`
-  - `share_patient_invite_sent/accepted`
-  - `treatment_created`, `patient_created`, `account_deleted`
-- [ ] Funil paywall: view → click → checkout_started → success/failure
-- [ ] Feature flags via PostHog
-
-### 14.2 Sentry alerting
-- [ ] Alertas: crash spike, error rate threshold, Edge Function failures
-- [ ] (opcional) Sentry Replay pra debug visual
-
-### 14.3 Dashboards launch
-- [ ] DAU, MAU, retention D1/D7/D30
-- [ ] Crash-free rate (alvo ≥99.5%)
-- [ ] ANR rate via Android Vitals export (alvo <0.5%)
-- [ ] Critical alarm enabled rate
-- [ ] Onboarding completion rate
-- [ ] Documentar métricas-alvo em `docs/launch-metrics.md`
-
-**Validação 14:** dashboards live. Eventos chegando. Alertas configurados. Pronto pra observar Beta.
+**Validação 12:** ✅ Touch targets ≥44px nos botões críticos. FocusTrap em BottomSheet. Skip-to-content acessível via Tab. Build verde, 66/66 tests, lint 0 errors.
 
 ---
 
-## FASE 15 — UX Refinements (P2)
+## FASE 13 — Performance Avançada ✅ CONCLUÍDA (parcial — virtualização + Lighthouse em backlog/FASE 17)
 
-> Não bloqueia launch mas eleva produto. Pode ir em paralelo com FASE 14 ou pós-Beta.
+- [x] `rollup-plugin-visualizer` instalado em vite.config.js — gera `dist/stats.html` treemap após build prod
+- [x] `@tanstack/react-virtual` instalado (infra pronta pra integração futura)
+- [ ] (movido pra FASE 23 backlog) Virtualização em DoseHistory/Patients/TreatmentList — refactor grande, risco UX. Aplicar quando user real tiver listas grandes (>200 items)
+- [ ] (movido pra FASE 17) Lighthouse baseline + alvo ≥90 mobile — manual em device real
+- [ ] (movido pra FASE 17) Performance scroll lista 500 doses — manual
 
-- [ ] Undo (5s) ao deletar paciente/tratamento (Dosy tem em doses só)
-- [ ] Busca text-search dentro de Histórico
-- [ ] Confirmação dupla ao deletar batch (>10 itens)
-- [ ] Sort configurável de pacientes (drag-and-drop ou ordem manual)
-- [ ] Anexar comprovantes/imagens em doses (foto da medicação) — feature PRO
-- [ ] Avaliar remoção de `mockStore.js` (205 LOC, modo demo) ou lazy-load
-- [ ] Mover `Plan-detalhado-backup.md` + `Plan-pre-reorg-backup.md` pra `docs/archive/`
+**Validação 13:** ✅ infra instrumentação pronta (stats.html + react-virtual). Métricas reais ficam pra validação FASE 17 device.
 
 ---
 
-## FASE 16 — Monetização Real (In-App Purchase)
+## FASE 14 — Observability Avançada ✅ CONCLUÍDA (parcial — Sentry alerts + dashboards manuais)
+
+### 14.1 PostHog ✅
+- [x] `posthog-js` instalado
+- [x] `src/services/analytics.js` — wrapper com `initAnalytics`, `track`, `identifyUser`, `resetUser`, `getFeatureFlag`
+- [x] `EVENTS` catalog (24 eventos): dose_*, alarm_*, paywall_*, patient_*, treatment_*, share_*, account_*, etc
+- [x] LGPD: `sanitize_properties` strips PII (email/name/observation/medName/patientName/doctor/allergies/condition)
+- [x] Session replay desabilitado (privacidade saúde)
+- [x] Init em `main.jsx` (no-op se VITE_POSTHOG_KEY ausente ou modo dev)
+- [x] `identifyUser(userId)` em `useAuth` após login (UUID anônimo)
+- [x] `resetUser()` em logout
+- [x] Eventos wired em pontos críticos:
+  - Doses: confirm/skip/undo + sos register em useDoses (4 events)
+  - Patients: create/delete em usePatients (2 events)
+  - Treatments: create/delete em useTreatments (2 events)
+  - Permissions: notification_permission_granted/denied em notifications.js (2 events)
+  - Settings: critical_alarm_toggled, dnd_toggled (2 events)
+  - Paywall: paywall_shown em PaywallModal (1 event)
+- [x] `.env.example` com `VITE_POSTHOG_KEY` + `VITE_POSTHOG_HOST`
+- [ ] (manual) Criar conta PostHog + projeto + adicionar key em GitHub Secret `VITE_POSTHOG_KEY`
+- [ ] (manual) Feature flags em PostHog UI (futuro)
+
+### 14.2 Sentry alerting (manual em Sentry UI)
+- [ ] (manual) Alertas em https://lhp-tech.sentry.io/alerts/rules/dosy/: crash spike, error threshold
+- [ ] (opcional) Sentry Replay — pulado por privacidade saúde
+
+### 14.3 Dashboards launch ✅
+- [x] `docs/launch-metrics.md` — métricas-alvo, dashboards Sentry/PostHog/Android Vitals, eventos catalog, LGPD
+- [x] Critérios saída Beta: crash-free ≥99.5%, ANR <0.5%, retention D7 ≥40%, NPS ≥7
+- [ ] (manual) Criar dashboards customizados PostHog após primeiros eventos
+
+**Validação 14:** ✅ infra analytics pronta (no-op sem key). Eventos críticos wired. PII LGPD-safe. Métricas documentadas. User adiciona PostHog key quando criar conta.
+
+---
+
+## FASE 15 — UX Refinements (P2) ✅ CONCLUÍDA (parcial — drag-sort + comprovantes movidos pra FASE 23 backlog)
+
+- [x] Undo (5s) ao deletar paciente — `useUndoableDelete` hook + integrado em PatientForm
+- [x] Undo (5s) ao deletar tratamento — integrado em TreatmentForm
+- [x] Busca text-search em Histórico — input com Icon, filtra por medName/unit/observation case-insensitive
+- [x] Mover backups md pra `docs/archive/` (Plan-detalhado-backup.md + Plan-pre-reorg-backup.md)
+- [ ] (FASE 23 backlog) Confirmação dupla ao deletar batch (>10 itens) — não há fluxo batch atual
+- [ ] (FASE 23 backlog) Sort configurável de pacientes (drag-and-drop) — refactor maior
+- [ ] (FASE 23 backlog) Anexar comprovantes/imagens em doses — feature PRO, requer Supabase Storage
+- [ ] (FASE 23 backlog) Avaliar remoção de `mockStore.js` (205 LOC, modo demo)
+- [ ] (FASE 23 backlog) Skeleton screens completos: TreatmentList/Reports/Analytics/SOS/forms
+- [ ] (FASE 23 backlog) Erros inline em forms (PatientForm/TreatmentForm/SOS/Settings)
+- [ ] (FASE 23 backlog) Subir contraste textos secundários no dark
+- [ ] (FASE 23 backlog) Hierarquia headings revisão + Dynamic Type via `rem`
+
+---
+
+## FASE 16 — Monetização Real (In-App Purchase) ⏸ ADIADA — pós-beta-aberto
+
+> Decisão: Beta interno + fechado serão FREE pra todos (sem cobrança). Monetização ativa apenas quando rollout produção.
+
+> **PROMO temporária ativa (sessão 30/abr/2026):** `getMyTier()` em `src/services/subscriptionService.js` converte `'free'` → `'plus'` automaticamente. Todos cadastros novos + free existing recebem Plus (features ilimitadas + ads ainda visíveis). **REVERTER ANTES DO LANÇAMENTO PRODUÇÃO:** trocar `return tier === 'free' ? 'plus' : tier` → `return tier`. Optional SQL trigger durável commented em chat. Pra DB ficar consistente com painel Admin, rodar SQL trigger Supabase SQL Editor:
+> ```sql
+> CREATE OR REPLACE FUNCTION medcontrol.handle_new_user_plus_promo()
+> RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+> BEGIN
+>   INSERT INTO medcontrol.subscriptions ("userId", tier, source)
+>   VALUES (NEW.id, 'plus', 'beta_promo')
+>   ON CONFLICT ("userId") DO NOTHING;
+>   RETURN NEW;
+> END; $$;
+> DROP TRIGGER IF EXISTS on_auth_user_signup_plus ON auth.users;
+> CREATE TRIGGER on_auth_user_signup_plus
+>   AFTER INSERT ON auth.users
+>   FOR EACH ROW EXECUTE FUNCTION medcontrol.handle_new_user_plus_promo();
+> ```
+
+
 
 ### 16.1 Setup contas + produtos
 - [ ] Criar conta RevenueCat
@@ -533,6 +576,9 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 ---
 
 ## FASE 17 — Validação Manual em Device Real (Pre-Beta Gate)
+
+> **Checklist completo gerado em `docs/device-validation-checklist.md`** — 9 seções (Devices, A11y, Performance, Notif/Alarmes, Mobile security, Fluxos críticos, Edge cases, Battery, Update).
+> Imprimir + executar quando 3 devices estiverem disponíveis.
 
 > Última checagem antes de Beta interno. Catch UX/perf issues que static audit não pega. Vinda Aud 5.3 + 5.5 device validation.
 
@@ -576,24 +622,65 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 - [x] Termos de Uso (`src/pages/Termos.jsx`)
 - [x] Rotas `/privacidade` + `/termos` públicas
 
-### 18.2 Play Console requirements
-- [ ] Preencher questionário IARC no Play Console
-- [ ] Preencher declaração de saúde
-- [ ] Data Safety section preenchida
-- [ ] Classificação etária
+### 18.2 Play Console requirements ✅ CONCLUÍDA (parcial — 1 declaração pendente)
+**App criado em 30/abr/2026** — App ID `4972201184307332877`, package `com.dosyapp.dosy`, conta pessoal "Dosy Med" (ID `6887515170724268248`)
 
-### 18.3 Keystore + signing ✅ CONCLUÍDA (parcial)
-- [x] `android/app/build.gradle` com signingConfig env-based
-- [x] `.keystore` + `*.jks` no `.gitignore`
-- [ ] Gerar keystore release final ⚠️ MANUAL CRÍTICO
-- [ ] Backup keystore em 3 locais seguros
+- [x] App registrado no Play Console (Dosy, pt-BR, Grátis)
+- [x] Política Privacidade URL: `https://dosy-teal.vercel.app/privacidade`
+- [x] Anúncios declarado: SIM (AdMob)
+- [x] Acesso de apps: credenciais teste (`teste02@teste.com / 123456`) declaradas
+- [x] Classificações IARC (questionário completo, "Todos os Outros Tipos", todas Não)
+- [x] Público-alvo: 18+ (Maiores de 18 anos)
+- [x] Segurança dos dados: Nome+Email+IDs+Saúde+Logs falha+Diagnóstico+ID dispositivo, criptografia trânsito SIM, exclusão conta SIM via `dosy-teal.vercel.app/privacidade`
+- [x] ID de publicidade: SIM, finalidade Publicidade ou marketing
+- [x] Apps governamentais: NÃO
+- [x] Recursos financeiros: NÃO
+- [x] Apps de saúde: SIM, "Controle de medicamentos e tratamentos"
+- [x] Intent tela cheia: Despertador (qualifica concessão prévia)
+- [x] Alarmes exatos: Despertador
+- [ ] **Permissões serviço primeiro plano** ⏳ PENDENTE — exige vídeo demo
+  - Dosy usa `FOREGROUND_SERVICE_SPECIAL_USE` em `AlarmService.java:163` (alarme crítico de dose)
+  - Console exige vídeo YouTube unlisted demonstrando uso (alarme tocando fullscreen com tela bloqueada)
+  - Alternativa: refatorar pra `FOREGROUND_SERVICE_TYPE_DATA_SYNC` (não exige justificativa) — mas pode quebrar alarme em background
+  - URL declaração: `app-content/foreground-services`
 
-### 18.4 Build AAB
-- [ ] Gerar primeiro `.aab` release (`./gradlew bundleRelease`)
+### 18.3 Keystore + signing ✅ CONCLUÍDA
+- [x] `android/app/build.gradle` com signingConfig dual-source: lê `keystore.properties` PRIMEIRO, fallback env vars
+- [x] Path resolver custom: relative path resolve relativo a `rootProject.projectDir` (android/), não app/. Antes resolveu errado e signing skip silente.
+- [x] `.keystore` + `*.jks` + `keystore.properties` no `.gitignore`
+- [x] Gerar keystore release final: `dosy-release.keystore` (RSA 2048, validity 10000 dias)
+  - Subject: `CN=Luiz Henrique Almeida, OU=Dosy, O=Dosy, L=Volta Redonda, ST=Rio de Janeiro, C=BR`
+  - Alias: `dosykey`
+- [x] `android/keystore.properties` criado com creds (gitignored, sem BOM UTF-8)
+- [ ] **Backup keystore em 3 locais seguros** ⚠️ MANUAL CRÍTICO antes de publicar
+  - 1: password manager (1Password/Bitwarden) — keystore + senhas
+  - 2: pendrive offline guardado fisicamente
+  - 3: cloud cifrado (drive cifrado / pCloud Crypto)
+  - **Perdeu = app morto no Play Store (não consegue mais publicar updates)**
 
-### 18.5 Assets de loja
-- [ ] Screenshots: Dashboard, DoseModal, Relatório, Settings, Pacientes (1080×1920)
-- [ ] Feature Graphic (1024×500px)
+### 18.4 Build AAB ✅ CONCLUÍDA
+- [x] AAB release assinado: `android/app/release/app-release.aab` (build manual via Studio: Build → Generate Signed App Bundle)
+- [x] Tamanho: 17.9 MB
+- [x] Signing: v1 JAR + v2 (default AGP) verificado via `jarsigner -verify`
+- [x] Capacitor sync executado (web assets copiados)
+- [x] versionCode 14 / versionName 0.1.6.1 (último upload: promo Plus tier)
+- [x] minifyEnabled true (ProGuard/R8)
+- [x] shrinkResources true
+- [x] **Histórico uploads Internal track:**
+  - v0.1.6.0 (13) — primeiro upload, "Disponível pra testadores internos"
+  - v0.1.6.1 (14) — fix loader export PDF/CSV/JSON + Plus tier promo + filename pattern + splash limpo
+
+### 18.5 Assets de loja ✅ CONCLUÍDA (parcial)
+- [x] **Android icons + splash** gerados via sharp custom script a partir de `resources/icon.png`, `splash.png`, `splash_icon.png`. Splash >100KB convertidos pra .webp
+- [x] **Feature Graphic 1024×500** em `resources/feature-graphic.png` — uploaded Console
+- [x] **Ícone 512×512** em `resources/icon-512.png` — uploaded Console (Detalhes app)
+- [x] **Textos ficha** Console preenchidos (nome Dosy + breve 80c + completa 4000c) — salvos como rascunho
+- [ ] **Screenshots phone 1080×1920** ⏳ PENDENTE — user vai retrabalhar
+  - Existing em `resources/screenshots/01-14`. User quer regerar mais polidos
+  - Mín 2 phone, máx 8. Pra qualificar promo: 4+ com 1080px+
+  - Console exige 16:9 ou 9:16, 320-3840px cada lado
+  - Telas: Dashboard, Pacientes, Tratamentos, Análises, Relatórios, S.O.S, Ajustes, DoseModal
+- [ ] **Tablet 7"/10" screenshots** — opcional (asterisco mas Console aceita sem pra Internal/Closed)
 
 ### 18.6 Textos de loja ✅ CONCLUÍDA
 - [x] Descrição curta (`docs/play-store/description-short.txt`)
@@ -609,46 +696,100 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 
 ---
 
-## FASE 18.5 — FAQ + Suporte In-App (pre-beta)
+## FASE 18.4.5 — Hot-fixes pós-deploy (smoke tests Chrome MCP) ✅ CONCLUÍDA
+
+> Bugs catados durante validação live em `dosy-teal.vercel.app` via Chrome MCP. Console limpo, fluxos básicos OK.
+
+### Bugs identificados + fixes
+- [x] **Sentry 403 Forbidden** — DSN no Vercel apontava project_id antigo (`4511299692855296`) de project deletado. Vercel env `VITE_SENTRY_DSN` atualizado para project ativo `4511299700129792`. `.env.production` re-puxado via `vercel env pull`.
+- [x] **Sentry 503 + CORS spam** — `autoSessionTracking: true` (default) gerava 1 envelope/pageload, ingest devolvia 503 (rate-limit transitório), CORS error spam. Disabled `autoSessionTracking: false` + `sendClientReports: false` + `tracesSampleRate: 0`. Mantém só captureException pra erros reais.
+- [x] **Supabase 406 Not Acceptable** — `getPatient(id).single()` disparava 406 (PGRST116) quando paciente recém-deletado mas hook ainda tinha id no cache. Trocado por `.maybeSingle()` (retorna `null` em 0 rows).
+- [x] **RPC `extend_continuous_treatments` 404 (PGRST202)** — função sumiu do schema (migration perdida). Chamadas client-side comentadas em `Dashboard.jsx` (mount + handleRefresh). Imports `hasSupabase, supabase` removidos. pg_cron faz fallback diário. Backlog FASE 23.5: recriar função + reativar.
+- [x] **DoseModal travado em undo race** — `await mutateAsync` bloqueava modal aberto se request lenta/abortada por cancelQueries do próximo onMutate. Trocado por `mutate` não-bloqueante; modal fecha imediato; optimistic update já cobre UI.
+- [x] **Storm `net::ERR_FAILED` em sequência confirm→undo→skip→undo** — `refetchQueries` (eager) em `onSettled` de cada mutation cancelava request anterior e refazia, gerando centenas de logs. Trocado por `invalidateQueries({refetchType: 'active'})` (lazy).
+- [x] **Paciente/Tratamento "morto" reaparece na lista pós-delete** — `usePatients`/`useTreatments` herdavam `staleTime: 0 + refetchOnMount: 'always'` global. Ao navegar pra `/pacientes` durante janela undo (5s), refetch trazia paciente do servidor (DELETE só roda em 5s). Setado `staleTime: 6_000 + refetchOnMount: false` em ambos.
+- [x] **Scroll herdado entre rotas** — botão "+ Novo" ficava sob header ao navegar de tela com scroll. Adicionado `useEffect` no `App.jsx` que `window.scrollTo(0, 0)` em cada `location.pathname` change.
+
+**Validação:** smoke test full (criar paciente → criar tratamento → marcar Tomada → marcar Pular → deletar tratamento → deletar paciente) executado via Chrome MCP. 0 erros console. Network limpo (sem 4xx/5xx exceto cache miss esperado).
+
+---
+
+## FASE 18.5 — FAQ + Suporte In-App (pre-beta) ✅ CONCLUÍDA
 
 > Reduzir suporte 1-on-1 antes do Beta. Antecipar dúvidas comuns sobre funcionamento, alarme, permissões, planos.
 
 ### 18.5.1 Conteúdo
-- [ ] Levantar perguntas previstas por categoria:
-  - **Primeiros passos:** "Como cadastrar primeiro paciente?", "Como criar tratamento?", "Como funciona dose contínua?"
-  - **Alarme & Notificações:** "Por que o alarme não toca?", "O que é o modo Não Perturbe?", "Como tocar mesmo no silencioso?", "Adiar 10min vai gerar nova dose?", "Push notif sumiu — como reativar?"
-  - **Permissões Android:** "Por que precisa de tantas permissões?", "Como liberar 'tela cheia' nas configurações?", "App não abre depois de update — re-conceder permissões"
-  - **Doses:** "Diferença entre Tomada/Pular/Ignorar?", "Como registrar dose extra (S.O.S)?", "Como editar uma dose tomada?", "Por que aparece 'atrasada'?"
-  - **Compartilhar paciente:** "Como compartilhar com cuidador?", "Compartilhar dá permissão de editar?"
-  - **Plano PRO/Plus:** "O que vem no PRO?", "Como cancelar?", "Trial 7 dias funciona como?", "Restaurar compras"
-  - **Privacidade:** "Onde meus dados ficam?", "Como exportar?", "Como excluir conta?", "App vê meus dados de saúde?"
-  - **Sincronização:** "Posso usar em 2 celulares?", "App funciona offline?", "Atualização automática?"
-  - **Bugs comuns:** "Alarme tocou 2x", "Resumo diário não chegou", "Versão desatualizada"
-- [ ] Escrever respostas concisas (3-5 linhas cada) em pt-BR
-- [ ] Revisar com advogado as respostas sobre privacidade/saúde (não dar conselho médico)
-- [ ] Salvar em `src/data/faq.js` como array `[{ category, question, answer, keywords }]`
+- [x] Levantar 35 perguntas previstas em 9 categorias
+  - Primeiros passos · Alarme · Permissões · Doses · Compartilhar · Plano PRO · Privacidade · Sync · Bugs
+- [x] Respostas concisas (3-5 linhas cada) em pt-BR
+- [ ] Revisar com advogado as respostas sobre privacidade/saúde (deferred — pre-launch)
+- [x] Salvar em `src/data/faq.js` como array `[{ id, category, question, answer, keywords }]` + helper `searchFaq()` com normalização (lowercase + sem acento)
 
 ### 18.5.2 UI in-app
-- [ ] Criar página `src/pages/FAQ.jsx` com:
-  - Search box no topo (filtra por question + keywords)
-  - Lista por categoria, accordion expandable
-  - Empty state se busca sem resultado + CTA "Não achou? Entre em contato"
-- [ ] Rota `/faq` em `App.jsx`
-- [ ] Link "Ajuda / FAQ" em `More.jsx` (entre "Ajustes" e "Painel Admin")
-- [ ] Link "Ver FAQ" no header da `PermissionsOnboarding` (caso usuário não entenda permissão)
-- [ ] Botão "Dúvidas frequentes" no `Settings.jsx` section "Sobre"
-- [ ] Tag PostHog: `faq_opened`, `faq_search_query`, `faq_question_expanded` (após FASE 14 instrumentation)
+- [x] Criar página `src/pages/FAQ.jsx`:
+  - Search box (filtra question + answer + keywords + categoria)
+  - Chips de categoria (sticky scroll horizontal)
+  - Lista agrupada por categoria, accordion expandable (chevron rotaciona)
+  - Empty state com CTA "Falar com suporte" (mailto)
+- [x] Rota `/faq` em `App.jsx` (lazy + acessível pre-login também)
+- [x] Item "Ajuda / FAQ" em `More.jsx` (após "Ajustes")
+- [x] Botão "Dúvidas frequentes" no `Settings.jsx` (seção Versão)
+- [ ] Link "Ver FAQ" no header da `PermissionsOnboarding` (deferred — opcional)
+- [x] Eventos PostHog: `faq_opened`, `faq_search_query` (debounce 800ms), `faq_question_expanded`, `faq_support_email_clicked`
 
 ### 18.5.3 Onboarding hint
-- [ ] Slide adicional no `OnboardingTour` apontando pra FAQ ("Tem dúvidas? Acesse Mais → FAQ a qualquer momento")
-- [ ] OR tooltip discreto pós-1º login: "💡 FAQ disponível em Mais"
+- [ ] Slide adicional no `OnboardingTour` apontando pra FAQ (deferred — opcional pós-Beta)
 
 ### 18.5.4 Suporte fallback
-- [ ] Email suporte funcional: `suporte@dosyapp.com` (ou similar)
-- [ ] Botão "Falar com suporte" no FAQ que abre email com template (subject + corpo pré-preenchido com versão do app + device info)
-- [ ] Resposta SLA documentada em `docs/support-sla.md` (24h dia útil PRO, 72h Free)
+- [x] Email reservado: `suporte@dosyapp.com` (configurar caixa real antes do Beta)
+- [x] Botão "Falar com suporte" abre `mailto:` com subject + body pré-preenchidos (versão app + plataforma + UA)
+- [x] SLA documentada em `docs/support-sla.md` (Free 72h · PRO 24h · Plus 12h, severidades S1-S4)
 
-**Validação 18.5:** FAQ respondendo ≥30 perguntas. Search funcional. Acessível de 3 entry-points (More, Settings, OnboardingTour). Email suporte testado.
+**Validação 18.5:** ✅ 35 perguntas respondendo. Search funcional. Acessível de 2 entry-points (More + Settings). Email suporte com template. Build OK (FAQ chunk 19.4KB / gzip 7.5KB). 66/66 tests pass. 0 lint errors.
+
+**Pendente pre-Beta:** revisar respostas com advogado · provisionar caixa `suporte@dosyapp.com` · testar mailto em device real Android.
+
+---
+
+## FASE 18.9 — Pendências Console pra desbloquear Closed/Open Testing
+
+> Sessão 30/abr/2026: Internal testing já live (FASE 19.1 ✅). Pendências antes de Closed/Open Testing pra cumprir requisito Google "12 testers × 14 dias" antes de Produção.
+
+### 18.9.1 Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE
+- [ ] Gravar vídeo ~30s demonstrando alarme crítico de dose:
+  - Abrir Dosy → criar tratamento dose horário próximo
+  - Bloquear telefone / app em background
+  - Aguardar alarme disparar fullscreen sobre lockscreen
+  - Marcar Tomada/Pulada
+- [ ] Subir YouTube unlisted
+- [ ] Console → `Conteúdo do app` → `Permissões de serviço em primeiro plano` → marcar "Outro" + colar URL vídeo + descrição uso
+- [ ] Alternativa custosa: refatorar `AlarmService.java` pra `FOREGROUND_SERVICE_TYPE_DATA_SYNC` ou outro tipo que não exige justificativa (risk: alarme pode ser killed em background)
+
+### 18.9.2 Screenshots phone retrabalho
+- [ ] User vai regerar 2-8 screenshots polidos (1080×1920 PNG)
+- [ ] Subir Console → `Detalhes do app` → `Capturas de tela do telefone`
+- [ ] Para qualificar promo Play: 4+ com 1080px+
+- [ ] Telas sugeridas: Dashboard com doses, Pacientes lista, Tratamentos, Relatórios PDF, S.O.S, Análises, Ajustes, DoseModal aberto
+
+### 18.9.3 Closed Testing track + 12 testers via Reddit (caminho pra Produção)
+**Regra Google 2024:** contas pessoais novas precisam **12 testers × 14 dias em Closed Testing** antes de publicar Open/Produção.
+
+- [ ] Promover versão atual (0.1.6.1) pra Closed Testing track
+  - URL: `play.google.com/console/u/0/developers/6887515170724268248/app/4972201184307332877/closed-testing`
+- [ ] Criar Google Group público pra testers ("dosy-beta-testers@googlegroups.com" ou similar) — qualquer pessoa pode entrar
+- [ ] Adicionar Group como tester list no Closed track
+- [ ] Pegar URL opt-in público gerado pelo Console
+- [ ] Posts Reddit (templates em `docs/launch-posts.md`):
+  - r/AndroidBeta
+  - r/brasil ou r/financasbr (subreddit BR)
+  - BetaList submission
+- [ ] Aguardar 14 dias com 12+ testers ativos
+- [ ] Após 14 dias: solicitar acesso Produção via Console (pré-requisito mostra contagem ao vivo)
+
+### 18.9.4 Após Produção destravada → Open Testing público
+- [ ] Configurar Open Testing track com mesma versão
+- [ ] Submit pra revisão Google (1-3 dias)
+- [ ] Após aprovado: link público Play Store pra Reddit/redes/site
 
 ---
 
@@ -656,17 +797,23 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 
 ## FASE 19 — Beta Interno (testers conhecidos)
 
-### 19.1 Preparação
-- [ ] Lista 5-10 testers (família, amigos próximos)
-- [ ] Configurar Internal Testing track no Play Console
-- [ ] Adicionar testers como licensed testers
-- [ ] Versão `0.9.x-internal` (ou seguir 0.1.x.x)
+> **Templates prontos:**
+> - `docs/beta-feedback-form.md` — spec Google Form com 20 perguntas (NPS + uso real + bugs + UX + features faltando + plano PRO)
+> - `docs/launch-posts.md` — 3 posts passivos prontos (Reddit r/AndroidBeta, BetaList, AlternativeTo) — postar 1x cada após Open Testing live
+> - `docs/play-store/seo-metadata.md` — keywords-alvo Brasil, title/short-desc otimizados, classificação IARC, ASO checklist
+
+### 19.1 Preparação ✅ CONCLUÍDA
+- [x] Lista 2 testers: `lhenrique.pda@gmail.com` + `daffiny.estevam@gmail.com` (lista "Dosy Testers" no Console — editável depois)
+- [x] Internal Testing track ativo no Play Console
+- [x] Versão `0.1.6.1 (14)` publicada no track
+- [x] **URL opt-in interno:** `https://play.google.com/apps/internaltest/4700769831647466031`
+  - Cada tester abre URL no celular logado com Gmail correspondente → "Become a tester" → instala via Play Store
 
 ### 19.2 Distribuição
-- [ ] Convite via Play Store (link interno)
+- [x] Convite via Play Store (URL opt-in pronta)
 - [ ] Onboarding em vídeo para testers
 - [ ] Canal Telegram/WhatsApp pra feedback
-- [ ] Formulário Google estruturado (bugs, sugestões, NPS)
+- [ ] Formulário Google estruturado (bugs, sugestões, NPS) — spec em `docs/beta-feedback-form.md`
 
 ### 19.3 Coleta
 - [ ] Sentry capturando crashes (já config FASE 10)
@@ -717,8 +864,8 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 ## FASE 21 — Beta Aberto (Play Store Closed/Open Testing)
 
 ### 21.1 Setup
-- [ ] Closed Testing track com até 100 testers
-- [ ] Open Testing depois de estável
+- [ ] Closed Testing track com até 100 testers (config detalhada em FASE 18.9.3)
+- [ ] Open Testing depois de estável (FASE 18.9.4)
 - [ ] Versão `1.0.0-beta.x`
 - [ ] Página "junte-se ao beta" no site
 
@@ -800,6 +947,7 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 - [ ] Drill anual de disaster recovery
 
 ### 23.5 Backlog pós-launch (vinda das auditorias 5.X — P3)
+- [ ] **Recriar RPC `extend_continuous_treatments(p_days_ahead int)`** — função sumiu do schema (PGRST202 404). Chamada client-side desabilitada em `Dashboard.jsx` (mount + handleRefresh). pg_cron faz fallback diário. Quando criar: assinatura `(p_days_ahead int) returns json` com `{dosesAdded, treatmentsExtended}`. Testar com user contínuo ativo. Reativar chamadas no Dashboard.
 - [ ] Audit_log abrangente (triggers em UPDATE/DELETE de doses/treatments/patients) (Aud 5.2 G12)
 - [ ] 2FA opcional via TOTP (Aud 5.4 G10)
 - [ ] Criptografia client-side de `observation` (Aud 5.4 G11)
@@ -819,16 +967,56 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 - [ ] Plano Family (até 5 usuários compartilhando)
 - [ ] API pública para integrações (apenas PRO)
 
+### 23.7 DosyMonitorService — confiabilidade alarmes em OEMs hostis (POST OPEN TESTING)
+
+> **Contexto:** Sem service em background, OEMs como Xiaomi MIUI, Huawei EMUI, OPPO ColorOS, OnePlus OxygenOS matam app idle e podem cancelar alarms agendados via `setAlarmClock`. ~30% Android BR afetado. Sintoma: user reporta "alarme não tocou" mesmo com permissões corretas.
+>
+> **Escopo desta fase (sem notification persistente):**
+> - Service silent rodando em background pra:
+>   - Re-agendar alarms cancelados por OEM agressivo
+>   - Sync periódico Supabase → puxar novas doses sem app aberto
+>   - Health-check permissões (alarme exato, full-screen intent ainda granted)
+> - Sem foreground notification visível pro user
+> - Triggered por boot + abertura app + WorkManager periodic
+>
+> **Decisão técnica (Android 12+):**
+> Android 12+ EXIGE foreground services terem notification visible. Não é possível service permanente totalmente silent. Caminhos:
+> - **Opção A — WorkManager periodic 15min:** sem foreground, sem notification. Funciona em stock Android, ainda pode falhar em OEMs muito agressivos (Xiaomi MIUI 13+ kills workers). Battery cost mínimo.
+> - **Opção B — Foreground service com notification PRIORITY_MIN + silent + low importance channel:** notification existe mas usuário nem vê (oculta no badge da barra). User pode "Ocultar notificação" via long-press canal. Tradeoff aceitável.
+> - **Opção C — Hybrid:** WorkManager default + ativar foreground service apenas quando detectar alarm prestes a disparar (próximas 24h).
+>
+> **Recomendação inicial:** Opção A (WorkManager). Avaliar feedback Open Testing — se usuários Xiaomi/OnePlus reportarem alarms missing, escalar pra Opção C.
+>
+> **Tarefas:**
+- [ ] Implementar `DosyMonitorWorker` com `WorkManager.enqueueUniquePeriodicWork(15min, KEEP)`
+- [ ] Lógica re-schedule: ler `dosy_critical_alarms` SharedPreferences + verificar via AlarmManager se ainda ativos; recriar se missing
+- [ ] Sync Supabase: query doses 24h ahead, agendar alarms novos
+- [ ] Schedule worker em: `MainActivity.onCreate`, `BootReceiver`, após login bem-sucedido
+- [ ] Toggle Ajustes "Modo confiável" (default ON) — desabilita worker se user prefere
+- [ ] Telemetria PostHog: evento `worker_run`, `alarm_re_scheduled` pra medir frequência re-spawn
+- [ ] Testar matriz: Pixel (stock), Xiaomi Redmi (MIUI), Samsung A14 (One UI battery saver ON)
+- [ ] Documentar workaround usuário Xiaomi: "Auto-start" + "Background activity" devem ser ativados manualmente
+
 ---
 
 ## STATUS GERAL
 
 - **Total de fases:** 23 (mais Fase 0)
-- **Concluídas (✅):** Fase 0, 1, 2, 2.5, 3, 5
-- **Em andamento:** Fase 4 (~95%)
-- **Próxima:** Fase 6 (Migrations CLI) → Fase 7 (Quick Wins) → cascata
-- **Estimativa restante até launch:** ~3-5 meses
-- **Versão atual:** 0.1.5.6 (dev — pre-1.0). v1.0 reservada pra Play Store launch.
+- **Concluídas (✅):** Fase 0, 1, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10, 11 (algumas parciais com remediações em backlog)
+- **Próxima:** Fase 12 (A11y Remediation) → 13 (Perf Avançada) → 14 (Observability+) → 15 (UX) → 16 (Monetização) → 17 (Device Validation) → 18 (Play Store) → 19 Beta Interno
+- **Estimativa restante até launch:** ~2-4 meses
+- **Versão atual:** 0.1.5.7 (dev — pre-1.0). v1.0 reservada pra Play Store launch.
+
+### Métricas atuais (snapshot)
+- Bundle main: **64KB** gzip 20KB (era 716KB → -91%)
+- APK release: **10.4MB** (era 12.3MB → -15% via ProGuard)
+- Tests: **66/66 passing** · coverage utils 88%
+- Lint: **0 errors**, 49 warnings (max=50)
+- DB: 11 tabelas RLS+FORCE_RLS · 33 indexes · 5 triggers integridade · anon 0 grants
+- 8 migrations DB versionadas em `supabase/migrations/`
+- 7 docs auditoria em `docs/audits/`
+- Sentry source maps live (release `dosy@0.1.5.7`)
+- FLAG_SECURE ativo em DoseModal/PatientDetail/Reports/DoseHistory
 
 ## Riscos Críticos
 
@@ -844,10 +1032,24 @@ Este é o **arquivo principal de roadmap**. Toda nova ação descoberta em qualq
 | Bypass regras SOS via requisição direta | **Mitigado** | Alto | RPC `register_sos_dose` + trigger bloqueia INSERT direto ✅ |
 | DoS via `durationDays` enorme → 100k doses | **Mitigado** | Alto | RPC valida limite 365 dias ✅ |
 | Dados órfãos por DELETE parcial | **Mitigado** | Médio | FK ON DELETE CASCADE ✅ |
-| Anon role tem grants em 10/11 tabelas | **Pendente** | Crítico | FASE 7.1 `REVOKE ALL FROM anon` |
-| `minifyEnabled false` permite reverse-engineering | **Pendente** | Alto | FASE 7.2 ProGuard ativo |
-| FLAG_SECURE ausente — info médica vaza recents | **Pendente** | Alto | FASE 11.1 |
-| Sem testes — refactors arriscados | **Pendente** | Crítico | FASE 9 Vitest |
-| Sem source maps — crashes prod inúteis | **Pendente** | Alto | FASE 10.1 `@sentry/vite-plugin` |
+| Anon role tem grants em 10/11 tabelas | **Mitigado** | Crítico | FASE 7.1 — REVOKE ALL FROM anon aplicado em 10/11 tabelas ✅ |
+| Cross-FK ownership (dose↔treatment mismatch) | **Mitigado** | Médio | FASE 8.2 — trigger `validate_dose_treatment_match` BEFORE INSERT/UPDATE ✅ |
+| Inputs malformados (length, range numérico) | **Mitigado** | Médio | FASE 8.1 — CHECK constraints em treatments/doses/sos_rules/patients ✅ |
+| `minifyEnabled false` permite reverse-engineering | **Mitigado** | Alto | FASE 7.2 — ProGuard/R8 ativo + custom keep rules. APK 12.3MB → 10.4MB ✅ |
+| FLAG_SECURE ausente — info médica vaza recents | **Mitigado** | Alto | FASE 11.1 — FLAG_SECURE em DoseModal/PatientDetail/Reports/DoseHistory via plugin privacy-screen ✅ |
+| Sem testes — refactors arriscados | **Mitigado** | Crítico | FASE 9 — Vitest 66 tests + ESLint + CI lint+test+audit. Coverage utils 88% ✅ |
+| Sem source maps — crashes prod inúteis | **Mitigado** | Alto | FASE 10.1 — @sentry/vite-plugin upload + release tag `dosy@0.1.5.7` em CI ✅ |
+| Sem ErrorBoundary — white screen em crash React | **Mitigado** | Alto | FASE 10.1 — ErrorBoundary global com Sentry capture + fallback amigável ✅ |
+| Bundle 716KB main bloqueia time-to-interactive 3G | **Mitigado** | Alto | FASE 10.2 — code splitting React.lazy + manualChunks → main 64KB ✅ |
+| Cleartext HTTP em domínios não-pinned | **Mitigado** | Médio | FASE 11.2 — network_security_config bloqueia cleartext + cert pinning Supabase + Vercel ✅ |
+| `:focus-visible` ausente — A11y keyboard nav | **Mitigado** | Médio | FASE 7.4 — outline brand global em theme.css ✅ |
 | Supabase auth token expirar offline | Média | Médio | `autoRefreshToken: true` + redirect Login |
 | Permissões especiais Android (full-screen, overlay) resetam após install | Média | Médio | PermissionsOnboarding re-aparece após APP_VERSION change ✅ |
+| Touch targets <44×44px — A11y mobile fail | **Pendente** | Médio | FASE 12 — audit + bump pra w-11 h-11 mínimo |
+| ARIA labels ausentes em ~50 botões só-ícone | **Pendente** | Médio | FASE 12 — adicionar one-by-one |
+| Trap de foco ausente em modais | **Pendente** | Médio | FASE 12 — focus-trap-react em BottomSheet |
+| Listas longas sem virtualização (200+ doses) | **Pendente** | Baixo | FASE 13 — `@tanstack/react-virtual` |
+| Sem PostHog — voar cego no launch (sem retention/funnel) | **Pendente** | Alto | FASE 14 — eventos custom + dashboards |
+| Sem Play Integrity — APK modificado pode instalar | **Pendente** | Médio | FASE 23 backlog (não-crítico Beta) |
+| Sem biometria opcional — saúde sensível sem 2nd factor | **Pendente** | Médio | FASE 23 backlog (infra pronta `useAppLock`) |
+| Sem detecção root/jailbreak | **Pendente** | Baixo | FASE 23 backlog (plugin não maintained Capacitor 8) |

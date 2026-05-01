@@ -1,8 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listPatients, createPatient, updatePatient, deletePatient, getPatient } from '../services/patientsService'
+import { track, EVENTS } from '../services/analytics'
 
 export function usePatients() {
-  return useQuery({ queryKey: ['patients'], queryFn: listPatients })
+  return useQuery({
+    queryKey: ['patients'],
+    queryFn: listPatients,
+    // Durante janela undo (5s) o paciente já foi removido optimistic do cache,
+    // mas o servidor ainda não deletou. staleTime cobre a janela pra evitar
+    // refetch on mount que traria o paciente "morto" de volta visualmente.
+    staleTime: 6_000,
+    refetchOnMount: false,
+  })
 }
 export function usePatient(id) {
   return useQuery({ queryKey: ['patients', id], queryFn: () => getPatient(id), enabled: !!id })
@@ -11,7 +20,10 @@ export function useCreatePatient() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createPatient,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['patients'] })
+    onSuccess: () => {
+      track(EVENTS.PATIENT_CREATED)
+      qc.invalidateQueries({ queryKey: ['patients'] })
+    }
   })
 }
 export function useUpdatePatient() {
@@ -26,6 +38,7 @@ export function useDeletePatient() {
   return useMutation({
     mutationFn: deletePatient,
     onSuccess: () => {
+      track(EVENTS.PATIENT_DELETED)
       qc.invalidateQueries({ queryKey: ['patients'] })
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })

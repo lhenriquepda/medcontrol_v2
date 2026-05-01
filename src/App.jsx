@@ -24,9 +24,14 @@ const Privacidade = lazy(() => import('./pages/Privacidade'))
 const Termos = lazy(() => import('./pages/Termos'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Install = lazy(() => import('./pages/Install'))
+const FAQ = lazy(() => import('./pages/FAQ'))
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
+import { useAppResume } from './hooks/useAppResume'
+import { useAdMobBanner } from './hooks/useAdMobBanner'
 import { usePushNotifications } from './hooks/usePushNotifications'
+import { useDoses } from './hooks/useDoses'
+import { usePatients } from './hooks/usePatients'
 import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
@@ -46,16 +51,25 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
   useRealtime()
+  useAppResume()
+  useAdMobBanner()
   const [showSummary, setShowSummary] = useState(false)
   // Tour shows after permissions modal closes (granted OR skipped). Web also shows immediately
   // since web has no special permissions modal.
   const [permsDone, setPermsDone] = useState(() => !Capacitor.isNativePlatform())
 
+  // Reset scroll para topo ao navegar entre rotas. Sem isso, navegar pra
+  // /pacientes mantém scroll da rota anterior — botão "+ Novo" no topo
+  // ficava escondido sob header quando user vinha de tela com scroll.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+
   // Auto-prompt notif permissions on first login (once per user per device)
   // Note: subscribe activates LOCAL CriticalAlarm + LocalNotifications scheduling.
   // FCM register happens inside but server-side push is suppressed (no foreground
   // redisplay, see pushNotificationReceived listener below).
-  const { subscribe, isNative, supported } = usePushNotifications()
+  const { subscribe, isNative, supported, scheduleDoses } = usePushNotifications()
   useEffect(() => {
     if (!user || !supported) return
     const key = `dosy_push_asked_${user.id}`
@@ -65,6 +79,18 @@ export default function App() {
       console.log('[Auto-subscribe] skipped:', e?.message)
     })
   }, [user, supported, subscribe])
+
+  // ─── App-level alarm reschedule ───────────────────────────────────────
+  // Re-runs rescheduleAll whenever doses or patients change. Mark/skip/undo
+  // a dose → query invalidates → effect re-fires → alarmes recalculados,
+  // doses não-pending excluídas. Cobre caso onde Dashboard não está montada
+  // (modal aberto direto via notif) e garante alarmes sempre sincronizados.
+  const { data: allDoses = [] } = useDoses()
+  const { data: allPatients = [] } = usePatients()
+  useEffect(() => {
+    if (!user) return
+    scheduleDoses(allDoses, { patients: allPatients })
+  }, [user, allDoses, allPatients, scheduleDoses])
 
   // ─── Notification tap handlers (LocalNotifications + FCM) ─────────────
   useEffect(() => {
@@ -232,6 +258,7 @@ export default function App() {
           <Route path="/termos" element={<Termos />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/install" element={<Install />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="*" element={<Login />} />
         </Routes>
       </Suspense>
@@ -243,8 +270,14 @@ export default function App() {
   return (
     <>
     <UpdateBanner />
+    <a
+      href="#main-content"
+      className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:bg-brand-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:font-semibold"
+    >
+      Pular para o conteúdo
+    </a>
     <AppHeader />
-    <div className="min-h-screen">
+    <main id="main-content" className="min-h-screen">
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -266,11 +299,12 @@ export default function App() {
           <Route path="/termos" element={<Termos />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/install" element={<Install />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
       {!hideNav && <BottomNav />}
-    </div>
+    </main>
     <DailySummaryModal open={showSummary} onClose={() => setShowSummary(false)} />
     <PermissionsOnboarding
       onComplete={() => setPermsDone(true)}

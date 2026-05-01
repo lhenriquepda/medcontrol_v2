@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
+import { identifyUser, resetUser } from '../services/analytics'
 
 const isNative = Capacitor.isNativePlatform()
 // Deep link Capacitor (manifest dosy:// already configured) OR https web origin
@@ -22,9 +23,14 @@ export function AuthProvider({ children }) {
     async function init() {
       if (hasSupabase) {
         const { data } = await supabase.auth.getSession()
-        setUser(data.session?.user || null)
+        const initialUser = data.session?.user || null
+        setUser(initialUser)
+        if (initialUser?.id) identifyUser(initialUser.id)
         const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-          setUser(s?.user || null)
+          const u = s?.user || null
+          setUser(u)
+          if (u?.id) identifyUser(u.id)
+          else resetUser()
           qc.clear() // limpa cache (tier, patients, doses...) ao trocar de usuário
         })
         unsub = () => sub.subscription.unsubscribe()
@@ -143,6 +149,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('medcontrol_notif')
     localStorage.removeItem('dashCollapsed')
     setUser(null)
+    // Limpa cache de queries pra evitar stale data (ex: tier=plus persistir
+    // após logout, mantendo banner ad na tela de Login)
+    qc.clear()
   }
 
   return (

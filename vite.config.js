@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 
@@ -37,6 +38,16 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       dosyVersionJsonPlugin(),
+      // Aud 4.5.5 G2 — bundle analyzer report (treemap em dist/stats.html após build prod)
+      // Não inclui no bundle final, só gera relatório análise.
+      isProd &&
+        visualizer({
+          filename: 'dist/stats.html',
+          template: 'treemap',
+          gzipSize: true,
+          brotliSize: true,
+          open: false,
+        }),
       // Aud 4.5.7 G1 — upload source maps pra Sentry decodar stack traces em prod.
       // Só ativa quando SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT estão setados (CI).
       isProd &&
@@ -82,6 +93,10 @@ export default defineConfig(({ mode }) => {
             if (id.includes('react-dom') || id.includes('scheduler')) return 'vendor-react'
             if (id.includes('react-router')) return 'vendor-react'
             if (/[\\/]react[\\/]/.test(id)) return 'vendor-react'
+            // Libs que requerem React top-level (parseInt(React.version) etc) — bundle junto pra ordem de load OK
+            if (id.includes('focus-trap-react') || id.includes('focus-trap') || id.includes('tabbable')) return 'vendor-react'
+            // framer-motion: bundle junto com React pra garantir ordem de import
+            if (id.includes('framer-motion') || id.includes('motion-utils') || id.includes('motion-dom')) return 'vendor-react'
             if (id.includes('@supabase') || id.includes('@tanstack')) return 'vendor-data'
             if (id.includes('@sentry')) return 'vendor-sentry'
             if (id.includes('@capacitor')) return 'vendor-capacitor'

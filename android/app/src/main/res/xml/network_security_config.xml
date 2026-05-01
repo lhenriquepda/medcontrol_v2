@@ -31,6 +31,16 @@
         </trust-anchors>
     </domain-config>
 
+    <!-- Vercel deploy (dosy-teal.vercel.app) — version.json + APK download (UpdateBanner).
+         Cleartext bloqueado + CA validation padrão. Sem pinning estrito porque Vercel
+         usa Let's Encrypt/ISRG que rotaciona certs frequentemente. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">dosy-teal.vercel.app</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
     <!-- Default: TLS obrigatório, validação CA padrão (sem pinning) -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>

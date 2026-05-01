@@ -38,9 +38,14 @@ export function useIsPro() {
 
 /**
  * Anúncios visíveis: free + plus. Pro/admin não veem ads.
+ *
+ * IMPORTANTE: aguarda tier carregar antes de retornar true, evitando
+ * banner ser mostrado preemptivamente (pra admin/pro) e ficar fixo
+ * por causa do singleton AdMob.
  */
 export function useShowAds() {
-  const { data: tier } = useMyTier()
+  const { data: tier, isLoading } = useMyTier()
+  if (isLoading || !tier) return false
   return tier !== 'pro' && tier !== 'admin'
 }
 

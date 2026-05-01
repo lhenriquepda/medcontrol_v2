@@ -7,8 +7,8 @@ android {
         applicationId "com.dosyapp.dosy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "0.1.5.7"
+        versionCode 22
+        versionName "0.1.6.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,20 +17,47 @@ android {
         }
     }
 
-    // Release signing config — keystore path + passwords from env vars.
-    // Generate keystore once via:
+    // Release signing config — credentials lidas de keystore.properties OU env vars.
+    // keystore.properties (PREFERIDO, gitignored) na raiz do projeto Android:
+    //   storeFile=../dosy-release.keystore
+    //   storePassword=...
+    //   keyAlias=dosykey
+    //   keyPassword=...
+    // Fallback: env vars KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+    // Gerar keystore via:
     //   keytool -genkey -v -keystore dosy-release.keystore -alias dosykey -keyalg RSA -keysize 2048 -validity 10000
-    // Store securely (3 backup locations). NEVER commit the .keystore file.
-    // Env vars expected: KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+    // NUNCA commitar .keystore nem keystore.properties.
+    def keystorePropsFile = rootProject.file('keystore.properties')
+    def keystoreProps = new Properties()
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+        println "[signing] keystore.properties LOADED: " + keystorePropsFile.absolutePath
+        println "[signing] props keys: " + keystoreProps.keySet()
+        println "[signing] storeFile=" + keystoreProps.getProperty('storeFile')
+        println "[signing] storePassword set: " + (keystoreProps.getProperty('storePassword')?.length() > 0)
+    } else {
+        println "[signing] keystore.properties NOT FOUND at: " + keystorePropsFile.absolutePath
+    }
+
+    // Resolve keystore path: relative paths são tratadas relativas a rootProject (android/)
+    // pra match o que keystore.properties define. Default: ../dosy-release.keystore
+    // resolve para medcontrol_v2/dosy-release.keystore.
+    def resolveKeystoreFile = { String path ->
+        if (path == null) return null
+        def f = new File(path)
+        return f.absolute ? f : new File(rootProject.projectDir, path)
+    }
+    def keystorePathStr = keystoreProps.getProperty('storeFile') ?: System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'
+    def keystoreFile = resolveKeystoreFile(keystorePathStr)
+    println "[signing] resolved keystore path: ${keystoreFile?.absolutePath} (exists=${keystoreFile?.exists()})"
+
     signingConfigs {
         release {
-            def keystorePath = System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'
-            def keystoreFile = file(keystorePath)
-            if (keystoreFile.exists()) {
+            if (keystoreFile != null && keystoreFile.exists()) {
                 storeFile keystoreFile
-                storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
-                keyAlias System.getenv('KEY_ALIAS') ?: 'dosykey'
-                keyPassword System.getenv('KEY_PASSWORD') ?: ''
+                storePassword keystoreProps.getProperty('storePassword') ?: System.getenv('KEYSTORE_PASSWORD') ?: ''
+                keyAlias keystoreProps.getProperty('keyAlias') ?: System.getenv('KEY_ALIAS') ?: 'dosykey'
+                keyPassword keystoreProps.getProperty('keyPassword') ?: System.getenv('KEY_PASSWORD') ?: ''
             }
         }
     }
@@ -44,8 +71,7 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // Apply signing config only if keystore exists (avoid breaking debug builds)
-            def keystorePath = System.getenv('KEYSTORE_PATH') ?: '../dosy-release.keystore'
-            if (file(keystorePath).exists()) {
+            if (keystoreFile != null && keystoreFile.exists()) {
                 signingConfig signingConfigs.release
             }
         }
