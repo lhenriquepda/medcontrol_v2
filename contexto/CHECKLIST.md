@@ -691,7 +691,7 @@
 - **Convenção:** bumpar a cada release com mudança de bundle JS (esquecer = bug serve velho). **TODO:** automatizar em vite plugin (P2 futuro).
 
 ### #079 — Realtime heartbeat keep-alive — caminho 1 de 3 (defense-in-depth)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit b4812e0 (2026-05-01) — release v0.1.7.1
 - **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle. User: "idoso não fecha app nenhum, idle deve ser ilimitado"
 - **Esforço:** 2-3h (impl + teste device físico)
 - **Dependências:** nenhuma
@@ -734,7 +734,7 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #080 — notify-doses reliability — caminho 2 de 3 (defense-in-depth)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 4b82d16 (2026-05-01) — release v0.1.7.1
 - **Origem:** [auditoria-live-2026-05-01] BUG-016
 - **Esforço:** 3-4h (investigação + fix + dashboard)
 - **Dependências:** acesso aos logs Edge Function (PAT precisa scope `read_logs` ou via Supabase Dashboard manual)
@@ -757,7 +757,7 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #081 — Defense-in-depth Android: alarmes nativos horizonte 24-72h — caminho 3 de 3
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1 (Gate 3 device validation em andamento)
 - **Origem:** [auditoria-live-2026-05-01] BUG-016 — defense-in-depth healthcare healthcare-critical
 - **Esforço:** 6-8h (impl plugin + WorkManager + teste device físico)
 - **Dependências:** nenhuma
@@ -795,6 +795,24 @@
   - OEMs hostis (Xiaomi/MIUI): WorkManager pode ser killed. Mitigação: combinação com `setAlarmClock()` que bypassa Doze por design.
   - Duplicação de alarmes: cuidado com idempotência ao reagendar.
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
+
+### #082 — Dual-app Android: Dosy Dev + Dosy oficial coexistem
+- **Status:** ✅ Concluído @ commit 5b5938e (2026-05-01) — release v0.1.7.1
+- **Origem:** [Sessão v0.1.7.1] User pedido: "ambiente dev independente, fácil merge em Dosy quando release"
+- **Esforço:** 1h (Gradle + Firebase entry + manifest)
+- **Implementação:**
+  - `android/app/build.gradle`: buildTypes.debug com `applicationIdSuffix .dev` + resValue app_name "Dosy Dev"
+  - `android/app/build.gradle`: buildTypes.release com resValue app_name "Dosy"
+  - Firebase Console: nova app entry `com.dosyapp.dosy.dev` (registrada via Console)
+  - `android/app/src/debug/google-services.json`: novo (Firebase plugin auto-escolhe por buildType)
+  - `AndroidManifest.xml`: `${appLabel}` placeholder (substituído conforme variant)
+  - `build.gradle`: dep `com.google.guava:guava:33.4.0-android` (resolve Worker.startWork() ListenableFuture compileClasspath)
+- **Aceitação:**
+  - Studio Run debug → instala "Dosy Dev" (`com.dosyapp.dosy.dev`) no device
+  - Build release → AAB "Dosy" (`com.dosyapp.dosy`) pra Play Store
+  - Apps coexistem no mesmo device, dados isolados
+  - Push FCM funciona em dev (Firebase entry .dev separada)
+- **Validado:** Gate 1 (build OK + instalou) ✅ via Android Studio Run em emulador
 
 ### #074 — Habilitar upload de debug symbols no Play Console
 - **Status:** ⏳ Aberto
