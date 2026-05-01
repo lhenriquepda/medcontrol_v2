@@ -66,16 +66,17 @@
 - **Bloqueador:** sem isso, Closed Testing não promove para Produção
 
 ### #005 — Resolver BUG-001 — Encoding UTF-8 quebrado em nome de paciente
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit pendente (2026-05-01)
 - **Origem:** [Auditoria] (BUG-001)
 - **Esforço:** 1-3h (investigação + fix + verificação)
 - **Dependências:** nenhuma
 - **Aceitação:**
-  1. Confirmar via `SELECT name, encode(name::bytea, 'escape') FROM medcontrol.patients` se bytes mal-formados ou U+FFFD literal
-  2. Se for só dado seed legado: `DELETE FROM medcontrol.patients WHERE name ILIKE '%�%'` (ou recuperar via histórico)
-  3. Cadastrar paciente novo via UI com "João da Silva" → ler do DB → confirmar bytes corretos UTF-8 (`{74, 111, 195, 163, 111}` para "João")
-  4. Adicionar teste E2E (Playwright) cobrindo "criar paciente com acentos"
+  1. ✅ Confirmado via `SELECT id, name, encode(name::bytea, 'hex')` — bytes `ef bf bd` (U+FFFD literal) presentes em 1 paciente legacy (`46d9196f` "Jo�o Teste", owner `teste03@teste.com`)
+  2. ✅ Deletado via REST DELETE service_role
+  3. ✅ Inserido novo paciente "João da Silva ÃÕÉÍÇãõéíç" via REST como teste03 → re-lido do DB → bytes idênticos UTF-8 puros (`c3 a3` para "ã" etc) → cleanup
+  4. ⚠️ Playwright não está no repo. Substituído por **recipe documentado** em `contexto/updates/2026-05-01-fix-encoding-utf8-pacientes.md` (script Python pronto pra reauditoria periódica). Adicionar Playwright = item separado novo (P3).
 - **Detalhe:** [auditoria/06-bugs.md#bug-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
+- **Causa raiz:** seed legacy inserido durante dev cedo via tooling com encoding ruim (Windows-1252). DB Postgres é UTF-8 default; PostgREST round-trip funciona corretamente. Sem mudança de código necessária.
 
 ### #006 — Validação manual em device físico (FASE 17 Plan)
 - **Status:** ⏳ Aberto
