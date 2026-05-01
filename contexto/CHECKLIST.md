@@ -9,7 +9,7 @@
 ## 🔴 P0 — Bloqueadores de Produção
 
 ### #001 — Adicionar auth check de admin em `send-test-push` Edge Function
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 37c8fee (2026-05-01)
 - **Origem:** [Auditoria] (BUG-002)
 - **Esforço:** 30 min
 - **Dependências:** nenhuma
@@ -26,7 +26,7 @@
     const jwt = authHeader.slice(7)
     const { data: { user }, error } = await supabase.auth.getUser(jwt)
     if (error || !user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
-    const { data: admin } = await supabase.from('admins').select('userId').eq('userId', user.id).maybeSingle()
+    const { data: admin } = await supabase.from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
     if (!admin) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
     // ... resto da função
   })
@@ -35,7 +35,7 @@
 - **Detalhe:** [auditoria/04-supabase.md §7.2](auditoria/04-supabase.md#72-send-test-pushindexts-120-linhas--crítico) · [auditoria/06-bugs.md#bug-002](auditoria/06-bugs.md#bug-002--edge-function-send-test-push-não-valida-autorização-auditoria-estática)
 
 ### #002 — Sanitizar erro de email enumeration em `send-test-push`
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 37c8fee (2026-05-01)
 - **Origem:** [Auditoria] (BUG-015)
 - **Esforço:** 5 min (parte do #001)
 - **Dependências:** #001

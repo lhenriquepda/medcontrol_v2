@@ -342,10 +342,12 @@ Antes de mandar resposta longa, agente revisa:
 **Padrão de fluxo:**
 ```
 1. Ler README + PROJETO + ROADMAP §3-4
-2. Ler arquivo específico se demanda for técnica
-3. Trabalhar
-4. No fim: atualizar ROADMAP + CHECKLIST + criar updates/{ts}.md + (se aplicável) PROJETO.md + decisoes/
-5. Commit
+2. Verificar/criar branch release/v{próxima}
+3. Ler arquivo específico se demanda for técnica
+4. Trabalhar (todos commits na branch release/v*)
+5. Atualizar ROADMAP + CHECKLIST + criar updates/{ts}.md + (se aplicável) PROJETO.md + decisoes/
+6. Commit na branch release/v* (NÃO em master)
+7. Master só recebe merge no fim da sessão, quando user disser "publica"/"terminamos" (ver §"Publicar release")
 ```
 
 ---
@@ -408,7 +410,7 @@ User pede feature nova ("quero seção X", "adicionar Y"):
 
 6. **Implementar:** seguir workflow padrão item por item.
 
-7. **Branch dedicada se >500 LOC ou múltiplos items P0/P1.** PR final.
+7. **Trabalho acontece na branch da release ativa** (`release/v{próxima-versão}`). Se ainda não existe, agente cria no início da sessão. Múltiplos items fechados = múltiplos commits na MESMA branch.
 
 8. **Ao concluir todos os items da feature:** atualizar `PROJETO.md` (nova seção §6 Funcionalidades, §4 schema DB se aplicável, §12 Rotas).
 
@@ -481,11 +483,13 @@ Durante outro trabalho ou uso casual, achou bug:
 
 ### Pre-trabalho (sempre)
 
-1. `git status` — working tree limpo? Branch correta?
-2. `git log -1 --format="%h %s"` — último commit conhecido
-3. `git fetch origin && git status` — sync com remote (sem ahead/behind unexpected)
-4. **Se itens P0 ou destrutivos na fila:** confirmar com usuário antes de codar
-5. **Listar itens previstos da sessão** ao usuário com estimativa de esforço
+1. `git fetch origin && git branch -v` — listar branches; verificar se já existe `release/v*` ativa
+2. **Se existe `release/v*` ativa:** `git checkout release/v*` (continuar acumulando commits da sessão anterior)
+3. **Se NÃO existe:** confirmar com user a próxima versão proposta (patch/minor/major a partir do master atual) → criar branch `release/v{versão}` a partir de master
+4. `git status` — working tree limpo? Branch correta?
+5. `git log -1 --format="%h %s"` — último commit conhecido
+6. **Se itens P0 ou destrutivos na fila:** confirmar com usuário antes de codar
+7. **Listar itens previstos da sessão** ao usuário com estimativa de esforço
 
 ### Durante o trabalho (por item)
 
@@ -535,45 +539,84 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
 
-### Branch / PR — modelo "master = release de código"
+### Branch / PR — modelo "1 sessão = 1 branch versionada = 1 release"
 
-**`master` é sagrado pra código que vai pro Play Store / Vercel produção.** Mas branch por toda mudança mínima vira ritual sem valor pra single-dev.
+**`master` é sagrado.** Sempre reflete a última versão publicada (Play Store + Vercel produção sincronizados). Trabalho do dia-a-dia **NUNCA** vai direto pra master.
 
-**Critério decisório (aplique ANTES de criar branch):**
+#### Modelo
 
-| Tipo de mudança | Vai direto pra master? | Razão |
-|---|---|---|
-| Código frontend (`src/`, `index.html`, `vite.config.js`) | **Branch** | Vai pro AAB e Vercel |
-| Plugin/config nativo (`android/`, `capacitor.config.ts`) | **Branch** | Vai pro AAB |
-| Edge Function (`supabase/functions/*`) | **Branch** | Deploy server-side; risco prod |
-| Migration SQL (`supabase/migrations/*`) | **Branch** | Mudança schema DB |
-| Só docs (`contexto/`, `README.md`, comentários em código não-build) | **Direto master** | Não afeta build/deploy |
-| Só data fix em prod (cleanup row, sem código) | **Direto master** | Mudança já aplicada server-side; commit é só registro |
-| Tweaks dev-only (`.gitignore`, scripts util `tools/`) | **Direto master** | Não afeta usuário |
+```
+Sessão começa
+  ├── Agente cria branch única `release/v{próxima-versão}`
+  │     (ex.: master em v0.1.6.9 → branch `release/v0.1.6.10`)
+  │
+  ├── TODAS as mudanças desta sessão vão nessa branch:
+  │     - código (src/, android/, supabase/functions/, supabase/migrations/)
+  │     - docs (contexto/, README, comentários)
+  │     - data fixes em prod (registro do cleanup, mesmo sem código)
+  │     - cada item ROADMAP fechado vira 1 commit nessa branch
+  │
+  ├── Sessão pode durar 1 chat ou múltiplos chats — branch persiste entre eles
+  │
+  └── Quando user diz "terminamos" / "publica" / "manda pro Play Store":
+        └── Ciclo de release dos 8 passos (ver §"Publicar release"):
+              1. Bump versão (package.json + android/app/build.gradle)
+              2. Build AAB local (Android Studio)
+              3. Upload Play Console + start rollout
+              4. Merge --no-ff branch → master + tag vX.Y.Z + push
+              5. Vercel auto-deploya (~2 min)
+              6. Atualizar contexto/ (PROJETO.md versão, ROADMAP §3, updates/)
+              7. Reporte final ao user
+              8. Branch deletada
+```
 
-**`master` continua = última versão publicada NO QUE TANGE A APP.** Docs/contexto/ podem evoluir em master sem corresponder a release de app.
+#### Por que esse modelo
 
-**Quando FOR branch — convenção de nome:**
+- **Single-dev sem CI completa:** cada merge pra master vai direto pra produção. Não pode haver código intermediário lá.
+- **Healthcare = zero margem de erro:** rollback de release inteiro = `git revert {tag}` (atômico). Rollback de commits soltos em master = frágil.
+- **Atomicidade:** master + Vercel produção + Play Store AAB sempre 3 sincronizados.
+- **Reduz ritual:** branch única elimina decisão "criar nova branch?" a cada item.
+- **Bump uma única vez no fim:** não importa quantos itens fecharam; release é evento único.
 
-| Tipo de mudança | Nome de branch sugerido |
-|---|---|
-| Fix bug | `fix/{tema}` |
-| Feature nova | `feature/{tema}` |
-| Refactor (geralmente com ADR) | `refactor/{tema}` |
-| Mudança segurança | `security/{tema}` |
-| Migration DB | `migration/{tema}` |
+#### Convenção nome de branch
 
-**Por quê master = release apenas:**
-- Single-dev sem CI de validação automática completa → cada merge pra master vai pra produção
-- Healthcare = zero margem de erro
-- Reverter release inteiro é trivial (`git revert {tag}`); reverter mudanças soltas commitadas em master é frágil
+```
+release/v{versão-próxima}
+```
 
-**Múltiplas branches simultâneas:**
-- Trabalho mais longo (>1 sessão) → fica na branch entre sessões, retoma depois
-- Trabalhos não-relacionados → branches separadas
-- `git branch` lista; agente reporta no início de cada sessão se há branches pendentes
+Sempre. Único formato. Ex.: `release/v0.1.6.10`, `release/v0.1.7.0`, `release/v0.2.0.0`.
 
-Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin-edge-functions`.
+#### Versão da branch = versão proposta da release
+
+- **Patch** (`X.Y.Z+1`): bug fixes, sem novo comportamento
+- **Minor** (`X.Y+1.0`): feature nova, comportamento visível ao user
+- **Major** (`X+1.0.0`): breaking change (raro pré-1.0)
+
+Agente decide bump no Passo 1 do release com base nos commits acumulados na branch e confirma com user.
+
+#### Múltiplas sessões antes de release
+
+Branch `release/v0.1.6.10` persiste entre sessões. Agente em chat novo:
+1. Lê `git branch` → vê `release/v0.1.6.10` ativa
+2. Faz checkout dela (não cria nova)
+3. Continua acumulando commits
+
+#### Hotfix urgente fora do ciclo
+
+Cenário raro: bug crítico em produção precisa fix imediato sem mexer em release/v0.1.6.10 em andamento.
+
+- Branch `hotfix/{tema}` saindo direto de master (não da release branch)
+- Bump patch automático
+- Ciclo release encurtado (skip preview Vercel)
+- Após hotfix: rebase release/v0.1.6.10 onto master atualizada
+
+#### Mudanças que NÃO entram em release branch
+
+Raras exceções pra master direto (sem branch + sem bump):
+- `.gitignore`, scripts `tools/` puro dev
+- Correção typo em commit message anterior (via amend, antes de push)
+
+**Tudo que afeta usuário, build, deploy ou doc canônico → release branch.**
 
 - Pre-commit hooks ainda não configurados (item #024 do ROADMAP). Por enquanto, gates manuais antes de commit.
 
@@ -593,7 +636,7 @@ Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin
 | **Local web (dev server)** | `npm run dev` → http://localhost:5173 | seu working tree (mudanças não-commitadas inclusas) | iteração rápida, qualquer mudança web |
 | **Local Android emulator** | `npm run build:android` → Android Studio Run | seu working tree empacotado | mudanças em plugin nativo, alarme, push, biometria |
 | **Local Android device físico** | mesmo + USB cable + USB debugging on | seu working tree empacotado | validação final mobile (FASE 17) |
-| **Vercel preview** | URL única gerada pelo Vercel para cada PR | branch da feature (não master) | demonstrar feature web pra você antes de mergear |
+| **Vercel preview** | URL única gerada pelo Vercel para cada PR | branch `release/v*` ativa (não master) | demonstrar mudanças web acumuladas da sessão antes de release final |
 | **Vercel produção** | https://dosy-teal.vercel.app | master | validação final produção web |
 | **Play Store Internal Testing** | URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (pode estar atrás de master) | validação real Android |
 
@@ -611,13 +654,13 @@ Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin
 
 ### Fluxo de teste passo-a-passo (para você, não-dev)
 
-**Cenário: agente fez mudança em branch `feature/estoque` e pediu pra você testar.**
+**Cenário: agente está acumulando mudanças na branch `release/v0.1.6.10` e quer que você teste antes de seguir.**
 
-1. **Agente diz:** *"Branch `feature/estoque` pronta. Pra testar:"*
+1. **Agente diz:** *"Mudança X pronta na branch release/v0.1.6.10. Pra testar local:"*
 
 2. **Agente envia comandos exatos:**
    ```
-   git checkout feature/estoque
+   git checkout release/v0.1.6.10
    npm install                    # se mudou deps
    npm run dev
    ```
@@ -626,38 +669,24 @@ Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin
 
 4. **Você loga:** `teste03@teste.com / 123456`
 
-5. **Agente lista o que testar:**
-   - "Vai em Pacientes → tap João → seção 'Estoque' nova deve aparecer"
-   - "Adicione estoque com valor 5"
-   - "Marque dose como tomada → estoque deve descer pra 4"
-   - "Quando chegar em 2, deve aparecer alerta amarelo"
+5. **Agente lista o que testar** (apenas itens da mudança em questão).
 
-6. **Você testa cada passo** e reporta de volta:
-   - "Funcionou tudo" → agente prossegue pra merge
-   - "Passo 3 não funcionou" → agente investiga, ajusta
+6. **Você reporta:**
+   - "Funcionou" → agente segue acumulando próximos itens NA MESMA BRANCH
+   - "Não funcionou" → agente investiga + ajusta na mesma branch (novo commit)
 
-7. **Após aprovação sua:** agente merge pra master:
-   ```
-   git checkout master
-   git merge feature/estoque
-   git push
-   ```
+7. **Master NÃO é tocada** durante a sessão. Master só recebe merge quando você disser "publica" → ciclo de release dos 8 passos.
 
-8. **Vercel auto-deploya** em ~2 minutos. Agente confirma:
-   *"Mergeado. Vercel deploy iniciou. Em ~2min https://dosy-teal.vercel.app reflete v{nova}. Refresh com Ctrl+F5 pra forçar."*
-
-9. **Para Android (se aplicável):**
-   - Mudanças em plugin nativo / alarme / build → exigem novo AAB
-   - Agente avisa: *"Mudança afeta Android. Master tem v{nova} mas Play Store Internal ainda em v0.1.6.9. Quer fazer build novo AAB agora? Precisa Android Studio aberto + você seguindo passo a passo."*
+8. **Para Android durante a sessão:** raramente necessário. Branch acumula. AAB só é gerado uma vez, no Passo 2 do release final.
 
 ### O que evitar
 
 - ❌ Testar em produção (https://dosy-teal.vercel.app) o que **ainda não foi mergeado** — você vai testar versão antiga e achar que mudança "não funcionou"
 - ❌ Confiar que "Play Store já tem versão nova" só porque mergeou pra master — Android exige build/upload manual (até CI Android estar configurado)
-- ❌ Mexer em `master` direto sem testar (exceto fix trivial confirmado)
-- ❌ Trabalhar em duas mudanças ao mesmo tempo na mesma branch — confunde diff e revert
+- ❌ Mexer em `master` direto durante a sessão — sempre via release branch
+- ❌ Criar branch nova `fix/*` ou `feature/*` no meio de uma sessão com `release/v*` ativa — tudo vai na release branch
 
-### Mensagem padrão do agente quando inicia trabalho em branch
+### Mensagem padrão do agente ao iniciar sessão
 
 > Use **exatamente** este template. Não improvise. Não adicione info técnica extra.
 
@@ -668,12 +697,14 @@ Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin
 - App web: https://dosy-teal.vercel.app
 - Play Store: AAB v{atual}
 
+**Branch desta sessão:** `release/v{próxima}` (todas mudanças vão aqui)
+
 **O que vou fazer:** {descrição em 1-2 linhas, português simples}
 
-**Onde você vai testar quando eu terminar:** {1 opção concreta — não 3 opções abstratas}
-- Geralmente: rodar `npm run dev` no terminal e abrir http://localhost:5173 (eu te guio passo a passo)
+**Onde você vai testar quando eu terminar uma mudança:**
+- Rodar `npm run dev` no terminal e abrir http://localhost:5173 (eu te guio passo a passo)
 
-**Quando publicar de verdade:** só quando você pedir "publica" — aí faço bump de versão + AAB + Console + atualizo tudo.
+**Quando publicar de verdade:** só quando você disser "publica" / "terminamos" — aí faço bump de versão + AAB + Console + merge master + tag.
 
 **Posso começar?** (sim / não / tenho dúvida)
 ```
@@ -699,8 +730,8 @@ Plano original mencionava worktrees pra paralelismo. **Não usar até time cresc
 ### Pre-checks (agente roda antes de iniciar release)
 
 ```bash
-# 1. Branch atual NÃO é master (deve estar em feature/* ou similar)
-git branch --show-current
+# 1. Branch atual = release/v{próxima} (NÃO master)
+git branch --show-current  # deve retornar algo como release/v0.1.6.10
 
 # 2. Working tree limpo
 git status --porcelain
@@ -779,7 +810,7 @@ Após confirmação Console publicado:
 ```bash
 git checkout master
 git pull origin master                                    # sync
-git merge --no-ff feature/{tema} -m "release: vX.Y.Z"     # preserva história
+git merge --no-ff release/v{X.Y.Z} -m "release: vX.Y.Z"   # preserva história
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin master --tags
 ```
@@ -818,15 +849,14 @@ docs(release): vX.Y.Z release log
 - updates/{data}-release-vX.Y.Z.md
 ```
 
-#### Passo 8 — Limpar branch (opcional)
+#### Passo 8 — Limpar branch da release
 
 ```bash
-# Se feature/* não vai ser reutilizada
-git branch -d feature/{tema}
-git push origin --delete feature/{tema}
+git branch -d release/v{X.Y.Z}
+git push origin --delete release/v{X.Y.Z} 2>/dev/null  # se foi pushada
 ```
 
-Agente pergunta se user quer deletar ou manter (pode ser útil pra hotfix rápido na mesma feature).
+Branch da release sempre é deletada após merge — próxima sessão cria nova branch com versão `v{X.Y.Z+1}`. Tag git `vX.Y.Z` permanece (ponto de referência pra rollback).
 
 ### Reporte final ao user
 
@@ -862,18 +892,19 @@ Agente pergunta se user quer deletar ou manter (pode ser útil pra hotfix rápid
 User pede algo novo. Agente:
 
 1. Lê README + PROJETO + ROADMAP §3-4 (PROJETO já reflete vX.Y.Z)
-2. `git status` deve estar limpo + branch master sync
-3. Cria nova branch `feature/{novo-tema}` ou `fix/{novo-tema}` conforme demanda
-4. Trabalha em sessões — pode ser 1 sessão curta ou várias longas
-5. Quando user pedir "publica" → ciclo §"Publicar release" recomeça com **novo bump** (ex.: vX.Y.Z+1)
+2. `git fetch origin && git branch -v` — verifica se já existe `release/v*` ativa de sessão anterior
+3. **Se sim:** checkout dela (continua acumulando)
+4. **Se não:** confirma próxima versão com user, cria `release/v{X.Y.Z+1}` a partir de master atualizada
+5. Trabalha — pode ser 1 sessão curta ou várias longas, todas no mesmo branch
+6. Quando user pedir "publica" / "terminamos" → ciclo §"Publicar release" recomeça com bump correspondente
 
 **Não há "release contínuo" silencioso.** Cada release é evento explícito + atomic + tagueado + sincronizado em 3 ambientes.
 
 ### Edge cases
 
-- **Mudança só docs (`contexto/`):** ainda exige bump? **Não.** Pode ir pra master direto via PR de docs ou mergeada na próxima release. Sem bump versão app.
-- **Hotfix urgente em produção:** branch `hotfix/{tema}` saindo direto de master, ciclo encurtado (skip preview Vercel, build AAB direto). Bump patch sempre.
-- **Mudança só web (sem AAB novo):** legítimo se não-mobile. Bump versão pode ser pulado. Reporta: *"Mudança só web. Quer bump versão pra registro ou mantém?"*. Master + Vercel produção atualizados; Play Store não.
+- **Mudança só docs/contexto puramente reflexiva** (ex.: corrigir typo em update antigo): pode ir direto master sem release branch. **Mas se a sessão tem `release/v*` ativa, vai nela** — não cria desvio paralelo.
+- **Hotfix urgente em produção:** branch `hotfix/{tema}` saindo direto de master (não interfere em release/v* ativa). Ciclo encurtado (skip preview Vercel, build AAB direto). Bump patch sempre. Após hotfix mergear pra master, rebase release/v* atual onto master nova.
+- **Mudança só web (sem AAB novo):** legítimo se não-mobile. Ainda vai em release branch + ainda merece bump (web também versionada). Diferença: Passo 2 (Build AAB) e Passo 3 (Console) são pulados. Reporta: *"Mudança só web. Bump vX.Y.Z, sem novo AAB."*
 - **Vercel deploy falha após merge master:** investigar dashboard Vercel. Se for transient, retry. Se for breaking, `git revert` o merge + investigar causa antes de re-tentar.
 - **AAB rejeitado pelo Play Console:** corrigir, bump patch, novo build, novo upload. Master ainda não foi tocado nesta etapa (ordem dos passos: AAB → Console → master) — exatamente pra cobrir esse cenário.
 

@@ -74,7 +74,7 @@
 3. Device validation FASE 17 (3 devices físicos)
 
 **Bug crítico ativo encontrado nesta auditoria:**
-- `send-test-push` Edge Function sem auth admin check (BUG-002 P0)
+- ~~`send-test-push` Edge Function sem auth admin check (BUG-002 P0)~~ → fechado #001 + #002 em 2026-05-01 (branch `security/send-test-push-admin`, deploy edge function pendente)
 
 ---
 
@@ -84,8 +84,8 @@
 
 | # | Tarefa | Esforço | Detalhe |
 |---|---|---|---|
-| #001 | Adicionar admin check em `send-test-push` Edge Function | 30 min | [CHECKLIST §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function) (em branch `security/send-test-push-admin`, aguardando merge) |
-| #002 | Sanitizar erro email enumeration (parte de #001) | 5 min | (em branch `security/send-test-push-admin`) |
+| ~~#001~~ | ~~Adicionar admin check em `send-test-push` Edge Function~~ ✅ | ~~30 min~~ | fechado nesta sessão, release `v0.1.6.10` |
+| ~~#002~~ | ~~Sanitizar erro email enumeration (parte de #001)~~ ✅ | ~~5 min~~ | fechado nesta sessão |
 | #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min manual | [archive/security-original.md](archive/security-original.md) |
 | ~~#005~~ | ~~Investigar BUG-001 encoding UTF-8~~ ✅ | ~~1-3h~~ | data fix prod-only, sem mudança de código |
 | #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | [CHECKLIST §#008](CHECKLIST.md#008--configurar-sentry_auth_token--org--project-em-github-secrets) |
@@ -162,8 +162,8 @@ ESTADO ATUAL: Internal Testing ativo
 ### 🔴 P0 — Bloqueadores
 
 #### Segurança server-side
-- [ ] **#001** [Auditoria] Admin auth check em `send-test-push` Edge Function. → [04 §7.2](auditoria/04-supabase.md#72-send-test-pushindexts-120-linhas--crítico) · [06 BUG-002](auditoria/06-bugs.md#bug-002--edge-function-send-test-push-não-valida-autorização-auditoria-estática) · [03 §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function)
-- [ ] **#002** [Auditoria] Sanitizar erro email enumeration. → [06 BUG-015](auditoria/06-bugs.md#bug-015--resposta-de-erro-user-not-found-em-send-test-push-permite-enumeration)
+- [x] **#001** [Auditoria] Admin auth check em `send-test-push` Edge Function. → [04 §7.2](auditoria/04-supabase.md#72-send-test-pushindexts-120-linhas--crítico) · [06 BUG-002](auditoria/06-bugs.md#bug-002--edge-function-send-test-push-não-valida-autorização-auditoria-estática) · [03 §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function)
+- [x] **#002** [Auditoria] Sanitizar erro email enumeration. → [06 BUG-015](auditoria/06-bugs.md#bug-015--resposta-de-erro-user-not-found-em-send-test-push-permite-enumeration)
 - [ ] **#003** [Plan + Auditoria] Rotacionar senha postgres + revogar PAT + INFOS.md → vault. → [archive/security-original.md](archive/security-original.md)
 
 #### Bloqueador Play Console
@@ -381,8 +381,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 ## 12. Resumo numérico (atualize após cada item fechado)
 
 - **Total:** 73 itens
-- **Em aberto:** 72 (#005 fechado nesta branch; #001 + #002 fechados em branch `security/send-test-push-admin` aguardando merge)
-- **P0:** 8 · **P1:** 18 · **P2:** 22 · **P3:** 24
+- **Em aberto:** 70 (#001, #002, #005 fechados em 2026-05-01 — release v0.1.6.10)
+- **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 24
 - **Esforço P0:** ~3-5 dias-pessoa
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
