@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.6.10` (tag `v0.1.6.10`) · branch `master` · sync com `origin/master`.
-**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.6.10. Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.1.7.0` (tag `v0.1.7.0`) · branch `master` · sync com `origin/master`.
+**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.7.0. Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,13 +58,26 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.6.10 publicada 2026-05-01 (Vercel + Play Store Internal Testing AAB versionCode 23).
-**Última auditoria:** 2026-05-01.
+**Última release:** v0.1.7.0 publicada 2026-05-01 (Vercel + Play Store Internal Testing AAB versionCode 24).
+**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 healthcare-critical).
 
-**Items fechados na release v0.1.6.10:**
+**Items fechados na release v0.1.7.0 (perf + UX):**
+- ✅ #023 useDoses background-aware
+- ✅ #075 React Query global staleTime
+- ✅ #076 useAppResume soft recover
+- ✅ #077 useRealtime TOKEN_REFRESHED listener
+- ✅ #078 SW cache bump v5→v6
+
+**Items fechados em release v0.1.6.10 (security + encoding):**
 - ✅ #001 Admin auth check em `send-test-push` Edge Function (deploy server-side)
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
+
+**Próxima release v0.1.7.1 (P0 healthcare-critical):**
+- BUG-016: alarme + push não disparam após idle longo. User: "idoso não fecha app nenhum". Solução defense-in-depth 3 caminhos:
+  - #079 realtime heartbeat (caminho 1)
+  - #080 notify-doses reliability (caminho 2)
+  - #081 alarmes nativos horizonte 24-72h (caminho 3)
 
 **Process improvements na release:**
 - Reorganização `contexto/` (auditoria → snapshot imutável em `auditoria/`, archive de docs históricos em `archive/`)
@@ -300,9 +313,12 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#077** [Sessão v0.1.7.0] Listener `TOKEN_REFRESHED` em `useRealtime.js` pra resubscribe quando JWT renova.
 - [x] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`.
 
-#### Notificações idle (P0 — descobertos durante validação v0.1.7.0)
-- [ ] **#079** [auditoria-live-2026-05-01 BUG-016] Realtime heartbeat keep-alive em `useRealtime.js` — websocket morre silently durante idle longo (~16min), app não detecta doses novas. Adicionar ping periódico + auto-reconnect em silent fail. Detalhe: [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
-- [ ] **#080** [auditoria-live-2026-05-01 BUG-016] Investigar logs `notify-doses` Edge cron + retry policy + cleanup `push_subscriptions.deviceToken` inválidos + observability (alerta queda push). Healthcare-critical: dose perdida = paciente sem medicação.
+#### Notificações idle ilimitado (P0 — release v0.1.7.1, defense-in-depth)
+> **Princípio user-driven:** "idoso não fecha aplicativo nenhum". Idle deve ser ilimitado e ainda assim alarme + push funcionarem 100%. Estratégia: 3 caminhos independentes de notificação, qualquer 1 garante a dose. Hoje só 1 caminho ativo.
+
+- [ ] **#079** [BUG-016] Realtime heartbeat keep-alive + reconnect automático em `useRealtime.js`. Heartbeat 30s detecta silent fail. Caminho 1 de 3.
+- [ ] **#080** [BUG-016] Edge `notify-doses` reliability: investigar logs cron + retry exponential FCM + cleanup tokens inválidos + observability/alerta queda. Caminho 2 de 3.
+- [ ] **#081** [BUG-016] Defense-in-depth Android: agendar alarmes nativos com horizonte 24-72h via plugin `criticalAlarm` (SharedPreferences sobrevive app fechado). WorkManager periódico re-sync DB + reagenda batch. Independe de app foreground / websocket / push. Caminho 3 de 3.
 
 ---
 
@@ -401,9 +417,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 80 itens (#074 v0.1.6.10 + #075-#078 v0.1.7.0 + #079/#080 v0.1.8.0)
-- **Em aberto:** 72 (3 fechados v0.1.6.10: #001 #002 #005; 5 fechados v0.1.7.0: #023 #075 #076 #077 #078)
-- **P0:** 8 (6 manual user + #079 + #080 healthcare-critical) · **P1:** 17 (18 - #023) · **P2:** 22 · **P3:** 25
+- **Total:** 81 itens (+ #081 defense-in-depth Android nativo)
+- **Em aberto:** 73 (3 fechados v0.1.6.10: #001 #002 #005; 5 fechados v0.1.7.0: #023 #075 #076 #077 #078)
+- **P0:** 9 (6 manual user + #079 + #080 + #081 healthcare-critical defense-in-depth) · **P1:** 17 · **P2:** 22 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

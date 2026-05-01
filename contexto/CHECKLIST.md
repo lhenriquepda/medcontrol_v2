@@ -690,9 +690,9 @@
   - Devices com bundle velho cached forçam download fresh
 - **Convenção:** bumpar a cada release com mudança de bundle JS (esquecer = bug serve velho). **TODO:** automatizar em vite plugin (P2 futuro).
 
-### #079 — Realtime heartbeat keep-alive (mantém websocket vivo durante idle)
+### #079 — Realtime heartbeat keep-alive — caminho 1 de 3 (defense-in-depth)
 - **Status:** ⏳ Aberto
-- **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle
+- **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle. User: "idoso não fecha app nenhum, idle deve ser ilimitado"
 - **Esforço:** 2-3h (impl + teste device físico)
 - **Dependências:** nenhuma
 - **Severidade:** P0 — healthcare-critical (dose perdida = paciente sem medicação)
@@ -733,7 +733,7 @@
   - Network mobile flaky — ping/pong em 3G ruim pode falsar timeout. Tunear thresholds via teste real
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
-### #080 — Investigar logs notify-doses Edge cron + retry policy + observability push
+### #080 — notify-doses reliability — caminho 2 de 3 (defense-in-depth)
 - **Status:** ⏳ Aberto
 - **Origem:** [auditoria-live-2026-05-01] BUG-016
 - **Esforço:** 3-4h (investigação + fix + dashboard)
@@ -754,6 +754,46 @@
   - Confirmar `pg_cron.job_run_details` mostra cron rodou às 18:54-18:56
   - Confirmar Edge response = 200 + `sent: N` apropriado
   - Se cron OK + Edge OK + push não chegou → problema FCM-side ou token Android
+- **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
+
+### #081 — Defense-in-depth Android: alarmes nativos horizonte 24-72h — caminho 3 de 3
+- **Status:** ⏳ Aberto
+- **Origem:** [auditoria-live-2026-05-01] BUG-016 — defense-in-depth healthcare healthcare-critical
+- **Esforço:** 6-8h (impl plugin + WorkManager + teste device físico)
+- **Dependências:** nenhuma
+- **Severidade:** P0 — caminho mais robusto. Independe de app foreground / websocket / push.
+- **Princípio:** Sistema atual depende de 1 caminho (app ativo). User idoso não fecha app mas Android pode kill em background. Solução: agendar alarmes locais com horizonte FUTURO ao invés de só "próxima dose".
+- **Estratégia:**
+  1. Quando app abre / sincroniza: plugin `criticalAlarm` agenda TODAS doses dos próximos 24-72h via `setAlarmClock()` (sobrevive Doze)
+  2. SharedPreferences armazena lista. `BootReceiver` re-agenda após reboot (já existe)
+  3. **Novo:** `WorkManager` periódico (a cada 6-12h) sincroniza DB → reagenda alarmes recém-criados sem precisar app foreground
+  4. `WorkManager` requer `WorkRequest` com `setInitialDelay` + `setPeriodic`. Bateria-friendly.
+- **Snippet conceitual (Java/Kotlin Android):**
+  ```java
+  // android/app/src/main/java/.../DoseSyncWorker.java
+  public class DoseSyncWorker extends Worker {
+      public Result doWork() {
+          // 1. Fetch doses próximos 72h via Supabase REST (auth via stored token)
+          // 2. Diff com SharedPreferences cache
+          // 3. setAlarmClock() pra novas doses, cancelAlarm() pra removidas
+          return Result.success();
+      }
+  }
+  // Schedule:
+  PeriodicWorkRequest sync = new PeriodicWorkRequest.Builder(
+      DoseSyncWorker.class, 6, TimeUnit.HOURS).build();
+  WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(
+      "dose-sync", ExistingPeriodicWorkPolicy.KEEP, sync);
+  ```
+- **Aceitação:**
+  - App fechado por 48h em device físico
+  - Doses criadas via DB direto chegam até 72h depois
+  - Alarme nativo dispara conforme schedule, mesmo SEM app NUNCA ter sido aberto
+  - WorkManager log mostra runs periódicos no `adb shell dumpsys jobscheduler`
+- **Riscos:**
+  - Bateria: WorkManager a cada 6h é leve mas existir. Threshold ajustável.
+  - OEMs hostis (Xiaomi/MIUI): WorkManager pode ser killed. Mitigação: combinação com `setAlarmClock()` que bypassa Doze por design.
+  - Duplicação de alarmes: cuidado com idempotência ao reagendar.
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #074 — Habilitar upload de debug symbols no Play Console
@@ -788,6 +828,7 @@
 - **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
 - **P1:** 22 itens (#010-027 + #075-#078 v0.1.7.0) · esforço estimado: ~10-15 dias-pessoa
 - **P2:** 22 itens (#028-049) · esforço estimado: ~3-4 semanas-pessoa
+- **P0 v0.1.7.1:** #079 #080 #081 healthcare-critical (defense-in-depth notif idle ilimitado)
 - **P3:** 25 itens (#050-073, #074) · esforço estimado: 90+ dias
 
 **Soft-launch (P0+P1):** ~15-20 dias-pessoa.
