@@ -294,11 +294,15 @@ ESTADO ATUAL: Internal Testing ativo
 #### DX / Observability
 - [ ] **#074** [Sessão v0.1.6.10] Habilitar upload de debug symbols (`ndk.debugSymbolLevel = 'FULL'` em build.gradle). Aviso recorrente do Play Console em todo build. Melhora stack traces de crashes/ANRs.
 
-#### Performance / UX (P1 — promovidos pra v0.1.7.0)
-- [ ] **#075** [Sessão v0.1.7.0] Reduzir agressividade React Query global em `main.jsx` (`staleTime: 30_000`, `refetchOnMount: true` em vez de `'always'`). Mitiga lentidão geral observada (every nav refeita todas queries).
-- [ ] **#076** [Sessão v0.1.7.0] Refatorar `useAppResume.js` — trocar `window.location.href = '/'` por invalidação + reconect realtime + preserve URL atual. Causa raiz do "app trava após muito tempo aberto". (BUG-016)
-- [ ] **#077** [Sessão v0.1.7.0] Listener `TOKEN_REFRESHED` em `useRealtime.js` pra resubscribe quando JWT renova (websocket morre silenciosamente após token rotation).
-- [ ] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`. Forçar invalidação de bundles velhos cacheados.
+#### Performance / UX (P1 — fechados em v0.1.7.0)
+- [x] **#075** [Sessão v0.1.7.0] Reduzir agressividade React Query global em `main.jsx` (`staleTime: 30_000`, `refetchOnMount: true` em vez de `'always'`). Mitiga lentidão geral observada.
+- [x] **#076** [Sessão v0.1.7.0] Refatorar `useAppResume.js` — trocar `window.location.href = '/'` por soft recover (refresh JWT + reconect realtime + invalidate, preserva URL).
+- [x] **#077** [Sessão v0.1.7.0] Listener `TOKEN_REFRESHED` em `useRealtime.js` pra resubscribe quando JWT renova.
+- [x] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`.
+
+#### Notificações idle (P0 — descobertos durante validação v0.1.7.0)
+- [ ] **#079** [auditoria-live-2026-05-01 BUG-016] Realtime heartbeat keep-alive em `useRealtime.js` — websocket morre silently durante idle longo (~16min), app não detecta doses novas. Adicionar ping periódico + auto-reconnect em silent fail. Detalhe: [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
+- [ ] **#080** [auditoria-live-2026-05-01 BUG-016] Investigar logs `notify-doses` Edge cron + retry policy + cleanup `push_subscriptions.deviceToken` inválidos + observability (alerta queda push). Healthcare-critical: dose perdida = paciente sem medicação.
 
 ---
 
@@ -397,10 +401,10 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 78 itens (#074 v0.1.6.10 + #075-#078 v0.1.7.0)
-- **Em aberto:** 75 (#001, #002, #005 fechados em v0.1.6.10)
-- **P0:** 6 · **P1:** 22 (+#075/#076/#077/#078) · **P2:** 22 · **P3:** 25
-- **Esforço P0 restante:** ~3-5 dias (todos manuais user)
+- **Total:** 80 itens (#074 v0.1.6.10 + #075-#078 v0.1.7.0 + #079/#080 v0.1.8.0)
+- **Em aberto:** 72 (3 fechados v0.1.6.10: #001 #002 #005; 5 fechados v0.1.7.0: #023 #075 #076 #077 #078)
+- **P0:** 8 (6 manual user + #079 + #080 healthcare-critical) · **P1:** 17 (18 - #023) · **P2:** 22 · **P3:** 25
+- **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
 
