@@ -535,15 +535,25 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
 
-### Branch / PR — modelo "master = release"
+### Branch / PR — modelo "master = release de código"
 
-**`master` é sagrado. Sempre reflete a ÚLTIMA versão publicada.**
+**`master` é sagrado pra código que vai pro Play Store / Vercel produção.** Mas branch por toda mudança mínima vira ritual sem valor pra single-dev.
 
-- `master` = `https://dosy-teal.vercel.app` (Vercel produção) = AAB no Play Store Internal Testing — **sempre os 3 sincronizados**
-- Trabalho do dia-a-dia **NUNCA** vai direto pra master
-- Master só recebe merge no momento de **publicar release** (ver §"Publicar release" abaixo)
+**Critério decisório (aplique ANTES de criar branch):**
 
-**Toda mudança = branch nova:**
+| Tipo de mudança | Vai direto pra master? | Razão |
+|---|---|---|
+| Código frontend (`src/`, `index.html`, `vite.config.js`) | **Branch** | Vai pro AAB e Vercel |
+| Plugin/config nativo (`android/`, `capacitor.config.ts`) | **Branch** | Vai pro AAB |
+| Edge Function (`supabase/functions/*`) | **Branch** | Deploy server-side; risco prod |
+| Migration SQL (`supabase/migrations/*`) | **Branch** | Mudança schema DB |
+| Só docs (`contexto/`, `README.md`, comentários em código não-build) | **Direto master** | Não afeta build/deploy |
+| Só data fix em prod (cleanup row, sem código) | **Direto master** | Mudança já aplicada server-side; commit é só registro |
+| Tweaks dev-only (`.gitignore`, scripts util `tools/`) | **Direto master** | Não afeta usuário |
+
+**`master` continua = última versão publicada NO QUE TANGE A APP.** Docs/contexto/ podem evoluir em master sem corresponder a release de app.
+
+**Quando FOR branch — convenção de nome:**
 
 | Tipo de mudança | Nome de branch sugerido |
 |---|---|
@@ -551,7 +561,6 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 | Feature nova | `feature/{tema}` |
 | Refactor (geralmente com ADR) | `refactor/{tema}` |
 | Mudança segurança | `security/{tema}` |
-| Só docs / contexto/ | `docs/{tema}` |
 | Migration DB | `migration/{tema}` |
 
 **Por quê master = release apenas:**
@@ -563,16 +572,6 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 - Trabalho mais longo (>1 sessão) → fica na branch entre sessões, retoma depois
 - Trabalhos não-relacionados → branches separadas
 - `git branch` lista; agente reporta no início de cada sessão se há branches pendentes
-
-**Convenção nome de branch:**
-
-```
-feature/{tema}              # nova feature
-fix/{tema}                  # bug fix grande
-refactor/{tema}             # refactor não-trivial
-security/{tema}             # mudança de segurança
-docs/{tema}                 # só docs
-```
 
 Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin-edge-functions`.
 
