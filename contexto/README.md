@@ -199,6 +199,130 @@ Arquivos históricos. **Nunca edite.** Apenas leitura.
 
 Esta pasta é fonte da verdade compartilhada. Se você está rodando em paralelo com outro chat/sessão, **coordene** ou aguarde. Conflitos de versão aqui custam caro porque se propagam pra todas as sessões futuras.
 
+### Regra 8 — Comunicação com usuário não-dev (CRÍTICA)
+
+**Usuário deste projeto não é desenvolvedor.** Não sabe git avançado, não conhece JWT/DevTools/curl, não distingue branch de tag. Comunicação técnica complexa = bloqueio = fricção.
+
+#### Princípios de comunicação
+
+1. **Toda jargão técnica DEVE ser traduzida** na primeira menção:
+   - ❌ *"Edge Function deployada em prod"*
+   - ✅ *"Correção colocada no servidor — está rodando agora"*
+   - ❌ *"JWT do DevTools → IndexedDB → supabase-auth-token"*
+   - ✅ *"Esse teste precisa que você faça login na sua conta — consegue agora?"*
+   - ❌ *"git merge --no-ff + push origin"*
+   - ✅ *"Vou juntar branch com master e atualizar o servidor"*
+
+2. **Toda decisão pedida ao user DEVE incluir recomendação clara.**
+   - ❌ *"(a) X, (b) Y, (c) Z. Qual prefere?"*
+   - ✅ *"Recomendo X porque {motivo}. Quer X? (sim/não)"*
+
+3. **Preferir perguntas binárias (sim/não) sobre múltipla escolha.**
+   - Múltipla escolha só quando consequência de cada opção for **claramente diferente** e **explicada em 1 linha cada**
+
+4. **Nunca pedir input que requer conhecimento técnico do user.**
+   - Se teste exige JWT, DevTools, curl, terminal config → agente faz tudo OU sugere pular o teste explicando o risco
+
+5. **Resumo em 1 linha sempre primeiro.** Detalhes técnicos abaixo, recolhidos.
+   - ❌ Tabela de 8 cenários antes de dizer se funcionou
+   - ✅ *"✅ Funcionou. 6 de 8 testes passaram, 2 pulei porque exigiriam sua conta admin. Risco do não-testado é baixo. Detalhes abaixo se quiser ver."*
+
+6. **Vocabulário proibido (sem tradução):**
+   `JWT` · `Bearer` · `prod` · `deploy` · `mergear` (use "juntar" ou "publicar") · `branch` (no contexto técnico — quando crítico, dizer "versão de teste" ou "rascunho separado") · `commit` (use "salvar mudança") · `endpoint` · `payload` · `token` (no body, OK em headers explicados) · `staging` · `production` (use "servidor de teste" / "servidor real") · `IndexedDB` · `localStorage` (use "cache do navegador") · `CORS`, `CSRF` (explicar de forma curta inline)
+
+7. **Vocabulário OK** (já familiar pelo PROJETO.md): paciente, dose, tratamento, alarme, push, FCM (mencionar 1x e usar "notificação"), Vercel, Play Store, Android, AAB.
+
+8. **Comandos pro user copiar:** sempre completos, prontos pra colar. Sem placeholder genérico tipo `<ref>` ou `{token}`.
+   - ❌ `supabase functions deploy {name} --project-ref <ref>`
+   - ✅ Agente roda no Bash dele e mostra resultado. OU diz: *"Cole isso no terminal: `supabase functions deploy send-test-push --project-ref guefraaqbkcehofchnrc`"* (com valor real preenchido)
+
+#### Template "Decisão de aprovação"
+
+Toda vez que precisar aprovação do user pra ação:
+
+```markdown
+{Resumo 1 linha do que aconteceu até agora}
+
+**Próxima ação:** {O que vou fazer se aprovar, em português simples}
+
+**Por que recomendo:** {Razão em 1-2 linhas}
+
+**Risco se aprovar:** {Em 1 linha — o que pode dar errado}
+**Risco se não aprovar:** {Em 1 linha — o que perdemos esperando}
+
+**Aprova?** (sim / não / quero entender melhor antes)
+```
+
+Exemplo (correção do que aconteceu na sessão real):
+
+> Bug crítico de segurança corrigido. Testei 6 cenários — todos passaram. 2 cenários extras que eu queria testar exigiam acessar sua conta admin (não vou fazer login no seu lugar).
+>
+> **Próxima ação:** juntar correção com versão principal e atualizar servidor.
+>
+> **Por que recomendo:** os 6 testes cobrem a parte arriscada (bloquear quem não é admin). O que ficou sem testar é o caminho que já funcionava antes — não mexi nessa parte.
+>
+> **Risco se aprovar:** mínimo — se algo quebrar, reverter leva 30 segundos.
+> **Risco se não aprovar:** servidor continua vulnerável até você decidir testar mais.
+>
+> **Aprova?** (sim / não / quero entender melhor antes)
+
+#### Template "Reporte de teste"
+
+```markdown
+**Resultado:** ✅ Funcionou / ⚠️ Funcionou parcial / ❌ Falhou
+
+**O que testei:** {1-2 linhas plain português}
+
+**O que faltou:** {1 linha — o que ficou sem teste e por quê}
+
+**Recomendação:** {ir adiante OR testar mais antes}
+
+<details>
+<summary>Detalhes técnicos (opcional)</summary>
+
+{tabela técnica, comandos curl, status codes, etc.}
+
+</details>
+```
+
+#### Template "Pergunta sobre coisas técnicas que o user não sabe"
+
+Se chegou num ponto que precisa de info que o user não-dev não tem:
+
+```markdown
+Pra continuar, preciso de {X}.
+
+**O que é {X}:** {explicação 1-2 linhas em português}
+
+**Como conseguir:**
+- Opção fácil: {ação simples}
+- Opção mais técnica: {se a fácil não der}
+
+**Se não for possível agora:** podemos pular esse passo. Risco: {1 linha}.
+
+Como você prefere?
+```
+
+Exemplo:
+
+> Pra testar o último cenário, preciso fazer login com sua conta admin no app.
+>
+> **O que é "conta admin":** sua conta principal que tem permissão especial pra mandar push de teste. Outras contas (como teste03) não.
+>
+> **Como conseguir:**
+> - Opção fácil: você loga no app web (https://dosy-teal.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
+> - Opção mais técnica: pular esse teste e confiar nos 6 que passaram (risco baixo — caminho não-testado é o que já funcionava antes).
+>
+> Como você prefere?
+
+#### Auto-checagem antes de enviar mensagem ao user
+
+Antes de mandar resposta longa, agente revisa:
+- Tem jargão sem tradução? Se sim, traduzir.
+- Pedi decisão sem dar recomendação? Se sim, adicionar recomendação.
+- Resumo em 1 linha está no topo? Se não, adicionar.
+- Pedi pro user fazer algo técnico? Se sim, oferecer alternativa fácil ou pular.
+
 ---
 
 ## 🎯 Quando o usuário pede algo
@@ -411,15 +535,25 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
 
-### Branch / PR — modelo "master = release"
+### Branch / PR — modelo "master = release de código"
 
-**`master` é sagrado. Sempre reflete a ÚLTIMA versão publicada.**
+**`master` é sagrado pra código que vai pro Play Store / Vercel produção.** Mas branch por toda mudança mínima vira ritual sem valor pra single-dev.
 
-- `master` = `https://dosy-teal.vercel.app` (Vercel produção) = AAB no Play Store Internal Testing — **sempre os 3 sincronizados**
-- Trabalho do dia-a-dia **NUNCA** vai direto pra master
-- Master só recebe merge no momento de **publicar release** (ver §"Publicar release" abaixo)
+**Critério decisório (aplique ANTES de criar branch):**
 
-**Toda mudança = branch nova:**
+| Tipo de mudança | Vai direto pra master? | Razão |
+|---|---|---|
+| Código frontend (`src/`, `index.html`, `vite.config.js`) | **Branch** | Vai pro AAB e Vercel |
+| Plugin/config nativo (`android/`, `capacitor.config.ts`) | **Branch** | Vai pro AAB |
+| Edge Function (`supabase/functions/*`) | **Branch** | Deploy server-side; risco prod |
+| Migration SQL (`supabase/migrations/*`) | **Branch** | Mudança schema DB |
+| Só docs (`contexto/`, `README.md`, comentários em código não-build) | **Direto master** | Não afeta build/deploy |
+| Só data fix em prod (cleanup row, sem código) | **Direto master** | Mudança já aplicada server-side; commit é só registro |
+| Tweaks dev-only (`.gitignore`, scripts util `tools/`) | **Direto master** | Não afeta usuário |
+
+**`master` continua = última versão publicada NO QUE TANGE A APP.** Docs/contexto/ podem evoluir em master sem corresponder a release de app.
+
+**Quando FOR branch — convenção de nome:**
 
 | Tipo de mudança | Nome de branch sugerido |
 |---|---|
@@ -427,7 +561,6 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 | Feature nova | `feature/{tema}` |
 | Refactor (geralmente com ADR) | `refactor/{tema}` |
 | Mudança segurança | `security/{tema}` |
-| Só docs / contexto/ | `docs/{tema}` |
 | Migration DB | `migration/{tema}` |
 
 **Por quê master = release apenas:**
@@ -439,16 +572,6 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 - Trabalho mais longo (>1 sessão) → fica na branch entre sessões, retoma depois
 - Trabalhos não-relacionados → branches separadas
 - `git branch` lista; agente reporta no início de cada sessão se há branches pendentes
-
-**Convenção nome de branch:**
-
-```
-feature/{tema}              # nova feature
-fix/{tema}                  # bug fix grande
-refactor/{tema}             # refactor não-trivial
-security/{tema}             # mudança de segurança
-docs/{tema}                 # só docs
-```
 
 Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin-edge-functions`.
 
@@ -536,26 +659,23 @@ Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin
 
 ### Mensagem padrão do agente quando inicia trabalho em branch
 
+> Use **exatamente** este template. Não improvise. Não adicione info técnica extra.
+
 ```
-🌿 BRANCH NOVA: {tipo}/{tema}
+🌿 Vou trabalhar em separado, sem mexer no que está no ar.
 
-**Onde você está:**
-- Master continua em v{atual} — sempre = última release publicada
-  - Vercel produção: https://dosy-teal.vercel.app (v{atual})
-  - Play Store Internal Testing: AAB v{atual}
-- Vou trabalhar em branch separada: {tipo}/{tema}
-- Master NÃO será tocada até você pedir release.
+**No ar agora (intocado):** v{atual}
+- App web: https://dosy-teal.vercel.app
+- Play Store: AAB v{atual}
 
-**Onde testar (durante/depois do meu trabalho):**
-- Local web: `npm run dev` → http://localhost:5173
-- Vercel preview: URL única gerada após push da branch (vou te mandar)
-- Android: só no fim, durante release (build AAB explícito)
+**O que vou fazer:** {descrição em 1-2 linhas, português simples}
 
-**Como saímos:**
-- Você aprova → quando pedir "publica" / "manda pro Play Store" → ciclo de release começa (8 passos)
-- Se quiser descartar: `git branch -D {tipo}/{tema}` (master continua intocada)
+**Onde você vai testar quando eu terminar:** {1 opção concreta — não 3 opções abstratas}
+- Geralmente: rodar `npm run dev` no terminal e abrir http://localhost:5173 (eu te guio passo a passo)
 
-**Não vou tocar master sem ciclo de release completo.**
+**Quando publicar de verdade:** só quando você pedir "publica" — aí faço bump de versão + AAB + Console + atualizo tudo.
+
+**Posso começar?** (sim / não / tenho dúvida)
 ```
 
 ### Worktrees git — não usar agora

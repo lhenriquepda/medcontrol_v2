@@ -84,10 +84,10 @@
 
 | # | Tarefa | Esforço | Detalhe |
 |---|---|---|---|
-| ~~#001~~ | ~~Adicionar admin check em `send-test-push` Edge Function~~ ✅ | ~~30 min~~ | fechado 2026-05-01, branch `security/send-test-push-admin` |
-| ~~#002~~ | ~~Sanitizar erro email enumeration (parte de #001)~~ ✅ | ~~5 min~~ | fechado 2026-05-01 |
+| ~~#001~~ | ~~Adicionar admin check em `send-test-push` Edge Function~~ ✅ | ~~30 min~~ | fechado nesta sessão, release `v0.1.6.10` |
+| ~~#002~~ | ~~Sanitizar erro email enumeration (parte de #001)~~ ✅ | ~~5 min~~ | fechado nesta sessão |
 | #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min manual | [archive/security-original.md](archive/security-original.md) |
-| #005 | Investigar BUG-001 encoding UTF-8 (SQL audit + verificação UI) | 1-3h | [06-bugs#bug-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente) |
+| ~~#005~~ | ~~Investigar BUG-001 encoding UTF-8~~ ✅ | ~~1-3h~~ | data fix prod-only, sem mudança de código |
 | #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | [CHECKLIST §#008](CHECKLIST.md#008--configurar-sentry_auth_token--org--project-em-github-secrets) |
 | #007 | Telemetria PostHog `notification_delivered` (regressão silenciosa) | 1-2h | [CHECKLIST §#007](CHECKLIST.md#007--adicionar-telemetria-notification_delivered-em-posthog-regressão-silenciosa) |
 | #004 | Gravar vídeo demo FGS YouTube unlisted | 2-3h | Plan FASE 18.9.1 |
@@ -170,7 +170,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#004** [Plan] Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE YouTube unlisted. Plan FASE 18.9.1
 
 #### Integridade dados
-- [ ] **#005** [Auditoria] Encoding UTF-8 quebrado em nome paciente. → [06 BUG-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
+- [x] **#005** [Auditoria] Encoding UTF-8 quebrado em nome paciente. → [06 BUG-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
 
 #### Validação manual
 - [ ] **#006** [Plan + Auditoria] Device validation FASE 17 em 3 devices físicos. → `docs/device-validation-checklist.md`
@@ -381,8 +381,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 ## 12. Resumo numérico (atualize após cada item fechado)
 
 - **Total:** 73 itens
-- **Em aberto:** 71 (#001, #002 fechados em 2026-05-01)
-- **P0:** 7 · **P1:** 18 · **P2:** 22 · **P3:** 24
+- **Em aberto:** 70 (#001, #002, #005 fechados em 2026-05-01 — release v0.1.6.10)
+- **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 24
 - **Esforço P0:** ~3-5 dias-pessoa
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
