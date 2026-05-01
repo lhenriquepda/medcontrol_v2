@@ -585,6 +585,111 @@
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 22.3
 
+### #075 — Reduzir agressividade React Query global (mitiga lentidão geral)
+- **Status:** ⏳ Aberto
+- **Origem:** [Sessão v0.1.7.0] Análise lentidão reportada pelo user
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Severidade:** alta — combina com #023 + #076 pra fix completo de lentidão/travamento
+- **Snippet:**
+  ```js
+  // src/main.jsx — defaultOptions atual:
+  // staleTime: 0
+  // refetchOnMount: 'always'
+  // refetchOnWindowFocus: true
+  //
+  // Mudar para:
+  staleTime: 30_000,           // 30s — cache fresh por 30s, evita refetch redundante
+  refetchOnMount: true,        // só se stale (não 'always')
+  refetchOnWindowFocus: true,  // mantém — útil pós-idle curto
+  ```
+- **Aceitação:**
+  - Navegação interna entre pages não dispara refetch se query foi feita há <30s
+  - Volta de aba ainda refresh (refetchOnWindowFocus mantido)
+  - DoseModal abre rápido (não espera refetch redundante)
+  - Lint passa
+- **Riscos:**
+  - Alarme/notif: zero (config TanStack ≠ alarme nativo Android que vive em SharedPreferences)
+  - Realtime: zero (websocket independente)
+  - Stale data 30s: aceitável pra healthcare; doses mudam minutos, não segundos
+
+### #076 — Refatorar useAppResume — recovery sem reload destrutivo (BUG-016)
+- **Status:** ⏳ Aberto
+- **Origem:** [Sessão v0.1.7.0] User reportou "app trava após ficar aberto muito tempo"
+- **Esforço:** 2h
+- **Dependências:** nenhuma
+- **Severidade:** alta — causa raiz do travamento observado
+- **Causa atual:** após 5min idle, `useAppResume.js` força `window.location.href = '/'`. Isso causa cold reload + perda de URL + tela branca 1-3s + cascata de refetch. Se algo falhar nesse reload (SW velho, JWT expirado, race condition), app fica em estado quebrado até hard close de Chrome.
+- **Snippet (proposta):**
+  ```js
+  // src/hooks/useAppResume.js
+  // Antes: window.location.href = '/'  (destrutivo)
+  // Depois: cleanup + invalidate + reconnect realtime, preservando URL
+  if (inactiveMs >= STALE_RELOAD_THRESHOLD_MS) {
+    console.log('[useAppResume] long idle', inactiveMs, 'ms → soft recover')
+    // 1. Force JWT refresh (Supabase rotaciona refresh token)
+    await supabase.auth.refreshSession()
+    // 2. Force realtime reconnect (drops dead websockets)
+    supabase.removeAllChannels()
+    // 3. Invalidate all queries — refetch fresh
+    await qc.invalidateQueries()
+    // 4. Refetch active queries
+    await qc.refetchQueries({ type: 'active' })
+    // URL preservada. Sem reload.
+  }
+  ```
+- **Aceitação:**
+  - App fica aberto 15min idle → volta foco → não força reload
+  - Estado UI preservado (url, modais abertos, scroll position)
+  - Doses recentes carregam (queries refetched)
+  - Realtime resubscribe (dose tomada em outro device aparece)
+  - Manual: device físico Android + 30min idle + voltar → app responde sem cold start
+- **Riscos:**
+  - Alarme nativo: zero (vive separado em AlarmReceiver + SharedPreferences)
+  - Notif FCM: zero (background handler separado)
+  - Edge case: se `supabase.auth.refreshSession()` falhar (refresh token expirado), redirect pra login (já handled em supabase.js auth listener)
+- **Detalhe:** BUG-016 catalogado em `auditoria-live-2026-05-01/` (nova pasta criada na sessão se necessário)
+
+### #077 — Listener TOKEN_REFRESHED em useRealtime (resubscribe pós JWT rotation)
+- **Status:** ⏳ Aberto
+- **Origem:** [Sessão v0.1.7.0]
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Severidade:** média — robustez. Sem isso, websocket pode morrer silenciosamente após Supabase rotacionar JWT (default 1h)
+- **Snippet:**
+  ```js
+  // src/hooks/useRealtime.js — adicionar dentro do useEffect
+  const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+      unsubscribe()
+      subscribe()
+    }
+  })
+  // cleanup: authSub.subscription.unsubscribe()
+  ```
+- **Aceitação:**
+  - Forçar JWT refresh (via `supabase.auth.refreshSession()` no console) → realtime resubscribe ocorre
+  - Console log mostra resubscribe disparado
+  - Dose tomada em device A após 1h+ aparece em device B (longe-evita)
+- **Riscos:** zero — adiciona robustez
+
+### #078 — Bumpar SW cache version v5 → v6 (invalidar bundles velhos)
+- **Status:** ⏳ Aberto
+- **Origem:** [Sessão v0.1.7.0]
+- **Esforço:** 5 min
+- **Dependências:** nenhuma
+- **Severidade:** baixa — limpeza. SW pode estar servindo bundle velho de v0.1.6.x se cache não rotaciona
+- **Snippet:**
+  ```js
+  // public/sw.js linha 1
+  // ANTES: const CACHE = 'medcontrol-v5'
+  // DEPOIS: const CACHE = 'medcontrol-v6'
+  ```
+- **Aceitação:**
+  - Após próximo deploy, SW activate event deleta cache `medcontrol-v5` e cria `medcontrol-v6`
+  - Devices com bundle velho cached forçam download fresh
+- **Convenção:** bumpar a cada release com mudança de bundle JS (esquecer = bug serve velho). **TODO:** automatizar em vite plugin (P2 futuro).
+
 ### #074 — Habilitar upload de debug symbols no Play Console
 - **Status:** ⏳ Aberto
 - **Origem:** [Sessão v0.1.6.10] Aviso recorrente Play Console
@@ -614,8 +719,8 @@
 
 ## Resumo
 
-- **P0:** 9 itens (#001-009) · esforço estimado: ~3-5 dias-pessoa
-- **P1:** 18 itens (#010-027) · esforço estimado: ~10-15 dias-pessoa
+- **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
+- **P1:** 22 itens (#010-027 + #075-#078 v0.1.7.0) · esforço estimado: ~10-15 dias-pessoa
 - **P2:** 22 itens (#028-049) · esforço estimado: ~3-4 semanas-pessoa
 - **P3:** 25 itens (#050-073, #074) · esforço estimado: 90+ dias
 

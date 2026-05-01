@@ -294,6 +294,12 @@ ESTADO ATUAL: Internal Testing ativo
 #### DX / Observability
 - [ ] **#074** [Sessão v0.1.6.10] Habilitar upload de debug symbols (`ndk.debugSymbolLevel = 'FULL'` em build.gradle). Aviso recorrente do Play Console em todo build. Melhora stack traces de crashes/ANRs.
 
+#### Performance / UX (P1 — promovidos pra v0.1.7.0)
+- [ ] **#075** [Sessão v0.1.7.0] Reduzir agressividade React Query global em `main.jsx` (`staleTime: 30_000`, `refetchOnMount: true` em vez de `'always'`). Mitiga lentidão geral observada (every nav refeita todas queries).
+- [ ] **#076** [Sessão v0.1.7.0] Refatorar `useAppResume.js` — trocar `window.location.href = '/'` por invalidação + reconect realtime + preserve URL atual. Causa raiz do "app trava após muito tempo aberto". (BUG-016)
+- [ ] **#077** [Sessão v0.1.7.0] Listener `TOKEN_REFRESHED` em `useRealtime.js` pra resubscribe quando JWT renova (websocket morre silenciosamente após token rotation).
+- [ ] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`. Forçar invalidação de bundles velhos cacheados.
+
 ---
 
 ## 7. Itens descartados pela auditoria (com justificativa)
@@ -391,9 +397,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 74 itens (#074 adicionado em release v0.1.6.10)
-- **Em aberto:** 71 (#001, #002, #005 fechados em release v0.1.6.10 — 2026-05-01)
-- **P0:** 6 · **P1:** 18 · **P2:** 22 · **P3:** 25
+- **Total:** 78 itens (#074 v0.1.6.10 + #075-#078 v0.1.7.0)
+- **Em aberto:** 75 (#001, #002, #005 fechados em v0.1.6.10)
+- **P0:** 6 · **P1:** 22 (+#075/#076/#077/#078) · **P2:** 22 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias (todos manuais user)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

@@ -1,4 +1,8 @@
-const CACHE = 'medcontrol-v5'
+// Item #078 (release v0.1.7.0) — bumpar a CADA release com mudança em bundle JS.
+// Activate event abaixo deleta caches != CACHE atual, forçando download fresh.
+// Sem bump, devices podem manter chunks antigos cacheados após deploy.
+// TODO (P2): automatizar via vite plugin que injeta versão do package.json no build.
+const CACHE = 'medcontrol-v6'
 const ASSETS = ['/', '/index.html', '/manifest.webmanifest']
 
 // ─── Install / Activate ──────────────────────────────────────────────────────
