@@ -112,44 +112,65 @@ public class CriticalAlarmPlugin extends Plugin {
             return;
         }
 
-        // Floor para boundary do minuto. Doses são definidas em HH:MM exato; segundos
-        // residuais (de test inserts ou drift) forçam alarme a cruzar para próximo minuto
-        // visualmente. Floor garante alarme dispara aos :00 do minuto agendado.
-        triggerAt = (triggerAt / 60000L) * 60000L;
-
         if (triggerAt <= System.currentTimeMillis()) {
             call.reject("'at' must be in the future");
             return;
         }
 
-        Context ctx = getContext();
-        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-
-        Intent intent = new Intent(ctx, AlarmReceiver.class);
-        intent.putExtra("id", id);
-        intent.putExtra("doses", doses.toString());
-
-        PendingIntent pi = PendingIntent.getBroadcast(
-            ctx, id, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        Intent showIntent = new Intent(ctx, AlarmActivity.class);
-        PendingIntent showPi = PendingIntent.getActivity(
-            ctx, id, showIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAt, showPi);
-        am.setAlarmClock(info, pi);
-
-        persistAlarm(id, triggerAt, doses);
+        // Item #081 (release v0.1.7.1) — delegate to AlarmScheduler helper
+        // (mesmo código usado pelo DoseSyncWorker em background).
+        boolean ok = AlarmScheduler.scheduleDose(getContext(), id, triggerAt, doses);
+        if (!ok) {
+            call.reject("schedule failed (past trigger or permission)");
+            return;
+        }
 
         JSObject ret = new JSObject();
         ret.put("scheduled", true);
         ret.put("id", id);
         ret.put("count", doses.length());
         call.resolve(ret);
+    }
+
+    /**
+     * Item #081 — armazena credentials Supabase em SharedPreferences pra
+     * DoseSyncWorker poder fazer fetch autenticado em background.
+     * Chamado pelo JS após login (useAuth.jsx onAuthStateChange SIGNED_IN).
+     */
+    @PluginMethod
+    public void setSyncCredentials(PluginCall call) {
+        String url = call.getString("supabaseUrl");
+        String anonKey = call.getString("anonKey");
+        String userId = call.getString("userId");
+        String refreshToken = call.getString("refreshToken");
+        String schema = call.getString("schema", "medcontrol");
+
+        if (url == null || anonKey == null || userId == null || refreshToken == null) {
+            call.reject("missing: supabaseUrl, anonKey, userId, refreshToken");
+            return;
+        }
+
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+        sp.edit()
+            .putString("supabase_url", url)
+            .putString("anon_key", anonKey)
+            .putString("user_id", userId)
+            .putString("refresh_token", refreshToken)
+            .putString("schema", schema)
+            .apply();
+
+        call.resolve();
+    }
+
+    /**
+     * Item #081 — limpa credentials (logout). DoseSyncWorker vai retornar
+     * Result.success() sem fazer nada na próxima execução.
+     */
+    @PluginMethod
+    public void clearSyncCredentials(PluginCall call) {
+        getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE)
+            .edit().clear().apply();
+        call.resolve();
     }
 
     @PluginMethod

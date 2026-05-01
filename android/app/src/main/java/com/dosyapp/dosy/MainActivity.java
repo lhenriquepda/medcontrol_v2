@@ -3,9 +3,16 @@ package com.dosyapp.dosy;
 import android.content.Intent;
 import android.os.Bundle;
 
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+
 import com.dosyapp.dosy.plugins.criticalalarm.CriticalAlarmPlugin;
 import com.dosyapp.dosy.plugins.criticalalarm.AlarmService;
+import com.dosyapp.dosy.plugins.criticalalarm.DoseSyncWorker;
 import com.getcapacitor.BridgeActivity;
+
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -13,6 +20,28 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(CriticalAlarmPlugin.class);
         super.onCreate(savedInstanceState);
         handleAlarmAction(getIntent());
+        enqueueDoseSyncWorker();
+    }
+
+    /**
+     * Item #081 (release v0.1.7.1) — agenda DoseSyncWorker periódico (6h).
+     * Worker fetcha doses pendentes próximas 72h via Supabase REST e agenda
+     * alarmes nativos via setAlarmClock(). Idempotente (KEEP policy reusa
+     * registro existente, seguro chamar em todo onCreate).
+     */
+    private void enqueueDoseSyncWorker() {
+        try {
+            PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
+                DoseSyncWorker.class, 6, TimeUnit.HOURS
+            ).build();
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "dosy-dose-sync",
+                ExistingPeriodicWorkPolicy.KEEP,
+                req
+            );
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "enqueueDoseSyncWorker failed: " + e.getMessage());
+        }
     }
 
     @Override

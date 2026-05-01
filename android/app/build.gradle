@@ -94,6 +94,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Item #081 (release v0.1.7.1) — WorkManager pra DoseSyncWorker
+    // periodic background sync (defense-in-depth notif idle ilimitado).
+    implementation "androidx.work:work-runtime:2.9.1"
 }
 
 apply from: 'capacitor.build.gradle'

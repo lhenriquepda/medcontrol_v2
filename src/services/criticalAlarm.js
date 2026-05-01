@@ -108,3 +108,31 @@ export async function openAppNotificationSettings() {
   if (!isCriticalAlarmAvailable()) return
   return CriticalAlarm.openAppNotificationSettings()
 }
+
+/**
+ * Item #081 (release v0.1.7.1) — credentials pra DoseSyncWorker fazer
+ * fetch autenticado em background. Plugin grava em SharedPreferences pra
+ * Worker ler.
+ *
+ * Caminho 3 de 3 defense-in-depth: WorkManager periódico (6h) busca doses
+ * próximas 72h e agenda alarmes nativos. Independe de app foreground /
+ * websocket realtime / push FCM.
+ *
+ * Chamar após login (useAuth onAuthStateChange SIGNED_IN/TOKEN_REFRESHED)
+ * pra Worker ter token de refresh atualizado.
+ */
+export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refreshToken, schema }) {
+  if (!isCriticalAlarmAvailable()) return null
+  return CriticalAlarm.setSyncCredentials({
+    supabaseUrl,
+    anonKey,
+    userId,
+    refreshToken,
+    schema: schema || 'medcontrol'
+  })
+}
+
+export async function clearSyncCredentials() {
+  if (!isCriticalAlarmAvailable()) return null
+  return CriticalAlarm.clearSyncCredentials()
+}
