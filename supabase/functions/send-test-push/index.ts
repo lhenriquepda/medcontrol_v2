@@ -1,7 +1,9 @@
 // Edge Function — send-test-push
 // Disparo de push de teste pra todos os tokens FCM de um user.
 // POST { email: string, title?: string, body?: string }
-// Auth: service_role required (admin-only)
+// Auth: requires Authorization: Bearer <JWT> from a user listed in medcontrol.admins.
+// Non-admin / unauthenticated callers are rejected. Responses are neutral re:
+// email existence (no enumeration via status code or body).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -12,6 +14,9 @@ const FCM_CLIENT   = Deno.env.get('FIREBASE_CLIENT_EMAIL')!
 const FCM_KEY_PEM  = Deno.env.get('FIREBASE_PRIVATE_KEY')!
 
 const supabase = createClient(supabaseUrl, serviceKey, { db: { schema: 'medcontrol' } })
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const NEUTRAL_OK = JSON.stringify({ ok: true, sent: 0 })
 
 let cachedToken: { token: string; exp: number } | null = null
 
@@ -59,28 +64,61 @@ async function getFcmAccessToken(): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('POST only', { status: 405 })
 
-  const { email, title = 'Dosy 💊 — Teste', body = 'Push de teste' } = await req.json()
-  if (!email) return new Response(JSON.stringify({ error: 'email required' }), { status: 400 })
+  const authHeader = req.headers.get('Authorization') ?? req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: JSON_HEADERS })
+  }
+  const jwt = authHeader.slice(7).trim()
+  const { data: userData, error: jwtErr } = await supabase.auth.getUser(jwt)
+  if (jwtErr || !userData?.user) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: JSON_HEADERS })
+  }
+  const caller = userData.user
 
-  // Find user by email
+  const { data: adminRow, error: adminErr } = await supabase
+    .from('admins')
+    .select('user_id')
+    .eq('user_id', caller.id)
+    .maybeSingle()
+  if (adminErr) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: JSON_HEADERS })
+  }
+  if (!adminRow) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: JSON_HEADERS })
+  }
+
+  let payload: { email?: string; title?: string; body?: string }
+  try {
+    payload = await req.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: JSON_HEADERS })
+  }
+  const { email, title = 'Dosy 💊 — Teste', body = 'Push de teste' } = payload
+  if (!email || typeof email !== 'string') {
+    return new Response(JSON.stringify({ error: 'email_required' }), { status: 400, headers: JSON_HEADERS })
+  }
+
   const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers()
-  if (listErr) return new Response(JSON.stringify({ error: listErr.message }), { status: 500 })
-  const user = users.find((u: any) => u.email === email)
-  if (!user) return new Response(JSON.stringify({ error: `user not found: ${email}` }), { status: 404 })
+  if (listErr) {
+    return new Response(NEUTRAL_OK, { status: 200, headers: JSON_HEADERS })
+  }
+  const target = users.find((u: any) => u.email === email)
+  if (!target) {
+    return new Response(NEUTRAL_OK, { status: 200, headers: JSON_HEADERS })
+  }
 
-  // Get FCM tokens for this user
   const { data: subs } = await supabase
     .from('push_subscriptions')
     .select('"deviceToken"')
-    .eq('userId', user.id)
+    .eq('userId', target.id)
     .not('deviceToken', 'is', null)
 
   if (!subs?.length) {
-    return new Response(JSON.stringify({ ok: true, sent: 0, message: 'no FCM tokens for user' }))
+    return new Response(NEUTRAL_OK, { status: 200, headers: JSON_HEADERS })
   }
 
   const accessToken = await getFcmAccessToken()
-  const results: any[] = []
+  let sent = 0
 
   for (const s of subs) {
     const r = await fetch(
@@ -110,10 +148,8 @@ Deno.serve(async (req) => {
         })
       }
     )
-    results.push({ token: s.deviceToken.slice(0, 20) + '...', status: r.status, body: await r.text() })
+    if (r.ok) sent++
   }
 
-  return new Response(JSON.stringify({ ok: true, email, sent: results.length, results }, null, 2), {
-    headers: { 'Content-Type': 'application/json' }
-  })
+  return new Response(JSON.stringify({ ok: true, sent }), { status: 200, headers: JSON_HEADERS })
 })
