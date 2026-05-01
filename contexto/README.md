@@ -535,45 +535,84 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
 
-### Branch / PR — modelo "master = release de código"
+### Branch / PR — modelo "1 sessão = 1 branch versionada = 1 release"
 
-**`master` é sagrado pra código que vai pro Play Store / Vercel produção.** Mas branch por toda mudança mínima vira ritual sem valor pra single-dev.
+**`master` é sagrado.** Sempre reflete a última versão publicada (Play Store + Vercel produção sincronizados). Trabalho do dia-a-dia **NUNCA** vai direto pra master.
 
-**Critério decisório (aplique ANTES de criar branch):**
+#### Modelo
 
-| Tipo de mudança | Vai direto pra master? | Razão |
-|---|---|---|
-| Código frontend (`src/`, `index.html`, `vite.config.js`) | **Branch** | Vai pro AAB e Vercel |
-| Plugin/config nativo (`android/`, `capacitor.config.ts`) | **Branch** | Vai pro AAB |
-| Edge Function (`supabase/functions/*`) | **Branch** | Deploy server-side; risco prod |
-| Migration SQL (`supabase/migrations/*`) | **Branch** | Mudança schema DB |
-| Só docs (`contexto/`, `README.md`, comentários em código não-build) | **Direto master** | Não afeta build/deploy |
-| Só data fix em prod (cleanup row, sem código) | **Direto master** | Mudança já aplicada server-side; commit é só registro |
-| Tweaks dev-only (`.gitignore`, scripts util `tools/`) | **Direto master** | Não afeta usuário |
+```
+Sessão começa
+  ├── Agente cria branch única `release/v{próxima-versão}`
+  │     (ex.: master em v0.1.6.9 → branch `release/v0.1.6.10`)
+  │
+  ├── TODAS as mudanças desta sessão vão nessa branch:
+  │     - código (src/, android/, supabase/functions/, supabase/migrations/)
+  │     - docs (contexto/, README, comentários)
+  │     - data fixes em prod (registro do cleanup, mesmo sem código)
+  │     - cada item ROADMAP fechado vira 1 commit nessa branch
+  │
+  ├── Sessão pode durar 1 chat ou múltiplos chats — branch persiste entre eles
+  │
+  └── Quando user diz "terminamos" / "publica" / "manda pro Play Store":
+        └── Ciclo de release dos 8 passos (ver §"Publicar release"):
+              1. Bump versão (package.json + android/app/build.gradle)
+              2. Build AAB local (Android Studio)
+              3. Upload Play Console + start rollout
+              4. Merge --no-ff branch → master + tag vX.Y.Z + push
+              5. Vercel auto-deploya (~2 min)
+              6. Atualizar contexto/ (PROJETO.md versão, ROADMAP §3, updates/)
+              7. Reporte final ao user
+              8. Branch deletada
+```
 
-**`master` continua = última versão publicada NO QUE TANGE A APP.** Docs/contexto/ podem evoluir em master sem corresponder a release de app.
+#### Por que esse modelo
 
-**Quando FOR branch — convenção de nome:**
+- **Single-dev sem CI completa:** cada merge pra master vai direto pra produção. Não pode haver código intermediário lá.
+- **Healthcare = zero margem de erro:** rollback de release inteiro = `git revert {tag}` (atômico). Rollback de commits soltos em master = frágil.
+- **Atomicidade:** master + Vercel produção + Play Store AAB sempre 3 sincronizados.
+- **Reduz ritual:** branch única elimina decisão "criar nova branch?" a cada item.
+- **Bump uma única vez no fim:** não importa quantos itens fecharam; release é evento único.
 
-| Tipo de mudança | Nome de branch sugerido |
-|---|---|
-| Fix bug | `fix/{tema}` |
-| Feature nova | `feature/{tema}` |
-| Refactor (geralmente com ADR) | `refactor/{tema}` |
-| Mudança segurança | `security/{tema}` |
-| Migration DB | `migration/{tema}` |
+#### Convenção nome de branch
 
-**Por quê master = release apenas:**
-- Single-dev sem CI de validação automática completa → cada merge pra master vai pra produção
-- Healthcare = zero margem de erro
-- Reverter release inteiro é trivial (`git revert {tag}`); reverter mudanças soltas commitadas em master é frágil
+```
+release/v{versão-próxima}
+```
 
-**Múltiplas branches simultâneas:**
-- Trabalho mais longo (>1 sessão) → fica na branch entre sessões, retoma depois
-- Trabalhos não-relacionados → branches separadas
-- `git branch` lista; agente reporta no início de cada sessão se há branches pendentes
+Sempre. Único formato. Ex.: `release/v0.1.6.10`, `release/v0.1.7.0`, `release/v0.2.0.0`.
 
-Ex.: `feature/estoque-medicacao`, `fix/encoding-utf8-pacientes`, `security/admin-edge-functions`.
+#### Versão da branch = versão proposta da release
+
+- **Patch** (`X.Y.Z+1`): bug fixes, sem novo comportamento
+- **Minor** (`X.Y+1.0`): feature nova, comportamento visível ao user
+- **Major** (`X+1.0.0`): breaking change (raro pré-1.0)
+
+Agente decide bump no Passo 1 do release com base nos commits acumulados na branch e confirma com user.
+
+#### Múltiplas sessões antes de release
+
+Branch `release/v0.1.6.10` persiste entre sessões. Agente em chat novo:
+1. Lê `git branch` → vê `release/v0.1.6.10` ativa
+2. Faz checkout dela (não cria nova)
+3. Continua acumulando commits
+
+#### Hotfix urgente fora do ciclo
+
+Cenário raro: bug crítico em produção precisa fix imediato sem mexer em release/v0.1.6.10 em andamento.
+
+- Branch `hotfix/{tema}` saindo direto de master (não da release branch)
+- Bump patch automático
+- Ciclo release encurtado (skip preview Vercel)
+- Após hotfix: rebase release/v0.1.6.10 onto master atualizada
+
+#### Mudanças que NÃO entram em release branch
+
+Raras exceções pra master direto (sem branch + sem bump):
+- `.gitignore`, scripts `tools/` puro dev
+- Correção typo em commit message anterior (via amend, antes de push)
+
+**Tudo que afeta usuário, build, deploy ou doc canônico → release branch.**
 
 - Pre-commit hooks ainda não configurados (item #024 do ROADMAP). Por enquanto, gates manuais antes de commit.
 
