@@ -174,6 +174,34 @@ async function tryRecordSent(doseId: string, channel: 'fcm' | 'webpush', userId:
   return true
 }
 
+// Item #083.4 (release v0.1.7.2) — coordenação push tray vs alarme nativo.
+// Antes de mandar push, consulta dose_alarms_scheduled. Se TODOS os devices
+// do user já têm alarme nativo agendado pra esta dose → skip push (alarme
+// fullscreen cobre, push tray seria redundante).
+//
+// Se nenhum device tem alarme agendado, ou apenas alguns → manda push como
+// fallback. Filosofia user: "se dose tem alarme setado, ok; senão, push".
+async function shouldSkipPushBecauseAlarmScheduled(doseId: string, userId: string): Promise<boolean> {
+  // Conta devices ativos do user (tem push_subscription)
+  const { count: deviceCount } = await supabase
+    .from('push_subscriptions')
+    .select('id', { count: 'exact', head: true })
+    .eq('userId', userId)
+
+  if (!deviceCount || deviceCount === 0) return false // sem devices, não pode ser cobert por alarme
+
+  // Conta devices com alarme nativo agendado pra esta dose
+  const { count: alarmCount } = await supabase
+    .from('dose_alarms_scheduled')
+    .select('doseId', { count: 'exact', head: true })
+    .eq('doseId', doseId)
+    .eq('userId', userId)
+
+  // Skip push apenas se TODOS devices têm alarme agendado
+  // (se só alguns, push fallback ainda vale pra devices sem alarme)
+  return (alarmCount ?? 0) >= deviceCount
+}
+
 // ─── Main handler ────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -243,6 +271,12 @@ Deno.serve(async (req) => {
         const webpushSubs = userSubs.filter((s: { endpoint?: string; deviceToken?: string }) => !s.deviceToken && s.endpoint)
         const useChannel: 'fcm' | 'webpush' | null = fcmSubs.length > 0 ? 'fcm' : (webpushSubs.length > 0 ? 'webpush' : null)
         if (!useChannel) continue
+
+        // Item #083.4 — skip push se alarme nativo já agendado em todos devices
+        if (await shouldSkipPushBecauseAlarmScheduled(dose.id, userId)) {
+          skipped++
+          continue
+        }
 
         const canSend = await tryRecordSent(dose.id, useChannel, userId)
         if (!canSend) { skipped++; continue }

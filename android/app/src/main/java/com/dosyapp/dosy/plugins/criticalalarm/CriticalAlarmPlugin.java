@@ -136,6 +136,10 @@ public class CriticalAlarmPlugin extends Plugin {
      * Item #081 — armazena credentials Supabase em SharedPreferences pra
      * DoseSyncWorker poder fazer fetch autenticado em background.
      * Chamado pelo JS após login (useAuth.jsx onAuthStateChange SIGNED_IN).
+     *
+     * Item #083.6 — adiciona device_id estável (UUID v4 gerado uma vez,
+     * persiste). Usado por DosyMessagingService.reportAlarmScheduled e
+     * notify-doses cron pra distinguir alarmes por device.
      */
     @PluginMethod
     public void setSyncCredentials(PluginCall call) {
@@ -151,15 +155,43 @@ public class CriticalAlarmPlugin extends Plugin {
         }
 
         SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+
+        // device_id estável: gera UUID na primeira vez, persiste pra sempre
+        String deviceId = sp.getString("device_id", null);
+        if (deviceId == null) {
+            deviceId = java.util.UUID.randomUUID().toString();
+        }
+
         sp.edit()
             .putString("supabase_url", url)
             .putString("anon_key", anonKey)
             .putString("user_id", userId)
             .putString("refresh_token", refreshToken)
             .putString("schema", schema)
+            .putString("device_id", deviceId)
             .apply();
 
-        call.resolve();
+        JSObject ret = new JSObject();
+        ret.put("deviceId", deviceId);
+        call.resolve(ret);
+    }
+
+    /**
+     * Item #083.6 — retorna device_id pra JS poder informar ao server
+     * (e.g. rescheduleAll upsert dose_alarms_scheduled).
+     * Gera UUID se ausente (primeira chamada).
+     */
+    @PluginMethod
+    public void getDeviceId(PluginCall call) {
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+        String deviceId = sp.getString("device_id", null);
+        if (deviceId == null) {
+            deviceId = java.util.UUID.randomUUID().toString();
+            sp.edit().putString("device_id", deviceId).apply();
+        }
+        JSObject ret = new JSObject();
+        ret.put("deviceId", deviceId);
+        call.resolve(ret);
     }
 
     /**

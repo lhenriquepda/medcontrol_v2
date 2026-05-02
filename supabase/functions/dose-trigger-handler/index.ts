@@ -1,0 +1,174 @@
+// Item #083.3 (release v0.1.7.2) — FCM scheduling em real-time via DB trigger
+//
+// Edge Function chamada por Postgres webhook (extension `pg_net` ou
+// `supabase_functions.http_request`) ao INSERT/UPDATE em medcontrol.doses.
+// Manda FCM data message imediato pra device(s) do user, agendar alarme
+// nativo local em <2s.
+//
+// Cobre cenário: user cadastra dose +30min via web, app fechado.
+// Sem este trigger, próximo cron 6h pode demorar até 6h pra agendar.
+//
+// Webhook payload (Supabase Database Webhooks):
+//   { type: "INSERT" | "UPDATE", table: "doses", record: {...}, old_record: {...} }
+
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const FCM_PROJECT = Deno.env.get('FIREBASE_PROJECT_ID')!
+const FCM_CLIENT  = Deno.env.get('FIREBASE_CLIENT_EMAIL')!
+const FCM_KEY_PEM = Deno.env.get('FIREBASE_PRIVATE_KEY')!
+
+const supabase = createClient(supabaseUrl, serviceKey, { db: { schema: 'medcontrol' } })
+
+// ─── FCM OAuth (cached) ────────────────────────────────────────────
+let cachedToken: { token: string; exp: number } | null = null
+async function getFcmAccessToken(): Promise<string> {
+  if (cachedToken && cachedToken.exp > Date.now() / 1000 + 60) return cachedToken.token
+
+  const now = Math.floor(Date.now() / 1000)
+  const enc = (o: object) => btoa(JSON.stringify(o))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+  const unsignedJwt = `${enc({ alg: 'RS256', typ: 'JWT' })}.${enc({
+    iss: FCM_CLIENT,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now, exp: now + 3600
+  })}`
+
+  const pemBody = FCM_KEY_PEM
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\s/g, '')
+  const keyDer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0))
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', keyDer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  )
+  const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey,
+    new TextEncoder().encode(unsignedJwt))
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${unsignedJwt}.${sig}`
+  })
+  if (!resp.ok) throw new Error(`OAuth: ${resp.status} ${await resp.text()}`)
+  const { access_token, expires_in } = await resp.json()
+  cachedToken = { token: access_token, exp: now + expires_in }
+  return access_token
+}
+
+interface WebhookPayload {
+  type: 'INSERT' | 'UPDATE' | 'DELETE'
+  table: string
+  schema: string
+  record: {
+    id: string
+    userId: string
+    medName: string
+    unit: string
+    scheduledAt: string
+    status: string
+    [key: string]: unknown
+  }
+  old_record?: Record<string, unknown>
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 })
+  }
+
+  let payload: WebhookPayload
+  try {
+    payload = await req.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400 })
+  }
+
+  const { type, table, record } = payload
+
+  // Filtra: só INSERT/UPDATE em doses pendentes futuras
+  if (table !== 'doses') return new Response(JSON.stringify({ ok: true, skipped: 'not-doses' }))
+  if (type === 'DELETE') return new Response(JSON.stringify({ ok: true, skipped: 'delete' }))
+  if (record.status !== 'pending') return new Response(JSON.stringify({ ok: true, skipped: 'not-pending' }))
+
+  const scheduledAt = new Date(record.scheduledAt)
+  if (scheduledAt.getTime() < Date.now()) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'past-dose' }))
+  }
+
+  try {
+    // Busca push_subscriptions FCM do user
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('deviceToken')
+      .eq('userId', record.userId)
+      .not('deviceToken', 'is', null)
+
+    if (!subs?.length) {
+      return new Response(JSON.stringify({ ok: true, skipped: 'no-fcm-subs' }))
+    }
+
+    const data = {
+      action: 'schedule_alarms',
+      doses: JSON.stringify([{
+        doseId: record.id,
+        medName: record.medName,
+        unit: record.unit,
+        scheduledAt: record.scheduledAt
+      }])
+    }
+
+    const accessToken = await getFcmAccessToken()
+    let sent = 0, errors = 0
+
+    for (const sub of subs) {
+      const resp = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT}/messages:send`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: {
+              token: sub.deviceToken,
+              data,
+              android: { priority: 'HIGH' }
+            }
+          })
+        }
+      )
+
+      if (resp.ok) {
+        sent++
+      } else {
+        errors++
+        const err = await resp.text()
+        if (resp.status === 404 || err.includes('UNREGISTERED') || err.includes('INVALID_ARGUMENT')) {
+          await supabase.from('push_subscriptions').delete().eq('deviceToken', sub.deviceToken)
+        }
+      }
+    }
+
+    console.log(`[dose-trigger] dose=${record.id} type=${type} sent=${sent} errors=${errors}`)
+
+    return new Response(JSON.stringify({ ok: true, sent, errors }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  } catch (err) {
+    console.error('[dose-trigger] error:', err)
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+})
