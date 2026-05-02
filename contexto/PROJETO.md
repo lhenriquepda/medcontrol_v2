@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-01 — pós release v0.1.7.0 (versionCode 24)
+> **Última revisão:** 2026-05-01 — pós release v0.1.7.1 (versionCode 25)
 
 ---
 
@@ -11,7 +11,7 @@ App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicament
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-teal.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 24 / versionName 0.1.7.0 (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation + BUG-016 push idle)
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 25 / versionName 0.1.7.1 (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation; BUG-016 mitigado parcial via #079/#080/#081, fix completo via #083 v0.1.7.2)
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
 
 ---
@@ -330,7 +330,7 @@ public/
 android/
 ├── app/
 │   ├── google-services.json    # Firebase config (FCM)
-│   ├── build.gradle            # versionCode 24 / versionName 0.1.7.0
+│   ├── build.gradle            # versionCode 25 / versionName 0.1.7.1
 │   │                             # signingConfigs.release env-based
 │   └── src/main/
 │       ├── AndroidManifest.xml # Permissions + AlarmActionReceiver registrado
