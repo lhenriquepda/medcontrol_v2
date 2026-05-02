@@ -797,7 +797,7 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #083 — FCM-driven alarm scheduling + 4 caminhos coordenados (idempotente)
-- **Status:** ⏳ Aberto — release v0.1.7.2
+- **Status:** ✅ Concluído @ commits `23deca4` + `3465ab6` + `26c51ab` (2026-05-02) — release v0.1.7.2. Validado end-to-end: cadastro web → trigger DB → Edge FCM → device agendou alarme nativo → alarme físico tocou no Android no horário.
 - **Origem:** [Sessão v0.1.7.1] User pedido: "alarme funcionar mesmo sem abrir app, dose +1mês precisa tocar"
 - **Esforço:** ~6-8h (Edge + Android nativo + migration + testes)
 - **Dependências:** #079 #080 #081 já fechados; nenhuma externa
