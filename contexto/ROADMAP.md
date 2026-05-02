@@ -356,6 +356,8 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#085** [BUG-018, reportado user 2026-05-02 v0.1.7.2] **Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim.** User toggle OFF na tela Ajustes → cadastrou dose → alarme nativo fullscreen disparou normalmente, deveria ter recebido apenas notificação push tray. Toggle não respeitado em algum dos 4 caminhos (#083). Possíveis causas: setting não persistido em prefs ou DB; AlarmScheduler não consulta flag antes de agendar; DosyMessagingService.onMessageReceived ignora flag em FCM data path; Edge `notify-doses` skip-push logic não respeita flag user. Auditar todos 4 caminhos + criar source-of-truth single check. P1 healthcare-adjacent (trust violation + LGPD/privacy).
 - [ ] **#086** [BUG-019, reportado user 2026-05-02 v0.1.7.2] **Resumo Diário não funciona — nunca dispara na hora marcada.** Feature de resumo diário configurada em Ajustes (horário definido) nunca enviou notificação. Verificar: persistência de horário em prefs/DB, cron agendado (Edge ou pg_cron), trigger envia push, FCM token ativo, channel notif Android registrado. Se broken end-to-end, decidir: fix em v0.1.7.3 ou parquear feature até v0.1.8.0. P1 broken feature user-facing.
 - [ ] **#087** [BUG-020, reportado user 2026-05-02 v0.1.7.2] **Verificar Não Perturbe funcional + UX condicional.** Verificar se DND atual está respeitando horários configurados (alarme deveria silenciar entre X-Y). Refactor UX: Não Perturbe deve aparecer SOMENTE quando Alarme Crítico ON (toggle pai); quando ON, sub-toggle DND habilita janela horária para desabilitar Alarme Crítico nesse intervalo. Depende de #085 fix (toggle parent precisa funcionar antes UX condicional fazer sentido). P1 UX healthcare-adjacent.
+- [ ] **#088** [BUG-021, reportado user 2026-05-02 emulador Pixel 7 API 35] **Dose cadastrada não aparece em Início sem refresh manual.** Após cadastrar dose nova, voltar pra Início mostra lista antiga — user precisa pull-to-refresh OU sair/voltar de tab. Provável causa: TanStack Query `invalidateQueries(['doses'])` não chamado após mutation INSERT em doses (ou hook useDoses não escuta eventos realtime suficientes). Verificar `dosesService.js` mutate handlers + `useDoses` queryKey invalidation. NÃO repro em Samsung S25 Ultra device físico real — pode ser race condition de timing OU difference em latência realtime. P1 UX healthcare-adjacent (user pode achar dose não foi salva, recadastrar = duplicata).
+- [ ] **#089** [BUG-022, reportado user 2026-05-02 emulador Pixel 7] **Layout: AdSense banner sobrepondo header + header texto longo truncando em alguns viewports.** Visível em emulador Pixel 7 (1080×2400 @420dpi). NÃO repro em Samsung S25 Ultra device físico. Provável causa: posicionamento absoluto do banner Ad colidindo com header em viewport intermediário; texto header sem truncate/ellipsis. Verificar `index.html` (placement AdSense) + componentes header (`Layout.jsx` ou similar). Estabelecer test responsive cross-device padrão no release process. P2 UX visual.
 
 ---
 
@@ -454,9 +456,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 87 itens (+ #085/#086/#087 reportados user 2026-05-02 pós release v0.1.7.2)
-- **Em aberto:** 74 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2 [#083]; #084-#087 abertos pra release v0.1.7.3)
-- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 20 (+#085 alarme bypass, +#086 resumo diário, +#087 DND UX condicional) · **P2:** 22 · **P3:** 25
+- **Total:** 89 itens (+ #088/#089 reportados user 2026-05-02 emulador Pixel 7)
+- **Em aberto:** 76 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2 [#083]; #084-#087 em release v0.1.7.3; #088-#089 abertos pra v0.1.7.4 ou v0.1.8.0)
+- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 21 (+#085 +#086 +#087 +#088 dose-not-shown) · **P2:** 23 (+#089 layout AdSense) · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
