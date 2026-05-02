@@ -993,6 +993,16 @@ public void onMessageReceived(RemoteMessage msg) {
 - [ ] Comparar com baseline (sessão anterior idle period) — uso anômalo?
 - [ ] Reportar achados antes prosseguir rotação
 
+**FASE 1.5 — Audit secrets adicionais no histórico (autônomo agente):**
+> Defense-in-depth: garantir que rotação JWT é o ÚNICO leak. Outros tipos de
+> credenciais (PAT, service account JSON, Firebase keys, VAPID, etc) podem
+> ter vazado em commits diferentes sem detection ainda.
+- [ ] `git log --all --full-history -p -- supabase/migrations/ | grep -iE "jwt|service_role|sbp_|sk-|api[_-]key|password|secret"`
+- [ ] `git log --all --full-history -p -- .env* supabase/functions/ | grep -iE "key|secret|token"`
+- [ ] Buscar em refs órfãos: `git fsck --lost-found` + inspect
+- [ ] Verificar tags com conteúdo sensível: `pre-secret-purge-backup` (já confirmada limpa em audit 2026-05-02 11:50 UTC)
+- [ ] Listar resultado consolidado em `contexto/updates/{data}-release-v0.1.7.3.md` antes prosseguir
+
 **FASE 2 — Reconectar Vercel↔GitHub (guided via Claude in Chrome):**
 - [ ] Agente navega `https://vercel.com/lhenriquepdas-projects/dosy/settings/git`
 - [ ] Agente clica botão "GitHub" pra iniciar reconexão
@@ -1048,6 +1058,23 @@ public void onMessageReceived(RemoteMessage msg) {
 - [ ] Decrementar P0: 7 → 6
 - [ ] Deletar `release/v0.1.7.3` local + remote
 - [ ] (Opcional) Deletar tag `pre-secret-purge-backup` se audit confirmou zero uso anômalo
+
+**FASE 8.5 — Resolution alerts security dashboards (guided via Claude in Chrome):**
+> Após rotação confirmada, marcar alertas como "resolved/revoked" pra fechar
+> ticket. Chave vazada continua existindo em commit cache GitHub + indexers
+> externos, mas perde valor (rotation = chave inválida server-side).
+- [ ] **GitHub Security:** navega `https://github.com/lhenriquepda/medcontrol_v2/security/secret-scanning`
+  - Localiza alerta "Supabase Service Key" (commit 85d5e614)
+  - Click "Close as" → "Revoked" (chave já rotacionada)
+  - Add comment: "Rotated v0.1.7.3 hotfix on YYYY-MM-DD"
+- [ ] **GitGuardian:** navega `https://dashboard.gitguardian.com` (login via GitHub OAuth)
+  - Localiza alerta `Supabase Service Role JWT` no repo medcontrol_v2
+  - Marcar "Resolved" → motivo "Secret revoked"
+- [ ] (Opcional) **GitHub Support:** abrir ticket pra purgar commit cache órfão `85d5e614`
+  - Endpoint: `https://support.github.com/contact/private-information`
+  - Justificar: secret credential exposed, request commit deletion from cache
+  - Não-bloqueante (rotation já mitiga risco efetivo)
+- [ ] Verificar 24h depois: alertas permanecem fechados, novos não disparam
 
 #### Aceitação
 
