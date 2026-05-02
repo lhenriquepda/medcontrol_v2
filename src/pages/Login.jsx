@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { TIMING, EASE } from '../animations'
@@ -15,6 +16,8 @@ function validatePassword(pwd) {
 export default function Login() {
   const { signInEmail, signUpEmail, resetPassword, signInDemo, hasSupabase } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [mode, setMode] = useState('signin')   // 'signin' | 'signup' | 'forgot'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -41,6 +44,18 @@ export default function Login() {
         await resetPassword(email)
         toast.show({ message: 'Email enviado. Verifique sua caixa de entrada (e spam).', kind: 'success' })
         setMode('signin')
+      }
+      // Item #090 (release v0.1.7.4) — BUG-023: pós-login não redirecionava
+      // pra Início se URL atual era rota authenticated-only (ex: /ajustes
+      // herdada da session anterior pré-logout). React Router preservava
+      // pathname após user mudar null→logged, fazendo Settings renderizar
+      // direto. Fix: navigate('/') explícito após signin/signup success
+      // se path atual não é raiz nem reset-password (preserva deep links
+      // legítimos como /reset-password com token).
+      if (mode === 'signin' || mode === 'signup') {
+        if (location.pathname !== '/' && location.pathname !== '/reset-password') {
+          navigate('/', { replace: true })
+        }
       }
     } catch (err) {
       toast.show({ message: err.message || 'Falha na operação', kind: 'error' })
