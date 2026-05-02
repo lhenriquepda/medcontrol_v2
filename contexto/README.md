@@ -991,24 +991,25 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `0.1.6.10` · tag `v0.1.6.10` · branch `master`
+**Versão atual:** `0.1.7.2` · tag `v0.1.7.2` · branch `master`
 **Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store Internal Testing:** AAB v0.1.6.10 (versionCode 23) — release web/server-only; Android behavior idêntico ao v0.1.6.9.
+**Play Store Internal Testing:** AAB v0.1.7.2 (versionCode 26) — fecha BUG-016 100% via #083 FCM-driven scheduling; alarme funciona end-to-end mesmo sem abrir app.
 
-**Última release:** v0.1.6.10 em 2026-05-01 — fechou #001, #002, #005 (P0 segurança + encoding) + processo (Regra 8 comunicação, modelo "1 sessão = 1 release branch").
+**Última release:** v0.1.7.2 em 2026-05-02 — fechou #083 (FCM-driven alarm scheduling + 4 caminhos coordenados). Validação device end-to-end concluída (cadastro web → alarme físico tocou no Android).
 
-**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões.
+**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 healthcare-critical agora resolvido.
 
-**Bloqueadores P0 ativos:** 6 itens. Todos manuais user (não tem código pra agente fazer):
-- #003 rotação senha postgres + revogar PAT (~30min)
-- #004 vídeo demo FGS Play Console (~2-3h)
-- #006 device validation 3 devices físicos (1-2 dias)
+**Bloqueadores P0 ativos:** 7 itens.
+- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — próxima sessão / hotfix v0.1.7.3
+- #003 rotação senha postgres + revogar PAT (~30min, manual user)
+- #004 vídeo demo FGS Play Console (~2-3h, manual user)
+- #006 device validation 3 devices físicos (1-2 dias, manual user)
 - #007 PostHog telemetria (depende #018 manual)
-- #008 Sentry GitHub Secrets (~15min)
+- #008 Sentry GitHub Secrets (~15min, manual user)
 - #009 PITR + DR drill (depende upgrade Pro plan)
 
-**Próximo passo concreto:** ver `ROADMAP.md §4`. Próxima sessão de código = atacar P1 batch (RLS migrations #012/#013/#014, label A11y #011, ic_stat_dosy #010, useDoses refactor #023) → release `v0.1.7.0` minor.
+**Próximo passo concreto:** ver `ROADMAP.md §4`. Atacar **#084 hotfix JWT rotation** primeiro (security incident). Depois P1 batch (RLS migrations #012/#013/#014, label A11y #011, ic_stat_dosy #010, useDoses refactor #023) → release `v0.1.8.0` minor.
 
 ---
 

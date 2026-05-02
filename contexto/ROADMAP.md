@@ -58,8 +58,17 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.7.0 publicada 2026-05-01 (Vercel + Play Store Internal Testing AAB versionCode 24).
-**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 healthcare-critical).
+**Última release:** v0.1.7.2 publicada 2026-05-02 (Vercel + Play Store Internal Testing AAB versionCode 26 + tag git `v0.1.7.2`).
+**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 healthcare-critical — fechado 100% nesta release).
+
+**Items fechados na release v0.1.7.2 (BUG-016 fix definitivo):**
+- ✅ #083 FCM-driven alarm scheduling + 4 caminhos coordenados (Trigger DB <2s + Cron 6h + rescheduleAll + WorkManager 6h). Validado end-to-end: cadastro web → alarme físico tocou no Android. (commits `23deca4` + `3465ab6` + `26c51ab` migration pg_net + `07b77ba` firebase-messaging dep)
+
+**Items fechados na release v0.1.7.1 (defense-in-depth notif idle):**
+- ✅ #079 Realtime heartbeat keep-alive (caminho 1)
+- ✅ #080 notify-doses reliability + retry exp + cleanup tokens + idempotência (caminho 2)
+- ✅ #081 WorkManager DoseSyncWorker periódico 6h (caminho 3)
+- ✅ #082 Dual-app dev/prod (`com.dosyapp.dosy.dev` Dosy Dev coexiste com Dosy oficial)
 
 **Items fechados na release v0.1.7.0 (perf + UX):**
 - ✅ #023 useDoses background-aware
@@ -73,11 +82,8 @@
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
-**Próxima release v0.1.7.1 (P0 healthcare-critical):**
-- BUG-016: alarme + push não disparam após idle longo. User: "idoso não fecha app nenhum". Solução defense-in-depth 3 caminhos:
-  - #079 realtime heartbeat (caminho 1)
-  - #080 notify-doses reliability (caminho 2)
-  - #081 alarmes nativos horizonte 24-72h (caminho 3)
+**Carry-over P0 pra próxima release (v0.1.7.3 ou hotfix):**
+- #084 INCIDENTE 2026-05-02 — service_role JWT vazado em commit, GitGuardian/GitHub Security detectaram. Histórico reescrito + force push, mas chave permanece em cache externos. Rotacionar JWT secret Supabase + atualizar VITE_SUPABASE_ANON_KEY Vercel + .env.local + auditar logs Auth/REST janela 22:23-22:29 UTC.
 
 **Process improvements na release:**
 - Reorganização `contexto/` (auditoria → snapshot imutável em `auditoria/`, archive de docs históricos em `archive/`)
@@ -103,6 +109,9 @@
 
 ## 4. Próximo passo imediato
 
+**P0 urgente (próxima sessão — security incident):**
+- **#084** Rotacionar service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC). Atualizar `VITE_SUPABASE_ANON_KEY` Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela do leak. Pode ser hotfix `v0.1.7.3` ou bundle com próximo release P1.
+
 **P0 restantes (todos manuais user):**
 
 | # | Tarefa | Esforço | Tipo |
@@ -114,7 +123,7 @@
 | #007 | Telemetria PostHog `notification_delivered` | 1-2h | depende #018 manual user |
 | #009 | PITR + DR drill | 30min config + 2h drill | depende upgrade Pro plan |
 
-**Próxima sessão de código (sugerida):** atacar P1 batch — RLS policies refinement (#012 + #013), recriar RPC `extend_continuous_treatments` (#014), `<label>` Login (#011), `ic_stat_dosy` icon (#010), `useDoses` refactor (#023), `minimum_password_length` 6→8 (#019). Release `v0.1.7.0` minor.
+**Próxima sessão de código (sugerida pós-#084):** atacar P1 batch — RLS policies refinement (#012 + #013), recriar RPC `extend_continuous_treatments` (#014), `<label>` Login (#011), `ic_stat_dosy` icon (#010), `useDoses` refactor (#023), `minimum_password_length` 6→8 (#019). Release `v0.1.8.0` minor.
 
 ---
 
