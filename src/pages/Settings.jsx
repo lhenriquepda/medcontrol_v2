@@ -348,15 +348,15 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Não perturbe (janela silenciosa — sem alarme tocando) */}
-          {pushActive && (
+          {/* Não perturbe — janela silenciosa (Item #087: aparece só se Alarme Crítico ON) */}
+          {pushActive && notif.criticalAlarm !== false && (
             <>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1">
                   <p className="text-sm font-medium inline-flex items-center gap-1.5"><Icon name="bell-off" size={14} /> Não perturbe</p>
                   <p className="text-xs text-slate-500 leading-tight mt-0.5">
-                    Durante esse período, doses só geram notificação push (sem alarme tocando).
-                    Útil pra noite/madrugada.
+                    Define janela em que o alarme crítico não toca. Doses no horário recebem só
+                    notificação push (sem despertador). Útil pra noite/madrugada.
                   </p>
                 </div>
                 <button

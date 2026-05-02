@@ -19,7 +19,7 @@
 // já tem row pro device (evita FCM redundante quando rescheduleAll já cobriu).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { getUserNotifPrefs } from '../_shared/userPrefs.ts'
+import { getUserNotifPrefs, inDndWindow } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -165,8 +165,14 @@ Deno.serve(async (req) => {
 
       if (!doses?.length) continue
 
+      // Item #087 (release v0.1.7.3) — filtra doses que caem em janela DND.
+      // Alarme nativo NÃO deve disparar dentro da janela; notify-doses cron
+      // mandará push tray como cobertura silenciosa.
+      const dosesOutsideDnd = doses.filter(d => !inDndWindow(new Date(d.scheduledAt), prefs))
+      if (!dosesOutsideDnd.length) continue
+
       // 3. Payload data — JSON stringify pra fits no FCM data limit (~4KB)
-      const dosesPayload = doses.map(d => ({
+      const dosesPayload = dosesOutsideDnd.map(d => ({
         doseId: d.id,
         medName: d.medName,
         unit: d.unit,

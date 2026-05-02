@@ -12,7 +12,7 @@
 //   { type: "INSERT" | "UPDATE", table: "doses", record: {...}, old_record: {...} }
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { getUserNotifPrefs } from '../_shared/userPrefs.ts'
+import { getUserNotifPrefs, inDndWindow } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -112,6 +112,15 @@ Deno.serve(async (req) => {
     const prefs = await getUserNotifPrefs(supabase, record.userId)
     if (!prefs.criticalAlarm) {
       return new Response(JSON.stringify({ ok: true, skipped: 'critical-alarm-off' }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Item #087 (release v0.1.7.3) — respeita janela DND do user. Se dose cai
+    // em DND, skip FCM data — alarme nativo NÃO deve disparar nesse intervalo.
+    // notify-doses cron mandará push tray como cobertura silenciosa.
+    if (inDndWindow(scheduledAt, prefs)) {
+      return new Response(JSON.stringify({ ok: true, skipped: 'dnd-window' }), {
         headers: { 'Content-Type': 'application/json' }
       })
     }
