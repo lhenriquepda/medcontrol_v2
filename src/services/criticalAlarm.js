@@ -136,3 +136,14 @@ export async function clearSyncCredentials() {
   if (!isCriticalAlarmAvailable()) return null
   return CriticalAlarm.clearSyncCredentials()
 }
+
+/**
+ * Item #083.6 — device_id estável (UUID v4 gerado pelo plugin uma vez,
+ * persistido). Usado por rescheduleAll() pra reportar dose_alarms_scheduled
+ * cross-device, e por notify-doses cron pra skip push redundante.
+ */
+export async function getDeviceId() {
+  if (!isCriticalAlarmAvailable()) return null
+  const r = await CriticalAlarm.getDeviceId()
+  return r?.deviceId || null
+}

@@ -40,7 +40,8 @@ import {
   scheduleCriticalAlarmGroup,
   cancelAllCriticalAlarms,
   isCriticalAlarmAvailable,
-  checkCriticalAlarmEnabled
+  checkCriticalAlarmEnabled,
+  getDeviceId
 } from './criticalAlarm'
 import { track, EVENTS } from './analytics'
 
@@ -256,6 +257,27 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
             }))
           })
           alarmsScheduled += group.length
+
+          // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
+          // permitindo notify-doses cron skip push tray (alarme nativo cobre).
+          // Best-effort: falha aqui não rollback alarme.
+          try {
+            const deviceId = await getDeviceId()
+            if (deviceId && hasSupabase) {
+              const rows = group.map(d => ({
+                doseId: d.id,
+                userId: d.userId,
+                deviceId,
+                via: 'app-foreground'
+              }))
+              const { error } = await supabase
+                .from('dose_alarms_scheduled')
+                .upsert(rows, { onConflict: 'doseId,deviceId', ignoreDuplicates: true })
+              if (error) console.warn('[Notif] dose_alarms_scheduled upsert:', error.message)
+            }
+          } catch (e) {
+            console.warn('[Notif] report alarm scheduled fail:', e?.message)
+          }
         } catch (e) {
           console.error('[Notif] alarm schedule fail at', key, ':', e?.message || e)
         }
