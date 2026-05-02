@@ -757,7 +757,15 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #081 — Defense-in-depth Android: alarmes nativos horizonte 24-72h — caminho 3 de 3
-- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1 (Gate 3 device validation em andamento)
+- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1. **Gate validação device 24h idle pendente** — bundle release v0.1.7.3.
+- **Validação 24h idle pendente (gate final):**
+  - User mantém Dosy Dev INSTALADO mas FECHADO por 1 dia inteiro (24h sem abrir)
+  - Pré-test: user cadastra dose +24-30h via web (Vercel prod) ANTES fechar app
+  - Esperado: alarme físico dispara no horário sem nunca user ter aberto Dosy Dev nesse intervalo
+  - Confirma caminhos #083 funcionam end-to-end com app realmente idle longo (não só ~minutos)
+  - Caminhos validados: 1 (trigger DB <2s), 2 (cron 6h FCM data), 4 (WorkManager 6h). Caminho 3 (rescheduleAll quando app abre) é sobre re-agendar AO ABRIR — não testado neste cenário (app fica fechado).
+  - Resultado positivo → marcar #081 nota "Gate 3 em andamento" como ✅ definitivo + log em updates/
+  - Resultado negativo → reabrir investigação (qual caminho falhou? logs Sentry/PostHog/Edge?)
 - **Origem:** [auditoria-live-2026-05-01] BUG-016 — defense-in-depth healthcare healthcare-critical
 - **Esforço:** 6-8h (impl plugin + WorkManager + teste device físico)
 - **Dependências:** nenhuma
@@ -952,6 +960,305 @@ public void onMessageReceived(RemoteMessage msg) {
   - Play Console não exibe mais aviso "App Bundle contém código nativo, e você não fez upload dos símbolos de depuração"
   - Crashes nativos no Console mostram stack traces simbolicados em vez de offsets brutos
 - **Detalhe:** Aviso aparece em todo upload AAB enquanto não habilitado. Sem impacto no usuário final; só dev observability. Tamanho AAB sobe ~5-10 MB com FULL.
+
+---
+
+### #084 — Hotfix v0.1.7.3: rotação service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub
+- **Status:** ⏳ Aberto — sessão dedicada próxima
+- **Origem:** INCIDENTE 2026-05-02 22:23 UTC. Migration `20260502091000_dose_trigger_webhook.sql` (commit original `85d5e61`) foi commitada com service_role JWT inline. GitGuardian + GitHub Security flagged em ~6min. Histórico do branch reescrito via `git-filter-repo` + force push (commit `6310c1e`). Tag `pre-secret-purge-backup` empurrada origin como referência.
+- **Severidade:** P0 security — service_role bypassa RLS = exposição teórica de TODOS dados saúde de TODOS users (LGPD categoria especial). Chave permanece em GitHub commit cache + indexers externos (Google cache, Wayback, etc) por tempo indeterminado.
+- **Esforço:** ~30-60min (sessão dedicada)
+- **Dependências:** nenhuma (independente)
+
+#### Janela de exposição
+
+- **Leak:** 2026-05-02 ~22:23 UTC (push original `85d5e61`)
+- **Purge:** 2026-05-02 ~22:29 UTC (force push `6310c1e`)
+- **Window in-repo:** ~6min
+- **Window cache externo:** indeterminado (continua exposta)
+
+#### Plan de execução — divisão autônomo / user
+
+> **Filosofia:** agente faz tudo que não é destrutivo-irrecuperável ou prohibited safety-rule. User só clica botão final irreversível ou autoriza OAuth.
+
+**FASE 0 — Pre-checks (autônomo agente):**
+- [ ] Confirmar branch: criar `release/v0.1.7.3` a partir de master atualizada
+- [ ] Verificar `.env.local` tem `VITE_SUPABASE_ANON_KEY` legível pra registrar valor velho (pra audit)
+- [ ] `git fetch origin && git status` clean
+- [ ] Verificar Vercel CLI auth (`vercel whoami` deve retornar `lhenriquepda`)
+
+**FASE 1 — Auditar logs janela leak (autônomo agente, via PAT):**
+- [ ] Query Supabase logs Auth + REST janela 22:23-22:29 UTC
+- [ ] Query `auth.audit_log_entries` mesma janela
+- [ ] Comparar com baseline (sessão anterior idle period) — uso anômalo?
+- [ ] Reportar achados antes prosseguir rotação
+
+**FASE 1.5 — Audit secrets adicionais no histórico (autônomo agente):**
+> Defense-in-depth: garantir que rotação JWT é o ÚNICO leak. Outros tipos de
+> credenciais (PAT, service account JSON, Firebase keys, VAPID, etc) podem
+> ter vazado em commits diferentes sem detection ainda.
+- [ ] `git log --all --full-history -p -- supabase/migrations/ | grep -iE "jwt|service_role|sbp_|sk-|api[_-]key|password|secret"`
+- [ ] `git log --all --full-history -p -- .env* supabase/functions/ | grep -iE "key|secret|token"`
+- [ ] Buscar em refs órfãos: `git fsck --lost-found` + inspect
+- [ ] Verificar tags com conteúdo sensível: `pre-secret-purge-backup` (já confirmada limpa em audit 2026-05-02 11:50 UTC)
+- [ ] Listar resultado consolidado em `contexto/updates/{data}-release-v0.1.7.3.md` antes prosseguir
+
+**FASE 2 — Reconectar Vercel↔GitHub (guided via Claude in Chrome):**
+- [ ] Agente navega `https://vercel.com/lhenriquepdas-projects/dosy/settings/git`
+- [ ] Agente clica botão "GitHub" pra iniciar reconexão
+- [ ] **USER ACTION:** autoriza OAuth Vercel↔GitHub (pelas regras safety, OAuth login = só user)
+- [ ] **USER ACTION:** seleciona repo `lhenriquepda/medcontrol_v2`
+- [ ] Agente confirma webhook ativo via deployments page
+- [ ] Agente push commit vazio teste pra confirmar auto-deploy dispara
+
+**FASE 3 — Rotação JWT secret (guided via Claude in Chrome):**
+- [ ] Agente navega Supabase Dashboard → projeto dosy-app → Settings → API
+- [ ] Agente localiza botão "Generate a new JWT secret" / "Roll JWT Secret"
+- [ ] Agente expande/lê confirmação dialog (preview destruction message)
+- [ ] **USER ACTION:** clica botão Roll (irreversível) + confirma dialog
+- [ ] Agente copia novos valores: `SUPABASE_ANON_KEY` + `SUPABASE_SERVICE_ROLE_KEY` (NUNCA log no chat — só persist em arquivos protegidos)
+
+**FASE 4 — Atualizar env vars (autônomo agente):**
+- [ ] Vercel CLI: `vercel env rm VITE_SUPABASE_ANON_KEY production` (3 envs: prod/preview/dev)
+- [ ] Vercel CLI: `vercel env add VITE_SUPABASE_ANON_KEY production` (cole valor novo)
+- [ ] Repetir pra preview + development
+- [ ] Atualizar `.env.local` (não-commitado, gitignored) — anon key novo
+- [ ] **USER ACTION:** confirmar não há outras máquinas dev pendentes
+- [ ] Atualizar `SUPABASE_SERVICE_ROLE_KEY` em Edge Functions secrets:
+  - Via Supabase Dashboard → Edge Functions → Secrets, OR
+  - Via Supabase CLI: `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=... --project-ref guefraaqbkcehofchnrc`
+
+**FASE 5 — Redeploy infra (autônomo agente):**
+- [ ] Vercel CLI: `vercel --prod --force` (rebuild com env nova)
+- [ ] Edge Functions redeploy (todas que usam service_role): `supabase functions deploy --project-ref guefraaqbkcehofchnrc` lista relevant
+- [ ] Confirmar Vercel prod respondendo 200 em `https://dosy-teal.vercel.app/ajustes`
+
+**FASE 6 — Rebuild Android (parcialmente guided):**
+- [ ] Agente atualiza `android/app/src/main/assets/capacitor.config.json` se necessário (verificar se anon key não está baked)
+- [ ] Agente verifica `src/services/supabase.js` lê `import.meta.env.VITE_SUPABASE_ANON_KEY` (não hardcoded)
+- [ ] Bump versão patch: 0.1.7.2 → 0.1.7.3 (package.json + gradle versionCode 27)
+- [ ] **USER ACTION:** Android Studio Build → Generate Signed Bundle (release variant)
+- [ ] **USER ACTION:** confirma AAB pronto em `android/app/release/app-release.aab`
+- [ ] Agente upload AAB Play Console via Claude in Chrome (mesmo fluxo de v0.1.7.2)
+- [ ] **USER ACTION:** confirma "Salvar e publicar" no Console
+
+**FASE 7 — Verificação pós-rotação (autônomo agente):**
+- [ ] Test: query Supabase com chave VELHA → deve retornar 401/403
+- [ ] Test: query Supabase com chave NOVA → deve retornar 200
+- [ ] Test: login Vercel prod (`https://dosy-teal.vercel.app`) com `teste03@teste.com / 123456` → fluxo completo
+- [ ] Test: device físico Dosy Dev (instalado v0.1.7.2-dev) — login + cadastrar dose teste → alarme dispara?
+  - **Nota:** Dosy Dev tem chave VELHA baked → vai falhar até reinstall. Esperado. Reinstall via Studio Run após FASE 6.
+- [ ] Auditar logs Supabase 1h pós-rotação — qualquer 401 inesperado de cliente legítimo?
+
+**FASE 8 — Cleanup + release v0.1.7.3 (autônomo agente):**
+- [ ] Merge `release/v0.1.7.3` → master (--no-ff) + tag `v0.1.7.3` + push
+- [ ] Atualizar `contexto/`: ROADMAP §3+§12, PROJETO.md versão, README.md "Estado atual"
+- [ ] Criar `contexto/updates/2026-05-XX-release-v0.1.7.3.md` com log completo + audit findings
+- [ ] Marcar #084 ✅ Concluído em CHECKLIST + ROADMAP
+- [ ] Decrementar P0: 7 → 6
+- [ ] Deletar `release/v0.1.7.3` local + remote
+- [ ] (Opcional) Deletar tag `pre-secret-purge-backup` se audit confirmou zero uso anômalo
+
+**FASE 8.5 — Resolution alerts security dashboards (guided via Claude in Chrome):**
+> Após rotação confirmada, marcar alertas como "resolved/revoked" pra fechar
+> ticket. Chave vazada continua existindo em commit cache GitHub + indexers
+> externos, mas perde valor (rotation = chave inválida server-side).
+- [ ] **GitHub Security:** navega `https://github.com/lhenriquepda/medcontrol_v2/security/secret-scanning`
+  - Localiza alerta "Supabase Service Key" (commit 85d5e614)
+  - Click "Close as" → "Revoked" (chave já rotacionada)
+  - Add comment: "Rotated v0.1.7.3 hotfix on YYYY-MM-DD"
+- [ ] **GitGuardian:** navega `https://dashboard.gitguardian.com` (login via GitHub OAuth)
+  - Localiza alerta `Supabase Service Role JWT` no repo medcontrol_v2
+  - Marcar "Resolved" → motivo "Secret revoked"
+- [ ] (Opcional) **GitHub Support:** abrir ticket pra purgar commit cache órfão `85d5e614`
+  - Endpoint: `https://support.github.com/contact/private-information`
+  - Justificar: secret credential exposed, request commit deletion from cache
+  - Não-bloqueante (rotation já mitiga risco efetivo)
+- [ ] Verificar 24h depois: alertas permanecem fechados, novos não disparam
+
+#### Aceitação
+
+- Chave velha retorna 401/403 em qualquer endpoint
+- Chave nova funciona em Vercel prod + Edge Functions + APK Dosy Dev (após reinstall)
+- Logs Supabase janela leak auditados — relatório de uso anômalo (0 ou N) em `updates/`
+- Vercel↔GitHub reconectado: push pra master dispara auto-deploy
+- AAB v0.1.7.3 publicado Play Store Internal Testing
+- 3 ambientes sincronizados (master + Vercel prod + Play Store) versionados v0.1.7.3
+- `pre-secret-purge-backup` tag mantida ou deletada conforme audit
+
+#### Risk register
+
+| Risco | Mitigação |
+|---|---|
+| Dosy oficial Play Store users com chave velha → 401 até auto-update | Auto-update Android é rápido pra Internal Testing (<24h). User comunica testers se notar. |
+| Edge Function downtime entre roll e redeploy | Redeploy imediato após rotação. Idle ~2min. |
+| Vercel env update falha → prod fica com chave inválida | Dry-run env update + verify ANTES rebuild. Rollback: revert env via dashboard. |
+| User cliente caches anon key velha em IndexedDB | Service worker bump cache version força refresh. |
+| OAuth Vercel↔GitHub falha | Fallback: continuar `vercel --prod` CLI até sessão futura. |
+
+- **Detalhe completo:** ver `contexto/updates/2026-05-02-release-v0.1.7.2.md` (incident report).
+
+---
+
+### #085 — BUG-018: Alarme Crítico OFF em Ajustes mas alarme tocou
+- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Origem:** Reportado user 2026-05-02 pós install v0.1.7.2. User toggle OFF em Ajustes → cadastrou dose teste → alarme nativo fullscreen disparou (não deveria — esperado: apenas notificação push tray).
+- **Severidade:** P1 healthcare-adjacent (trust violation user setting + LGPD/privacy implications quanto user opta por menos intrusão)
+- **Esforço:** ~3-5h (auditar 4 caminhos + criar source-of-truth + testes)
+- **Dependências:** nenhuma (independente, mas #087 DND UX depende disso)
+
+#### Diagnóstico provável
+
+Toggle "Alarme Crítico" não está sendo respeitado em algum dos 4 caminhos coordenados de #083. Suspeitos:
+
+| Caminho | Onde verificar | Risco |
+|---|---|---|
+| 1. Trigger DB (Edge `dose-trigger-handler`) | Edge consulta user prefs antes mandar FCM data com `scheduleAlarm:true`? | Alto — Edge talvez ignora flag |
+| 2. Cron 6h (Edge `schedule-alarms-fcm`) | Mesma checagem? | Alto |
+| 3. App `rescheduleAll()` | `criticalAlarm.js` consulta useUserPrefs antes scheduling? | Médio |
+| 4. WorkManager DoseSyncWorker | Worker consulta SharedPreferences flag antes setAlarmClock? | Alto (é background, sem React state) |
+
+#### Investigação inicial
+
+- [ ] Reproduzir: toggle OFF Ajustes → cadastrar dose +1min → confirmar alarme fullscreen disparou
+- [ ] Inspecionar `useUserPrefs.js` — qual key salva o toggle? Persiste em DB ou só local?
+- [ ] Inspecionar Edge `dose-trigger-handler/index.ts` — query user prefs antes responder?
+- [ ] Inspecionar Edge `schedule-alarms-fcm/index.ts` — mesmo
+- [ ] Inspecionar `src/services/criticalAlarm.js` — `scheduleAlarm()` consulta prefs?
+- [ ] Inspecionar `DoseSyncWorker.java` (Android) — lê SharedPreferences `criticalAlarmEnabled`?
+- [ ] Inspecionar `DosyMessagingService.onMessageReceived` — lê flag antes de chamar `AlarmScheduler.schedule()`?
+
+#### Solução
+
+Single source of truth: flag persistida em `medcontrol.user_prefs.critical_alarm_enabled` (DB) + cached SharedPreferences Android.
+
+- Cliente UI: ao toggle, atualiza ambos (DB + local cache via SharedPreferences plugin)
+- Edge functions: leem `user_prefs.critical_alarm_enabled` antes mandar FCM data com `scheduleAlarm:true`. Se OFF, mandam só `pushNotification:true` (tray fallback).
+- AlarmScheduler.schedule() (Android nativo): consulta SharedPreferences cache antes setAlarmClock. Se OFF, no-op (push tray cobre).
+- `criticalAlarm.js` (web/Capacitor): mesma checagem antes de chamar plugin.
+
+#### Aceitação
+
+- [ ] Toggle OFF Ajustes → cadastrar dose → push tray dispara, **alarme fullscreen NÃO** dispara em nenhum dos 4 caminhos
+- [ ] Toggle ON novamente → alarme fullscreen dispara normalmente
+- [ ] Dose já agendada (com toggle ON) + user toggle OFF depois → próxima dose: respeita OFF (cancelar alarme nativo agendado se necessário)
+- [ ] Test cobre todos 4 caminhos: trigger DB, cron 6h, rescheduleAll, WorkManager
+- [ ] Logs Sentry/PostHog telemetria: zero `critical_alarm_fired_when_disabled`
+
+---
+
+### #086 — BUG-019: Resumo Diário não funciona — nunca dispara
+- **Status:** ⏸️ Bloqueado — parqueado pra v0.1.8.0 (caminho B). UI ocultada em v0.1.7.3 (commit pending).
+- **Origem:** Reportado user 2026-05-02. Feature configurada em Ajustes (horário definido) mas user nunca recebeu notificação no horário marcado.
+- **Severidade:** P1 broken feature user-facing
+- **Esforço:** ~2-4h (depende de fix vs parquear)
+- **Dependências:** nenhuma
+
+#### Diagnóstico provável
+
+Feature pode ter quebrado em qualquer ponto end-to-end:
+
+1. Persistência horário em prefs/DB — config salva?
+2. Mecanismo agendamento — pg_cron job? Edge cron? AlarmManager local? WorkManager?
+3. Trigger lógica — chega na hora, calcula payload, manda push
+4. FCM token ativo + channel notif Android registrado
+5. UI Ajustes — horário exibido bate com persistido?
+
+#### Investigação inicial
+
+- [ ] Localizar onde feature está implementada (UI Ajustes, service, Edge, cron)
+- [ ] Inspecionar `pages/Settings.jsx` — campo horário salva em qual key?
+- [ ] Inspecionar `useUserPrefs` — `daily_summary_time` ou similar persiste em DB?
+- [ ] Buscar Edge function relevante (`daily-summary`?, `notify-doses`?)
+- [ ] Verificar pg_cron jobs ativos: `SELECT * FROM cron.job` no Supabase
+- [ ] Sentry/logs: erro nas execuções? Job nem roda?
+- [ ] FCM token user — registrado? Chegando push de teste em outras features?
+
+#### Decisão branch points
+
+- **Caminho A — Feature broken end-to-end mas baixa complexidade:** fix em v0.1.7.3
+- **Caminho B — Feature precisa retrabalho significativo:** parquear pra v0.1.8.0 + esconder UI até pronto + comunicar user ✅ ESCOLHIDO
+- **Caminho C — Feature funciona, mas user-side issue (FCM token expirado, channel mutado):** dx fix + telemetria preventiva
+
+#### Decisão tomada (2026-05-02): Caminho B
+
+Investigação concluída em src/services/notifications.js:312-338. Resumo diário
+implementado client-side via Capacitor LocalNotifications. Schedule
+{ every: 'day' } depende de:
+- App abrir pelo menos 1x pra rescheduleAll() agendar
+- Sobreviver Doze mode Android
+
+Sem cron server-side equivalente (não há Edge `daily-summary-cron`). User idle
+nunca recebe.
+
+Para fix completo precisaria:
+- Migration nova: tabela `daily_summary_log` (PK userId+date) pra idempotência
+- Edge function `daily-summary-cron`
+- Schedule pg_cron 1x/hora chamando Edge
+- Timezone handling per-user (default America/Sao_Paulo, mas pode haver users
+  fora — tabela user_prefs sem coluna timezone atualmente)
+- Push tray formatting + payload
+
+Esforço: ~3-5h. Escopo grande pra hotfix v0.1.7.3 (focado #084 security +
+#085/#087 toggle bypass).
+
+**Ação v0.1.7.3:** ocultar UI Resumo Diário em Settings.jsx pra user não
+esperar feature broken. Toggle + horário continuam persistidos em DB se
+setados antes; apenas não-renderizados.
+
+**Próxima sessão v0.1.8.0:** quebrar #086 em sub-itens (#086.1 migration,
+#086.2 Edge, #086.3 cron schedule, #086.4 timezone field, #086.5 reativar
+UI) e implementar.
+
+#### Aceitação
+
+- [ ] User configura resumo diário às HH:MM em Ajustes
+- [ ] No horário marcado (±1min), notificação push tray chega
+- [ ] Conteúdo resumo bate com adesão últimas 24h: doses programadas, tomadas, perdidas, próximas
+- [ ] Se feature parqueada (caminho B): UI esconde toggle + nota "em breve" + ROADMAP item v0.1.8.0 criado
+
+---
+
+### #087 — BUG-020: DND verificar funcional + UX condicional ao Alarme Crítico
+- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Origem:** Reportado user 2026-05-02. Solicitação dupla: (1) verificar se Não Perturbe atual respeita janela horária configurada; (2) refactor UX condicional.
+- **Severidade:** P1 UX healthcare-adjacent
+- **Esforço:** ~3-4h (verificação + UX refactor)
+- **Dependências:** **#085 deve fechar primeiro** — toggle parent precisa funcionar pra UX condicional fazer sentido.
+
+#### Verificação funcional (parte 1)
+
+- [ ] Inspecionar implementação atual DND em `pages/Settings.jsx` + `services/notifications.js` + `criticalAlarm.js`
+- [ ] DND tem campos: hora início + hora fim + flag enabled?
+- [ ] Quando alarme deveria disparar dentro da janela DND, qual comportamento atual? (silencia, vibra só, bypassa, nada)
+- [ ] Reproduzir: configurar DND 22:00-08:00 → criar dose 02:00 → testar comportamento
+- [ ] Documentar comportamento atual antes de refactorar
+
+#### Refactor UX condicional (parte 2)
+
+Comportamento desejado por user:
+- Toggle pai: **Alarme Crítico** (Ajustes raiz)
+  - **OFF:** apenas push notification tray (sem alarme fullscreen). DND option **NÃO aparece** na UI.
+  - **ON:** alarme fullscreen ativo. **DND option aparece** abaixo:
+    - DND toggle: enabled / disabled
+    - Se enabled: campos horário início + fim
+    - Comportamento: dentro da janela DND, **Alarme Crítico desativa** (push tray cobre como fallback). Fora da janela: Alarme Crítico normal.
+
+#### Componentes afetados
+
+- `pages/Settings.jsx` — render condicional DND section
+- `useUserPrefs.js` — hook com novos fields se ainda não existirem
+- Migration DB — adicionar `dnd_start_time`, `dnd_end_time`, `dnd_enabled` em `user_prefs` (se ainda não)
+- Edge functions + AlarmScheduler — checar janela DND antes scheduling (mesmo source-of-truth #085)
+
+#### Aceitação
+
+- [ ] Alarme Crítico OFF → DND option não aparece na UI
+- [ ] Alarme Crítico ON → DND option aparece com toggle + campos horário
+- [ ] DND ON + janela 22:00-08:00 → criar dose 02:00 → push tray dispara, alarme fullscreen não
+- [ ] DND OFF (com Alarme Crítico ON) → alarme fullscreen normal independente de horário
+- [ ] DND ON com janela inválida (start > end, atravessa meia-noite) é tratado corretamente
+- [ ] Persistência DB OK — relogar mantém config
 
 ---
 

@@ -54,6 +54,17 @@ public class DosyMessagingService extends MessagingService {
         String action = data != null ? data.get("action") : null;
 
         if ("schedule_alarms".equals(action)) {
+            // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
+            // Se OFF, skip scheduling local. Edges deveriam ter skipado FCM data
+            // antes mesmo de chegar aqui, mas double-check defensivo: server pode
+            // estar com cache stale OR mensagem foi enfileirada antes do toggle.
+            SharedPreferences sp = getApplicationContext()
+                .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
+            boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
+            if (!criticalAlarmEnabled) {
+                Log.d(TAG, "critical alarm OFF — skip schedule_alarms (push tray covers)");
+                return;
+            }
             try {
                 handleScheduleAlarms(data.get("doses"));
                 // NÃO chama super — não mostra notif tray pra esta mensagem

@@ -121,15 +121,30 @@ export async function openAppNotificationSettings() {
  * Chamar após login (useAuth onAuthStateChange SIGNED_IN/TOKEN_REFRESHED)
  * pra Worker ter token de refresh atualizado.
  */
-export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refreshToken, schema }) {
+export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refreshToken, schema, criticalAlarmEnabled }) {
   if (!isCriticalAlarmAvailable()) return null
   return CriticalAlarm.setSyncCredentials({
     supabaseUrl,
     anonKey,
     userId,
     refreshToken,
-    schema: schema || 'medcontrol'
+    schema: schema || 'medcontrol',
+    // Item #085 (release v0.1.7.3) — propaga toggle Alarme Crítico pro
+    // SharedPreferences Android. DoseSyncWorker + DosyMessagingService
+    // leem essa flag antes de agendar alarme nativo.
+    // Default true mantém comportamento atual (alarme ON) se não passado.
+    criticalAlarmEnabled: criticalAlarmEnabled !== false
   })
+}
+
+/**
+ * Item #085 — atualização incremental do toggle Alarme Crítico no
+ * SharedPreferences Android. Chamado pelo useUserPrefs.mutationFn quando
+ * user mexe no toggle em Ajustes. Sem precisar redo full sync de creds.
+ */
+export async function setCriticalAlarmEnabled(enabled) {
+  if (!isCriticalAlarmAvailable()) return null
+  return CriticalAlarm.setCriticalAlarmEnabled({ enabled: enabled !== false })
 }
 
 export async function clearSyncCredentials() {

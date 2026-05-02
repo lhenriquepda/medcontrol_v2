@@ -702,6 +702,21 @@ Raras exceções pra master direto (sem branch + sem bump):
 - ❌ **Instalar build de release branch como "Dosy" oficial** — sempre instalar como **Dosy Dev** (`com.dosyapp.dosy.dev`) via Android Studio Run debug variant. Studio Run em release variant escreveria sobre Dosy oficial — só fazer no ciclo de release final.
 - ❌ **Misturar dados entre Dosy e Dosy Dev** — se logar mesma conta nos dois apps, ambos veem o mesmo backend Supabase. OK pra teste, mas crie tratamentos teste só em Dosy Dev pra não poluir histórico real.
 
+### Regra de ouro — fix de bug device-specific (ex.: emulador antigo)
+
+Quando bug aparece em **um device** (emulador antigo, viewport específico, OEM fork) mas **NÃO em device de referência** (Samsung S25 Ultra device físico = baseline atual), o fix DEVE preservar comportamento no device de referência. Caso contrário, fix vira regressão pior que o bug original.
+
+**Protocolo obrigatório antes de commit:**
+1. Reproduzir bug no device com problema (ex.: emulador Pixel 7 API 35) — confirmar repro consistente
+2. Implementar fix
+3. Testar fix no device com problema — confirmar resolvido
+4. **Testar fix no device de referência (S25 Ultra)** — confirmar zero regressão
+5. Se passo 4 falhar, voltar pro 2 (revisar fix). Não commit antes de ambos passarem.
+
+**Se fix exige trade-off (não dá pra cobrir ambos)**: documenta em ADR (`contexto/decisoes/`) explicando opção escolhida + lista devices afetados. Reporta user antes de prosseguir.
+
+Aplicável a: layout responsive, race conditions timing, latência realtime, plugins nativos, FCM behavior, gestures touch.
+
 ### Mensagem padrão do agente ao iniciar sessão
 
 > Use **exatamente** este template. Não improvise. Não adicione info técnica extra.

@@ -19,6 +19,7 @@
 // já tem row pro device (evita FCM redundante quando rescheduleAll já cobriu).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { getUserNotifPrefs, inDndWindow } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -133,10 +134,18 @@ Deno.serve(async (req) => {
       byUser.get(s.userId)!.push({ deviceToken: s.deviceToken })
     }
 
-    let totalUsers = 0, totalSent = 0, totalErrors = 0
+    let totalUsers = 0, totalSent = 0, totalErrors = 0, totalSkippedCriticalOff = 0
 
     for (const [userId, userSubs] of byUser) {
       totalUsers++
+
+      // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico per user.
+      // Se OFF, skip FCM data pra este user (não agenda alarme nativo).
+      const prefs = await getUserNotifPrefs(supabase, userId)
+      if (!prefs.criticalAlarm) {
+        totalSkippedCriticalOff++
+        continue
+      }
 
       // 2. Doses pendentes próximas 72h pra este user
       const { data: ownPatients } = await supabase
@@ -156,8 +165,14 @@ Deno.serve(async (req) => {
 
       if (!doses?.length) continue
 
+      // Item #087 (release v0.1.7.3) — filtra doses que caem em janela DND.
+      // Alarme nativo NÃO deve disparar dentro da janela; notify-doses cron
+      // mandará push tray como cobertura silenciosa.
+      const dosesOutsideDnd = doses.filter(d => !inDndWindow(new Date(d.scheduledAt), prefs))
+      if (!dosesOutsideDnd.length) continue
+
       // 3. Payload data — JSON stringify pra fits no FCM data limit (~4KB)
-      const dosesPayload = doses.map(d => ({
+      const dosesPayload = dosesOutsideDnd.map(d => ({
         doseId: d.id,
         medName: d.medName,
         unit: d.unit,
@@ -177,9 +192,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[schedule-alarms-fcm] users=${totalUsers} sent=${totalSent} errors=${totalErrors} ts=${now.toISOString()}`)
+    console.log(`[schedule-alarms-fcm] users=${totalUsers} sent=${totalSent} errors=${totalErrors} skippedCriticalOff=${totalSkippedCriticalOff} ts=${now.toISOString()}`)
 
-    return new Response(JSON.stringify({ ok: true, users: totalUsers, sent: totalSent, errors: totalErrors }), {
+    return new Response(JSON.stringify({ ok: true, users: totalUsers, sent: totalSent, errors: totalErrors, skippedCriticalOff: totalSkippedCriticalOff }), {
       headers: { 'Content-Type': 'application/json' }
     })
   } catch (err) {
