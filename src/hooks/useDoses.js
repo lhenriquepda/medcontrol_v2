@@ -12,7 +12,15 @@ export function useDoses(filter = {}) {
     // alarme nativo Android é independente do cache TanStack.
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
-    staleTime: 30_000
+    staleTime: 30_000,
+    // Item #088 (release v0.1.7.4) — BUG-021: dose recém-cadastrada não aparecia
+    // em Início sem refresh manual em emulador Pixel 7 API 35 (NÃO repro em
+    // Samsung S25 Ultra device físico real). Provável race condition em devices
+    // lentos: navigate dispara antes invalidate refetch completar.
+    // Fix conservador: refetchOnMount='always' força refetch toda vez Dashboard
+    // monta. Cost: +1 request /navegação (S25 já fazia se cache stale, então
+    // sem regressão visível). Backstop garantido cross-device.
+    refetchOnMount: 'always'
   })
 }
 
