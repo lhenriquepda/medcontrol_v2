@@ -58,8 +58,13 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.7.2 publicada 2026-05-02 (Vercel + Play Store Internal Testing AAB versionCode 26 + tag git `v0.1.7.2`).
-**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 healthcare-critical — fechado 100% nesta release).
+**Última release:** v0.1.7.3 publicada 2026-05-02 (Vercel + Play Store Internal Testing AAB versionCode 27 + tag git `v0.1.7.3`).
+**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 fechado em v0.1.7.2; #085/#087 Fase A fechados em v0.1.7.3).
+
+**Items fechados na release v0.1.7.3 (Ajustes user respeitados):**
+- ✅ #085 [BUG-018] Alarme Crítico OFF agora respeitado em todos 6 caminhos (3 Edges + 2 Android nativo + 1 client React). Single source-of-truth via user_prefs.notif.criticalAlarm sincronizado em DB + localStorage + SharedPreferences. Validado emulador Pixel 7 cenários A/B/C.
+- ✅ #087 Fase A [BUG-020] DND UX condicional (aparece só se Alarme Crítico ON) + Edges respeitam janela DND (skip FCM data dentro window). Validado emulador. Fase B (Android nativo fire time) parqueada v0.1.7.4.
+- ⏸️ #086 [BUG-019] Resumo Diário — UI ocultada em Settings, parqueado v0.1.8.0 (precisa Edge cron + migration timezone).
 
 **Items fechados na release v0.1.7.2 (BUG-016 fix definitivo):**
 - ✅ #083 FCM-driven alarm scheduling + 4 caminhos coordenados (Trigger DB <2s + Cron 6h + rescheduleAll + WorkManager 6h). Validado end-to-end: cadastro web → alarme físico tocou no Android. (commits `23deca4` + `3465ab6` + `26c51ab` migration pg_net + `07b77ba` firebase-messaging dep)
@@ -82,12 +87,15 @@
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
-**Próxima release v0.1.7.3 (hotfix dedicado — sessão única coordenada):**
-- **#081 gate validação 24h idle** — User mantém Dosy Dev fechado 24h após cadastrar dose teste pré-fechamento. Confirma caminhos #083 funcionam com app idle longo. Fecha nota "Gate 3 device validation em andamento" definitivamente.
-- **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084)
-- **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — toggle ignorado nos caminhos #083
-- **#086** [P1 BUG-019] Resumo Diário não funciona — nunca dispara na hora marcada
-- **#087** [P1 BUG-020] Verificar DND funcional + UX condicional (DND aparece só se Alarme Crítico ON; depende #085)
+**Próxima release v0.1.7.4 (hotfix dedicado security):**
+- **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084 com FASE 1.5 audit secrets adicionais + FASE 8.5 close alerts GitHub/GitGuardian dashboards)
+- **#087 Fase B** [opcional, P1] Android nativo respeitar DND fire time (AlarmActivity abort + DoseSyncWorker skip schedule)
+- **#081 gate validação 24h idle** [opcional] User mantém Dosy Dev fechado 24h após cadastrar dose teste pré-fechamento. Fecha nota "Gate 3 device validation em andamento". Em andamento — pode terminar antes da release v0.1.7.4.
+
+**Items pendentes pra v0.1.8.0 (próxima minor):**
+- **#086** [P1 BUG-019] Resumo Diário fix completo (migration daily_summary_log + Edge cron + timezone)
+- **#088** [P1 BUG-021] Dose não aparece em Início sem refresh (TanStack Query invalidate)
+- **#089** [P2 BUG-022] Layout AdSense + header truncamento (viewport-specific Pixel 7)
 
 **Process improvements na release:**
 - Reorganização `contexto/` (auditoria → snapshot imutável em `auditoria/`, archive de docs históricos em `archive/`)
@@ -113,14 +121,12 @@
 
 ## 4. Próximo passo imediato
 
-**Próxima sessão dedicada — release v0.1.7.3 (5 itens coordenados):**
-- **#081 gate validação 24h idle** — Dosy Dev fechado por 1 dia inteiro após cadastrar dose teste pré-fechamento. Confirma caminhos #083 funcionam com app realmente idle longo. Fecha nota "Gate 3 device validation em andamento". User responsabilidade: deixar app fechado pelo período. Pode rodar em paralelo com outros itens (não bloqueia).
+**Próxima sessão dedicada — release v0.1.7.4 (hotfix security):**
 - **#084** [P0 security] Rotacionar service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub (incidente 2026-05-02). Plano 8-fase em CHECKLIST §#084.
-- **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — auditar toggle propagation nos 4 caminhos (#083).
-- **#086** [P1 BUG-019] Resumo Diário não funciona — verificar persistência horário + cron + push delivery.
-- **#087** [P1 BUG-020] DND verificar funcional + UX condicional (DND visível só se Alarme Crítico ON). Depende #085.
+- **#087 Fase B** [opcional P1] Android nativo respeitar DND fire time.
+- **#081 gate validação 24h** [opcional] em andamento, pode fechar antes ou junto.
 
-Branch `release/v0.1.7.3` já criada e ativa.
+Branch nova: `release/v0.1.7.4` (criar a partir de master atualizada quando começar sessão).
 
 **Sequência sugerida (sessão dedicada):**
 ```
@@ -353,9 +359,9 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#082** [Sessão v0.1.7.1] Dual-app dev/prod: `com.dosyapp.dosy.dev` "Dosy Dev" coexiste com `com.dosyapp.dosy` "Dosy" oficial. Permite testes destrutivos (force stop, idle 24h) sem afetar Dosy oficial. Firebase entry .dev separada. (commit `5b5938e`)
 - [x] **#083** [Sessão v0.1.7.1 → v0.1.7.2] FCM-driven alarm scheduling + 4 caminhos coordenados (idempotente). Trigger DB <2s + Cron 6h FCM data + rescheduleAll quando app abre + WorkManager 6h. Push tray inteligente: skip se alarme nativo já agendado. Fecha BUG-016 100%. Validado end-to-end no device: cadastro web → trigger DB → Edge FCM → AlarmScheduler → alarme físico tocou. (commits `23deca4` + `3465ab6` + `26c51ab`)
 - [ ] **#084** [INCIDENTE 2026-05-02 22:23 UTC] **Rotacionar service_role JWT + JWT secret do projeto Supabase**. Service role JWT foi commitado em migration `20260502091000_dose_trigger_webhook.sql` (commit 85d5e61), pushado pra GitHub público. GitGuardian + GitHub Security detectaram em ~6min (22:23-22:29). Histórico do branch reescrito via git-filter-repo + force push (commit 6310c1e), MAS chave permanece em GitHub commit cache + indexers externos. Service_role JWT bypassa RLS = expõe todos dados saúde de todos users (LGPD categoria especial). Ação: Supabase Dashboard → Settings → API → Roll JWT Secret. Atualizar VITE_SUPABASE_ANON_KEY em Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela 22:23-22:29 UTC. Bonus: reconectar Vercel↔GitHub (webhook quebrou após force push). Plano detalhado em `CHECKLIST.md §#084` (8 fases, autônomo vs USER ACTION). Próxima release v0.1.7.3. P0 security.
-- [ ] **#085** [BUG-018, reportado user 2026-05-02 v0.1.7.2] **Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim.** User toggle OFF na tela Ajustes → cadastrou dose → alarme nativo fullscreen disparou normalmente, deveria ter recebido apenas notificação push tray. Toggle não respeitado em algum dos 4 caminhos (#083). Possíveis causas: setting não persistido em prefs ou DB; AlarmScheduler não consulta flag antes de agendar; DosyMessagingService.onMessageReceived ignora flag em FCM data path; Edge `notify-doses` skip-push logic não respeita flag user. Auditar todos 4 caminhos + criar source-of-truth single check. P1 healthcare-adjacent (trust violation + LGPD/privacy).
+- [x] **#085** [BUG-018, fechado v0.1.7.3 commit `f22f5a9`] **Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim.** User toggle OFF na tela Ajustes → cadastrou dose → alarme nativo fullscreen disparou normalmente, deveria ter recebido apenas notificação push tray. Toggle não respeitado em algum dos 4 caminhos (#083). Possíveis causas: setting não persistido em prefs ou DB; AlarmScheduler não consulta flag antes de agendar; DosyMessagingService.onMessageReceived ignora flag em FCM data path; Edge `notify-doses` skip-push logic não respeita flag user. Auditar todos 4 caminhos + criar source-of-truth single check. P1 healthcare-adjacent (trust violation + LGPD/privacy).
 - [ ] **#086** [BUG-019, reportado user 2026-05-02 v0.1.7.2] **Resumo Diário não funciona — nunca dispara na hora marcada.** Feature de resumo diário configurada em Ajustes (horário definido) nunca enviou notificação. Verificar: persistência de horário em prefs/DB, cron agendado (Edge ou pg_cron), trigger envia push, FCM token ativo, channel notif Android registrado. Se broken end-to-end, decidir: fix em v0.1.7.3 ou parquear feature até v0.1.8.0. P1 broken feature user-facing.
-- [ ] **#087** [BUG-020, reportado user 2026-05-02 v0.1.7.2] **Verificar Não Perturbe funcional + UX condicional.** Verificar se DND atual está respeitando horários configurados (alarme deveria silenciar entre X-Y). Refactor UX: Não Perturbe deve aparecer SOMENTE quando Alarme Crítico ON (toggle pai); quando ON, sub-toggle DND habilita janela horária para desabilitar Alarme Crítico nesse intervalo. Depende de #085 fix (toggle parent precisa funcionar antes UX condicional fazer sentido). P1 UX healthcare-adjacent.
+- [x] **#087** [BUG-020, Fase A fechada v0.1.7.3 commit `f22f5a9`; Fase B parqueada v0.1.7.4] **Verificar Não Perturbe funcional + UX condicional.** Verificar se DND atual está respeitando horários configurados (alarme deveria silenciar entre X-Y). Refactor UX: Não Perturbe deve aparecer SOMENTE quando Alarme Crítico ON (toggle pai); quando ON, sub-toggle DND habilita janela horária para desabilitar Alarme Crítico nesse intervalo. Depende de #085 fix (toggle parent precisa funcionar antes UX condicional fazer sentido). P1 UX healthcare-adjacent.
 - [ ] **#088** [BUG-021, reportado user 2026-05-02 emulador Pixel 7 API 35] **Dose cadastrada não aparece em Início sem refresh manual.** Após cadastrar dose nova, voltar pra Início mostra lista antiga — user precisa pull-to-refresh OU sair/voltar de tab. Provável causa: TanStack Query `invalidateQueries(['doses'])` não chamado após mutation INSERT em doses (ou hook useDoses não escuta eventos realtime suficientes). Verificar `dosesService.js` mutate handlers + `useDoses` queryKey invalidation. **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar comportamento atual em devices modernos. Antes de mudar `useDoses`/`dosesService`/realtime, regredir em S25 Ultra primeiro. Provável race condition timing OR latência realtime emulador-only. P1 UX healthcare-adjacent (user pode achar dose não foi salva, recadastrar = duplicata).
 - [ ] **#089** [BUG-022, reportado user 2026-05-02 emulador Pixel 7] **Layout: AdSense banner empurrando header parcial.** Print confirma: banner "Test Ad 468x60" ocupa topo da viewport, header "Dosy ▸ Frederico" fica abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Tabs filtro (12h/24h/48h/7 dias/Tudo) e cards (Pendentes/Adesão/Atrasadas) renderizam OK abaixo. Visível em emulador Pixel 7 (1080×2400 @420dpi). **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar layout atual em devices modernos. Provável causa: posicionamento absoluto AdSense em `index.html` ou container CSS colidindo com `<header>` sem `padding-top` proporcional ao banner; viewport `<meta>` ou safe-area-inset comportamento diferente em Pixel 7. Verificar `index.html` (placement AdSense) + componentes header (`Layout.jsx`/`AppHeader.jsx`). Test cross-device obrigatório antes commit (Pixel 7 emul + S25 Ultra real + tablet baseline). P2 UX visual.
 
@@ -456,9 +462,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 89 itens (+ #088/#089 reportados user 2026-05-02 emulador Pixel 7)
-- **Em aberto:** 76 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2 [#083]; #084-#087 em release v0.1.7.3; #088-#089 abertos pra v0.1.7.4 ou v0.1.8.0)
-- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 21 (+#085 +#086 +#087 +#088 dose-not-shown) · **P2:** 23 (+#089 layout AdSense) · **P3:** 25
+- **Total:** 89 itens
+- **Em aberto:** 74 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2; 2 fechados v0.1.7.3 [#085 + #087 Fase A]; #086 parqueado v0.1.8.0; #084 carry-over v0.1.7.4; #088-#089 v0.1.8.0)
+- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 19 (-#085 -#087 fechados) · **P2:** 23 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

@@ -1006,17 +1006,17 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `0.1.7.2` · tag `v0.1.7.2` · branch `master`
+**Versão atual:** `0.1.7.3` · tag `v0.1.7.3` · branch `master`
 **Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store Internal Testing:** AAB v0.1.7.2 (versionCode 26) — fecha BUG-016 100% via #083 FCM-driven scheduling; alarme funciona end-to-end mesmo sem abrir app.
+**Play Store Internal Testing:** AAB v0.1.7.3 (versionCode 27) — Ajustes user respeitados (Alarme Crítico OFF não toca; DND janela silencia alarme), DND UX condicional ao Alarme Crítico.
 
-**Última release:** v0.1.7.2 em 2026-05-02 — fechou #083 (FCM-driven alarm scheduling + 4 caminhos coordenados). Validação device end-to-end concluída (cadastro web → alarme físico tocou no Android).
+**Última release:** v0.1.7.3 em 2026-05-02 — fechou #085 (BUG-018 alarme bypass) + #087 Fase A (BUG-020 DND UX condicional + Edges respeitam janela). Validado emulador Pixel 7 cenários A/B/C + DND dentro/fora janela. #086 (Resumo Diário) UI ocultada parqueada v0.1.8.0.
 
-**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 healthcare-critical agora resolvido.
+**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 + #085 + #087 Fase A resolvidos.
 
 **Bloqueadores P0 ativos:** 7 itens.
-- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — próxima sessão / hotfix v0.1.7.3
+- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — próxima sessão hotfix `v0.1.7.4`
 - #003 rotação senha postgres + revogar PAT (~30min, manual user)
 - #004 vídeo demo FGS Play Console (~2-3h, manual user)
 - #006 device validation 3 devices físicos (1-2 dias, manual user)
@@ -1024,7 +1024,12 @@ Template:
 - #008 Sentry GitHub Secrets (~15min, manual user)
 - #009 PITR + DR drill (depende upgrade Pro plan)
 
-**Próximo passo concreto:** ver `ROADMAP.md §4`. Atacar **#084 hotfix JWT rotation** primeiro (security incident). Depois P1 batch (RLS migrations #012/#013/#014, label A11y #011, ic_stat_dosy #010, useDoses refactor #023) → release `v0.1.8.0` minor.
+**Bugs novos pra v0.1.8.0:**
+- #086 Resumo Diário fix completo (migration + Edge cron + timezone)
+- #088 Dose não aparece em Início sem refresh (TanStack Query invalidate)
+- #089 Layout AdSense + header truncamento Pixel 7
+
+**Próximo passo concreto:** ver `ROADMAP.md §4`. Próxima sessão = **#084 hotfix v0.1.7.4** (security). Depois v0.1.8.0 minor (#086 + #088 + #089 + P1 batch).
 
 ---
 

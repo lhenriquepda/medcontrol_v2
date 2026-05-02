@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-02 — pós release v0.1.7.2 (versionCode 26)
+> **Última revisão:** 2026-05-02 — pós release v0.1.7.3 (versionCode 27)
 
 ---
 
@@ -11,7 +11,7 @@ App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicament
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-teal.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 26 / versionName 0.1.7.2 (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation; BUG-016 fechado 100% via #079/#080/#081/#083 — alarme funciona end-to-end mesmo sem abrir app; #084 carry-over P0 security incident JWT rotation)
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 27 / versionName 0.1.7.3 (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation; BUG-016 fechado 100% via #079/#080/#081/#083; #085 alarme bypass + #087 DND UX condicional fechados v0.1.7.3; #086 Resumo Diário parqueado v0.1.8.0; #084 carry-over P0 security pra v0.1.7.4 hotfix)
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
 
 ---
