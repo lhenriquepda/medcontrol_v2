@@ -49,13 +49,15 @@ END;
 $$;
 
 -- Trigger AFTER INSERT/UPDATE em doses
+-- Item #083 audit (v0.1.7.2): WHEN clause filtra scheduledAt futuro pra evitar
+-- HTTP wasted em doses com horário no passado (ex.: import histórico, edição).
 DROP TRIGGER IF EXISTS dose_change_notify ON medcontrol.doses;
 CREATE TRIGGER dose_change_notify
   AFTER INSERT OR UPDATE OF status, "scheduledAt"
   ON medcontrol.doses
   FOR EACH ROW
-  WHEN (NEW.status = 'pending')
+  WHEN (NEW.status = 'pending' AND NEW."scheduledAt" > now())
   EXECUTE FUNCTION medcontrol.notify_dose_change();
 
 COMMENT ON TRIGGER dose_change_notify ON medcontrol.doses IS
-  'Item #083.3 — chama Edge dose-trigger-handler em real-time pra agendar alarme nativo via FCM data <2s';
+  'Item #083.3 — chama Edge dose-trigger-handler em real-time pra agendar alarme nativo via FCM data <2s. Filtra status=pending + scheduledAt futuro pra evitar HTTP wasted.';
