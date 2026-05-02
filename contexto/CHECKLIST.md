@@ -955,6 +955,116 @@ public void onMessageReceived(RemoteMessage msg) {
 
 ---
 
+### #084 — Hotfix v0.1.7.3: rotação service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub
+- **Status:** ⏳ Aberto — sessão dedicada próxima
+- **Origem:** INCIDENTE 2026-05-02 22:23 UTC. Migration `20260502091000_dose_trigger_webhook.sql` (commit original `85d5e61`) foi commitada com service_role JWT inline. GitGuardian + GitHub Security flagged em ~6min. Histórico do branch reescrito via `git-filter-repo` + force push (commit `6310c1e`). Tag `pre-secret-purge-backup` empurrada origin como referência.
+- **Severidade:** P0 security — service_role bypassa RLS = exposição teórica de TODOS dados saúde de TODOS users (LGPD categoria especial). Chave permanece em GitHub commit cache + indexers externos (Google cache, Wayback, etc) por tempo indeterminado.
+- **Esforço:** ~30-60min (sessão dedicada)
+- **Dependências:** nenhuma (independente)
+
+#### Janela de exposição
+
+- **Leak:** 2026-05-02 ~22:23 UTC (push original `85d5e61`)
+- **Purge:** 2026-05-02 ~22:29 UTC (force push `6310c1e`)
+- **Window in-repo:** ~6min
+- **Window cache externo:** indeterminado (continua exposta)
+
+#### Plan de execução — divisão autônomo / user
+
+> **Filosofia:** agente faz tudo que não é destrutivo-irrecuperável ou prohibited safety-rule. User só clica botão final irreversível ou autoriza OAuth.
+
+**FASE 0 — Pre-checks (autônomo agente):**
+- [ ] Confirmar branch: criar `release/v0.1.7.3` a partir de master atualizada
+- [ ] Verificar `.env.local` tem `VITE_SUPABASE_ANON_KEY` legível pra registrar valor velho (pra audit)
+- [ ] `git fetch origin && git status` clean
+- [ ] Verificar Vercel CLI auth (`vercel whoami` deve retornar `lhenriquepda`)
+
+**FASE 1 — Auditar logs janela leak (autônomo agente, via PAT):**
+- [ ] Query Supabase logs Auth + REST janela 22:23-22:29 UTC
+- [ ] Query `auth.audit_log_entries` mesma janela
+- [ ] Comparar com baseline (sessão anterior idle period) — uso anômalo?
+- [ ] Reportar achados antes prosseguir rotação
+
+**FASE 2 — Reconectar Vercel↔GitHub (guided via Claude in Chrome):**
+- [ ] Agente navega `https://vercel.com/lhenriquepdas-projects/dosy/settings/git`
+- [ ] Agente clica botão "GitHub" pra iniciar reconexão
+- [ ] **USER ACTION:** autoriza OAuth Vercel↔GitHub (pelas regras safety, OAuth login = só user)
+- [ ] **USER ACTION:** seleciona repo `lhenriquepda/medcontrol_v2`
+- [ ] Agente confirma webhook ativo via deployments page
+- [ ] Agente push commit vazio teste pra confirmar auto-deploy dispara
+
+**FASE 3 — Rotação JWT secret (guided via Claude in Chrome):**
+- [ ] Agente navega Supabase Dashboard → projeto dosy-app → Settings → API
+- [ ] Agente localiza botão "Generate a new JWT secret" / "Roll JWT Secret"
+- [ ] Agente expande/lê confirmação dialog (preview destruction message)
+- [ ] **USER ACTION:** clica botão Roll (irreversível) + confirma dialog
+- [ ] Agente copia novos valores: `SUPABASE_ANON_KEY` + `SUPABASE_SERVICE_ROLE_KEY` (NUNCA log no chat — só persist em arquivos protegidos)
+
+**FASE 4 — Atualizar env vars (autônomo agente):**
+- [ ] Vercel CLI: `vercel env rm VITE_SUPABASE_ANON_KEY production` (3 envs: prod/preview/dev)
+- [ ] Vercel CLI: `vercel env add VITE_SUPABASE_ANON_KEY production` (cole valor novo)
+- [ ] Repetir pra preview + development
+- [ ] Atualizar `.env.local` (não-commitado, gitignored) — anon key novo
+- [ ] **USER ACTION:** confirmar não há outras máquinas dev pendentes
+- [ ] Atualizar `SUPABASE_SERVICE_ROLE_KEY` em Edge Functions secrets:
+  - Via Supabase Dashboard → Edge Functions → Secrets, OR
+  - Via Supabase CLI: `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=... --project-ref guefraaqbkcehofchnrc`
+
+**FASE 5 — Redeploy infra (autônomo agente):**
+- [ ] Vercel CLI: `vercel --prod --force` (rebuild com env nova)
+- [ ] Edge Functions redeploy (todas que usam service_role): `supabase functions deploy --project-ref guefraaqbkcehofchnrc` lista relevant
+- [ ] Confirmar Vercel prod respondendo 200 em `https://dosy-teal.vercel.app/ajustes`
+
+**FASE 6 — Rebuild Android (parcialmente guided):**
+- [ ] Agente atualiza `android/app/src/main/assets/capacitor.config.json` se necessário (verificar se anon key não está baked)
+- [ ] Agente verifica `src/services/supabase.js` lê `import.meta.env.VITE_SUPABASE_ANON_KEY` (não hardcoded)
+- [ ] Bump versão patch: 0.1.7.2 → 0.1.7.3 (package.json + gradle versionCode 27)
+- [ ] **USER ACTION:** Android Studio Build → Generate Signed Bundle (release variant)
+- [ ] **USER ACTION:** confirma AAB pronto em `android/app/release/app-release.aab`
+- [ ] Agente upload AAB Play Console via Claude in Chrome (mesmo fluxo de v0.1.7.2)
+- [ ] **USER ACTION:** confirma "Salvar e publicar" no Console
+
+**FASE 7 — Verificação pós-rotação (autônomo agente):**
+- [ ] Test: query Supabase com chave VELHA → deve retornar 401/403
+- [ ] Test: query Supabase com chave NOVA → deve retornar 200
+- [ ] Test: login Vercel prod (`https://dosy-teal.vercel.app`) com `teste03@teste.com / 123456` → fluxo completo
+- [ ] Test: device físico Dosy Dev (instalado v0.1.7.2-dev) — login + cadastrar dose teste → alarme dispara?
+  - **Nota:** Dosy Dev tem chave VELHA baked → vai falhar até reinstall. Esperado. Reinstall via Studio Run após FASE 6.
+- [ ] Auditar logs Supabase 1h pós-rotação — qualquer 401 inesperado de cliente legítimo?
+
+**FASE 8 — Cleanup + release v0.1.7.3 (autônomo agente):**
+- [ ] Merge `release/v0.1.7.3` → master (--no-ff) + tag `v0.1.7.3` + push
+- [ ] Atualizar `contexto/`: ROADMAP §3+§12, PROJETO.md versão, README.md "Estado atual"
+- [ ] Criar `contexto/updates/2026-05-XX-release-v0.1.7.3.md` com log completo + audit findings
+- [ ] Marcar #084 ✅ Concluído em CHECKLIST + ROADMAP
+- [ ] Decrementar P0: 7 → 6
+- [ ] Deletar `release/v0.1.7.3` local + remote
+- [ ] (Opcional) Deletar tag `pre-secret-purge-backup` se audit confirmou zero uso anômalo
+
+#### Aceitação
+
+- Chave velha retorna 401/403 em qualquer endpoint
+- Chave nova funciona em Vercel prod + Edge Functions + APK Dosy Dev (após reinstall)
+- Logs Supabase janela leak auditados — relatório de uso anômalo (0 ou N) em `updates/`
+- Vercel↔GitHub reconectado: push pra master dispara auto-deploy
+- AAB v0.1.7.3 publicado Play Store Internal Testing
+- 3 ambientes sincronizados (master + Vercel prod + Play Store) versionados v0.1.7.3
+- `pre-secret-purge-backup` tag mantida ou deletada conforme audit
+
+#### Risk register
+
+| Risco | Mitigação |
+|---|---|
+| Dosy oficial Play Store users com chave velha → 401 até auto-update | Auto-update Android é rápido pra Internal Testing (<24h). User comunica testers se notar. |
+| Edge Function downtime entre roll e redeploy | Redeploy imediato após rotação. Idle ~2min. |
+| Vercel env update falha → prod fica com chave inválida | Dry-run env update + verify ANTES rebuild. Rollback: revert env via dashboard. |
+| User cliente caches anon key velha em IndexedDB | Service worker bump cache version força refresh. |
+| OAuth Vercel↔GitHub falha | Fallback: continuar `vercel --prod` CLI até sessão futura. |
+
+- **Detalhe completo:** ver `contexto/updates/2026-05-02-release-v0.1.7.2.md` (incident report).
+
+---
+
 ## Resumo
 
 - **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
