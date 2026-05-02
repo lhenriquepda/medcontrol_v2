@@ -14,6 +14,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3'
+import { getUserNotifPrefs } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -224,6 +225,12 @@ Deno.serve(async (req) => {
     }
 
     for (const [userId, userSubs] of byUser) {
+      // Item #085 (release v0.1.7.3) — busca prefs notif do user pra decidir
+      // skip-push-quando-alarme-agendado. Se criticalAlarm OFF, push tray
+      // sempre (ignora alarme agendado — toggle OFF significa "só push").
+      const userPrefs = await getUserNotifPrefs(supabase, userId)
+      const criticalAlarmOn = userPrefs.criticalAlarm
+
       // Item #080 — fallback defensivo: advanceMins=0 cria janela ±60s, muito apertado.
       // Se cron tiver pequeno drift, dose escapa. Default 5min é seguro
       // (push antecipado é aceitável; push tardio é falha healthcare).
@@ -272,8 +279,12 @@ Deno.serve(async (req) => {
         const useChannel: 'fcm' | 'webpush' | null = fcmSubs.length > 0 ? 'fcm' : (webpushSubs.length > 0 ? 'webpush' : null)
         if (!useChannel) continue
 
-        // Item #083.4 — skip push se alarme nativo já agendado em todos devices
-        if (await shouldSkipPushBecauseAlarmScheduled(dose.id, userId)) {
+        // Item #083.4 — skip push se alarme nativo já agendado em todos devices.
+        // Item #085 (release v0.1.7.3) — só skipa se criticalAlarm ON. Se OFF,
+        // alarme não devia ter sido agendado (mas pode estar ainda devido a
+        // race condition / cache stale Android), então mandamos push tray
+        // sempre que toggle OFF — user pediu push-only.
+        if (criticalAlarmOn && await shouldSkipPushBecauseAlarmScheduled(dose.id, userId)) {
           skipped++
           continue
         }

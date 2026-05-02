@@ -12,6 +12,7 @@
 //   { type: "INSERT" | "UPDATE", table: "doses", record: {...}, old_record: {...} }
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { getUserNotifPrefs } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -105,6 +106,16 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
+    // Se OFF, skip FCM data (não agenda alarme nativo). notify-doses cron
+    // mandará push tray no momento certo.
+    const prefs = await getUserNotifPrefs(supabase, record.userId)
+    if (!prefs.criticalAlarm) {
+      return new Response(JSON.stringify({ ok: true, skipped: 'critical-alarm-off' }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
     // Busca push_subscriptions FCM do user
     const { data: subs } = await supabase
       .from('push_subscriptions')
