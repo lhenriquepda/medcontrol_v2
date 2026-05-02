@@ -38,7 +38,16 @@ export const supabase = hasSupabase
         // Required on native — no URL redirect for OAuth in WebView
         detectSessionInUrl: !isNative
       },
-      db: { schema: SCHEMA }
+      db: { schema: SCHEMA },
+      // Item #079 (release v0.1.7.1) — heartbeat explicit + reconnect rápido.
+      // Defense-in-depth caminho 1: detectar websocket morto durante idle longo
+      // (Android Doze + OS network management matam silently após ~10-15min).
+      // Default supabase-js: 30s heartbeat, reconnect lento. Mantemos 30s mas
+      // forçamos reconnectAfterMs custom com backoff agressivo.
+      realtime: {
+        heartbeatIntervalMs: 30_000,
+        reconnectAfterMs: (tries) => Math.min(1_000 * Math.pow(2, tries), 30_000)
+      }
     })
   : null
 

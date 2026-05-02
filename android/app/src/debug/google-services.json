@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "334865070768",
+    "project_id": "dosy-b592e",
+    "storage_bucket": "dosy-b592e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:334865070768:android:c74d0119909556084a1975",
+        "android_client_info": {
+          "package_name": "com.dosyapp.dosy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC670U0Zc8SpXL9A9mF7s18ujufsG9VWJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:334865070768:android:c4c0f943a4a953034a1975",
+        "android_client_info": {
+          "package_name": "com.dosyapp.dosy.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC670U0Zc8SpXL9A9mF7s18ujufsG9VWJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

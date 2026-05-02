@@ -97,42 +97,81 @@ async function getFcmAccessToken(): Promise<string> {
 
 async function sendFcm(deviceToken: string, title: string, body: string, data: Record<string, string>) {
   const accessToken = await getFcmAccessToken()
-  const resp = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT}/messages:send`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: {
-          token: deviceToken,
-          notification: { title, body },
-          data,
-          android: {
-            priority: 'HIGH',
-            notification: {
-              channel_id: 'doses_v2',
-              sound: 'default',
-              default_sound: true,
-              default_vibrate_timings: true,
-              notification_priority: 'PRIORITY_MAX',
-              visibility: 'PUBLIC'
+  // Item #080 (release v0.1.7.1) — retry exponential em transient errors.
+  // FCM pode retornar 503 UNAVAILABLE / 500 INTERNAL / 429 RATE_LIMITED
+  // de forma transitória. Sem retry, dose perdida silenciosa.
+  // Não-retryable (4xx exceto 429): UNREGISTERED, INVALID_ARGUMENT → delete token.
+  const MAX_ATTEMPTS = 3
+  let lastErr = ''
+  let lastStatus = 0
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const resp = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: {
+            token: deviceToken,
+            notification: { title, body },
+            data,
+            android: {
+              priority: 'HIGH',
+              notification: {
+                channel_id: 'doses_v2',
+                sound: 'default',
+                default_sound: true,
+                default_vibrate_timings: true,
+                notification_priority: 'PRIORITY_MAX',
+                visibility: 'PUBLIC'
+              }
             }
           }
-        }
-      })
-    }
-  )
-  if (!resp.ok) {
-    const err = await resp.text()
-    // 404 NOT_FOUND or UNREGISTERED → token invalid, delete it
-    if (resp.status === 404 || err.includes('UNREGISTERED') || err.includes('INVALID_ARGUMENT')) {
+        })
+      }
+    )
+    if (resp.ok) return // success
+
+    lastStatus = resp.status
+    lastErr = await resp.text()
+
+    // Permanent errors → delete token, no retry
+    if (resp.status === 404 || lastErr.includes('UNREGISTERED') || lastErr.includes('INVALID_ARGUMENT')) {
       await supabase.from('push_subscriptions').delete().eq('deviceToken', deviceToken)
+      throw new Error(`FCM token invalid (${resp.status}), deleted: ${lastErr.slice(0, 200)}`)
     }
-    throw new Error(`FCM send failed: ${resp.status} ${err}`)
+
+    // Transient (5xx, 429): retry with backoff
+    if (resp.status >= 500 || resp.status === 429) {
+      if (attempt < MAX_ATTEMPTS) {
+        const delay = 500 * Math.pow(2, attempt - 1) + Math.random() * 200 // 500ms, 1s, 2s + jitter
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+    }
+
+    // Other 4xx (invalid request etc) — don't retry
+    break
   }
+  throw new Error(`FCM send failed after ${MAX_ATTEMPTS} attempts: ${lastStatus} ${lastErr.slice(0, 200)}`)
+}
+
+// Item #080 — idempotência. Antes de enviar, registra (doseId, channel).
+// PK conflict = já enviado → skip. Garante zero duplicatas + permite
+// detecção de "missed cron run" futura (gap detection).
+async function tryRecordSent(doseId: string, channel: 'fcm' | 'webpush', userId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('dose_notifications')
+    .insert({ doseId, channel, userId })
+  if (!error) return true // primeira vez — pode enviar
+  // 23505 = unique_violation (PK conflict) → already sent, skip silently
+  if ((error as { code?: string }).code === '23505') return false
+  // Outros erros: log + permite envio (fail-open pra não perder dose)
+  console.warn(`[idempotency] insert failed (allowing send): ${error.message}`)
+  return true
 }
 
 // ─── Main handler ────────────────────────────────────────────────────
@@ -142,7 +181,7 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date()
-  const results: { userId: string; sent: number; errors: number; via: string[] }[] = []
+  const results: { userId: string; sent: number; errors: number; skipped?: number; via: string[] }[] = []
 
   try {
     const { data: subs, error: subErr } = await supabase
@@ -157,7 +196,11 @@ Deno.serve(async (req) => {
     }
 
     for (const [userId, userSubs] of byUser) {
-      const advanceMins = userSubs[0]?.advanceMins ?? 15
+      // Item #080 — fallback defensivo: advanceMins=0 cria janela ±60s, muito apertado.
+      // Se cron tiver pequeno drift, dose escapa. Default 5min é seguro
+      // (push antecipado é aceitável; push tardio é falha healthcare).
+      const rawAdvance = userSubs[0]?.advanceMins
+      const advanceMins = (rawAdvance == null || rawAdvance < 1) ? 5 : rawAdvance
       const windowStart = new Date(now.getTime() - 60 * 1000)
       const windowEnd   = new Date(now.getTime() + advanceMins * 60 * 1000 + 60 * 1000)
 
@@ -181,7 +224,7 @@ Deno.serve(async (req) => {
         continue
       }
 
-      let sent = 0, errors = 0
+      let sent = 0, errors = 0, skipped = 0
       const via: string[] = []
 
       for (const dose of doses) {
@@ -191,16 +234,27 @@ Deno.serve(async (req) => {
           : `${dose.medName} — ${dose.unit} (em ${minutesUntil} min)`
         const data = { doseId: dose.id, url: '/' }
 
-        for (const sub of userSubs) {
+        // Item #080 — idempotência por (doseId, channel). Tenta registrar UMA VEZ
+        // por canal antes de enviar; se já registrado, skip.
+        // FCM tem prioridade — se user tem deviceToken, manda FCM only.
+        // Se só webpush, usa webpush. Evita duplicate push em clientes que
+        // têm AMBOS registrados (Android + PWA web instalado).
+        const fcmSubs = userSubs.filter((s: { deviceToken?: string }) => s.deviceToken)
+        const webpushSubs = userSubs.filter((s: { endpoint?: string; deviceToken?: string }) => !s.deviceToken && s.endpoint)
+        const useChannel: 'fcm' | 'webpush' | null = fcmSubs.length > 0 ? 'fcm' : (webpushSubs.length > 0 ? 'webpush' : null)
+        if (!useChannel) continue
+
+        const canSend = await tryRecordSent(dose.id, useChannel, userId)
+        if (!canSend) { skipped++; continue }
+
+        const targetSubs = useChannel === 'fcm' ? fcmSubs : webpushSubs
+        for (const sub of targetSubs) {
           try {
-            // FCM path (Android nativo)
-            if (sub.deviceToken) {
+            if (useChannel === 'fcm' && sub.deviceToken) {
               await sendFcm(sub.deviceToken, 'Dosy 💊', body, data)
               sent++
               via.push('fcm')
-            }
-            // Web Push path (PWA legacy)
-            else if (sub.endpoint && sub.keys) {
+            } else if (useChannel === 'webpush' && sub.endpoint && sub.keys) {
               await webpush.sendNotification(
                 { endpoint: sub.endpoint, keys: sub.keys },
                 JSON.stringify({
@@ -221,12 +275,19 @@ Deno.serve(async (req) => {
             if (e.statusCode === 410 && sub.endpoint) {
               await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
             }
+            console.warn(`[notify-doses] err user=${userId} dose=${dose.id}: ${e.message ?? String(err)}`)
           }
         }
       }
 
-      results.push({ userId, sent, errors, via })
+      results.push({ userId, sent, errors, skipped, via })
     }
+
+    // Item #080 — log estruturado pra observability futura (PostHog/Sentry alerting hook)
+    const totalSent = results.reduce((a, r) => a + r.sent, 0)
+    const totalErrors = results.reduce((a, r) => a + r.errors, 0)
+    const totalSkipped = results.reduce((a, r) => a + (r.skipped ?? 0), 0)
+    console.log(`[notify-doses] users=${results.length} sent=${totalSent} errors=${totalErrors} skipped=${totalSkipped} ts=${now.toISOString()}`)
 
     return new Response(JSON.stringify({ ok: true, results }), {
       headers: { 'Content-Type': 'application/json' }

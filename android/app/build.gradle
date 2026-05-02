@@ -7,8 +7,8 @@ android {
         applicationId "com.dosyapp.dosy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 24
-        versionName "0.1.7.0"
+        versionCode 25
+        versionName "0.1.7.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -63,6 +63,16 @@ android {
     }
 
     buildTypes {
+        // Item #082 (release v0.1.7.1) — dual-app dev/prod:
+        //   debug   → applicationId com.dosyapp.dosy.dev, label "Dosy Dev"
+        //   release → applicationId com.dosyapp.dosy,     label "Dosy"
+        // Coexistem no device. google-services.json em src/debug e raiz cobrem ambos.
+        debug {
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            resValue "string", "app_name_override", "Dosy Dev"
+            manifestPlaceholders = [appLabel: "@string/app_name_override"]
+        }
         release {
             // Auditoria 4.5.4 G1 (P0): minifyEnabled true ativa ProGuard/R8.
             // Reduz APK size + obfusca código (anti reverse-engineering).
@@ -70,6 +80,8 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            resValue "string", "app_name_override", "Dosy"
+            manifestPlaceholders = [appLabel: "@string/app_name_override"]
             // Apply signing config only if keystore exists (avoid breaking debug builds)
             if (keystoreFile != null && keystoreFile.exists()) {
                 signingConfig signingConfigs.release
@@ -94,6 +106,13 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Item #081 (release v0.1.7.1) — WorkManager pra DoseSyncWorker
+    // periodic background sync (defense-in-depth notif idle ilimitado).
+    implementation "androidx.work:work-runtime:2.9.1"
+    // Guava (Android-friendly) — work-runtime requer ListenableFuture classfile.
+    // Stub 1.0/9999.0 não estava sendo resolvido no compileClasspath; Guava
+    // completo garante. ~500KB AAR aceitável vs healthcare reliability.
+    implementation "com.google.guava:guava:33.4.0-android"
 }
 
 apply from: 'capacitor.build.gradle'

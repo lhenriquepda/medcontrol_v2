@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
+import { setSyncCredentials, clearSyncCredentials } from '../services/criticalAlarm'
 
 const isNative = Capacitor.isNativePlatform()
 // Deep link Capacitor (manifest dosy:// already configured) OR https web origin
@@ -26,12 +27,27 @@ export function AuthProvider({ children }) {
         const initialUser = data.session?.user || null
         setUser(initialUser)
         if (initialUser?.id) identifyUser(initialUser.id)
-        const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+        const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
           const u = s?.user || null
           setUser(u)
           if (u?.id) identifyUser(u.id)
           else resetUser()
           qc.clear() // limpa cache (tier, patients, doses...) ao trocar de usuário
+
+          // Item #081 (release v0.1.7.1) — propaga credentials pro DoseSyncWorker
+          // (Android background) sempre que session muda. Worker precisa do
+          // refresh_token atualizado pra fetch autenticado em background.
+          if (s?.user?.id && s?.refresh_token && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+            setSyncCredentials({
+              supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+              anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+              userId: s.user.id,
+              refreshToken: s.refresh_token,
+              schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
+            }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
+          } else if (event === 'SIGNED_OUT') {
+            clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
+          }
         })
         unsub = () => sub.subscription.unsubscribe()
       } else {
