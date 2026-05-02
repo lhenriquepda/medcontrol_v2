@@ -757,7 +757,15 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #081 — Defense-in-depth Android: alarmes nativos horizonte 24-72h — caminho 3 de 3
-- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1 (Gate 3 device validation em andamento)
+- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1. **Gate validação device 24h idle pendente** — bundle release v0.1.7.3.
+- **Validação 24h idle pendente (gate final):**
+  - User mantém Dosy Dev INSTALADO mas FECHADO por 1 dia inteiro (24h sem abrir)
+  - Pré-test: user cadastra dose +24-30h via web (Vercel prod) ANTES fechar app
+  - Esperado: alarme físico dispara no horário sem nunca user ter aberto Dosy Dev nesse intervalo
+  - Confirma caminhos #083 funcionam end-to-end com app realmente idle longo (não só ~minutos)
+  - Caminhos validados: 1 (trigger DB <2s), 2 (cron 6h FCM data), 4 (WorkManager 6h). Caminho 3 (rescheduleAll quando app abre) é sobre re-agendar AO ABRIR — não testado neste cenário (app fica fechado).
+  - Resultado positivo → marcar #081 nota "Gate 3 em andamento" como ✅ definitivo + log em updates/
+  - Resultado negativo → reabrir investigação (qual caminho falhou? logs Sentry/PostHog/Edge?)
 - **Origem:** [auditoria-live-2026-05-01] BUG-016 — defense-in-depth healthcare healthcare-critical
 - **Esforço:** 6-8h (impl plugin + WorkManager + teste device físico)
 - **Dependências:** nenhuma

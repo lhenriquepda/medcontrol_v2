@@ -83,6 +83,7 @@
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
 **Próxima release v0.1.7.3 (hotfix dedicado — sessão única coordenada):**
+- **#081 gate validação 24h idle** — User mantém Dosy Dev fechado 24h após cadastrar dose teste pré-fechamento. Confirma caminhos #083 funcionam com app idle longo. Fecha nota "Gate 3 device validation em andamento" definitivamente.
 - **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084)
 - **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — toggle ignorado nos caminhos #083
 - **#086** [P1 BUG-019] Resumo Diário não funciona — nunca dispara na hora marcada
@@ -112,13 +113,26 @@
 
 ## 4. Próximo passo imediato
 
-**Próxima sessão dedicada — release v0.1.7.3 (4 itens coordenados):**
+**Próxima sessão dedicada — release v0.1.7.3 (5 itens coordenados):**
+- **#081 gate validação 24h idle** — Dosy Dev fechado por 1 dia inteiro após cadastrar dose teste pré-fechamento. Confirma caminhos #083 funcionam com app realmente idle longo. Fecha nota "Gate 3 device validation em andamento". User responsabilidade: deixar app fechado pelo período. Pode rodar em paralelo com outros itens (não bloqueia).
 - **#084** [P0 security] Rotacionar service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub (incidente 2026-05-02). Plano 8-fase em CHECKLIST §#084.
 - **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — auditar toggle propagation nos 4 caminhos (#083).
 - **#086** [P1 BUG-019] Resumo Diário não funciona — verificar persistência horário + cron + push delivery.
 - **#087** [P1 BUG-020] DND verificar funcional + UX condicional (DND visível só se Alarme Crítico ON). Depende #085.
 
 Branch `release/v0.1.7.3` já criada e ativa.
+
+**Sequência sugerida (sessão dedicada):**
+```
+Pré-sessão: USER cadastra dose teste +24-30h em Vercel prod + FECHA Dosy Dev (gate #081 começa)
+Hora 0-1: validação 24h pós v0.1.7.2 (Sentry, Play Console, dose_alarms_scheduled, logs Supabase JWT janela)
+Hora 1-5: #085 alarme toggle bypass (refactor source-of-truth)
+Hora 5-9: #087 DND UX condicional (reusa fix #085)
+Hora 9-12: #086 resumo diário (paralelo possível)
+Hora ~24: USER reporta se alarme da dose teste disparou no horário → fecha #081 gate
+Hora final: #084 rotação JWT (último, requer redeploy tudo)
+Cleanup + release v0.1.7.3
+```
 
 **P0 restantes (todos manuais user):**
 
