@@ -82,8 +82,11 @@
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
-**Carry-over P0 pra próxima release (v0.1.7.3 ou hotfix):**
-- #084 INCIDENTE 2026-05-02 — service_role JWT vazado em commit, GitGuardian/GitHub Security detectaram. Histórico reescrito + force push, mas chave permanece em cache externos. Rotacionar JWT secret Supabase + atualizar VITE_SUPABASE_ANON_KEY Vercel + .env.local + auditar logs Auth/REST janela 22:23-22:29 UTC.
+**Próxima release v0.1.7.3 (hotfix dedicado — sessão única coordenada):**
+- **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084)
+- **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — toggle ignorado nos caminhos #083
+- **#086** [P1 BUG-019] Resumo Diário não funciona — nunca dispara na hora marcada
+- **#087** [P1 BUG-020] Verificar DND funcional + UX condicional (DND aparece só se Alarme Crítico ON; depende #085)
 
 **Process improvements na release:**
 - Reorganização `contexto/` (auditoria → snapshot imutável em `auditoria/`, archive de docs históricos em `archive/`)
@@ -109,8 +112,13 @@
 
 ## 4. Próximo passo imediato
 
-**P0 urgente (próxima sessão — security incident):**
-- **#084** Rotacionar service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC). Atualizar `VITE_SUPABASE_ANON_KEY` Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela do leak. Pode ser hotfix `v0.1.7.3` ou bundle com próximo release P1.
+**Próxima sessão dedicada — release v0.1.7.3 (4 itens coordenados):**
+- **#084** [P0 security] Rotacionar service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub (incidente 2026-05-02). Plano 8-fase em CHECKLIST §#084.
+- **#085** [P1 BUG-018] Alarme Crítico OFF em Ajustes mas alarme tocou — auditar toggle propagation nos 4 caminhos (#083).
+- **#086** [P1 BUG-019] Resumo Diário não funciona — verificar persistência horário + cron + push delivery.
+- **#087** [P1 BUG-020] DND verificar funcional + UX condicional (DND visível só se Alarme Crítico ON). Depende #085.
+
+Branch `release/v0.1.7.3` já criada e ativa.
 
 **P0 restantes (todos manuais user):**
 
@@ -330,7 +338,10 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#081** [BUG-016] Defense-in-depth Android: WorkManager DoseSyncWorker periódico 6h fetcha doses 72h adiante + agenda via `setAlarmClock()`. Independe de app foreground / websocket / push. Caminho 3 de 3. (commit `49550e4`) — validação device em andamento
 - [x] **#082** [Sessão v0.1.7.1] Dual-app dev/prod: `com.dosyapp.dosy.dev` "Dosy Dev" coexiste com `com.dosyapp.dosy` "Dosy" oficial. Permite testes destrutivos (force stop, idle 24h) sem afetar Dosy oficial. Firebase entry .dev separada. (commit `5b5938e`)
 - [x] **#083** [Sessão v0.1.7.1 → v0.1.7.2] FCM-driven alarm scheduling + 4 caminhos coordenados (idempotente). Trigger DB <2s + Cron 6h FCM data + rescheduleAll quando app abre + WorkManager 6h. Push tray inteligente: skip se alarme nativo já agendado. Fecha BUG-016 100%. Validado end-to-end no device: cadastro web → trigger DB → Edge FCM → AlarmScheduler → alarme físico tocou. (commits `23deca4` + `3465ab6` + `26c51ab`)
-- [ ] **#084** [INCIDENTE 2026-05-02 22:23 UTC] **Rotacionar service_role JWT + JWT secret do projeto Supabase**. Service role JWT foi commitado em migration `20260502091000_dose_trigger_webhook.sql` (commit 85d5e61), pushado pra GitHub público. GitGuardian + GitHub Security detectaram em ~6min (22:23-22:29). Histórico do branch reescrito via git-filter-repo + force push (commit 6310c1e), MAS chave permanece em GitHub commit cache + indexers externos. Service_role JWT bypassa RLS = expõe todos dados saúde de todos users (LGPD categoria especial). Ação: Supabase Dashboard → Settings → API → Roll JWT Secret. Atualizar VITE_SUPABASE_ANON_KEY em Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela 22:23-22:29 UTC. Próxima release v0.1.7.3 ou hotfix imediato. P0 security.
+- [ ] **#084** [INCIDENTE 2026-05-02 22:23 UTC] **Rotacionar service_role JWT + JWT secret do projeto Supabase**. Service role JWT foi commitado em migration `20260502091000_dose_trigger_webhook.sql` (commit 85d5e61), pushado pra GitHub público. GitGuardian + GitHub Security detectaram em ~6min (22:23-22:29). Histórico do branch reescrito via git-filter-repo + force push (commit 6310c1e), MAS chave permanece em GitHub commit cache + indexers externos. Service_role JWT bypassa RLS = expõe todos dados saúde de todos users (LGPD categoria especial). Ação: Supabase Dashboard → Settings → API → Roll JWT Secret. Atualizar VITE_SUPABASE_ANON_KEY em Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela 22:23-22:29 UTC. Bonus: reconectar Vercel↔GitHub (webhook quebrou após force push). Plano detalhado em `CHECKLIST.md §#084` (8 fases, autônomo vs USER ACTION). Próxima release v0.1.7.3. P0 security.
+- [ ] **#085** [BUG-018, reportado user 2026-05-02 v0.1.7.2] **Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim.** User toggle OFF na tela Ajustes → cadastrou dose → alarme nativo fullscreen disparou normalmente, deveria ter recebido apenas notificação push tray. Toggle não respeitado em algum dos 4 caminhos (#083). Possíveis causas: setting não persistido em prefs ou DB; AlarmScheduler não consulta flag antes de agendar; DosyMessagingService.onMessageReceived ignora flag em FCM data path; Edge `notify-doses` skip-push logic não respeita flag user. Auditar todos 4 caminhos + criar source-of-truth single check. P1 healthcare-adjacent (trust violation + LGPD/privacy).
+- [ ] **#086** [BUG-019, reportado user 2026-05-02 v0.1.7.2] **Resumo Diário não funciona — nunca dispara na hora marcada.** Feature de resumo diário configurada em Ajustes (horário definido) nunca enviou notificação. Verificar: persistência de horário em prefs/DB, cron agendado (Edge ou pg_cron), trigger envia push, FCM token ativo, channel notif Android registrado. Se broken end-to-end, decidir: fix em v0.1.7.3 ou parquear feature até v0.1.8.0. P1 broken feature user-facing.
+- [ ] **#087** [BUG-020, reportado user 2026-05-02 v0.1.7.2] **Verificar Não Perturbe funcional + UX condicional.** Verificar se DND atual está respeitando horários configurados (alarme deveria silenciar entre X-Y). Refactor UX: Não Perturbe deve aparecer SOMENTE quando Alarme Crítico ON (toggle pai); quando ON, sub-toggle DND habilita janela horária para desabilitar Alarme Crítico nesse intervalo. Depende de #085 fix (toggle parent precisa funcionar antes UX condicional fazer sentido). P1 UX healthcare-adjacent.
 
 ---
 
@@ -429,9 +440,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 84 itens
-- **Em aberto:** 71 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2 [#083]; #084 carry-over P0)
-- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 17 · **P2:** 22 · **P3:** 25
+- **Total:** 87 itens (+ #085/#086/#087 reportados user 2026-05-02 pós release v0.1.7.2)
+- **Em aberto:** 74 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2 [#083]; #084-#087 abertos pra release v0.1.7.3)
+- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 20 (+#085 alarme bypass, +#086 resumo diário, +#087 DND UX condicional) · **P2:** 22 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

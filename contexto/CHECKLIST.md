@@ -1065,6 +1065,140 @@ public void onMessageReceived(RemoteMessage msg) {
 
 ---
 
+### #085 — BUG-018: Alarme Crítico OFF em Ajustes mas alarme tocou
+- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Origem:** Reportado user 2026-05-02 pós install v0.1.7.2. User toggle OFF em Ajustes → cadastrou dose teste → alarme nativo fullscreen disparou (não deveria — esperado: apenas notificação push tray).
+- **Severidade:** P1 healthcare-adjacent (trust violation user setting + LGPD/privacy implications quanto user opta por menos intrusão)
+- **Esforço:** ~3-5h (auditar 4 caminhos + criar source-of-truth + testes)
+- **Dependências:** nenhuma (independente, mas #087 DND UX depende disso)
+
+#### Diagnóstico provável
+
+Toggle "Alarme Crítico" não está sendo respeitado em algum dos 4 caminhos coordenados de #083. Suspeitos:
+
+| Caminho | Onde verificar | Risco |
+|---|---|---|
+| 1. Trigger DB (Edge `dose-trigger-handler`) | Edge consulta user prefs antes mandar FCM data com `scheduleAlarm:true`? | Alto — Edge talvez ignora flag |
+| 2. Cron 6h (Edge `schedule-alarms-fcm`) | Mesma checagem? | Alto |
+| 3. App `rescheduleAll()` | `criticalAlarm.js` consulta useUserPrefs antes scheduling? | Médio |
+| 4. WorkManager DoseSyncWorker | Worker consulta SharedPreferences flag antes setAlarmClock? | Alto (é background, sem React state) |
+
+#### Investigação inicial
+
+- [ ] Reproduzir: toggle OFF Ajustes → cadastrar dose +1min → confirmar alarme fullscreen disparou
+- [ ] Inspecionar `useUserPrefs.js` — qual key salva o toggle? Persiste em DB ou só local?
+- [ ] Inspecionar Edge `dose-trigger-handler/index.ts` — query user prefs antes responder?
+- [ ] Inspecionar Edge `schedule-alarms-fcm/index.ts` — mesmo
+- [ ] Inspecionar `src/services/criticalAlarm.js` — `scheduleAlarm()` consulta prefs?
+- [ ] Inspecionar `DoseSyncWorker.java` (Android) — lê SharedPreferences `criticalAlarmEnabled`?
+- [ ] Inspecionar `DosyMessagingService.onMessageReceived` — lê flag antes de chamar `AlarmScheduler.schedule()`?
+
+#### Solução
+
+Single source of truth: flag persistida em `medcontrol.user_prefs.critical_alarm_enabled` (DB) + cached SharedPreferences Android.
+
+- Cliente UI: ao toggle, atualiza ambos (DB + local cache via SharedPreferences plugin)
+- Edge functions: leem `user_prefs.critical_alarm_enabled` antes mandar FCM data com `scheduleAlarm:true`. Se OFF, mandam só `pushNotification:true` (tray fallback).
+- AlarmScheduler.schedule() (Android nativo): consulta SharedPreferences cache antes setAlarmClock. Se OFF, no-op (push tray cobre).
+- `criticalAlarm.js` (web/Capacitor): mesma checagem antes de chamar plugin.
+
+#### Aceitação
+
+- [ ] Toggle OFF Ajustes → cadastrar dose → push tray dispara, **alarme fullscreen NÃO** dispara em nenhum dos 4 caminhos
+- [ ] Toggle ON novamente → alarme fullscreen dispara normalmente
+- [ ] Dose já agendada (com toggle ON) + user toggle OFF depois → próxima dose: respeita OFF (cancelar alarme nativo agendado se necessário)
+- [ ] Test cobre todos 4 caminhos: trigger DB, cron 6h, rescheduleAll, WorkManager
+- [ ] Logs Sentry/PostHog telemetria: zero `critical_alarm_fired_when_disabled`
+
+---
+
+### #086 — BUG-019: Resumo Diário não funciona — nunca dispara
+- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Origem:** Reportado user 2026-05-02. Feature configurada em Ajustes (horário definido) mas user nunca recebeu notificação no horário marcado.
+- **Severidade:** P1 broken feature user-facing
+- **Esforço:** ~2-4h (depende de fix vs parquear)
+- **Dependências:** nenhuma
+
+#### Diagnóstico provável
+
+Feature pode ter quebrado em qualquer ponto end-to-end:
+
+1. Persistência horário em prefs/DB — config salva?
+2. Mecanismo agendamento — pg_cron job? Edge cron? AlarmManager local? WorkManager?
+3. Trigger lógica — chega na hora, calcula payload, manda push
+4. FCM token ativo + channel notif Android registrado
+5. UI Ajustes — horário exibido bate com persistido?
+
+#### Investigação inicial
+
+- [ ] Localizar onde feature está implementada (UI Ajustes, service, Edge, cron)
+- [ ] Inspecionar `pages/Settings.jsx` — campo horário salva em qual key?
+- [ ] Inspecionar `useUserPrefs` — `daily_summary_time` ou similar persiste em DB?
+- [ ] Buscar Edge function relevante (`daily-summary`?, `notify-doses`?)
+- [ ] Verificar pg_cron jobs ativos: `SELECT * FROM cron.job` no Supabase
+- [ ] Sentry/logs: erro nas execuções? Job nem roda?
+- [ ] FCM token user — registrado? Chegando push de teste em outras features?
+
+#### Decisão branch points
+
+- **Caminho A — Feature broken end-to-end mas baixa complexidade:** fix em v0.1.7.3
+- **Caminho B — Feature precisa retrabalho significativo:** parquear pra v0.1.8.0 + esconder UI até pronto + comunicar user
+- **Caminho C — Feature funciona, mas user-side issue (FCM token expirado, channel mutado):** dx fix + telemetria preventiva
+
+Decidir após investigação inicial (~30min).
+
+#### Aceitação
+
+- [ ] User configura resumo diário às HH:MM em Ajustes
+- [ ] No horário marcado (±1min), notificação push tray chega
+- [ ] Conteúdo resumo bate com adesão últimas 24h: doses programadas, tomadas, perdidas, próximas
+- [ ] Se feature parqueada (caminho B): UI esconde toggle + nota "em breve" + ROADMAP item v0.1.8.0 criado
+
+---
+
+### #087 — BUG-020: DND verificar funcional + UX condicional ao Alarme Crítico
+- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Origem:** Reportado user 2026-05-02. Solicitação dupla: (1) verificar se Não Perturbe atual respeita janela horária configurada; (2) refactor UX condicional.
+- **Severidade:** P1 UX healthcare-adjacent
+- **Esforço:** ~3-4h (verificação + UX refactor)
+- **Dependências:** **#085 deve fechar primeiro** — toggle parent precisa funcionar pra UX condicional fazer sentido.
+
+#### Verificação funcional (parte 1)
+
+- [ ] Inspecionar implementação atual DND em `pages/Settings.jsx` + `services/notifications.js` + `criticalAlarm.js`
+- [ ] DND tem campos: hora início + hora fim + flag enabled?
+- [ ] Quando alarme deveria disparar dentro da janela DND, qual comportamento atual? (silencia, vibra só, bypassa, nada)
+- [ ] Reproduzir: configurar DND 22:00-08:00 → criar dose 02:00 → testar comportamento
+- [ ] Documentar comportamento atual antes de refactorar
+
+#### Refactor UX condicional (parte 2)
+
+Comportamento desejado por user:
+- Toggle pai: **Alarme Crítico** (Ajustes raiz)
+  - **OFF:** apenas push notification tray (sem alarme fullscreen). DND option **NÃO aparece** na UI.
+  - **ON:** alarme fullscreen ativo. **DND option aparece** abaixo:
+    - DND toggle: enabled / disabled
+    - Se enabled: campos horário início + fim
+    - Comportamento: dentro da janela DND, **Alarme Crítico desativa** (push tray cobre como fallback). Fora da janela: Alarme Crítico normal.
+
+#### Componentes afetados
+
+- `pages/Settings.jsx` — render condicional DND section
+- `useUserPrefs.js` — hook com novos fields se ainda não existirem
+- Migration DB — adicionar `dnd_start_time`, `dnd_end_time`, `dnd_enabled` em `user_prefs` (se ainda não)
+- Edge functions + AlarmScheduler — checar janela DND antes scheduling (mesmo source-of-truth #085)
+
+#### Aceitação
+
+- [ ] Alarme Crítico OFF → DND option não aparece na UI
+- [ ] Alarme Crítico ON → DND option aparece com toggle + campos horário
+- [ ] DND ON + janela 22:00-08:00 → criar dose 02:00 → push tray dispara, alarme fullscreen não
+- [ ] DND OFF (com Alarme Crítico ON) → alarme fullscreen normal independente de horário
+- [ ] DND ON com janela inválida (start > end, atravessa meia-noite) é tratado corretamente
+- [ ] Persistência DB OK — relogar mantém config
+
+---
+
 ## Resumo
 
 - **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
