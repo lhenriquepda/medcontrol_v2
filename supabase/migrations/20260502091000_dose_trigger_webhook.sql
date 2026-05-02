@@ -16,11 +16,11 @@ SET search_path = medcontrol, pg_temp
 AS $$
 DECLARE
   edge_url text := 'https://guefraaqbkcehofchnrc.supabase.co/functions/v1/dose-trigger-handler';
-  -- service_role JWT pra Edge auth bypass
-  service_jwt text := 'SUPABASE_SERVICE_ROLE_REVOKED';
   payload jsonb;
 BEGIN
-  -- Build payload no formato do webhook Supabase (compatível com handler)
+  -- Edge dose-trigger-handler é deployada com --no-verify-jwt.
+  -- Não inclui service_role JWT em SQL/migration por segurança (vazaria em git).
+  -- Validação acontece dentro da Edge.
   payload := jsonb_build_object(
     'type', TG_OP,
     'table', TG_TABLE_NAME,
@@ -32,10 +32,7 @@ BEGIN
   -- Async HTTP POST (não-bloqueia INSERT). Falha silenciosa se Edge fora do ar.
   PERFORM net.http_post(
     url := edge_url,
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || service_jwt
-    ),
+    headers := jsonb_build_object('Content-Type', 'application/json'),
     body := payload,
     timeout_milliseconds := 5000
   );
