@@ -796,6 +796,120 @@
   - Duplicação de alarmes: cuidado com idempotência ao reagendar.
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
+### #083 — FCM-driven alarm scheduling + 4 caminhos coordenados (idempotente)
+- **Status:** ⏳ Aberto — release v0.1.7.2
+- **Origem:** [Sessão v0.1.7.1] User pedido: "alarme funcionar mesmo sem abrir app, dose +1mês precisa tocar"
+- **Esforço:** ~6-8h (Edge + Android nativo + migration + testes)
+- **Dependências:** #079 #080 #081 já fechados; nenhuma externa
+- **Severidade:** P0 — healthcare-critical, fecha BUG-016 100%
+
+#### Arquitetura — 4 caminhos coordenados pra agendar alarme nativo
+
+Cada caminho roda independente. **Idempotência via id determinístico** (`AlarmScheduler.idFromString(doseId)` — mesmo id = substitui, nunca duplica). User vê **1 alarme** mesmo se 4 caminhos tentarem agendar.
+
+| # | Caminho | Quando dispara | Cobertura | Latência |
+|---|---|---|---|---|
+| **1** | Trigger DB Supabase ON INSERT/UPDATE doses | Imediato ao cadastrar/editar dose | "+30min via web, app fechado" | <2s |
+| **2** | Cron Edge 6h `notify-doses-schedule` | Sweep periódico | Garantia caso trigger falhou; doses 72h adiante | até 6h |
+| **3** | App `rescheduleAll()` quando abre | Toda vez user abre app | Redundância adicional | imediato |
+| **4** | WorkManager DoseSyncWorker (#081 atual) | A cada 6h em background | Backup se FCM falhar entrega | até 6h |
+
+#### Notificação push tray — fallback inteligente
+
+> Filosofia user: "se dose tiver alarme setado, ok; se não, manda push"
+
+- **Hoje:** `notify-doses` cron 1min manda push tray sempre (~advanceMins antes da dose)
+- **Novo:** cron antes de mandar push, consulta tabela `dose_alarms_scheduled (doseId, userId, deviceId)`:
+  - Se row existe → device já tem alarme nativo agendado → **skip push** (alarme fullscreen cobre)
+  - Se row ausente → push é única chance → manda push tray normal
+
+Comportamento prático user:
+- Caso ideal: alarme nativo agendado → device toca despertador fullscreen no horário, sem push tray redundante
+- Caso fallback: alarme não foi agendado (caminhos 1-4 falharam todos) → push tray dispara como única notificação — user vê algo, mesmo que menos crítico
+
+#### Componentes a implementar
+
+**A. Database migration `20260502xxxxxx_dose_alarms_scheduled.sql`:**
+```sql
+CREATE TABLE medcontrol.dose_alarms_scheduled (
+  "doseId" uuid REFERENCES medcontrol.doses(id) ON DELETE CASCADE,
+  "userId" uuid NOT NULL,
+  "deviceId" text NOT NULL,
+  scheduled_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("doseId", "deviceId")
+);
+-- RLS: service_role only
+```
+
+**B. Edge Function NOVA `schedule-alarms-fcm` (cron 6h):**
+- Pra cada user com push_subscription ativa, busca doses pendentes próximas 72h
+- Manda FCM **data message** `{"action": "schedule_alarms", "doses": [{...}]}` pra deviceToken
+- **NÃO inclui notification payload** (silencioso, só wake-up)
+- Atualiza `dose_alarms_scheduled` (especulativo — assume FCM entrega)
+
+**C. Edge Function NOVA `dose-trigger-handler` (Postgres webhook trigger):**
+- Trigger ON INSERT/UPDATE em `medcontrol.doses` chama essa função
+- Lógica idêntica a `schedule-alarms-fcm` mas pra dose única recém-cadastrada
+
+**D. Edge `notify-doses` (modificada):**
+- Antes de enviar push tray, query `dose_alarms_scheduled` por doseId+deviceId
+- Se row existe → skip
+- Se não → manda push (mantém comportamento atual)
+
+**E. Android `FirebaseMessagingService` (handler novo):**
+```java
+@Override
+public void onMessageReceived(RemoteMessage msg) {
+  Map<String, String> data = msg.getData();
+  if ("schedule_alarms".equals(data.get("action"))) {
+    JSONArray doses = new JSONArray(data.get("doses"));
+    for (JSONObject d : doses) {
+      AlarmScheduler.scheduleDose(ctx, idFromString(d.getString("doseId")),
+          parseInstant(d.getString("scheduledAt")), d);
+      // Reporta ao server
+      reportAlarmScheduled(ctx, d.getString("doseId"), getDeviceId());
+    }
+  } else {
+    super.onMessageReceived(msg); // notification message — handler default
+  }
+}
+```
+
+**F. Android `criticalAlarm` plugin:**
+- Novo método `reportAlarmScheduled(doseId)` chama Supabase REST insert dose_alarms_scheduled
+- Auth via SharedPreferences (já temos via #081)
+
+**G. App `rescheduleAll` (modificado):**
+- Após agendar local: também upsert `dose_alarms_scheduled` (defesa em camadas)
+
+#### Aceitação
+
+1. ✅ User cadastra dose +1 mês via web. Não abre app Android. 1 mês depois alarme dispara fullscreen.
+2. ✅ User cadastra dose +30min via web. Trigger manda FCM data <2s. Device agenda. 30min depois despertador toca.
+3. ✅ User cadastra dose +5min via web (advanceMins=5). FCM data + cron notify-doses ambos rodam. Device agenda alarme via FCM data. Cron notify-doses ANTES de mandar push tray detecta alarme já agendado e skip — user vê apenas despertador, sem push redundante.
+4. ✅ Device offline durante FCM data send. Volta online 2h depois. Cron 6h re-tenta + entrega. Device agenda. Alarme funciona.
+5. ✅ User cadastra dose +5min via web. Push FCM data falha entrega total (rate limit). Cron `notify-doses` 1min detecta dose em janela, alarme NÃO agendado → manda push tray. User vê notif "dose em 1min" como fallback.
+6. ✅ User abre app após 1 semana. App roda rescheduleAll. Verifica quais doses já tem alarme agendado (via local SharedPreferences). Adiciona apenas as faltantes. **Sem duplicar.**
+7. ✅ 4 caminhos tentam agendar mesma dose. AlarmScheduler.scheduleDose com mesmo id = replace. user vê 1 alarme.
+
+#### Riscos / mitigação
+
+- **FCM data message pode ter delivery delay** (Doze mode estendido) — mitigação: cron 6h sweep + WorkManager #081 + rescheduleAll quando app abre = 4 caminhos
+- **DB trigger pode falhar silenciosamente** — mitigação: cron 6h pega no próximo ciclo
+- **Bateria** — wake-up FCM data 4×/dia + cron sync = baixo impacto (Slack/WhatsApp fazem dezenas/dia)
+- **Latência cron 6h pra dose +30min "via web app fechado"** — mitigação: trigger DB cobre <2s
+
+#### Implementação faseada (sub-items se quiser quebrar)
+
+- #083.1 Migration `dose_alarms_scheduled`
+- #083.2 Edge `schedule-alarms-fcm` cron 6h
+- #083.3 Edge `dose-trigger-handler` + Postgres trigger
+- #083.4 `notify-doses` modificação (skip se alarme agendado)
+- #083.5 Android FirebaseMessagingService handler
+- #083.6 `criticalAlarm` plugin: reportAlarmScheduled method
+- #083.7 App rescheduleAll: upsert dose_alarms_scheduled
+- #083.8 Validação device físico (idle 1 semana sem abrir app)
+
 ### #082 — Dual-app Android: Dosy Dev + Dosy oficial coexistem
 - **Status:** ✅ Concluído @ commit 5b5938e (2026-05-01) — release v0.1.7.1
 - **Origem:** [Sessão v0.1.7.1] User pedido: "ambiente dev independente, fácil merge em Dosy quando release"
