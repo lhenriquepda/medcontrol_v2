@@ -72,6 +72,15 @@ public class DoseSyncWorker extends Worker {
             return Result.success(); // não retry — user ainda não logou
         }
 
+        // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
+        // Se OFF, skip scheduling (notify-doses cron mandará push tray).
+        // Default true se SP ausente (alarme ON pre-existing behavior).
+        boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
+        if (!criticalAlarmEnabled) {
+            Log.d(TAG, "critical alarm OFF — skip schedule (push tray covers)");
+            return Result.success();
+        }
+
         try {
             String accessToken = refreshAccessToken(url, anon, refreshToken, sp);
             if (accessToken == null) {

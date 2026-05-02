@@ -162,6 +162,13 @@ public class CriticalAlarmPlugin extends Plugin {
             deviceId = java.util.UUID.randomUUID().toString();
         }
 
+        // Item #085 (release v0.1.7.3) — toggle Alarme Crítico do user.
+        // Se passado, atualiza SP. Senão, mantém valor existente (default true).
+        boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
+        if (call.hasOption("criticalAlarmEnabled")) {
+            criticalAlarmEnabled = call.getBoolean("criticalAlarmEnabled", true);
+        }
+
         sp.edit()
             .putString("supabase_url", url)
             .putString("anon_key", anonKey)
@@ -169,11 +176,30 @@ public class CriticalAlarmPlugin extends Plugin {
             .putString("refresh_token", refreshToken)
             .putString("schema", schema)
             .putString("device_id", deviceId)
+            .putBoolean("critical_alarm_enabled", criticalAlarmEnabled)
             .apply();
 
         JSObject ret = new JSObject();
         ret.put("deviceId", deviceId);
         call.resolve(ret);
+    }
+
+    /**
+     * Item #085 (release v0.1.7.3) — atualiza só o toggle Alarme Crítico em
+     * SharedPreferences. Chamado pelo useUserPrefs.mutationFn quando user
+     * mexe no toggle em Ajustes (sem precisar redo full setSyncCredentials).
+     * DoseSyncWorker + DosyMessagingService leem essa flag antes de agendar.
+     */
+    @PluginMethod
+    public void setCriticalAlarmEnabled(PluginCall call) {
+        Boolean enabled = call.getBoolean("enabled");
+        if (enabled == null) {
+            call.reject("enabled required (boolean)");
+            return;
+        }
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+        sp.edit().putBoolean("critical_alarm_enabled", enabled).apply();
+        call.resolve();
     }
 
     /**
