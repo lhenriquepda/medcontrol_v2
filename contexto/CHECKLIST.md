@@ -1148,7 +1148,7 @@ Single source of truth: flag persistida em `medcontrol.user_prefs.critical_alarm
 ---
 
 ### #086 — BUG-019: Resumo Diário não funciona — nunca dispara
-- **Status:** ⏳ Aberto — release v0.1.7.3
+- **Status:** ⏸️ Bloqueado — parqueado pra v0.1.8.0 (caminho B). UI ocultada em v0.1.7.3 (commit pending).
 - **Origem:** Reportado user 2026-05-02. Feature configurada em Ajustes (horário definido) mas user nunca recebeu notificação no horário marcado.
 - **Severidade:** P1 broken feature user-facing
 - **Esforço:** ~2-4h (depende de fix vs parquear)
@@ -1177,10 +1177,38 @@ Feature pode ter quebrado em qualquer ponto end-to-end:
 #### Decisão branch points
 
 - **Caminho A — Feature broken end-to-end mas baixa complexidade:** fix em v0.1.7.3
-- **Caminho B — Feature precisa retrabalho significativo:** parquear pra v0.1.8.0 + esconder UI até pronto + comunicar user
+- **Caminho B — Feature precisa retrabalho significativo:** parquear pra v0.1.8.0 + esconder UI até pronto + comunicar user ✅ ESCOLHIDO
 - **Caminho C — Feature funciona, mas user-side issue (FCM token expirado, channel mutado):** dx fix + telemetria preventiva
 
-Decidir após investigação inicial (~30min).
+#### Decisão tomada (2026-05-02): Caminho B
+
+Investigação concluída em src/services/notifications.js:312-338. Resumo diário
+implementado client-side via Capacitor LocalNotifications. Schedule
+{ every: 'day' } depende de:
+- App abrir pelo menos 1x pra rescheduleAll() agendar
+- Sobreviver Doze mode Android
+
+Sem cron server-side equivalente (não há Edge `daily-summary-cron`). User idle
+nunca recebe.
+
+Para fix completo precisaria:
+- Migration nova: tabela `daily_summary_log` (PK userId+date) pra idempotência
+- Edge function `daily-summary-cron`
+- Schedule pg_cron 1x/hora chamando Edge
+- Timezone handling per-user (default America/Sao_Paulo, mas pode haver users
+  fora — tabela user_prefs sem coluna timezone atualmente)
+- Push tray formatting + payload
+
+Esforço: ~3-5h. Escopo grande pra hotfix v0.1.7.3 (focado #084 security +
+#085/#087 toggle bypass).
+
+**Ação v0.1.7.3:** ocultar UI Resumo Diário em Settings.jsx pra user não
+esperar feature broken. Toggle + horário continuam persistidos em DB se
+setados antes; apenas não-renderizados.
+
+**Próxima sessão v0.1.8.0:** quebrar #086 em sub-itens (#086.1 migration,
+#086.2 Edge, #086.3 cron schedule, #086.4 timezone field, #086.5 reativar
+UI) e implementar.
 
 #### Aceitação
 

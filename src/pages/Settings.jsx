@@ -395,30 +395,12 @@ export default function Settings() {
             </>
           )}
 
-          {/* Resumo diário */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">Resumo diário</p>
-              <p className="text-xs text-slate-500">Visão geral das doses do dia</p>
-            </div>
-            <button
-              onClick={() => updateNotif({ dailySummary: !notif.dailySummary })}
-              className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.dailySummary ? 'bg-brand-600' : 'bg-slate-300'}`}
-            >
-              <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.dailySummary ? 'translate-x-5' : ''}`} />
-            </button>
-          </div>
-          {notif.dailySummary && (
-            <label className="block">
-              <span className="block text-xs font-medium mb-1">Horário do resumo</span>
-              <input
-                type="time"
-                className="input"
-                value={notif.summaryTime}
-                onChange={(e) => updateNotif({ summaryTime: e.target.value })}
-              />
-            </label>
-          )}
+          {/* Resumo diário — Item #086 (BUG-019): UI ocultada em v0.1.7.3.
+              Feature broken end-to-end (LocalNotifications client-side só
+              dispara se app abrir; sem cron server-side equivalente).
+              Reativar quando Edge daily-summary-cron estiver pronta em
+              release v0.1.8.0. Toggle/horário ainda persistem em DB se
+              setados anteriormente — apenas escondidos visualmente. */}
         </motion.section>
 
         {/* Conta */}
