@@ -1,0 +1,282 @@
+/* ============================================================
+   Dosy Design System — Foundations
+   Warm fintech / wellness aesthetic. Light-first.
+   ============================================================ */
+
+/* ---- Type ---- */
+/* Gilroy is the brand font but is paid. Substituting with Manrope from
+   Google Fonts (geometric sans, very close x-height and proportions to Gilroy).
+   Replace url() below with self-hosted Gilroy when licensed. */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* ===========================================================
+     COLORS — Light mode (DEFAULT / PRIMARY)
+     =========================================================== */
+
+  /* Surfaces — never pure white */
+  --bg:            #FFF4EC; /* dominant cream/peach background */
+  --bg-elevated:   #FFFAF5; /* cards layered on bg */
+  --bg-sunken:     #FBE9DC; /* wells, inset states */
+  --bg-overlay:    rgba(26, 18, 14, 0.42); /* modal scrim, warm */
+
+  /* Sunset primary gradient (signature) */
+  --sunset-1:      #FF3D7F; /* magenta-rose */
+  --sunset-2:      #FF6B5B; /* coral */
+  --sunset-3:      #FFA56B; /* warm orange */
+  --gradient-sunset: linear-gradient(135deg, #FF3D7F 0%, #FF6B5B 50%, #FFA56B 100%);
+  --gradient-sunset-soft: linear-gradient(135deg, #FFD0DC 0%, #FFD4C2 50%, #FFE5D6 100%);
+  --gradient-sunset-radial: radial-gradient(circle at 30% 20%, #FFA56B 0%, #FF6B5B 45%, #FF3D7F 100%);
+
+  /* Primary as solid (mid of gradient) */
+  --primary:       #FF6B5B;
+  --primary-hover: #F25A4B;
+  --primary-press: #E04638;
+
+  /* Peach accents (secondary cards, chips) */
+  --peach-50:      #FFF4EC;
+  --peach-100:     #FFE5D6;
+  --peach-200:     #FFD4C2;
+  --peach-300:     #FFB99B;
+  --peach-400:     #FF9A75;
+
+  /* Foreground — almost-black, never pure */
+  --fg:            #1A1A1A; /* primary text, icons */
+  --fg-secondary:  #7A7068; /* warm gray */
+  --fg-tertiary:   #A89F94; /* meta, captions */
+  --fg-disabled:   #C8BEB3;
+  --fg-on-sunset:  #FFFFFF; /* text on sunset gradient */
+
+  /* Borders / dividers — barely-there warm tints */
+  --border:        rgba(26, 26, 26, 0.06);
+  --border-strong: rgba(26, 26, 26, 0.12);
+  --divider:       rgba(122, 112, 104, 0.18);
+
+  /* Semantic */
+  --success:       #6EC9A8; /* mint */
+  --success-bg:    #DDF1E8;
+  --warning:       #F2B441;
+  --warning-bg:    #FCEACB;
+  --danger:        #E5564A; /* coral-red, lives in same family as sunset */
+  --danger-bg:     #FAD8D3;
+  --info:          #C9856E; /* warm tan, never blue */
+  --info-bg:       #F5E2D8;
+
+  /* Shadows — warm, not gray */
+  --shadow-xs:     0 1px 2px 0 rgba(74, 36, 16, 0.05);
+  --shadow-sm:     0 2px 6px -1px rgba(74, 36, 16, 0.07), 0 1px 2px 0 rgba(74, 36, 16, 0.04);
+  --shadow-md:     0 8px 20px -6px rgba(74, 36, 16, 0.10), 0 2px 6px -2px rgba(74, 36, 16, 0.05);
+  --shadow-lg:     0 20px 40px -12px rgba(74, 36, 16, 0.18), 0 6px 16px -6px rgba(74, 36, 16, 0.08);
+  --shadow-sunset: 0 12px 32px -8px rgba(255, 61, 127, 0.35), 0 4px 12px -4px rgba(255, 107, 91, 0.25);
+
+  /* ===========================================================
+     SPACING
+     =========================================================== */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ===========================================================
+     RADII — generous, consistent
+     =========================================================== */
+  --radius-xs:    6px;
+  --radius-sm:    12px;
+  --radius-md:    16px;  /* small cards, inputs */
+  --radius-lg:    24px;  /* main cards, hero */
+  --radius-xl:    32px;  /* modal/sheet tops */
+  --radius-pill:  9999px;/* buttons, chips, bottom nav */
+
+  /* ===========================================================
+     TYPE — Sora (Gilroy substitute)
+     =========================================================== */
+  --font-display: 'Manrope', 'Gilroy', system-ui, -apple-system, sans-serif;
+  --font-body:    'Manrope', 'Gilroy', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* Weights */
+  --w-light:  300;
+  --w-regular:400;
+  --w-medium: 500;
+  --w-semi:   600;
+  --w-bold:   700;
+  --w-black:  800;
+
+  /* Mobile-first scale (per spec: 32–48px titles) */
+  --fs-display:  48px;  /* hero metric */
+  --fs-h1:       36px;
+  --fs-h2:       28px;
+  --fs-h3:       22px;
+  --fs-h4:       18px;
+  --fs-body:     16px;
+  --fs-small:    14px;
+  --fs-caption:  12px;
+  --fs-overline: 11px;
+
+  --lh-tight:  1.05;
+  --lh-snug:   1.2;
+  --lh-normal: 1.45;
+  --lh-loose:  1.6;
+
+  --tracking-tight:  -0.03em; /* large display */
+  --tracking-snug:   -0.02em; /* h1/h2 */
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-overline: 0.12em;
+
+  /* Motion */
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:  150ms;
+  --dur-base:  250ms;
+  --dur-slow:  400ms;
+}
+
+/* ===========================================================
+   DARK MODE — secondary, still warm (never cold blue-black)
+   =========================================================== */
+:root[data-theme="dark"], .dark {
+  --bg:            #1C1410; /* warm near-black, brown-tinted */
+  --bg-elevated:   #261B16;
+  --bg-sunken:     #150E0A;
+  --bg-overlay:    rgba(0, 0, 0, 0.6);
+
+  --peach-50:      #2A1F18;
+  --peach-100:     #3A2820;
+  --peach-200:     #4A3128;
+  --peach-300:     #5C3D31;
+  --peach-400:     #7A4F3F;
+
+  --fg:            #FFF4EC;
+  --fg-secondary:  #C8B8AB;
+  --fg-tertiary:   #8E7F73;
+  --fg-disabled:   #5C5048;
+
+  --border:        rgba(255, 244, 236, 0.08);
+  --border-strong: rgba(255, 244, 236, 0.16);
+  --divider:       rgba(255, 244, 236, 0.10);
+
+  --success-bg:    rgba(110, 201, 168, 0.15);
+  --warning-bg:    rgba(242, 180, 65, 0.15);
+  --danger-bg:     rgba(229, 86, 74, 0.18);
+  --info-bg:       rgba(201, 133, 110, 0.18);
+
+  --shadow-xs:     0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm:     0 2px 6px -1px rgba(0, 0, 0, 0.35);
+  --shadow-md:     0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  --shadow-lg:     0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  --shadow-sunset: 0 12px 32px -8px rgba(255, 61, 127, 0.4);
+}
+
+/* ===========================================================
+   SEMANTIC TYPE CLASSES
+   =========================================================== */
+
+html, body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.t-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: var(--w-black);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: var(--w-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-snug);
+}
+
+.t-h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: var(--w-bold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+.t-h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+.t-h4 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-snug);
+}
+
+.t-body {
+  font-size: var(--fs-body);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-normal);
+}
+
+.t-body-medium {
+  font-size: var(--fs-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-normal);
+}
+
+.t-small {
+  font-size: var(--fs-small);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-normal);
+  color: var(--fg-secondary);
+}
+
+.t-caption {
+  font-size: var(--fs-caption);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+  color: var(--fg-tertiary);
+}
+
+.t-overline {
+  font-size: var(--fs-overline);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+}
+
+.t-metric {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: var(--w-black);
+  line-height: 1;
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sunset text fill — for accent words/numbers on light bg */
+.t-sunset {
+  background: var(--gradient-sunset);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
