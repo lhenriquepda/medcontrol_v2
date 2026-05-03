@@ -115,7 +115,10 @@ export default function Dashboard() {
   const { data: todayDoses = [] } = useDoses(windows.today)
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
   const { data: overdueAll = [] } = useDoses(windows.overdue)
-  const overdueNow = overdueAll.length
+  // overdueAll cache pode conter doses com status atualizado post-patch
+  // (status='done' ou 'skipped' após user marcar). Filtra por status atual
+  // pra count refletir tempo-real sem precisar refetch + revisitar tela.
+  const overdueNow = overdueAll.filter((d) => d.status === 'overdue').length
   const { data: weekDoses = [] } = useDoses(windows.week)
   const adherence = (() => {
     const past = weekDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
