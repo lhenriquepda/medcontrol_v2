@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { TIMING, EASE } from '../animations'
@@ -15,6 +16,8 @@ function validatePassword(pwd) {
 export default function Login() {
   const { signInEmail, signUpEmail, resetPassword, signInDemo, hasSupabase } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [mode, setMode] = useState('signin')   // 'signin' | 'signup' | 'forgot'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -41,6 +44,18 @@ export default function Login() {
         await resetPassword(email)
         toast.show({ message: 'Email enviado. Verifique sua caixa de entrada (e spam).', kind: 'success' })
         setMode('signin')
+      }
+      // Item #090 (release v0.1.7.4) — BUG-023: pós-login não redirecionava
+      // pra Início se URL atual era rota authenticated-only (ex: /ajustes
+      // herdada da session anterior pré-logout). React Router preservava
+      // pathname após user mudar null→logged, fazendo Settings renderizar
+      // direto. Fix: navigate('/') explícito após signin/signup success
+      // se path atual não é raiz nem reset-password (preserva deep links
+      // legítimos como /reset-password com token).
+      if (mode === 'signin' || mode === 'signup') {
+        if (location.pathname !== '/' && location.pathname !== '/reset-password') {
+          navigate('/', { replace: true })
+        }
       }
     } catch (err) {
       toast.show({ message: err.message || 'Falha na operação', kind: 'error' })
@@ -91,17 +106,34 @@ export default function Login() {
           )}
 
           <form onSubmit={submit} className="space-y-3">
+            {/* Item #011 (release v0.1.7.4) — labels explícitos pra A11y idosos
+                + TalkBack lê corretamente. Mantém placeholder pra UX visual. */}
             {mode === 'signup' && (
-              <input type="text" required placeholder="Seu nome" className="input"
-                     value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+              <div>
+                <label htmlFor="login-name" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
+                  Nome
+                </label>
+                <input id="login-name" type="text" required placeholder="Seu nome" className="input"
+                       value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+              </div>
             )}
-            <input type="email" required placeholder="Email" className="input"
-                   value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            <div>
+              <label htmlFor="login-email" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
+                Email
+              </label>
+              <input id="login-email" type="email" required placeholder="seu@email.com" className="input"
+                     value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            </div>
             {mode !== 'forgot' && (
-              <input type="password" required placeholder="Senha" className="input"
-                     value={password} onChange={(e) => setPassword(e.target.value)}
-                     minLength={mode === 'signup' ? 8 : undefined}
-                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
+              <div>
+                <label htmlFor="login-password" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
+                  Senha
+                </label>
+                <input id="login-password" type="password" required placeholder="••••••••" className="input"
+                       value={password} onChange={(e) => setPassword(e.target.value)}
+                       minLength={mode === 'signup' ? 8 : undefined}
+                       autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
+              </div>
             )}
             {mode === 'signin' && (
               <div className="flex justify-end">
@@ -132,6 +164,15 @@ export default function Login() {
                     {' '}e consinto com o tratamento dos meus dados de saúde conforme a LGPD.
                   </span>
                 </label>
+                {/* Item #020 (release v0.1.7.4) — Disclaimer médico no signup.
+                    Plan FASE 18.5.1 + Auditoria Dim 16. Aparece visivelmente
+                    pra deixar claro escopo do Dosy antes de criar conta. */}
+                <div className="rounded-lg border border-amber-300/60 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-900/20 p-3 text-xs text-amber-900 dark:text-amber-100 leading-snug">
+                  <strong className="block mb-1">⚠️ Aviso importante</strong>
+                  Dosy é uma ferramenta de organização e lembrete de medicação.
+                  <strong> Não substitui prescrição, diagnóstico ou orientação de profissional de saúde.</strong>{' '}
+                  Em caso de dúvida sobre seu tratamento, consulte seu médico ou farmacêutico.
+                </div>
               </>
             )}
             <button type="submit" className="btn-primary w-full" disabled={busy}>

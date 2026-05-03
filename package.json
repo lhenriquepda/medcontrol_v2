@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "0.1.7.3",
+  "version": "0.1.7.4",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -17,7 +17,13 @@
     "format:check": "prettier --check src",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --max-warnings=80"
+    ]
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
@@ -71,7 +77,9 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.0",
+    "lint-staged": "^16.4.0",
     "pg": "^8.20.0",
     "postcss": "^8.4.39",
     "prettier": "^3.8.3",

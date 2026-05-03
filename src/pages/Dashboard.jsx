@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TIMING, EASE } from '../animations'
-// FASE 23 backlog: supabase + hasSupabase removidos — extend_continuous_treatments desabilitado
+import { supabase, hasSupabase } from '../services/supabase'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
@@ -28,17 +28,27 @@ export default function Dashboard() {
   const undoMut = useUndoDose()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Rolling 5-day horizon for continuous treatments. RPC is idempotent +
-  // cheap (no-op when horizon already covers next 5 days). Runs once per
-  // mount; pg_cron also runs daily as backup for inactive users.
-  // FASE 23 backlog: RPC `extend_continuous_treatments` foi removida do schema
-  // (migration perdida). Chamada client-side desabilitada até nova migration.
-  // pg_cron faz fallback diário; impacto = doses contínuas só renovam 1x/dia
-  // pra usuários ativos (vs sob-demanda no mount). OK pra Beta interno.
-  // useEffect(() => {
-  //   if (!hasSupabase) return
-  //   ...rpc('extend_continuous_treatments')
-  // }, [qc])
+  // Item #014 (release v0.1.7.4) — RPC extend_continuous_treatments recriada.
+  // Rolling 5-day horizon for continuous treatments. RPC idempotente + cheap
+  // (no-op quando horizon já cobre próximos 5 dias). Runs once per mount;
+  // pg_cron também roda diário como backup pra users inativos.
+  useEffect(() => {
+    if (!hasSupabase) return
+    supabase
+      .schema('medcontrol')
+      .rpc('extend_continuous_treatments', { p_days_ahead: 5 })
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('[Dashboard] extend_continuous_treatments rpc error:', error.message)
+          return
+        }
+        if (data?.dosesAdded > 0) {
+          console.log('[Dashboard] extend_continuous: added', data.dosesAdded, 'doses across', data.treatmentsExtended, 'treatments')
+          qc.invalidateQueries({ queryKey: ['doses'] })
+        }
+      })
+      .catch(err => console.warn('[Dashboard] extend_continuous_treatments exception:', err?.message))
+  }, [qc])
   const [filters, setFilters] = useState({ range: '12h', patientId: null, status: null, type: null })
 
   // Notif-tap → IDs pra abrir em modal multi-dose
@@ -147,8 +157,11 @@ export default function Dashboard() {
       qc.refetchQueries({ queryKey: ['patients'] }),
       qc.refetchQueries({ queryKey: ['user_prefs'] }),
       qc.refetchQueries({ queryKey: ['my_tier'] }),
-      // FASE 23 backlog: extend_continuous_treatments RPC removida — disabilitada.
-      Promise.resolve()
+      // Item #014 — refresh sob-demanda do horizon de tratamentos contínuos
+      hasSupabase
+        ? supabase.schema('medcontrol').rpc('extend_continuous_treatments', { p_days_ahead: 5 })
+            .catch(err => console.warn('[refresh] extend_continuous err:', err?.message))
+        : Promise.resolve()
     ])
   }
   const ptr = usePullToRefresh(handleRefresh)
