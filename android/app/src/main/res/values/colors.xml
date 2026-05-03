@@ -4,6 +4,6 @@
     <color name="colorPrimary">#FF6B5B</color>
     <color name="colorPrimaryDark">#E04638</color>
     <color name="colorAccent">#FF3D7F</color>
-    <!-- Splash background — matches --dosy-bg cream peach -->
+    <!-- Splash background — matches dosy-bg cream peach -->
     <color name="dosy_splash_bg">#FFF4EC</color>
 </resources>
