@@ -757,7 +757,7 @@
 - **Detalhe:** [auditoria-live-2026-05-01/bugs-encontrados.md#bug-016](auditoria-live-2026-05-01/bugs-encontrados.md#bug-016)
 
 ### #081 — Defense-in-depth Android: alarmes nativos horizonte 24-72h — caminho 3 de 3
-- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1. **Gate validação device 24h idle pendente** — bundle release v0.1.7.3.
+- **Status:** ✅ Concluído @ commit 49550e4 (2026-05-01) — release v0.1.7.1. **Gate validação device 24h idle FECHADO 2026-05-02** — alarme dose teste tocou após Dosy Dev fechado por 24h sem abrir, confirmando defense-in-depth #083 funciona end-to-end real. BUG-016 100% resolvido.
 - **Validação 24h idle pendente (gate final):**
   - User mantém Dosy Dev INSTALADO mas FECHADO por 1 dia inteiro (24h sem abrir)
   - Pré-test: user cadastra dose +24-30h via web (Vercel prod) ANTES fechar app
@@ -963,7 +963,7 @@ public void onMessageReceived(RemoteMessage msg) {
 
 ---
 
-### #084 — Hotfix v0.1.7.3: rotação service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub
+### #084 — Hotfix v0.1.7.5: rotação service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub
 - **Status:** ⏳ Aberto — sessão dedicada próxima
 - **Origem:** INCIDENTE 2026-05-02 22:23 UTC. Migration `20260502091000_dose_trigger_webhook.sql` (commit original `85d5e61`) foi commitada com service_role JWT inline. GitGuardian + GitHub Security flagged em ~6min. Histórico do branch reescrito via `git-filter-repo` + force push (commit `6310c1e`). Tag `pre-secret-purge-backup` empurrada origin como referência.
 - **Severidade:** P0 security — service_role bypassa RLS = exposição teórica de TODOS dados saúde de TODOS users (LGPD categoria especial). Chave permanece em GitHub commit cache + indexers externos (Google cache, Wayback, etc) por tempo indeterminado.

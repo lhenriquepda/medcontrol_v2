@@ -87,13 +87,10 @@
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
-**Próxima release v0.1.7.4 (hotfix dedicado security):**
+**Próxima release v0.1.7.5 (bundle security + financial — sessão dedicada):**
 - **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084 com FASE 1.5 audit secrets adicionais + FASE 8.5 close alerts GitHub/GitGuardian dashboards)
-- **#087 Fase B** [opcional, P1] Android nativo respeitar DND fire time (AlarmActivity abort + DoseSyncWorker skip schedule)
-- **#081 gate validação 24h idle** [opcional] User mantém Dosy Dev fechado 24h após cadastrar dose teste pré-fechamento. Fecha nota "Gate 3 device validation em andamento". Em andamento — pode terminar antes da release v0.1.7.4.
-
-**Próxima release v0.1.7.5 (otimização egress — bloqueador financial):**
 - **#092** [P0 CRÍTICO BUG-025] Reduzir egress Supabase 20GB→<5GB/mês ANTES grace period 01/Jun/2026. Audit breakdown + otimizar TanStack refetch + Realtime filtering + Edge cron intervals.
+- **#087 Fase B** [opcional, P1] Android nativo respeitar DND fire time (AlarmActivity abort + DoseSyncWorker skip schedule)
 
 **Items pendentes pra v0.1.8.0 (próxima minor):**
 - **#086** [P1 BUG-019] Resumo Diário fix completo (migration daily_summary_log + Edge cron + timezone)
