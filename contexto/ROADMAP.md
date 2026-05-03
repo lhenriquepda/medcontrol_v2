@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.7.5` em desenvolvimento (branch `release/v0.1.7.5`) · master ainda em `0.1.7.4`.
-**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente). Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.1.7.5` (tag `v0.1.7.5`) · branch `master` · sync com `origin/master`.
+**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.1.7.5 (master). `dosy-dev.vercel.app` = release branch ativa (atualmente espelha master). Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,9 +58,17 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.7.4 publicada 2026-05-03 (Vercel + Play Store Internal Testing AAB versionCode 28 + tag git `v0.1.7.4`).
-**Em desenvolvimento:** v0.1.7.5 (branch `release/v0.1.7.5`) — egress reduction + race fix coded, AAB/deploy pendentes.
+**Última release:** v0.1.7.5 publicada 2026-05-03 (Vercel `dosy-app.vercel.app` + Play Store Internal Testing AAB versionCode 30 + tag git `v0.1.7.5`).
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
+
+**Items fechados na release v0.1.7.5 (egress + race + JWT rotation):**
+- ✅ **#092 [P0 CRÍTICO BUG-025]** Egress reduction Supabase: Realtime postgres_changes filter `userId=eq` server-side; subscriptions removido do Realtime; listDoses default range fail-safe (-30d/+60d) + paginate cap 5 pages; useDoses queryKey timestamps normalizados pra hour boundary; useDoses refetchInterval 60s→5min, staleTime 30s→2min; staleTime bump em useUserPrefs/usePatients/useTreatments/useMyTier; App.jsx alarm scope -1d/+14d. Critical alarm path NÃO regrediu.
+- ✅ **#093 [P1 BUG-026]** Race condition useRealtime: nome único per-subscribe + await removeChannel + generation counter ignora callbacks de canais antigos.
+- ✅ **#094 [P0 trust BUG-027]** Paywall falso pra users plus durante mount race (useMyTier `enabled: !!user` via useAuth + queryKey inclui userId) + DB trigger `enforce_patient_limit` whitelist faltava 'plus' (migration `20260503180000_fix_enforce_patient_limit_plus.sql`).
+- ✅ **#095 [P1 UX]** /Ajustes mostra versão real do app via `Capacitor.App.getInfo()` packageInfo (não bundle baked-in que pode ficar stale se cap sync não rodou). Bonus fix FAQ.jsx APP_VERSION hardcoded '0.1.5.7' → __APP_VERSION__ injetado.
+- ✅ **#084 [P0 security]** Migração Supabase legacy JWT → sb_publishable_/sb_secret_ + revoke HS256 signing key (key id 855AE81C... revoked) + disable JWT-based API keys. Service_role JWT vazado em commit 85d5e61 = inválido server-side. Edge functions migradas pra `SERVICE_ROLE_KEY` custom env (com fallback). Vercel envs atualizados todos 3 (prod/preview/dev). dosy-app.vercel.app público, Authentication Standard Protection desabilitada.
+- ✅ Webhook Vercel↔GitHub reconectado (lhenriquepda/medcontrol_v2 connected via OAuth) — push pra master agora dispara auto-deploy.
+- ✅ GitHub Security alert #3 closed as Revoked.
 
 **Items fechados na release v0.1.7.4 (RLS hardening + RPC TZ fix + UX bundle):**
 - ✅ #012 #013 RLS hardening — todas policies TO authenticated + split cmd=ALL (48 policies finais)
@@ -497,9 +505,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 93 itens
-- **Em aberto:** 62 (-2 fechados em v0.1.7.5: #092 + #093). Ainda: 3 v0.1.6.10; 5 v0.1.7.0; 4 v0.1.7.1; 1 v0.1.7.2; 2 v0.1.7.3; 14 v0.1.7.4; #084+#087FaseB v0.1.7.5; #089 v0.1.8.0
-- **P0:** 5 (4 manuais user + #084 security) · **P1:** 11 · **P2:** 21 · **P3:** 25
+- **Total:** 95 itens (+#094 paywall + #095 versão)
+- **Em aberto:** 58 (-5 em v0.1.7.5: #092 + #093 + #094 + #095 + #084). Ainda: 3 v0.1.6.10; 5 v0.1.7.0; 4 v0.1.7.1; 1 v0.1.7.2; 2 v0.1.7.3; 14 v0.1.7.4; #087FaseB; #089 v0.1.8.0
+- **P0:** 4 (manuais user; #084 fechado) · **P1:** 10 · **P2:** 21 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
