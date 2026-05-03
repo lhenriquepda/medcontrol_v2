@@ -9,7 +9,9 @@ import { FAQ as FAQ_DATA, FAQ_CATEGORIES, searchFaq } from '../data/faq'
 import { track, EVENTS } from '../services/analytics'
 
 const SUPPORT_EMAIL = 'suporte@dosyapp.com'
-const APP_VERSION = '0.1.5.7'
+/* eslint-disable no-undef */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+/* eslint-enable no-undef */
 
 /**
  * FAQ — perguntas frequentes (FASE 18.5).
