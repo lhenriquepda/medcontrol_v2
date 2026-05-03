@@ -250,7 +250,7 @@ export default function Dashboard() {
             <MiniStat
               label="Atrasadas"
               value={overdueNow}
-              unit={overdueNow > 0 ? 'hoje' : undefined}
+              unit={overdueNow > 0 ? 'agora' : undefined}
               tone={overdueNow > 0 ? 'danger' : 'neutral'}
             />
           </div>

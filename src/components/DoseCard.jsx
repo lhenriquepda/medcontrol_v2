@@ -89,28 +89,31 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   }
   const dosyStatus = statusKindMap[dose.status] || statusKindMap.pending
 
-  // bare=true: inner sem outer wrapper visual (usado em actionable swipe wrapper)
+  // Source: contexto/claude-design/dosy/project/src/screens/Inicio.jsx (DoseRow)
+  // bg-sunken (peach inset) ou danger-bg quando overdue. Sem border, sem shadow.
+  // Right column: HH:mm display + StatusPill abaixo.
+  const rowBg = isOverdue ? 'var(--dosy-danger-bg)' : 'var(--dosy-bg-sunken)'
+
   const renderInner = (bare = false) => (
     <button
       onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
       className="dosy-press"
       style={{
         width: '100%', textAlign: 'left',
-        padding: 14,
+        padding: '12px 12px',
         display: 'flex', alignItems: 'center', gap: 12,
-        background: 'var(--dosy-bg-elevated)',
-        border: bare
-          ? 'none'
-          : (isOverdue ? '1px solid rgba(229,86,74,0.3)' : '1px solid var(--dosy-border)'),
-        borderRadius: bare ? 0 : 18,
-        boxShadow: bare ? 'none' : 'var(--dosy-shadow-sm)',
+        background: rowBg,
+        border: 'none',
+        borderRadius: bare ? 0 : 16,
+        boxShadow: 'none',
         cursor: 'pointer',
         fontFamily: 'var(--dosy-font-body)',
         color: 'var(--dosy-fg)',
       }}
     >
+      {/* PillIcon — squircle 40px, status colored bg */}
       <div style={{
-        width: 42, height: 42, borderRadius: 14,
+        width: 40, height: 40, borderRadius: 12,
         background: dosyStatus.bg,
         color: dosyStatus.color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -118,12 +121,15 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
       }}>
         <Icon name={s.iconName} size={20} />
       </div>
+      {/* Text col — med + unit */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <p style={{
-            fontFamily: 'var(--dosy-font-display)',
             fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em',
-            color: 'var(--dosy-fg)', margin: 0,
+            color: dose.status === 'done' ? 'var(--dosy-fg-secondary)' : 'var(--dosy-fg)',
+            textDecoration: dose.status === 'done' ? 'line-through' : 'none',
+            textDecorationColor: 'var(--dosy-fg-tertiary)',
+            margin: 0,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{dose.medName}</p>
           {dose.type === 'sos' && (
@@ -137,51 +143,55 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
           )}
         </div>
         <p style={{
-          fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: 0,
+          fontSize: 12.5, color: 'var(--dosy-fg-secondary)', margin: '1px 0 0 0',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>{dose.unit}</p>
-        <p style={{
-          fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: '2px 0 0 0',
-          fontVariantNumeric: 'tabular-nums',
         }}>
-          {relativeLabel(dose.scheduledAt)} · {formatTime(dose.scheduledAt)}
-          {dose.status === 'done' && dose.actualTime && (
-            <span style={{ marginLeft: 6, color: '#3F9E7E', fontWeight: 600 }}>
-              → {formatTime(dose.actualTime)}
-            </span>
-          )}
+          {dose.unit}
+          <span style={{ color: 'var(--dosy-fg-tertiary)', marginLeft: 6, fontVariantNumeric: 'tabular-nums' }}>
+            · {relativeLabel(dose.scheduledAt)}
+          </span>
         </p>
       </div>
-      <span style={{
-        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
-        color: dosyStatus.color,
-        background: dosyStatus.bg,
-        padding: '4px 10px',
-        borderRadius: 9999,
-        whiteSpace: 'nowrap',
-        textTransform: 'lowercase',
-        fontFamily: 'var(--dosy-font-display)',
+      {/* Right col: HH:mm display + StatusPill below */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5,
         flexShrink: 0,
       }}>
-        {s.label}
-      </span>
+        <div style={{
+          fontFamily: 'var(--dosy-font-display)',
+          fontWeight: 800, fontSize: 16, letterSpacing: '-0.02em',
+          fontVariantNumeric: 'tabular-nums',
+          color: isOverdue ? 'var(--dosy-danger)' : 'var(--dosy-fg)',
+          lineHeight: 1,
+        }}>{formatTime(dose.scheduledAt)}</div>
+        <span style={{
+          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+          color: dosyStatus.color,
+          background: 'rgba(255,255,255,0.55)',
+          padding: '3px 9px',
+          borderRadius: 9999,
+          whiteSpace: 'nowrap',
+          textTransform: 'lowercase',
+          fontFamily: 'var(--dosy-font-display)',
+        }}>
+          {s.label}
+        </span>
+      </div>
     </button>
   )
 
-  // Non-actionable doses → plain card, no swipe
+  // Non-actionable doses → plain row, no swipe
   if (!isActionable) return renderInner(false)
 
-  // Actionable → wrap. Outer wrapper assume border/radius/shadow.
+  // Actionable → wrap. Outer wrapper carrega border-radius pra clip swipe layers.
   return (
     <div
       style={{
         position: 'relative',
         overflow: 'hidden',
         userSelect: 'none',
-        background: 'var(--dosy-bg-elevated)',
-        border: isOverdue ? '1px solid rgba(229,86,74,0.3)' : '1px solid var(--dosy-border)',
-        borderRadius: 18,
-        boxShadow: 'var(--dosy-shadow-sm)',
+        background: rowBg,
+        borderRadius: 16,
         touchAction: 'pan-y',
       }}
       {...handlers}
@@ -210,7 +220,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
       <div
         style={{
           transform: `translateX(${delta}px)`,
-          transition: delta === 0 ? 'transform 0.2s ease-out' : busy ? 'transform 0.15s ease-in' : 'none'
+          transition: delta === 0 ? 'transform 0.2s ease-out' : busy ? 'transform 0.15s ease-in' : 'none',
         }}
       >
         {renderInner(true)}
