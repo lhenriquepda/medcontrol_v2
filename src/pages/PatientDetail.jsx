@@ -271,10 +271,11 @@ export default function PatientDetail() {
                   <div style={{
                     width: 42, height: 42, borderRadius: 14,
                     background: 'var(--dosy-peach-100)',
+                    color: 'var(--dosy-primary)',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <Pill size={20} strokeWidth={1.75}/>
+                    <Pill size={20} strokeWidth={2}/>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{

@@ -56,11 +56,11 @@ export default function PaywallModal({ open, onClose, reason }) {
             <div style={{
               width: 36, height: 36, borderRadius: 12,
               background: 'var(--dosy-gradient-sunset-soft)',
-              color: 'var(--dosy-fg)',
+              color: 'var(--dosy-primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
-              <f.Icon size={18} strokeWidth={1.75}/>
+              <f.Icon size={18} strokeWidth={2}/>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{

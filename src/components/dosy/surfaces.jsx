@@ -6,6 +6,7 @@
  * backdrop-filter blur 36px saturate 180%, gradient translucent warm.
  */
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 /* ── Card ──────────────────────────────────────────────────────────────
  * variants: gradient (sunset) | soft (sunset-soft) | elevated (default)
@@ -92,6 +93,7 @@ export function Sheet({
   }, [open])
 
   if (!open) return null
+  if (typeof document === 'undefined') return null
 
   const glassPanel = glass ? {
     background: 'linear-gradient(180deg, color-mix(in oklab, var(--dosy-bg-elevated) 88%, transparent) 0%, color-mix(in oklab, var(--dosy-bg) 82%, transparent) 100%)',
@@ -107,7 +109,7 @@ export function Sheet({
     boxShadow: '0 -20px 40px -12px rgba(74,36,16,0.18)',
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -155,7 +157,8 @@ export function Sheet({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -179,8 +182,9 @@ export function Modal({
   }, [open])
 
   if (!open) return null
+  if (typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -228,6 +232,7 @@ export function Modal({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
