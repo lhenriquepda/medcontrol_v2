@@ -1,530 +1,310 @@
 # Dosy — Mapa do App
 
-> Documento de inventário visual e funcional do app. Detalha cada página, componente sempre visível, modal global, sitemap e principais user flows. Para uso em briefing de design, onboarding de IA e auditoria de UX.
->
-> **Última revisão:** 2026-05-03 — pós release v0.1.7.3 (versionCode 27)
+> Inventário funcional do app. Lista o que cada página contém. Sem detalhes visuais (cor, formato, posicionamento) — designer tem liberdade total nessa parte.
 
 ---
 
 ## Sobre o app
 
-**Dosy — Controle de Medicação.** App mobile (Android nativo via Capacitor + PWA web) de organização e lembrete de medicação para qualquer pessoa que toma remédio com horário: pacientes crônicos, pais cuidando dos filhos, cuidadores familiares.
+**Dosy — Controle de Medicação.** App mobile (Android + PWA web) de organização e lembrete de medicação para qualquer pessoa que toma remédio com horário: pacientes crônicos, pais cuidando dos filhos, cuidadores familiares.
 
-- **Plataformas:** Android (Play Store, pkg `com.dosyapp.dosy`) + Web PWA (https://dosy-teal.vercel.app).
-- **Idioma:** Português (BR) único. Sem internacionalização ainda.
-- **Tema:** Dark / Light com toggle manual (default segue sistema).
-- **Tier:** Free / Plus / Pro / Admin. Free limita 1 paciente; Plus/Pro liberam ilimitado + Análises + Relatórios PDF/CSV + Compartilhamento.
-- **Autenticação:** Supabase Auth email/senha + consentimento LGPD obrigatório no signup.
-- **Diferenciais visíveis:** alarme estilo despertador (bypassa silencioso/DND no Android), notificação push tray fallback, modo S.O.S para doses extras com regras de segurança, painel de adesão.
+- Português Brasil único.
+- Tema Dark e Light com toggle manual.
+- Tier Free / Plus / Pro / Admin. Free limita 1 paciente. Plus/Pro liberam ilimitado, Análises, Relatórios PDF/CSV e Compartilhamento.
+- Login email/senha com consentimento LGPD obrigatório.
 
 ---
 
-## Componentes sempre visíveis
+## Sempre visíveis
 
-### Header (`AppHeader.jsx`)
+### Header
+- Logo Dosy clicável (leva pra Início).
+- Saudação contextual com nome do user (Bom dia / Boa tarde / Boa noite) e indicador do tier (Free, Plus, Pro, Admin).
+- Aviso de doses atrasadas quando há, clicável (leva pra Início filtrado por atrasadas).
+- Acesso rápido pra Ajustes.
 
-Barra superior fixa (sticky, fundo azul escuro `#0d1535`) presente em todas as telas autenticadas.
+### Bottom Nav
+Menu inferior com 5 itens, todos com ícones ilustrativos:
+1. **Início**
+2. **Pacientes**
+3. **+** botão central pra adicionar tratamento novo
+4. **S.O.S**
+5. **Mais**
 
-- **Logo Dosy** à esquerda (clicável, leva pra Início).
-- **Saudação contextual:** "Bom dia / Boa tarde / Boa noite" + primeiro nome do user + chip de tier (Free/Plus/Pro/Admin).
-- **Badge de doses atrasadas** (rosa pulsante) quando há doses overdue — clicável, leva pra Início filtrada por `status=overdue`.
-- **Ícone de engrenagem** (botão circular) à direita, leva pra Ajustes.
+### AdBanner
+Banner publicitário visível apenas no plano Free, em telas principais (Início, Pacientes, Mais, etc.). Some no Plus/Pro/Admin.
 
-### Bottom Nav Menu (`BottomNav` — montado em `App.jsx`)
-
-Barra inferior fixa com 5 itens, ícones ilustrativos + label:
-
-1. **Início** — ícone casa, leva pro Dashboard.
-2. **Pacientes** — ícone pessoas, leva pra lista de pacientes.
-3. **+ (botão central destacado)** — botão circular azul flutuante, leva pra "Novo tratamento".
-4. **S.O.S** — ícone sirene, leva pra registro de dose extra fora do agendado.
-5. **Mais** — ícone três pontos, leva pra menu secundário (Histórico, Tratamentos, Análises, Relatórios, Ajustes, FAQ).
-
-### AdBanner (`AdBanner.jsx`)
-
-Banner publicitário aparece em telas principais (Início, Pacientes, Mais, etc.) **somente para tier Free**. Plus/Pro/Admin não veem.
-
-- **Web:** AdSense responsivo abaixo do header / dentro do conteúdo.
-- **Android nativo:** AdMob banner overlay no topo via plugin Capacitor (TOP_CENTER, ADAPTIVE_BANNER).
-- Disclaimer "Publicidade" acima da área do banner em web.
-
-### UpdateBanner (`UpdateBanner.jsx`)
-
-Banner discreto no topo (abaixo do AdBanner se houver) quando há update disponível via Service Worker (web) ou Play In-App Updates (Android). Botão "Atualizar agora" recarrega a app.
+### UpdateBanner
+Aviso no topo quando há nova versão disponível, com ação pra atualizar.
 
 ---
 
 ## Páginas autenticadas
 
-### Início (`Dashboard.jsx`)
+### Início
+- 3 cards de status: Pendentes hoje, Adesão 7 dias, Atrasadas.
+- Filtro de período inline com opções 12h, 24h, 48h, 7 dias, Tudo, e botão pra abrir filtros avançados.
+- **Modal Filtros:** título Filtros, opção Paciente com seletor, opção Status com botões (Pendente, Atrasada, Tomada, Pulada — cada um com ícone), opção Tipo com 2 botões (Horário fixo, S.O.S — com ícones), botões Limpar e Aplicar.
+- Lista de doses agrupada por paciente. Cada grupo mostra avatar e nome do paciente, contagem de doses, alerta de atrasadas, e pode ser recolhido/expandido.
+- Cada dose mostra: nome do medicamento, dose/unidade, horário, status. Permite confirmar como tomada ou pular direto na lista.
+- Pull-to-refresh no topo.
+- Estado inicial (sem pacientes): card de boas-vindas com guia de 3 passos e CTA pra cadastrar primeiro paciente.
+- Estado vazio (sem doses no período): mensagem "Nenhuma dose neste período" + CTA pra criar tratamento.
 
-Tela principal de acompanhamento diário das doses.
+### Pacientes
+- Título "Pacientes" + botão pra adicionar novo.
+- Aviso de limite de plano Free quando aplicável (1/1 paciente, com link pra conhecer Pro).
+- Lista de pacientes com avatar (foto ou emoji), nome, idade, condição.
+- Estado vazio: "Nenhum paciente cadastrado" + CTA.
 
-- **3 cards de status** lado a lado:
-  - **Pendentes hoje** (azul) — número de doses do dia ainda não confirmadas.
-  - **Adesão 7d** (verde) — porcentagem de adesão dos últimos 7 dias.
-  - **Atrasadas** (rosa pulsante quando >0) — total de doses overdue.
+### Detalhe do Paciente
+- Avatar grande, nome, idade, peso, condição, médico responsável, alergias (com aviso se houver).
+- Acesso a "Compartilhar paciente" (recurso Pro): mostra com quem está compartilhado e permite gerenciar.
+- Aviso quando paciente é compartilhado por outra pessoa (colaboração).
+- 2 cards lado a lado: Adesão hoje (%), Tratamentos ativos (contagem).
+- Seção Tratamentos ativos com link pra adicionar novo, e lista de cards de cada tratamento ativo.
+- Estado sem tratamentos: "Sem tratamentos ativos".
 
-- **Filtros sticky (FilterBar)** logo abaixo:
-  - Linha 1: pílulas de período horizontais — `12h`, `24h`, `48h`, `7 dias`, `Tudo` + botão circular com ícone funil pra abrir modal de filtros avançados.
-  - Linha 2 (condicional): chips dos filtros ativos com X pra remover individualmente + link "limpar" no final.
+### Novo / Editar Paciente
+- Avatar (escolha de emoji ou upload de foto).
+- Campos: Nome completo, Idade, Peso (kg), Condição/diagnóstico, Médico responsável, Alergias.
+- Botão Salvar.
+- Na edição: botão Excluir paciente com confirmação dupla (avisa que doses associadas serão removidas).
 
-- **Modal de filtros avançados (BottomSheet "Filtros"):**
-  - **Paciente** — dropdown picker com avatar + nome de cada paciente (opção "Todos pacientes").
-  - **Status** — grid 2 colunas com 4 botões (cada um com ícone): Pendente, Atrasada, Tomada, Pulada.
-  - **Tipo** — grid 2 colunas com 2 botões: Horário fixo, S.O.S, cada um com ícone + hint pequeno embaixo.
-  - Footer: botão **Limpar** (secundário) + **Aplicar** (primário).
+### Novo / Editar Tratamento
+- Campos principais: Paciente (seletor), Medicamento (com sugestões dos já usados), Dose / unidade.
+- **Modo de agendamento** com 2 opções:
+  - **Intervalo fixo**: chips de frequência (4h, 6h, 8h, 12h, 1x/dia, 2 em 2 dias, 3 em 3 dias, 1x/semana, quinzenal, 1x/mês) + horário da 1ª dose.
+  - **Horários**: lista de horários pontuais (ex: 08:00, 12:00, 16:00), permite adicionar e remover.
+- Toggle **Uso contínuo** (sem data de fim). Quando desligado, pede Duração em dias.
+- Campo Início (data e hora).
+- Preview informando quantas doses serão geradas.
+- Opção de salvar tratamento como modelo reutilizável (apenas em criação) com nome do modelo.
+- Botão Criar tratamento / Salvar alterações.
+- Na edição: botão Excluir tratamento com confirmação.
+- Acesso a templates salvos por um botão de modelos (carrega configurações pré-prontas).
 
-- **Conteúdo principal (3 estados):**
-  - **Sem pacientes (primeiro uso):** card "Bem-vindo ao Dosy!" com ícone mão acenando + mini guia 3 passos (1. Cadastre os pacientes / 2. Crie um tratamento / 3. Acompanhe as doses) + CTA "Cadastrar primeiro paciente".
-  - **Sem doses no período:** EmptyState com ícone pílula + mensagem "Nenhuma dose neste período" + CTA "+ Novo tratamento".
-  - **Com doses:** lista agrupada por paciente. Cada grupo tem cabeçalho clicável (avatar + nome + contagem + badge de atrasadas/pendentes) que colapsa/expande. Dentro, cards de dose (DoseCard) com nome do medicamento, dose/unidade, horário, status, swipeable pra confirmar/pular.
+### Lista de Tratamentos
+- Título "Tratamentos" + botão pra adicionar novo.
+- Campo de busca por medicamento.
+- Lista de cards de tratamento (medicamento, paciente, dose, frequência, status).
+- Estado vazio: "Nenhum tratamento" + CTA.
 
-- **Pull-to-refresh** no topo (overlay com spinner + texto "Puxe para atualizar / Solte para atualizar / Atualizando…").
+### S.O.S
+- Título "S.O.S" e subtítulo "Dose extra fora do agendado".
+- Campos: Paciente, Medicamento, Dose, Quando (data e hora, default agora), Observação.
+- Card de regra de segurança (aparece quando o medicamento já foi cadastrado): Intervalo mínimo entre doses, Máximo de doses em 24h, com botão pra salvar a regra.
+- Botão Registrar S.O.S.
+- Validação automática: bloqueia registro com aviso se violar regra de segurança ("Próxima permitida: HH:MM").
+- Histórico recente do paciente abaixo.
 
-- **DoseModal (modal individual de dose):** abre ao tocar num card. Mostra detalhes completos da dose, botões "Tomei agora", "Pular", "Editar horário" (PRO), histórico do medicamento.
-
-- **MultiDoseModal (modal de múltiplas doses):** abre via deep-link de notificação push quando o user toca numa notif que agrupou várias doses do mesmo horário. Lista todas, permite confirmar em lote.
-
-### Pacientes (`Patients.jsx`)
-
-Lista de pacientes cadastrados.
-
-- **Header:** título "Pacientes" + botão "+ Novo" no canto direito.
-- **AdBanner** abaixo.
-- **Card de limite Free** (tier free + tem 1 paciente): "Plano grátis: 1/1 paciente · Ver PRO →" — clicar abre paywall.
-- **Lista de PatientCard** (avatar emoji ou foto + nome + idade + condição). Sem pacientes: EmptyState "Nenhum paciente cadastrado" + CTA "Adicionar paciente".
-- **PaywallModal** abre ao tentar adicionar 2º paciente em tier free.
-
-### Detalhe do Paciente (`PatientDetail.jsx`)
-
-Acessada ao tocar num PatientCard.
-
-- **Header:** botão voltar + nome do paciente + link "Editar".
-- **Card do paciente:** avatar grande, nome, idade · peso, condição, médico, alergias (com aviso vermelho se houver).
-- **Card de Compartilhamento (PRO):** "Compartilhar paciente" — cuidadores adicionais com edição em tempo real (ícone aperto de mão). Free vê CTA pra upgrade.
-- **Bloco "Compartilhado com você"** (quando user não é dono): badge azul indicando colaboração.
-- **2 cards menores lado a lado:** Adesão hoje (%) + Tratamentos ativos (contagem).
-- **Seção "Tratamentos ativos":** cabeçalho com link "+ Novo" + lista de tratamentos (medicamento, posologia, próxima dose). Sem ativos: EmptyState "Sem tratamentos ativos".
-
-### Novo / Editar Paciente (`PatientForm.jsx`)
-
-Formulário de cadastro/edição de paciente.
-
-- **Header:** botão voltar + título "Novo paciente" ou "Editar paciente".
-- **Campos:**
-  - **Avatar** — picker emoji ou upload de foto.
-  - **Nome completo*** (placeholder "Nome completo").
-  - **Idade** (numérico, "Ex: 45").
-  - **Peso (kg)** (decimal, "Ex: 78,5").
-  - **Condição/diagnóstico** ("Ex: Hipertensão").
-  - **Médico responsável** ("Ex: Dra. Ana").
-  - **Alergias** (textarea, "Ex: Penicilina, AAS").
-- **Botão primário** "Salvar" no rodapé.
-- **Botão excluir** (vermelho) só na edição. Abre `ConfirmDialog` "Excluir paciente?" com mensagem sobre doses associadas.
-
-### Novo / Editar Tratamento (`TreatmentForm.jsx`)
-
-Formulário central pra criar tratamento e gerar doses.
-
-- **Header:** botão voltar + título "Novo tratamento" ou "Editar tratamento" + botão modelo (📋) à direita se há templates salvos.
-- **Campos principais:**
-  - **Paciente*** — select dropdown (desabilitado em edição).
-  - **Medicamento*** — input com autocomplete (`MedNameInput` — sugere nomes já usados pelo user).
-  - **Dose / unidade*** ("Ex: 1 comprimido, 15 gotas").
-- **Card "Modo de agendamento"** (toggle de 2 abas):
-  - **Intervalo fixo:** chips de frequência (4h, 6h, 8h, 12h, 1x/dia, 2 em 2 dias, 3 em 3 dias, 1x/semana, quinzenal, 1x/mês) + campo "Horário da 1ª dose".
-  - **Horários:** lista editável de horários pontuais (ex: 08:00, 12:00, 16:00, 20:00) com botões + e ✕ pra adicionar/remover.
-- **Toggle "Uso contínuo ♾"** (sem data fim) — quando OFF mostra campo "Duração (dias)". Quando ON, sistema gera 5 dias iniciais e renova automaticamente via cron.
-- **Campo "Início"** — datetime-local picker.
-- **Preview** ("X doses no total" ou "X doses (primeiros 5 dias gerados)").
-- **Card "Salvar como modelo"** (apenas em criação) — checkbox + nome do template pra reutilizar depois.
-- **Botão primário** "Criar tratamento" / "Salvar alterações".
-- **Botão excluir** vermelho na edição → `ConfirmDialog` "Excluir tratamento?".
-- **BottomSheet "Carregar modelo"** — lista de templates salvos com nome + preview (medicamento · dose · intervalo).
-
-### Lista de Tratamentos (`TreatmentList.jsx`)
-
-Lista todos tratamentos do user (ativos e inativos).
-
-- **Header:** voltar + "Tratamentos" + botão "+ Novo".
-- **Campo de busca** "Buscar por medicamento…".
-- **Lista** com cards de tratamento (medicamento, paciente, dose, frequência, status). Sem itens: EmptyState "Nenhum tratamento" + CTA.
-
-### S.O.S (`SOS.jsx`)
-
-Tela de registro de dose extra fora do agendado (paliativo, dor, etc.).
-
-- **Fundo rosa-claro** sutil pra diferenciar visualmente do flow normal.
-- **Header:** "S.O.S" + subtítulo "Dose extra fora do agendado".
-- **Formulário:**
-  - **Paciente*** — picker.
-  - **Medicamento*** — autocomplete.
-  - **Dose*** ("Ex: 1 comprimido").
-  - **Quando** — datetime-local (default agora).
-  - **Observação** ("Ex: Dor de cabeça forte").
-- **Card de regra de segurança** (quando medicamento já foi cadastrado):
-  - **Intervalo mínimo (h)** entre doses S.O.S do mesmo medicamento.
-  - **Máximo de doses em 24h.**
-  - Botão **Salvar regra**.
-  - Validação ao registrar: bloqueia com mensagem "Próxima permitida: HH:MM" se violar regra.
-- **Botão primário** "Registrar S.O.S".
-- **Histórico recente** do paciente abaixo (últimas doses S.O.S).
-
-### Mais (`More.jsx`)
-
-Menu secundário acessado pelo bottom nav.
-
-- **Header:** "Mais".
-- **Card de perfil:** avatar (inicial em círculo brand), nome, email, plano. Chip de tier à direita.
-- **Banner "Conheça o Dosy PRO"** (gradient brand) — só pra free, abre paywall.
-- **Lista de itens** com ícone + label + hint:
+### Mais
+- Card de perfil: avatar, nome, email, plano atual.
+- Banner pra conhecer o Pro (apenas no Free).
+- Lista de itens com ícone, label e descrição curta:
   - **Histórico** — Doses por dia, adesão.
   - **Tratamentos** — Lista e gerenciamento.
-  - **Análises** — Adesão e calendários (PRO, badge cadeado quando free).
-  - **Relatórios** — Exportar PDF / CSV (PRO).
+  - **Análises** — Adesão e calendários (Pro).
+  - **Relatórios** — Exportar PDF / CSV (Pro).
   - **Ajustes** — Tema, notificações, conta.
-  - **Ajuda / FAQ** — Dúvidas, suporte e tutoriais.
-- **Painel Admin** (só pra tier admin) — card destacado em vermelho com ícone coroa.
+  - **Ajuda / FAQ** — Dúvidas e tutoriais.
+- Acesso ao Painel Admin (apenas pra usuários Admin).
 
-### Histórico (`DoseHistory.jsx`)
+### Histórico
+- Título "Histórico de doses".
+- Seletor de paciente (default Todos pacientes).
+- Pílulas de período: Hoje, Ontem, 7 dias, 30 dias, 90 dias.
+- Navegação anterior/próximo período.
+- Campo de busca por medicamento ou observação.
+- Card resumo: Adesão no período, com barra de progresso e contagens (tomadas, atrasadas, puladas).
+- Lista agrupada por dia, cada grupo com badge de adesão diária e cards de dose (medicamento, paciente, horário previsto vs real, status).
 
-Linha do tempo completa de doses passadas.
+### Análises (Pro)
+- Título "Análises".
+- No Free: prévia bloqueada com mensagem explicando o recurso e CTA pra desbloquear.
+- No Pro:
+  - Toggle de período: 7 dias / 30 dias.
+  - Calendário heatmap dos últimos dias (cor reflete adesão diária).
+  - Adesão por paciente em barras.
+  - Uso de S.O.S por medicamento em ranking.
 
-- **Header:** voltar + "Histórico de doses".
-- **Picker de paciente** (default "Todos pacientes").
-- **Pílulas de período:** Hoje, Ontem, 7 dias, 30 dias, 90 dias.
-- **Navegador anterior/próximo** pra mover período.
-- **Campo de busca** ("Buscar por medicamento ou observação…").
-- **Card resumo:** "Adesão no período" + barra de progresso + contagens (✓ tomadas / atrasadas / puladas).
-- **Lista agrupada por dia** com badge de adesão por dia + cards de dose (medicamento, paciente, horário previsto vs real, status colorido).
+### Relatórios (Pro)
+- Título "Relatórios".
+- Seletor de paciente.
+- Range de data e hora De / Até (default últimos 30 dias).
+- Botões Baixar PDF e Baixar CSV.
+- No Free: clicar abre paywall.
+- No Android: salva no dispositivo + abre opções pra compartilhar (WhatsApp, Email, Drive).
 
-### Análises (`Analytics.jsx`) — PRO
-
-Gráficos e métricas avançadas.
-
-- **Header:** voltar + "Análises" + badge PRO se locked.
-- **Free vê preview borrado** com `LockedOverlay` "Análises detalhadas de adesão, calendário e S.O.S são exclusivas do PRO" + CTA Desbloquear.
-- **PRO vê:**
-  - Toggle período: 7 dias / 30 dias.
-  - **Calendário heatmap** — grid de dias coloridos (verde = todas tomadas, amarelo = parcial, vermelho = nenhuma, cinza = sem doses).
-  - **Adesão por paciente** — barras horizontais com %.
-  - **Uso de S.O.S por medicamento** — ranking + barra proporcional.
-
-### Relatórios (`Reports.jsx`) — PRO
-
-Exportação de histórico em PDF e CSV.
-
-- **Header:** voltar + "Relatórios".
-- **Picker de paciente.**
-- **Range datetime-local de/até** (default últimos 30 dias).
-- **Botões export:** "Baixar PDF" + "Baixar CSV".
-  - Web: download direto do navegador.
-  - Android: salva em cache + abre share sheet do sistema.
-- **Free:** clicar em qualquer botão abre paywall.
-- **Privacy screen ativo** (FLAG_SECURE Android) — não aparece em screenshots/recents.
-
-### Ajustes (`Settings.jsx`)
-
-Configurações da conta e do app.
-
-- **Header:** voltar + "Ajustes".
-- **Card "Seu plano"** — Tier ativo + chip grande.
-- **Seção Aparência:**
+### Ajustes
+- Card "Seu plano" com tier atual.
+- **Aparência:**
   - Toggle Modo escuro.
-  - Estilo de ícones — select (Flat = visual moderno · Emoji = legado colorido).
-- **Seção Notificações:**
-  - Toggle "Notificações push" + status (ativo / desativado / bloqueado pelo SO).
-  - Botão "Verificar permissões do alarme" (Android) — re-checa as 4 permissões especiais (post notifications, exact alarm, full screen intent, draw overlay).
-  - Dropdown "Avisar com antecedência" (Na hora / 5 min antes / 15 min antes / 30 min antes / 1h antes).
-  - Toggle "Alarme crítico" (rosa quando ON) — ativa despertador fullscreen ignorando silencioso e DND.
-  - Toggle "Não perturbe" (aparece SÓ se Alarme Crítico ON, item #087) — define janela horária (De / Até) em que o alarme crítico não toca, doses recebem só push tray.
-  - (Resumo Diário ocultado em v0.1.7.3, será reativado na v0.1.8.0).
-- **Seção Conta:**
-  - Campo "Seu nome" + botão Salvar.
+  - Estilo de ícones (Flat moderno / Emoji legado).
+- **Notificações:**
+  - Toggle Notificações push (com status atual: ativo, desativado, ou bloqueado).
+  - Botão Verificar permissões do alarme (Android).
+  - Avisar com antecedência (seleciona Na hora, 5 min antes, 15, 30, 1h).
+  - Toggle Alarme crítico (despertador estilo, ignora silencioso e DND).
+  - Toggle Não perturbe (aparece apenas se Alarme crítico ON): janela horária De / Até em que o alarme não toca, doses recebem só notificação simples.
+- **Conta:**
+  - Editar nome.
   - Email (somente leitura).
-  - Botão "Sair da conta" → ConfirmDialog.
-- **Seção Dados & Privacidade:**
-  - Botão "Exportar meus dados" (LGPD — CSV/JSON do user).
-  - Botão "Excluir conta permanentemente" → ConfirmDialog dupla "Excluir conta permanentemente?".
+  - Botão Sair da conta.
+- **Dados & Privacidade:**
+  - Exportar meus dados (LGPD).
+  - Excluir conta permanentemente (com confirmação dupla).
 
-### Painel Admin (`Admin.jsx`) — apenas tier Admin
-
-Gerenciamento manual de tier de usuários (concessão de Plus/Pro promocional, suporte).
-
+### Painel Admin (apenas Admin)
 - Lista de usuários com email, tier atual, data de criação.
-- Ações: alterar tier, revogar acesso PRO promo, ver assinaturas ativas.
+- Ações: alterar tier, conceder Plus/Pro promocional, ver assinaturas ativas.
 
-### Ajuda / FAQ (`FAQ.jsx`)
-
-Base de conhecimento com perguntas frequentes.
-
-- **Header:** voltar + "Ajuda / FAQ" + subtítulo "X perguntas frequentes".
-- **Campo de busca** ("Buscar pergunta ou palavra-chave…").
-- **Lista categorizada** com headings de categorias (Notificações, Pacientes, Tratamentos, Conta, etc.) + perguntas expansíveis (accordion).
-- **Footer:** versão do app + link "Dosy não substitui orientação médica".
+### Ajuda / FAQ
+- Título "Ajuda / FAQ" + contagem de perguntas.
+- Campo de busca por palavra-chave.
+- Lista categorizada (Notificações, Pacientes, Tratamentos, Conta, etc.) com perguntas expansíveis.
+- Rodapé com versão do app e disclaimer "Dosy não substitui orientação médica".
 
 ---
 
 ## Páginas não autenticadas
 
-### Login / Cadastro / Recuperação (`Login.jsx`)
+### Login
+Tela única com 3 modos: Entrar, Criar conta, Esqueci minha senha.
 
-Tela única com 3 modos (signin / signup / forgot).
+- Logo Dosy.
+- Toggle entre Entrar e Criar conta.
+- Campos com label visível:
+  - Nome (apenas no signup).
+  - Email.
+  - Senha (mínimo 8 caracteres, 1 maiúscula, 1 número no signup).
+- Link "Esqueci minha senha".
+- Hint da senha no signup.
+- Checkbox de consentimento LGPD com link pra Política de Privacidade (obrigatório no signup).
+- Disclaimer médico no signup: aviso de que Dosy é ferramenta de organização e não substitui prescrição, diagnóstico ou orientação médica.
+- Botão principal: Entrar / Criar conta / Enviar link de recuperação.
+- Modo demonstração disponível em web sem cadastro.
 
-- **Background gradient azul escuro** (`#0d1535 → #1a2660`).
-- **Logo Dosy** centralizado.
-- **Toggle de modo** entre "Entrar" e "Criar conta" (link "Esqueci minha senha" leva pro modo forgot).
-- **Campos com label explícito** (item #011, A11y idosos):
-  - **Nome** (signup only).
-  - **Email** + placeholder "seu@email.com".
-  - **Senha** + placeholder "••••••••" (mínimo 8 chars, 1 maiúscula, 1 número no signup).
-- **Link "Esqueci minha senha"** (signin).
-- **Hint de senha** (signup): "Senha: mín. 8 chars, uma maiúscula, um número.".
-- **Checkbox de consentimento LGPD** (signup) — link pra Política de Privacidade obrigatório.
-- **Disclaimer médico amber** (signup, item #020): "⚠️ Aviso importante. Dosy é uma ferramenta de organização e lembrete de medicação. **Não substitui prescrição, diagnóstico ou orientação de profissional de saúde.**"
-- **Botão primário** "Entrar" / "Criar conta" / "Enviar link de recuperação".
-- **Modo demo** (web sem Supabase configurado) — botão "Modo demonstração" pra explorar sem cadastro.
+### Política de Privacidade
+Texto institucional LGPD-compliant. Acessível antes do login.
 
-### Política de Privacidade (`Privacidade.jsx`)
+### Termos de Uso
+Texto contratual, com disclaimer médico em destaque na seção de limitações.
 
-Texto institucional LGPD-compliant. Acessível antes do login (link rodapé).
+### Reset Password
+Recebida via link enviado por email.
+- Campos Nova senha e Confirmar senha.
+- Botão Salvar nova senha.
 
-### Termos de Uso (`Termos.jsx`)
-
-Texto contratual. Inclui disclaimer médico em destaque na seção "Limitações". Acessível antes do login.
-
-### Reset Password (`ResetPassword.jsx`)
-
-Recebida via deep link `dosy://reset-password?token=...` (Android) ou URL Vercel (web).
-
-- Campo "Nova senha" + "Confirmar senha".
-- Botão "Salvar nova senha".
-
-### Install (`Install.jsx`)
-
-Landing page institucional para download web → CTA Play Store + Termos / Privacidade.
+### Install
+Landing page institucional pra download web, com CTAs pra Play Store e links pra Termos / Privacidade.
 
 ---
 
 ## Modais e overlays globais
 
-### DoseModal (`DoseModal.jsx`)
-
-Modal individual de dose. Abre ao tocar num DoseCard. Mostra:
-- Medicamento, paciente, horário previsto/real, status colorido.
-- Botões: "Tomei agora", "Pular", "Editar horário" (PRO), "Desfazer" (após ação).
+### Modal de Dose
+Abre ao tocar num card de dose na lista. Mostra:
+- Medicamento, paciente, horário previsto, horário real, status.
+- Botões Tomei agora, Pular, Editar horário (Pro), Desfazer (após ação).
 - Histórico recente do mesmo medicamento (5 últimas doses).
-- Campo de observação opcional.
+- Campo opcional de observação.
 
-### MultiDoseModal (`MultiDoseModal.jsx`)
+### Modal de Múltiplas Doses
+Abre via notificação push agrupada (várias doses no mesmo horário). Lista todas e permite confirmar ou pular em lote.
 
-Modal pra múltiplas doses do mesmo horário. Aberto via notificação agrupada. Permite confirmar/pular em lote.
-
-### BottomSheet "Filtros" (`FilterBar.jsx`)
-
+### Modal Filtros
 Já descrito em Início.
 
-### PaywallModal (`PaywallModal.jsx`)
+### Paywall
+Aparece ao tentar usar feature Pro sem ter o tier:
+- Razão contextual.
+- Lista de benefícios do Pro (Pacientes ilimitados, Análises, Relatórios, Compartilhamento).
+- Botão Assinar Pro.
+- Botão Fechar.
 
-Aparece ao tentar usar feature PRO sem ter o tier.
-- Título e razão contextual ("No plano grátis você pode ter até 1 paciente…").
-- Lista de benefícios PRO (Pacientes ilimitados / Análises / Relatórios PDF/CSV / Compartilhamento).
-- Botão "Assinar PRO" (placeholder enquanto billing não implementado).
-- Botão "Fechar".
-
-### SharePatientSheet (`SharePatientSheet.jsx`) — PRO
-
-BottomSheet pra compartilhar paciente com outro user.
+### Compartilhar Paciente (Pro)
 - Lista de compartilhamentos atuais (email + permissão + botão revogar).
-- Campo "Adicionar email" + botão "Convidar".
-- Toggle de permissão (visualizar / editar).
+- Campo pra adicionar email + permissão (visualizar / editar).
+- Botão Convidar.
 
-### ConfirmDialog (`ConfirmDialog.jsx`)
+### Confirmação Destrutiva
+Aparece em ações como excluir paciente, tratamento ou conta.
+- Título e mensagem explicando consequência.
+- Botões Cancelar e Confirmar.
 
-Dialog modal pra ações destrutivas (excluir paciente, tratamento, conta, sair).
-- Título + mensagem.
-- Botões "Cancelar" + "Confirmar" (vermelho quando `danger=true`).
+### Onboarding Tour
+Carousel de 6 slides exibido no primeiro login após signup:
+- Slide de boas-vindas.
+- Slides apresentando recursos chave (alarme despertador, S.O.S, adesão, compartilhamento).
+- Slide final com CTA Começar.
+- Opção Pular sempre disponível.
 
-### OnboardingTour (`OnboardingTour.jsx`)
-
-Carousel de 6 slides aparece no primeiro login após signup:
-- Slide 1: "Bem-vindo ao Dosy" (mão acenando).
-- Slides 2–5: features chave (alarme despertador, S.O.S, adesão, compartilhamento).
-- Slide 6: CTA "Começar".
-- Botão "Pular" no canto superior direito.
-
-### PermissionsOnboarding (`PermissionsOnboarding.jsx`)
-
-Sheet Android-only pra solicitar 4 permissões especiais do alarme crítico:
-- POST_NOTIFICATIONS
-- SCHEDULE_EXACT_ALARM
-- USE_FULL_SCREEN_INTENT
-- SYSTEM_ALERT_WINDOW (overlay)
-
-### DailySummaryModal (`DailySummaryModal.jsx`)
-
-(Funcionalidade ocultada em v0.1.7.3 — não rendered no momento.) Modal que aparecia no horário configurado mostrando resumo do dia (doses pendentes, atrasadas, próximas).
-
-### UpdateBanner (`UpdateBanner.jsx`)
-
-Já descrito em "Sempre visíveis".
+### Permissões do Alarme (Android)
+Sheet exibido no primeiro uso pra solicitar 4 permissões especiais necessárias pro alarme estilo despertador funcionar (notificações, alarmes exatos, tela cheia, sobreposição).
 
 ---
 
 ## Sitemap
 
 ```
-/  (Início — Dashboard)
+Início
 │
-├── /pacientes
-│   ├── /pacientes/novo
-│   ├── /pacientes/:id
-│   └── /pacientes/:id/editar
+├── Pacientes
+│   ├── Novo paciente
+│   ├── Detalhe do paciente
+│   └── Editar paciente
 │
-├── /tratamento/novo
-├── /tratamento/:id  (editar)
-├── /tratamentos     (lista completa)
+├── + Novo tratamento
+├── Editar tratamento
+├── Lista de tratamentos
 │
-├── /sos
+├── S.O.S
 │
-├── /mais
-│   ├── /historico
-│   ├── /tratamentos        (compartilhado com /tratamentos)
-│   ├── /relatorios-analise (Análises — PRO)
-│   ├── /relatorios         (Relatórios PDF/CSV — PRO)
-│   ├── /ajustes
-│   ├── /faq
-│   └── /admin              (Admin only)
-│
-└── (não autenticado)
-    ├── /login            (catch-all → Login)
-    ├── /privacidade
-    ├── /termos
-    ├── /reset-password
-    ├── /install
-    └── /faq              (também acessível público)
+└── Mais
+    ├── Histórico
+    ├── Tratamentos
+    ├── Análises (Pro)
+    ├── Relatórios (Pro)
+    ├── Ajustes
+    ├── Ajuda / FAQ
+    └── Painel Admin (Admin)
+
+Não autenticado:
+├── Login (Entrar / Criar conta / Esqueci senha)
+├── Privacidade
+├── Termos
+├── Reset Password
+├── Install
+└── FAQ (também acessível público)
 ```
 
 ---
 
 ## User flows principais
 
-### 1. Onboarding — primeiro uso
-
-```
-Login (signup) →
-  consent LGPD + disclaimer médico →
-  signup success →
-  PermissionsOnboarding (Android, 4 perms) →
-  OnboardingTour (6 slides) →
-  Dashboard vazio com card "Bem-vindo ao Dosy" + CTA "Cadastrar primeiro paciente" →
-  PatientForm preenche dados →
-  PatientDetail (paciente recém-criado) →
-  CTA "+ Novo tratamento" →
-  TreatmentForm (paciente preselecionado) →
-  Dashboard com primeira dose visível
-```
+### 1. Onboarding (primeiro uso)
+Login → cadastro com consent LGPD e disclaimer médico → permissões do alarme (Android) → tour de boas-vindas → Início vazio com guia → cadastrar primeiro paciente → criar primeiro tratamento → primeira dose visível na lista.
 
 ### 2. Acompanhamento diário (uso recorrente)
+Abre app → Início mostra cards de status e lista de doses agrupadas por paciente → toca numa dose pendente → modal abre → "Tomei agora" → toast de confirmação com opção Desfazer → status atualiza.
 
-```
-App abre →
-  Dashboard mostra cards de status (Pendentes hoje / Adesão 7d / Atrasadas) →
-  Lista agrupada por paciente →
-  User toca em DoseCard pendente →
-  DoseModal abre →
-  Botão "Tomei agora" →
-  Toast "X marcada como tomada — Desfazer" →
-  Status atualiza em real-time (verde/check) →
-  Repetir pra próximas doses
-```
-
-Alternativa: swipe-right no DoseCard direto na lista marca como tomada (sem abrir modal).
+Atalho: confirmar direto pelo card sem abrir modal.
 
 ### 3. Receber alarme estilo despertador
-
-```
-Hora da dose chega →
-  AlarmManager Android dispara →
-  AlarmActivity abre fullscreen (mesmo no silencioso/DND) →
-  Som contínuo + vibração + tela cheia com nome do medicamento e paciente →
-  User toca "Tomei" ou "Adiar 10 min" ou "Pular" →
-  App registra no DB →
-  Status sincroniza no Dashboard
-```
+Hora da dose chega → tela cheia abre (mesmo no silencioso/DND) com som contínuo, vibração, nome do medicamento e paciente → user toca Tomei, Adiar 10 min ou Pular → app registra → status sincroniza no Início.
 
 ### 4. Cadastrar dose S.O.S
+Bottom nav → S.O.S → preenche paciente, medicamento, dose, horário, observação → Registrar → validação contra regra de segurança → sucesso ou bloqueio com horário da próxima dose permitida.
 
-```
-Bottom nav → S.O.S →
-  Fundo rosa diferencia visualmente →
-  Picker paciente + medicamento + dose + horário (default agora) + observação →
-  Botão "Registrar S.O.S" →
-  Validação contra regra de segurança (intervalo mínimo + máx/24h) →
-  Se ok: toast "Dose S.O.S registrada" + aparece no histórico
-  Se viola: toast vermelho "Próxima permitida: HH:MM"
-```
+### 5. Exportar relatório (Pro)
+Mais → Relatórios → seleciona paciente e período → Baixar PDF ou CSV → no Android: arquivo gerado e share sheet abre pra enviar via WhatsApp, Email, Drive.
 
-### 5. Exportar relatório (PRO)
-
-```
-Mais → Relatórios →
-  Seleciona paciente + range de/até →
-  Botão "Baixar PDF" →
-  PDF gerado com header (paciente + período) + tabela de doses + assinatura "Dosy v{x.y.z}" →
-  Web: download navegador
-  Android: cache + share sheet (envia pra WhatsApp/Email/Drive)
-```
-
-### 6. Compartilhar paciente com cuidador (PRO)
-
-```
-PatientDetail → "Compartilhar paciente" →
-  SharePatientSheet abre →
-  Adicionar email + permissão (visualizar/editar) →
-  "Convidar" →
-  Outro user recebe (email/notif) →
-  Aceita → vê paciente em sua lista marcado "Compartilhado com você" →
-  Edições aparecem em tempo real pra ambos via Supabase Realtime
-```
+### 6. Compartilhar paciente (Pro)
+Detalhe do paciente → Compartilhar → adiciona email do cuidador + permissão → outro user aceita → vê paciente compartilhado → edições aparecem em tempo real pra ambos.
 
 ### 7. Recuperação de senha
+Login → Esqueci minha senha → digita email → recebe email com link → clica → tela Reset Password → define nova senha → volta pro Login.
 
-```
-Login → "Esqueci minha senha" →
-  Modo forgot → input email → "Enviar link" →
-  Toast "Email enviado" →
-  User abre email → clica link →
-  Web: redireciona /reset-password?token=...
-  Android: deep link dosy://reset-password?token=... →
-  ResetPassword tela → nova senha + confirmar →
-  "Salvar nova senha" → redireciona Login
-```
-
-### 8. Mudar tier para PRO
-
-```
-Qualquer ação bloqueada (Análises / Relatórios / >1 paciente / Compartilhar) →
-  PaywallModal abre →
-  Lista benefícios + "Assinar PRO" →
-  (Billing não implementado ainda — placeholder ou fluxo manual via admin) →
-  Tier atualizado → cards desbloqueados em real-time
-```
-
----
-
-## Notas para design
-
-- **Tom de voz:** acolhedor, prático, não-clínico. Evita jargão médico técnico em copy de botão (ex: "Tomei agora" vs "Marcar como administrada").
-- **Hierarquia visual:** ícones flat modernos por padrão (Lucide), opção emoji legado pra users que preferem. Cards com cantos arredondados (rounded-xl, rounded-2xl). Brand color azul royal (`#3b5bdb` aproximado).
-- **Estados emocionais codificados por cor:**
-  - Verde (emerald) = positivo (dose tomada, adesão alta).
-  - Rosa/vermelho (rose) = atenção (dose atrasada, alarme crítico, S.O.S).
-  - Âmbar = aviso/PRO/disclaimer.
-  - Azul brand = principal, navegação, CTAs primários.
-  - Cinza = neutro / inativo / sem dados.
-- **Dark mode** é tratado como first-class (não afterthought) — todas combinações de cor têm pares dark com saturação reduzida.
-- **Touch targets** mínimo 44×44 dp (idosos).
-- **Animações** sutis via framer-motion (staggers, springs) — nunca bloqueiam interação, máximo 300ms.
-- **Safe-area** respeitada em todos sticky elements (header, bottom nav, pull-to-refresh).
+### 8. Mudar pra Pro
+Tenta ação bloqueada (>1 paciente, Análises, Relatórios, Compartilhar) → Paywall abre → benefícios listados → assina → tier atualizado → recursos desbloqueados em tempo real.
