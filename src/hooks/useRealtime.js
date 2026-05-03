@@ -8,13 +8,15 @@ import { useAuth } from './useAuth'
 const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
 
 // Mapeia tabela -> queryKeys a invalidar
+// #092 (release v0.1.7.5): subscriptions removido — admin-only writes, raras
+// (tier change manual). User pode refresh ou re-login. Não vale custo realtime
+// + 1 channel registration / user × 10k users.
 const TABLE_TO_KEYS = {
   patients: [['patients']],
   treatments: [['treatments'], ['doses'], ['user_medications']],
   doses: [['doses']],
   sos_rules: [['sos_rules']],
   treatment_templates: [['templates']],
-  subscriptions: [['my_tier'], ['admin_users']],
   patient_shares: [['patient_shares'], ['patients']]
 }
 
@@ -26,7 +28,19 @@ const TABLE_TO_KEYS = {
  * Item #079 (release v0.1.7.1) — defense-in-depth caminho 1 de 3.
  * Heartbeat detection + watchdog + reconnect com backoff. Endereça
  * BUG-016 onde websocket morria silently durante idle longo (~16min)
- * em Android Doze. User: "idoso não fecha app, idle deve ser ilimitado".
+ * em Android Doze.
+ *
+ * Item #093 (release v0.1.7.5) — race condition fix:
+ *   1. Channel name uses uuid per-subscribe (não reusa nome durante reconnect)
+ *   2. removeChannel awaitado (era fire-and-forget)
+ *   3. Generation counter ignora callbacks de canais antigos
+ *
+ * Item #092 (release v0.1.7.5) — egress reduction:
+ *   1. postgres_changes filter server-side por userId (evita streaming
+ *      changes de TODOS users pra TODOS clients — multi-tenant fix)
+ *   2. invalidateQueries scoped por table (era invalidate ALL queries)
+ *   3. patient_shares fica sem filter (multi-user resource — necessário
+ *      receber notif quando outro user compartilha paciente comigo)
  */
 const WATCHDOG_INTERVAL_MS = 60_000 // 60s — verifica saúde do channel
 
@@ -40,49 +54,67 @@ export function useRealtime() {
     let channel = null
     let watchdogTimer = null
     let reconnectAttempts = 0
+    let generation = 0 // #093: ignora callbacks de canais antigos
 
-    const onStatusChange = (status) => {
+    const onStatusChange = (myGen) => (status) => {
+      if (myGen !== generation) return // canal antigo — ignore
       // status: 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT'
       if (status === 'SUBSCRIBED') {
-        reconnectAttempts = 0 // success — reset backoff
+        reconnectAttempts = 0
         return
       }
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        // Bad state — reconnect with backoff
         reconnectAttempts++
         const delay = Math.min(1_000 * Math.pow(2, reconnectAttempts), 30_000)
         console.warn(`[useRealtime] status=${status} attempt=${reconnectAttempts} reconnect in ${delay}ms`)
-        setTimeout(() => {
+        setTimeout(async () => {
           if (!user) return
-          unsubscribe()
-          subscribe()
-          // Refetch — data pode estar stale durante reconnect window
-          qc.invalidateQueries()
+          await unsubscribe()
+          await subscribe()
+          // #092: invalidate APENAS keys relevantes (não ALL queries) durante reconnect
+          for (const keys of Object.values(TABLE_TO_KEYS)) {
+            for (const key of keys) qc.invalidateQueries({ queryKey: key })
+          }
         }, delay)
       }
     }
 
-    const subscribe = () => {
+    const subscribe = async () => {
       if (channel) return
-      channel = supabase.channel(`realtime:${user.id}`)
+      generation++
+      const myGen = generation
+      // #093: nome único por subscribe — evita race com removeChannel async
+      const chanName = `realtime:${user.id}:${myGen}:${Date.now()}`
+      const ch = supabase.channel(chanName)
       for (const table of Object.keys(TABLE_TO_KEYS)) {
-        channel.on(
-          'postgres_changes',
-          { event: '*', schema: SCHEMA, table },
-          () => {
-            for (const key of TABLE_TO_KEYS[table]) {
-              qc.invalidateQueries({ queryKey: key })
-            }
+        // #092: filter postgres_changes server-side por userId.
+        // Sem filter, Realtime stream MUDA TODAS rows pra TODOS clients
+        // conectados (multi-tenant egress nuke). Filter força broker
+        // rotear apenas changes do meu userId.
+        // Exceção: patient_shares (recurso multi-user — preciso saber
+        // quando alguém compartilha paciente comigo).
+        const opts = { event: '*', schema: SCHEMA, table }
+        if (table !== 'patient_shares') {
+          opts.filter = `userId=eq.${user.id}`
+        }
+        ch.on('postgres_changes', opts, () => {
+          if (myGen !== generation) return // callback de canal antigo
+          // #092: invalidate APENAS keys da tabela mudada
+          for (const key of TABLE_TO_KEYS[table]) {
+            qc.invalidateQueries({ queryKey: key })
           }
-        )
+        })
       }
-      channel.subscribe(onStatusChange)
+      ch.subscribe(onStatusChange(myGen))
+      channel = ch
     }
 
-    const unsubscribe = () => {
-      if (channel) {
-        supabase.removeChannel(channel)
-        channel = null
+    const unsubscribe = async () => {
+      const ch = channel
+      channel = null
+      if (ch) {
+        // #093: await removeChannel — era fire-and-forget
+        try { await supabase.removeChannel(ch) } catch (e) { console.warn('[useRealtime] removeChannel:', e) }
       }
     }
 
@@ -90,14 +122,16 @@ export function useRealtime() {
     // não disparou). Verifica channel.state — se !== 'joined' mas deveria estar,
     // força reconnect. Roda a cada 60s.
     const startWatchdog = () => {
-      watchdogTimer = setInterval(() => {
+      watchdogTimer = setInterval(async () => {
         if (!channel) return
-        const state = channel.state // 'joined' | 'closed' | 'errored' | 'leaving' | 'joining'
+        const state = channel.state
         if (state !== 'joined' && state !== 'joining') {
           console.warn(`[useRealtime] watchdog: state=${state} → force reconnect`)
-          unsubscribe()
-          subscribe()
-          qc.invalidateQueries()
+          await unsubscribe()
+          await subscribe()
+          for (const keys of Object.values(TABLE_TO_KEYS)) {
+            for (const key of keys) qc.invalidateQueries({ queryKey: key })
+          }
         }
       }, WATCHDOG_INTERVAL_MS)
     }
@@ -106,10 +140,10 @@ export function useRealtime() {
     startWatchdog()
 
     // Item #077 (release v0.1.7.0) — resubscribe ao Supabase rotacionar JWT.
-    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: authSub } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        unsubscribe()
-        subscribe()
+        await unsubscribe()
+        await subscribe()
       }
     })
 
@@ -117,15 +151,16 @@ export function useRealtime() {
     let pauseHandle, resumeHandle
     if (Capacitor.isNativePlatform()) {
       const setupListeners = async () => {
-        pauseHandle = await CapacitorApp.addListener('pause', () => {
-          // Pausa watchdog + drop channel — economia bateria background
+        pauseHandle = await CapacitorApp.addListener('pause', async () => {
           if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null }
-          unsubscribe()
+          await unsubscribe()
         })
-        resumeHandle = await CapacitorApp.addListener('resume', () => {
-          subscribe()
+        resumeHandle = await CapacitorApp.addListener('resume', async () => {
+          await subscribe()
           if (!watchdogTimer) startWatchdog()
-          qc.invalidateQueries()
+          for (const keys of Object.values(TABLE_TO_KEYS)) {
+            for (const key of keys) qc.invalidateQueries({ queryKey: key })
+          }
         })
       }
       setupListeners()
@@ -133,7 +168,7 @@ export function useRealtime() {
 
     return () => {
       if (watchdogTimer) clearInterval(watchdogTimer)
-      unsubscribe()
+      unsubscribe() // fire-and-forget no unmount (sync cleanup boundary)
       authSub?.subscription?.unsubscribe?.()
       pauseHandle?.remove()
       resumeHandle?.remove()

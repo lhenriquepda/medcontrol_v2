@@ -8,7 +8,9 @@ export function useMyTier() {
   return useQuery({
     queryKey: ['my_tier'],
     queryFn: getMyTier,
-    staleTime: 60_000
+    // #092 (v0.1.7.5): tier raramente muda (admin grant). 60s → 30min.
+    // Realtime invalida em mutation; reconnect refresca de qualquer jeito.
+    staleTime: 30 * 60_000
   })
 }
 

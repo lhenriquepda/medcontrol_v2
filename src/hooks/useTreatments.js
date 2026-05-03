@@ -7,7 +7,8 @@ export function useTreatments(filter = {}) {
     queryKey: ['treatments', filter],
     queryFn: () => listTreatments(filter),
     // Cobre janela undo de 5s pra delete optimistic não voltar visualmente.
-    staleTime: 6_000,
+    // #092 (v0.1.7.5): tratamentos mudam raramente, staleTime 6s → 5min.
+    staleTime: 5 * 60_000,
     refetchOnMount: false,
   })
 }

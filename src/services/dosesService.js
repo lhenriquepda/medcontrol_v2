@@ -14,16 +14,40 @@ function recomputeOverdue(rows) {
 
 const DOSE_COLS = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'
 
+// #092 (release v0.1.7.5) — egress reduction.
+// Default range fail-safe: se caller não passar from/to, aplica janela
+// padrão (-30d passado, +60d futuro). Evita pull histórico inteiro
+// (5+ anos × 4 doses/dia = 7000+ rows × 250 bytes = 1.75 MB / refetch).
+// Caller deve sempre passar from/to explícito quando precisar histórico
+// completo (e.g. Reports com range custom).
+const DEFAULT_RANGE_PAST_DAYS = 30
+const DEFAULT_RANGE_FUTURE_DAYS = 60
+
+function applyDefaultRange(from, to) {
+  if (from && to) return { from, to }
+  const now = new Date()
+  if (!from) {
+    const past = new Date(now); past.setDate(past.getDate() - DEFAULT_RANGE_PAST_DAYS)
+    from = past.toISOString()
+  }
+  if (!to) {
+    const future = new Date(now); future.setDate(future.getDate() + DEFAULT_RANGE_FUTURE_DAYS)
+    to = future.toISOString()
+  }
+  return { from, to }
+}
+
 export async function listDoses({ from, to, patientId, status, type } = {}) {
   if (hasSupabase) {
+    // #092: aplica default range se ausente
+    const range = applyDefaultRange(from, to)
     // Order desc by scheduledAt + paginate to bypass 1000-row default limit.
-    // Loop until empty page returns. Each page = 1000 rows max.
     let q = supabase
       .from('doses')
       .select(DOSE_COLS)
       .order('scheduledAt', { ascending: false })
-    if (from) q = q.gte('scheduledAt', from)
-    if (to) q = q.lte('scheduledAt', to)
+      .gte('scheduledAt', range.from)
+      .lte('scheduledAt', range.to)
     if (patientId) q = q.eq('patientId', patientId)
     if (type) q = q.eq('type', type)
     // Importante: NÃO filtrar por status no servidor — overdue é computado no cliente
@@ -32,8 +56,9 @@ export async function listDoses({ from, to, patientId, status, type } = {}) {
     const PAGE = 1000
     const all = []
     let page = 0
-    // Safety cap: 20 pages = 20k doses (5+ years for typical user)
-    while (page < 20) {
+    // #092: safety cap reduzida 20→5 pages (5k rows max — coverage 90d window
+    // mesmo cenário extremo 50 doses/dia). Maior = bug ou misuse.
+    while (page < 5) {
       const { data, error } = await q.range(page * PAGE, (page + 1) * PAGE - 1)
       if (error) throw error
       if (!data || data.length === 0) break
