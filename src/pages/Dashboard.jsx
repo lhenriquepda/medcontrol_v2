@@ -142,19 +142,18 @@ export default function Dashboard() {
       if (!map.has(d.patientId)) map.set(d.patientId, [])
       map.get(d.patientId).push(d)
     }
-    // Sort within each group: overdue primeiro, depois pending por scheduledAt asc
+    // Doses dentro do grupo: cronológico asc (data + hora) independente do status.
     for (const list of map.values()) {
-      list.sort((a, b) => {
-        const rank = (s) => s === 'overdue' ? 0 : s === 'pending' ? 1 : s === 'done' ? 2 : 3
-        const dr = rank(a.status) - rank(b.status)
-        if (dr !== 0) return dr
-        return a.scheduledAt.localeCompare(b.scheduledAt)
-      })
+      list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
     }
-    return [...map.entries()].map(([pid, list]) => ({
-      patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
-      list,
-    }))
+    // Pacientes: alfabético por name (locale pt-BR, case-insensitive).
+    const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
+    return [...map.entries()]
+      .map(([pid, list]) => ({
+        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
+        list,
+      }))
+      .sort((a, b) => collator.compare(a.patient.name || '', b.patient.name || ''))
   }, [mergedDoses, patients])
 
   const selectedPatient = selected && patients.find((p) => p.id === selected.patientId)
