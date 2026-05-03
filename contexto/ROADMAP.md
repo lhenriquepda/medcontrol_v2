@@ -65,7 +65,7 @@
 **Items fechados na release v0.1.7.4 (RLS hardening + RPC TZ fix + UX bundle):**
 - ✅ #012 #013 RLS hardening — todas policies TO authenticated + split cmd=ALL (48 policies finais)
 - ✅ #014 RPC extend_continuous_treatments recriada + reativada client Dashboard
-- ✅ #011 `<label>` Login A11y idosos + TalkBack
+- ✅ #011 `<label>` Login A11y (TalkBack + screen readers — universal)
 - ✅ #019 password length 8 + complexity (config.toml + cloud confirmado)
 - ✅ #020 Disclaimer médico visível no signup
 - ✅ #022 typescript 6.0.3 confirmado legítimo
@@ -381,7 +381,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`.
 
 #### Notificações idle ilimitado (P0 — release v0.1.7.1, defense-in-depth)
-> **Princípio user-driven:** "idoso não fecha aplicativo nenhum". Idle deve ser ilimitado e ainda assim alarme + push funcionarem 100%. Estratégia: 3 caminhos independentes de notificação, qualquer 1 garante a dose. Hoje só 1 caminho ativo.
+> **Princípio user-driven:** muitos users (não só idosos — também cuidadores ocupados, pais multi-tarefa, profissionais saúde) deixam app aberto em background indefinidamente. Idle deve ser ilimitado e ainda assim alarme + push funcionarem 100%. Estratégia: 3 caminhos independentes de notificação, qualquer 1 garante a dose. Hoje só 1 caminho ativo.
 
 - [x] **#079** [BUG-016] Realtime heartbeat keep-alive + reconnect automático em `useRealtime.js`. Heartbeat 30s detecta silent fail. Caminho 1 de 3. (commit `b4812e0`)
 - [x] **#080** [BUG-016] Edge `notify-doses` reliability: retry exponential FCM + cleanup tokens inválidos + idempotência via `dose_notifications` + advanceMins fallback. Caminho 2 de 3. (commit `4b82d16`)

@@ -1006,6 +1006,7 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
+**Público-alvo:** amplo — pais com crianças em tratamento, pessoas organizadas com múltiplos medicamentos diários, cuidadores formais/informais, clínicas/consultórios, hospitais/instituições, idosos auto-gerindo medicação. **NÃO é app exclusivo de idosos.** Decisões UX seguem design universal — fluxos simples e legíveis servem todas personas.
 **Versão atual:** `0.1.7.4` em master · em desenvolvimento `0.1.7.5` na branch `release/v0.1.7.5` (commit `557dcd9`)
 **Vercel prod:** `https://dosy-app.vercel.app/` (master, deploy v0.1.7.5 ativo após `vercel --prod` em 2026-05-03)
 **Vercel dev:** `https://dosy-dev.vercel.app/` (branch `release/v0.1.7.5` preview)

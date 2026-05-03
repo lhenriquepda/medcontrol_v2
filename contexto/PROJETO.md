@@ -7,7 +7,17 @@
 
 ## 1. O que é o projeto
 
-App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicamentos** em pt-BR, marca **Dosy** (originalmente MedControl). Usuário cadastra **pacientes** (filhos, familiares, ele mesmo), cria **tratamentos** por medicamento e acompanha **doses** agendadas no dashboard diário. Inclui modo SOS para doses de resgate, análises de adesão, exportação de relatórios PDF/CSV, alarme estilo despertador (plugin nativo Android), notificações FCM, sistema de assinaturas Free/Plus/Pro/Admin e atualizações in-app via Google Play.
+App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicamentos** em pt-BR, marca **Dosy** (originalmente MedControl). Usuário cadastra **pacientes** (filhos, familiares, ele mesmo, terceiros sob cuidado), cria **tratamentos** por medicamento e acompanha **doses** agendadas no dashboard diário. Inclui modo SOS para doses de resgate, análises de adesão, exportação de relatórios PDF/CSV, alarme estilo despertador (plugin nativo Android), notificações FCM, sistema de assinaturas Free/Plus/Pro/Admin e atualizações in-app via Google Play.
+
+**Público-alvo (amplo, não restrito a uma persona):**
+- Pais com crianças em tratamento (antibióticos, vitaminas, medicações contínuas)
+- Pessoas organizadas que tomam múltiplos medicamentos diários (cardio, ansiolíticos, hormônios, suplementação)
+- Cuidadores formais ou informais (acompanham doses de terceiros)
+- Clínicas, consultórios e equipes de saúde (gerenciam adesão de pacientes)
+- Hospitais e instituições de longa permanência (auxílio operacional + handoff entre turnos)
+- Idosos auto-gerindo medicação (uma persona dentre várias, não a única)
+
+Decisões de UX devem balancear todas essas personas — letras legíveis e fluxos simples NÃO significam "design só pra idosos", significa **design universal** que serve do adolescente em tratamento crônico ao cuidador profissional.
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-app.vercel.app
