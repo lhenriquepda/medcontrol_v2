@@ -38,14 +38,26 @@ export function fromDatetimeLocalInput(value) {
 }
 
 export function rangeNow(rangeKey) {
+  // Janela simétrica em torno de "now": filtro "24h" => 24h pra trás + 24h
+  // pra frente. Cobre atrasadas recentes + tomadas/puladas do dia + próximas
+  // doses agendadas. Sem assimetria que escondia atrasadas > 6h do label '12h'.
   const now = new Date()
-  const start = new Date()
+  const start = new Date(now)
   const end = new Date(now)
-  if (rangeKey === '12h') end.setHours(end.getHours() + 12)
-  else if (rangeKey === '24h') end.setHours(end.getHours() + 24)
-  else if (rangeKey === '48h') end.setHours(end.getHours() + 48)
-  else if (rangeKey === '7d') end.setDate(end.getDate() + 7)
-  else return { from: null, to: null }
-  start.setHours(start.getHours() - 6) // mostra também doses recentes atrasadas
+  if (rangeKey === '12h') {
+    start.setHours(start.getHours() - 12)
+    end.setHours(end.getHours() + 12)
+  } else if (rangeKey === '24h') {
+    start.setHours(start.getHours() - 24)
+    end.setHours(end.getHours() + 24)
+  } else if (rangeKey === '48h') {
+    start.setHours(start.getHours() - 48)
+    end.setHours(end.getHours() + 48)
+  } else if (rangeKey === '7d') {
+    start.setDate(start.getDate() - 7)
+    end.setDate(end.getDate() + 7)
+  } else {
+    return { from: null, to: null }
+  }
   return { from: start.toISOString(), to: end.toISOString() }
 }
