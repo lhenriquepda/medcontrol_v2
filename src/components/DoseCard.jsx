@@ -80,52 +80,110 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const showRight = delta > 4  // user swiping right (confirm)
   const showLeft = delta < -4  // user swiping left (skip)
 
-  // bare=true: inner sem border/radius/shadow — outer wrapper assume papel visual do card
-  // (usado quando wrapper actionable adiciona border/radius/overflow-hidden)
+  // Status → Dosy StatusPill kind + leading icon container colors
+  const statusKindMap = {
+    done:    { kind: 'success', color: '#3F9E7E', bg: '#DDF1E8' },
+    pending: { kind: 'pending', color: 'var(--dosy-fg-secondary)', bg: 'var(--dosy-peach-100)' },
+    overdue: { kind: 'danger',  color: 'var(--dosy-danger)', bg: 'var(--dosy-danger-bg)' },
+    skipped: { kind: 'skipped', color: 'var(--dosy-fg-tertiary)', bg: 'var(--dosy-bg-sunken)' },
+  }
+  const dosyStatus = statusKindMap[dose.status] || statusKindMap.pending
+
+  // bare=true: inner sem outer wrapper visual (usado em actionable swipe wrapper)
   const renderInner = (bare = false) => (
     <button
       onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
-      className={`w-full text-left p-4 flex items-center gap-3 transition active:scale-[0.96] active:opacity-90 ${
-        bare
-          ? 'bg-[var(--color-bg-elevated)]'
-          : `card ${isOverdue ? 'border-rose-300 dark:border-rose-500/40' : ''}`
-      }`}
+      className="dosy-press"
+      style={{
+        width: '100%', textAlign: 'left',
+        padding: 14,
+        display: 'flex', alignItems: 'center', gap: 12,
+        background: 'var(--dosy-bg-elevated)',
+        border: bare
+          ? 'none'
+          : (isOverdue ? '1px solid rgba(229,86,74,0.3)' : '1px solid var(--dosy-border)'),
+        borderRadius: bare ? 0 : 18,
+        boxShadow: bare ? 'none' : 'var(--dosy-shadow-sm)',
+        cursor: 'pointer',
+        fontFamily: 'var(--dosy-font-body)',
+        color: 'var(--dosy-fg)',
+      }}
     >
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s.color}`}>
-        <Icon name={s.iconName} size={18} />
+      <div style={{
+        width: 42, height: 42, borderRadius: 14,
+        background: dosyStatus.bg,
+        color: dosyStatus.color,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Icon name={s.iconName} size={20} />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold truncate">{dose.medName}</p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{
+            fontFamily: 'var(--dosy-font-display)',
+            fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em',
+            color: 'var(--dosy-fg)', margin: 0,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{dose.medName}</p>
           {dose.type === 'sos' && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-600 text-white">S.O.S</span>
+            <span style={{
+              fontSize: 9.5, fontWeight: 800, letterSpacing: '0.02em',
+              padding: '2px 6px', borderRadius: 6,
+              background: 'var(--dosy-danger)',
+              color: 'var(--dosy-fg-on-sunset)',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>S.O.S</span>
           )}
         </div>
-        <p className="text-xs text-slate-500 truncate">{dose.unit}</p>
-        <p className="text-xs mt-0.5 text-slate-600 dark:text-slate-400">
+        <p style={{
+          fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: 0,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{dose.unit}</p>
+        <p style={{
+          fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: '2px 0 0 0',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
           {relativeLabel(dose.scheduledAt)} · {formatTime(dose.scheduledAt)}
           {dose.status === 'done' && dose.actualTime && (
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">→ {formatTime(dose.actualTime)}</span>
+            <span style={{ marginLeft: 6, color: '#3F9E7E', fontWeight: 600 }}>
+              → {formatTime(dose.actualTime)}
+            </span>
           )}
         </p>
       </div>
-      <span className={`chip ${s.color}`}>{s.label}</span>
+      <span style={{
+        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+        color: dosyStatus.color,
+        background: dosyStatus.bg,
+        padding: '4px 10px',
+        borderRadius: 9999,
+        whiteSpace: 'nowrap',
+        textTransform: 'lowercase',
+        fontFamily: 'var(--dosy-font-display)',
+        flexShrink: 0,
+      }}>
+        {s.label}
+      </span>
     </button>
   )
 
   // Non-actionable doses → plain card, no swipe
   if (!isActionable) return renderInner(false)
 
-  // Actionable → wrap. Outer wrapper assume border/radius/shadow (.card-like)
-  // → evita stroke clipping em corner curva (overflow-hidden + 2 radii diferentes).
+  // Actionable → wrap. Outer wrapper assume border/radius/shadow.
   return (
     <div
-      className={`relative overflow-hidden select-none border shadow-sm ${
-        isOverdue
-          ? 'border-rose-300 dark:border-rose-500/40'
-          : 'border-[var(--color-border)]'
-      }`}
-      style={{ touchAction: 'pan-y', borderRadius: 'var(--radius-lg)' }}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        userSelect: 'none',
+        background: 'var(--dosy-bg-elevated)',
+        border: isOverdue ? '1px solid rgba(229,86,74,0.3)' : '1px solid var(--dosy-border)',
+        borderRadius: 18,
+        boxShadow: 'var(--dosy-shadow-sm)',
+        touchAction: 'pan-y',
+      }}
       {...handlers}
     >
       {/* Reveal layer — confirm (right swipe) — green bg, icon left */}
