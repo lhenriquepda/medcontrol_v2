@@ -95,6 +95,8 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   // Right column: HH:mm display + StatusPill abaixo.
   const rowBg = isOverdue ? 'var(--dosy-danger-bg)' : 'var(--dosy-bg-sunken)'
 
+  const isFaded = dose.status === 'skipped' || dose.status === 'done'
+
   const renderInner = (bare = false) => (
     <button
       onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
@@ -110,6 +112,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         cursor: 'pointer',
         fontFamily: 'var(--dosy-font-body)',
         color: 'var(--dosy-fg)',
+        opacity: isFaded ? 0.55 : 1,
       }}
     >
       {/* PillIcon — squircle 40px, status colored bg */}
@@ -127,8 +130,8 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <p style={{
             fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em',
-            color: dose.status === 'done' ? 'var(--dosy-fg-secondary)' : 'var(--dosy-fg)',
-            textDecoration: dose.status === 'done' ? 'line-through' : 'none',
+            color: isFaded ? 'var(--dosy-fg-secondary)' : 'var(--dosy-fg)',
+            textDecoration: isFaded ? 'line-through' : 'none',
             textDecorationColor: 'var(--dosy-fg-tertiary)',
             margin: 0,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
