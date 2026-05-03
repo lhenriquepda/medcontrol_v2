@@ -1006,17 +1006,19 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `0.1.7.4` · tag `v0.1.7.4` · branch `master`
-**Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
+**Versão atual:** `0.1.7.4` em master · em desenvolvimento `0.1.7.5` na branch `release/v0.1.7.5` (commit `557dcd9`)
+**Vercel:** `https://dosy-teal.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28) — RLS hardening + RPC TZ fix + UX bundle (Login labels A11y, password 8+, disclaimer médico, dose-not-shown fix, pós-login redirect, husky pre-commit, PostHog/Sentry observability).
+**Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28). AAB v0.1.7.5 / 29 build pendente.
 
-**Última release:** v0.1.7.4 em 2026-05-03 — fechou #011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091 (CRÍTICO TZ fix em extend_continuous_treatments). #084 P0 security + #092 P0 egress carry-over pra v0.1.7.5.
+**Última release publicada:** v0.1.7.4 em 2026-05-03 — fechou #011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091 (CRÍTICO TZ fix em extend_continuous_treatments).
+
+**Em desenvolvimento (v0.1.7.5):** #092 P0 egress reduction (Realtime userId filter + listDoses default range + queryKey norm + staleTime tuning) + #093 P1 race condition useRealtime fix (commit `557dcd9`). #084 P0 security carry-over (USER actions). Detalhes em `updates/2026-05-03-release-v0.1.7.5.md`.
 
 **Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 + #085 + #087 Fase A resolvidos.
 
-**Bloqueadores P0 ativos:** 7 itens.
-- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — próxima sessão hotfix `v0.1.7.4`
+**Bloqueadores P0 ativos:** 5 itens (-2: #092 egress fechado código v0.1.7.5; #084 ainda pendente USER action).
+- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — release `v0.1.7.5` em curso, USER actions pendentes
 - #003 rotação senha postgres + revogar PAT (~30min, manual user)
 - #004 vídeo demo FGS Play Console (~2-3h, manual user)
 - #006 device validation 3 devices físicos (1-2 dias, manual user)
@@ -1029,7 +1031,7 @@ Template:
 - #088 Dose não aparece em Início sem refresh (TanStack Query invalidate)
 - #089 Layout AdSense + header truncamento Pixel 7
 
-**Próximo passo concreto:** ver `ROADMAP.md §4`. Próxima sessão = **#084 hotfix v0.1.7.4** (security). Depois v0.1.8.0 minor (#086 + #088 + #089 + P1 batch).
+**Próximo passo concreto:** finalizar v0.1.7.5 — USER builds AAB Android Studio (versionCode 29) + USER publica Play Store + agente faz Vercel deploy CLI + USER coordena sessão #084 JWT rotation (8 fases guided). Detalhes em `updates/2026-05-03-release-v0.1.7.5.md`. Depois v0.1.8.0 minor (#086 + #089 + P1 batch).
 
 ---
 
