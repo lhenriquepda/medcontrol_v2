@@ -421,8 +421,12 @@ export default function Dashboard() {
                             height: 0,
                             transition: { duration: TIMING.fast, ease: EASE.inOut, staggerChildren: 0.02, staggerDirection: -1 },
                           }}
-                          className="space-y-1 overflow-hidden"
+                          style={{ overflow: 'hidden' }}
                         >
+                          <div style={{
+                            padding: '0 10px 10px',
+                            display: 'flex', flexDirection: 'column', gap: 10,
+                          }}>
                           {list.map((d) => (
                             <motion.div
                               key={d.id}
@@ -463,6 +467,7 @@ export default function Dashboard() {
                               />
                             </motion.div>
                           ))}
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>

@@ -80,12 +80,13 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const showRight = delta > 4  // user swiping right (confirm)
   const showLeft = delta < -4  // user swiping left (skip)
 
-  // Status → Dosy StatusPill kind + leading icon container colors
+  // Status → leading icon container colors + StatusPill colors.
+  // pillBg distinct from row bg-sunken pra não sumir contra fundo peach.
   const statusKindMap = {
-    done:    { kind: 'success', color: '#3F9E7E', bg: '#DDF1E8' },
-    pending: { kind: 'pending', color: 'var(--dosy-fg-secondary)', bg: 'var(--dosy-peach-100)' },
-    overdue: { kind: 'danger',  color: 'var(--dosy-danger)', bg: 'var(--dosy-danger-bg)' },
-    skipped: { kind: 'skipped', color: 'var(--dosy-fg-tertiary)', bg: 'var(--dosy-bg-sunken)' },
+    done:    { kind: 'success', color: '#3F9E7E',                  bg: '#DDF1E8',                pillBg: '#DDF1E8' },
+    pending: { kind: 'pending', color: '#C5841A',                  bg: 'var(--dosy-peach-100)',  pillBg: '#FCEACB' },
+    overdue: { kind: 'danger',  color: 'var(--dosy-danger)',       bg: 'var(--dosy-danger-bg)',  pillBg: 'var(--dosy-danger-bg)' },
+    skipped: { kind: 'skipped', color: '#C5841A',                  bg: '#FCEACB',                pillBg: '#FCEACB' },
   }
   const dosyStatus = statusKindMap[dose.status] || statusKindMap.pending
 
@@ -167,7 +168,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         <span style={{
           fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
           color: dosyStatus.color,
-          background: 'rgba(255,255,255,0.55)',
+          background: dosyStatus.pillBg || dosyStatus.bg,
           padding: '3px 9px',
           borderRadius: 9999,
           whiteSpace: 'nowrap',
