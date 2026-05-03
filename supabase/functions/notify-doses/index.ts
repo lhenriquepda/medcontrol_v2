@@ -17,7 +17,7 @@ import webpush from 'npm:web-push@3'
 import { getUserNotifPrefs } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 // ─── FCM setup ───────────────────────────────────────────────────────
 const FCM_PROJECT  = Deno.env.get('FIREBASE_PROJECT_ID')!

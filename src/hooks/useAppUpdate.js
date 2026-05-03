@@ -2,10 +2,28 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
 
 /* eslint-disable no-undef */
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+const BUNDLE_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 /* eslint-enable no-undef */
 
 const isNative = Capacitor.isNativePlatform()
+
+// #095 fix (v0.1.7.5): native app version source-of-truth = Android packageInfo
+// (App.getInfo()), não JS bundle. Bundle pode ficar stale se cap sync não rodou
+// antes do AAB build. PackageInfo reflete versionName real do APK instalado.
+// Web continua usando bundle version (não tem nativo).
+let cachedNativeVersion = null
+async function getRealVersion() {
+  if (!isNative) return BUNDLE_VERSION
+  if (cachedNativeVersion) return cachedNativeVersion
+  try {
+    const { App } = await import('@capacitor/app')
+    const info = await App.getInfo()
+    cachedNativeVersion = info?.version || BUNDLE_VERSION
+    return cachedNativeVersion
+  } catch {
+    return BUNDLE_VERSION
+  }
+}
 
 // Web-only fallback. Native ignora — usa Play Store In-App Updates API.
 const VERSION_URL = 'https://dosy-teal.vercel.app/version.json'
@@ -46,7 +64,15 @@ export function useAppUpdate() {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(DISMISS_KEY) } catch { return null }
   })
+  const [currentVersion, setCurrentVersion] = useState(BUNDLE_VERSION)
   const listenerRef = useRef(null)
+
+  // #095 (v0.1.7.5): resolver versão real native (Android packageInfo)
+  useEffect(() => {
+    let active = true
+    getRealVersion().then(v => { if (active) setCurrentVersion(v) })
+    return () => { active = false }
+  }, [])
 
   // ─── Native check (Play Store) ──────────────────────────────────────
   const checkNative = useCallback(async () => {
@@ -150,7 +176,7 @@ export function useAppUpdate() {
   // ─── Availability flag ─────────────────────────────────────────────
   // Native: banner só some quando versão atual = última (após restart)
   // Web: banner desaparece quando user dispensa explicitamente
-  const isWebNewer = !isNative && latest?.version && isNewer(latest.version, APP_VERSION)
+  const isWebNewer = !isNative && latest?.version && isNewer(latest.version, currentVersion)
   let available = isNative
     ? !!latest                              // sempre exibe enquanto Play reporta update
     : (isWebNewer && dismissed !== latest.version)
@@ -170,7 +196,7 @@ export function useAppUpdate() {
 
   return {
     available,
-    current: APP_VERSION,
+    current: currentVersion,
     latest,
     downloaded,
     progress,

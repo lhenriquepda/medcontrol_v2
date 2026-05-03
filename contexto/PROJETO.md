@@ -1,17 +1,27 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-03 — pós release v0.1.7.4 (versionCode 28)
+> **Última revisão:** 2026-05-03 — em desenvolvimento v0.1.7.5 (versionCode 29) na branch `release/v0.1.7.5` (master ainda em v0.1.7.4 / 28)
 
 ---
 
 ## 1. O que é o projeto
 
-App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicamentos** em pt-BR, marca **Dosy** (originalmente MedControl). Usuário cadastra **pacientes** (filhos, familiares, ele mesmo), cria **tratamentos** por medicamento e acompanha **doses** agendadas no dashboard diário. Inclui modo SOS para doses de resgate, análises de adesão, exportação de relatórios PDF/CSV, alarme estilo despertador (plugin nativo Android), notificações FCM, sistema de assinaturas Free/Plus/Pro/Admin e atualizações in-app via Google Play.
+App Android nativo (Capacitor) **+ PWA mobile-first** de **gestão de medicamentos** em pt-BR, marca **Dosy** (originalmente MedControl). Usuário cadastra **pacientes** (filhos, familiares, ele mesmo, terceiros sob cuidado), cria **tratamentos** por medicamento e acompanha **doses** agendadas no dashboard diário. Inclui modo SOS para doses de resgate, análises de adesão, exportação de relatórios PDF/CSV, alarme estilo despertador (plugin nativo Android), notificações FCM, sistema de assinaturas Free/Plus/Pro/Admin e atualizações in-app via Google Play.
+
+**Público-alvo (amplo, não restrito a uma persona):**
+- Pais com crianças em tratamento (antibióticos, vitaminas, medicações contínuas)
+- Pessoas organizadas que tomam múltiplos medicamentos diários (cardio, ansiolíticos, hormônios, suplementação)
+- Cuidadores formais ou informais (acompanham doses de terceiros)
+- Clínicas, consultórios e equipes de saúde (gerenciam adesão de pacientes)
+- Hospitais e instituições de longa permanência (auxílio operacional + handoff entre turnos)
+- Idosos auto-gerindo medicação (uma persona dentre várias, não a única)
+
+Decisões de UX devem balancear todas essas personas — letras legíveis e fluxos simples NÃO significam "design só pra idosos", significa **design universal** que serve do adolescente em tratamento crônico ao cuidador profissional.
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
-**Deploy web (Vercel):** https://dosy-teal.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 28 / versionName 0.1.7.4 (Closed Testing bloqueado por #004 vídeo FGS + #006 device validation; BUG-016 fechado 100%; #085 #087 fechados v0.1.7.3; #086 hide v0.1.7.4 espera v0.1.8.0; #012 #013 #014 #011 #019 #020 #022 #024 #088 #090 #091 fechados v0.1.7.4; #084 P0 security + #092 P0 egress carry-over v0.1.7.5)
+**Deploy web (Vercel):** https://dosy-app.vercel.app
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 28 / versionName 0.1.7.4 (Play Store; AAB v0.1.7.5 / 29 build pendente). Closed Testing bloqueado por #004 vídeo FGS + #006 device validation. BUG-016 fechado 100%; #085 #087 fechados v0.1.7.3; #086 hide v0.1.7.4 espera v0.1.8.0; #012 #013 #014 #011 #019 #020 #022 #024 #088 #090 #091 fechados v0.1.7.4; #092 P0 egress + #093 P1 race condition fechados v0.1.7.5 (código); #084 P0 security carry-over (USER actions).
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
 
 ---
@@ -494,7 +504,7 @@ dndEnabled: false,       dndStart: '23:00', dndEnd: '07:00'
   - Tap "Atualizar" → Play prompt nativo → download bg → restart prompt
   - Source of truth = Play Console (publish nova versão = banner aparece automaticamente)
   - Plugin: `@capawesome/capacitor-app-update`
-- **Web:** check `https://dosy-teal.vercel.app/version.json` a cada 30min + onFocus
+- **Web:** check `https://dosy-app.vercel.app/version.json` a cada 30min + onFocus
   - Banner dismissable (close X)
   - Tap → window.location.reload()
 - Debug toggle: `window.__dosyForceUpdate = true` em DevTools
@@ -793,7 +803,7 @@ Services verificam `hasSupabase` e desviam para `mock.*`.
 ```bash
 npm run build
 npx vercel --prod --yes
-# → https://dosy-teal.vercel.app
+# → https://dosy-app.vercel.app
 ```
 
 ### Android (local):

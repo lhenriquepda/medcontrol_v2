@@ -138,7 +138,7 @@
   - APK rebuild → notif aparece com silhueta correta no system tray
 - **Detalhe:** [auditoria/06-bugs.md#bug-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
 
-### #011 — Adicionar `<label>` explícito em inputs Login (A11y idosos)
+### #011 — Adicionar `<label>` explícito em inputs Login (A11y universal — TalkBack/screen readers)
 - **Status:** ⏳ Aberto
 - **Origem:** [Auditoria] (Dimensão 7)
 - **Esforço:** 30 min
@@ -692,7 +692,7 @@
 
 ### #079 — Realtime heartbeat keep-alive — caminho 1 de 3 (defense-in-depth)
 - **Status:** ✅ Concluído @ commit b4812e0 (2026-05-01) — release v0.1.7.1
-- **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle. User: "idoso não fecha app nenhum, idle deve ser ilimitado"
+- **Origem:** [auditoria-live-2026-05-01] BUG-016 — push + alarme não disparam após 16min idle. Premissa universal: muitos users (cuidadores, pais, profissionais, idosos) deixam app aberto em background — idle deve ser ilimitado.
 - **Esforço:** 2-3h (impl + teste device físico)
 - **Dependências:** nenhuma
 - **Severidade:** P0 — healthcare-critical (dose perdida = paciente sem medicação)
@@ -770,7 +770,7 @@
 - **Esforço:** 6-8h (impl plugin + WorkManager + teste device físico)
 - **Dependências:** nenhuma
 - **Severidade:** P0 — caminho mais robusto. Independe de app foreground / websocket / push.
-- **Princípio:** Sistema atual depende de 1 caminho (app ativo). User idoso não fecha app mas Android pode kill em background. Solução: agendar alarmes locais com horizonte FUTURO ao invés de só "próxima dose".
+- **Princípio:** Sistema atual depende de 1 caminho (app ativo). Muitos users deixam app aberto background, mas Android pode kill mesmo assim. Solução: agendar alarmes locais com horizonte FUTURO ao invés de só "próxima dose".
 - **Estratégia:**
   1. Quando app abre / sincroniza: plugin `criticalAlarm` agenda TODAS doses dos próximos 24-72h via `setAlarmClock()` (sobrevive Doze)
   2. SharedPreferences armazena lista. `BootReceiver` re-agenda após reboot (já existe)

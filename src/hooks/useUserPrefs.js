@@ -71,7 +71,8 @@ export function useUserPrefs() {
         return readLocal()
       }
     },
-    staleTime: 30_000
+    // #092 (v0.1.7.5): prefs mudam raramente — staleTime 30s → 10min reduz refetch
+    staleTime: 10 * 60_000
   })
 }
 

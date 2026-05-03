@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.7.4` (tag `v0.1.7.4`) · branch `master` · sync com `origin/master`.
-**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.7.4. Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.1.7.5` em desenvolvimento (branch `release/v0.1.7.5`) · master ainda em `0.1.7.4`.
+**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente). Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -59,12 +59,13 @@
 ## 3. Onde paramos
 
 **Última release:** v0.1.7.4 publicada 2026-05-03 (Vercel + Play Store Internal Testing AAB versionCode 28 + tag git `v0.1.7.4`).
+**Em desenvolvimento:** v0.1.7.5 (branch `release/v0.1.7.5`) — egress reduction + race fix coded, AAB/deploy pendentes.
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
 
 **Items fechados na release v0.1.7.4 (RLS hardening + RPC TZ fix + UX bundle):**
 - ✅ #012 #013 RLS hardening — todas policies TO authenticated + split cmd=ALL (48 policies finais)
 - ✅ #014 RPC extend_continuous_treatments recriada + reativada client Dashboard
-- ✅ #011 `<label>` Login A11y idosos + TalkBack
+- ✅ #011 `<label>` Login A11y (TalkBack + screen readers — universal)
 - ✅ #019 password length 8 + complexity (config.toml + cloud confirmado)
 - ✅ #020 Disclaimer médico visível no signup
 - ✅ #022 typescript 6.0.3 confirmado legítimo
@@ -103,10 +104,23 @@
 - ✅ #002 Sanitizar email enumeration em `send-test-push`
 - ✅ #005 Encoding UTF-8 paciente legacy (BUG-001) — cleanup data + verificação UI roundtrip OK
 
-**Próxima release v0.1.7.5 (bundle security + financial — sessão dedicada):**
-- **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect (8-fase plan em CHECKLIST §#084 com FASE 1.5 audit secrets adicionais + FASE 8.5 close alerts GitHub/GitGuardian dashboards)
-- **#092** [P0 CRÍTICO BUG-025] Reduzir egress Supabase 20GB→<5GB/mês ANTES grace period 01/Jun/2026. Audit breakdown + otimizar TanStack refetch + Realtime filtering + Edge cron intervals.
-- **#087 Fase B** [opcional, P1] Android nativo respeitar DND fire time (AlarmActivity abort + DoseSyncWorker skip schedule)
+**Em desenvolvimento — release v0.1.7.5 (bundle security + financial + realtime):**
+
+Code done (commit `557dcd9` em `release/v0.1.7.5`):
+- ✅ **#092** [P0 CRÍTICO BUG-025] Egress reduction:
+  - Realtime postgres_changes filter `userId=eq.X` server-side (era stream multi-tenant)
+  - subscriptions removido do Realtime (admin-only writes)
+  - listDoses default range fail-safe (-30d/+60d) — antes pull 5+ anos sem from/to
+  - listDoses paginate cap 20→5 pages
+  - useDoses queryKey timestamps normalizados pra hour boundary (evita refetch storm)
+  - useDoses refetchInterval 60s→5min, staleTime 30s→2min, refetchOnMount=always→true
+  - useUserPrefs staleTime 30s→10min, usePatients/useTreatments 6s→5min, useMyTier 60s→30min
+  - App.jsx alarm reschedule scope -1d/+14d (era pull histórico todo)
+- ✅ **#093** [P1 BUG-026] Race condition useRealtime: nome único per-subscribe + await removeChannel + generation counter
+
+Pendente nesta release:
+- **#084** [P0 security] Rotação service_role JWT + Vercel↔GitHub reconnect — requer USER actions (OAuth, JWT Roll irreversível, AAB build, Play Console publish)
+- **#087 Fase B** [opcional, P1] Android nativo respeitar DND fire time
 
 **Items pendentes pra v0.1.8.0 (próxima minor):**
 - **#086** [P1 BUG-019] Resumo Diário fix completo (migration daily_summary_log + Edge cron + timezone)
@@ -367,7 +381,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6` em `public/sw.js`.
 
 #### Notificações idle ilimitado (P0 — release v0.1.7.1, defense-in-depth)
-> **Princípio user-driven:** "idoso não fecha aplicativo nenhum". Idle deve ser ilimitado e ainda assim alarme + push funcionarem 100%. Estratégia: 3 caminhos independentes de notificação, qualquer 1 garante a dose. Hoje só 1 caminho ativo.
+> **Princípio user-driven:** muitos users (não só idosos — também cuidadores ocupados, pais multi-tarefa, profissionais saúde) deixam app aberto em background indefinidamente. Idle deve ser ilimitado e ainda assim alarme + push funcionarem 100%. Estratégia: 3 caminhos independentes de notificação, qualquer 1 garante a dose. Hoje só 1 caminho ativo.
 
 - [x] **#079** [BUG-016] Realtime heartbeat keep-alive + reconnect automático em `useRealtime.js`. Heartbeat 30s detecta silent fail. Caminho 1 de 3. (commit `b4812e0`)
 - [x] **#080** [BUG-016] Edge `notify-doses` reliability: retry exponential FCM + cleanup tokens inválidos + idempotência via `dose_notifications` + advanceMins fallback. Caminho 2 de 3. (commit `4b82d16`)
@@ -381,7 +395,9 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#088** [BUG-021, reportado user 2026-05-02 emulador Pixel 7 API 35] **Dose cadastrada não aparece em Início sem refresh manual.** Após cadastrar dose nova, voltar pra Início mostra lista antiga — user precisa pull-to-refresh OU sair/voltar de tab. Provável causa: TanStack Query `invalidateQueries(['doses'])` não chamado após mutation INSERT em doses (ou hook useDoses não escuta eventos realtime suficientes). Verificar `dosesService.js` mutate handlers + `useDoses` queryKey invalidation. **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar comportamento atual em devices modernos. Antes de mudar `useDoses`/`dosesService`/realtime, regredir em S25 Ultra primeiro. Provável race condition timing OR latência realtime emulador-only. P1 UX healthcare-adjacent (user pode achar dose não foi salva, recadastrar = duplicata).
 - [x] **#090** [BUG-023, fechado v0.1.7.4 commit pendente] **Pós-login redireciona pra Ajustes ao invés de Início.** Causa raiz: React Router preserva pathname após user mudar null→logged. Se URL era `/ajustes` (herdada session anterior pré-logout), App re-renderiza com user truthy + rota /ajustes existente → Settings renderiza direto sem redirecionar Início. Fix: navigate('/', {replace:true}) explícito em Login.submit após signin/signup success se path atual não é `/` nem `/reset-password` (preserva deep links legítimos com token).
 - [ ] **#089** [BUG-022, reportado user 2026-05-02 emulador Pixel 7] **Layout: AdSense banner empurrando header parcial.** Print confirma: banner "Test Ad 468x60" ocupa topo da viewport, header "Dosy ▸ Frederico" fica abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Tabs filtro (12h/24h/48h/7 dias/Tudo) e cards (Pendentes/Adesão/Atrasadas) renderizam OK abaixo. Visível em emulador Pixel 7 (1080×2400 @420dpi). **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar layout atual em devices modernos. Provável causa: posicionamento absoluto AdSense em `index.html` ou container CSS colidindo com `<header>` sem `padding-top` proporcional ao banner; viewport `<meta>` ou safe-area-inset comportamento diferente em Pixel 7. Verificar `index.html` (placement AdSense) + componentes header (`Layout.jsx`/`AppHeader.jsx`). Test cross-device obrigatório antes commit (Pixel 7 emul + S25 Ultra real + tablet baseline). P2 UX visual.
-- [ ] **#092** [BUG-025, reportado user 2026-05-02 dashboard Supabase — P0 CRÍTICO release v0.1.7.5] **Egress 20 GB / 5 GB Free Plan (400%) — risco corte service após grace period 01/Jun/2026.** Métricas dashboard: Egress 20013/5GB ❌, DB size 6% ✅, MAU <1% ✅, Edge invocations <1% ✅, Storage 0% ✅, Realtime peak 4/200 ✅. Concentração suspeita: REST queries (TanStack refetch 60s) + Realtime broadcasts (postgres_changes full row). Plano otimização: (1) `useDoses` refetchInterval 60s→5min OR remove + dependa apenas realtime; (2) reduzir SELECT * pra colunas essenciais; (3) Realtime filter agressivo (`userId=eq.{uid}` em vez broadcast geral); (4) staleTime longer + persistQueryClient mais agressivo; (5) audit Edge cron intervals (notify-doses 1min talvez 5min se aceitável); (6) reduzir payload das responses (json columns trimmed). Auditar breakdown egress no dashboard ANTES decidir mitigação principal. Meta: voltar pra <5GB/mês ou aceitar Pro $25/mês. Bloqueador release v0.1.7.5 OR upgrade pro Pro tier antes 01/Jun. P0 financial/operational.
+- [x] **#094** [BUG-027, fechado v0.1.7.5 commit `8b32245`] **Paywall falso fires pra users plus/pro durante mount race**. Reportado user em validação dosy-dev: teste03@teste (tier plus DB) tentou cadastrar paciente novo → paywall "No plano grátis você pode ter até 1 paciente". Causa: (1) usePatientLimitReached retornava true quando tier=undefined durante loading; (2) getMyTier faz auth.getUser() race podendo resolver null e cachear 30min. Fix: useMyTier `enabled: !!user` via useAuth + queryKey inclui userId + usePatientLimitReached retorna false durante loading/null em vez de assumir free. P0 trust violation (user pago vê paywall).
+- [x] **#093** [BUG-026, fechado v0.1.7.5 commit `557dcd9`] **Race condition em useRealtime: "cannot add postgres_changes callbacks after subscribe()"**. Fix aplicado: nome único `realtime:${userId}:${gen}:${Date.now()}` por subscribe + await `supabase.removeChannel()` (era fire-and-forget) + generation counter ignora callbacks de canais antigos durante reconnect. AbortError "Lock broken" continua WONTFIX (benigno cross-tab).
+- [x] **#092** [BUG-025, fechado v0.1.7.5 commit `557dcd9`] **Egress reduction Supabase**. Multi-frente: (1) Realtime postgres_changes filter `userId=eq.X` server-side (era stream multi-tenant todas rows); (2) subscriptions removido do Realtime (admin-only writes raras); (3) listDoses default range fail-safe (-30d/+60d) — era pull histórico inteiro 5+ anos sem from/to (1.7MB / refetch); (4) listDoses paginate cap 20→5 pages; (5) useDoses queryKey timestamps normalizados pra hour boundary (evita refetch storm com `new Date()` inline); (6) useDoses refetchInterval 60s→5min, staleTime 30s→2min, refetchOnMount=always→true; (7) staleTime bump em useUserPrefs/usePatients/useTreatments/useMyTier; (8) App.jsx alarm reschedule scope -1d/+14d. Critical alarm path (dose-trigger-handler INSERT trigger + schedule-alarms-fcm cron 6h + notify-doses cron) NÃO regrediu. Validar via dashboard pós-deploy.
 - [x] **#091** [BUG-024, fechado v0.1.7.4 commit pendente — CRÍTICO] **pg_cron extends contínuos com TZ UTC errado em firstDoseTime array.** User lhenrique.pda reportou Cortisol cadastrado 27/04 com horários 08:00+12:00 BRT — doses iniciais OK (11/15 UTC), mas doses futuras geradas pelo cron diário aparecem com horário 5h+9h BRT (08/12 UTC raw). Causa: `date_trunc('day', startDate) + make_interval(hours=>h)` produz UTC. Fix: combina date+time em America/Sao_Paulo, converte AT TIME ZONE pra UTC. 3 treatments afetados (Triiodotironina, Cortisol, Citrato Magnésio). Cleanup aplicado: DELETE pending futuras + reset doseHorizon NULL + regen via fn fixed. Validado doses 03/05 = 11/15/19 UTC = 8/12/16 BRT ✅. Migration `20260503025200_fix_extend_continuous_tz_bug.sql`. P0 healthcare-critical (user pode tomar dose hora errada).
 
 ---
@@ -481,9 +497,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 92 itens
-- **Em aberto:** 63 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2; 2 fechados v0.1.7.3; 14 fechados v0.1.7.4 [#011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091]; #084+#092+#087FaseB v0.1.7.5; #089 v0.1.8.0)
-- **P0:** 6 (5 manuais user [#003/#004/#006/#007/#008/#009] + #084 security + #092 egress carry-over) · **P1:** 11 · **P2:** 21 · **P3:** 25
+- **Total:** 93 itens
+- **Em aberto:** 62 (-2 fechados em v0.1.7.5: #092 + #093). Ainda: 3 v0.1.6.10; 5 v0.1.7.0; 4 v0.1.7.1; 1 v0.1.7.2; 2 v0.1.7.3; 14 v0.1.7.4; #084+#087FaseB v0.1.7.5; #089 v0.1.8.0
+- **P0:** 5 (4 manuais user + #084 security) · **P1:** 11 · **P2:** 21 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)

@@ -313,7 +313,7 @@ Exemplo:
 > **O que é "conta admin":** sua conta principal que tem permissão especial pra mandar push de teste. Outras contas (como teste03) não.
 >
 > **Como conseguir:**
-> - Opção fácil: você loga no app web (https://dosy-teal.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
+> - Opção fácil: você loga no app web (https://dosy-app.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
 > - Opção mais técnica: pular esse teste e confiar nos 6 que passaram (risco baixo — caminho não-testado é o que já funcionava antes).
 >
 > Como você prefere?
@@ -648,9 +648,17 @@ Raras exceções pra master direto (sem branch + sem bump):
 |---|---|---|---|
 | **Local web (dev server)** | `npm run dev` → http://localhost:5173 | seu working tree (mudanças não-commitadas inclusas) | iteração rápida, qualquer mudança web |
 | **Dosy Dev (Android Studio Run)** | pkg `com.dosyapp.dosy.dev` · label "Dosy Dev" | branch `release/v*` ativa empacotada | **TODO trabalho de release branch em device físico/emulator vai aqui.** Coexiste lado-a-lado com Dosy oficial. Dados separados, alarme/notif/storage isolados. |
-| **Vercel preview** | URL única gerada pelo Vercel para a branch | branch `release/v*` ativa (não master) | demonstrar mudanças web acumuladas da sessão antes de release final |
-| **Vercel produção** | https://dosy-teal.vercel.app | master | validação final produção web |
+| **Vercel dev** | https://dosy-dev.vercel.app | branch `release/v*` ativa (re-aliased após cada `vercel deploy --yes`) | **validação OBRIGATÓRIA pré-merge.** Toda release passa aqui antes de promover pra prod |
+| **Vercel produção** | https://dosy-app.vercel.app | **master estável** (atualiza APENAS após ciclo completo: validação dev → merge master → tag → AAB Play Store) | **NUNCA aponta pra release ativa.** Mantém versão estável até release fechar |
 | **Dosy oficial — Play Store Internal Testing** | pkg `com.dosyapp.dosy` · URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (master ou atrás) | validação real Android **só recebe builds quando release oficial é cortada (Passo 3 do ciclo)** |
+
+**Princípio Vercel (regra crítica):**
+- `dosy-app.vercel.app` = sempre versão **estável publicada** (master pós-tag + AAB Play Store ativo)
+- `dosy-dev.vercel.app` = sempre **release em desenvolvimento** (branch `release/v*` corrente)
+- Validação em dev é GATE OBRIGATÓRIO antes de promover pra prod. NUNCA deploy --prod direto da release branch.
+- Comandos:
+  - Release em desenvolvimento → `vercel deploy --yes` + `vercel alias set <url> dosy-dev.vercel.app`
+  - Promover pra prod (FIM do release): merge → master + tag + AAB publicado primeiro, THEN `git checkout master && vercel --prod && vercel alias set <url> dosy-app.vercel.app`
 
 **Princípio dual-app:**
 - **Dosy Dev** (`com.dosyapp.dosy.dev`): app instalado pelo Android Studio Run em debug variant. Usa Firebase entry separada (`google-services.json` em `src/debug/`) — push FCM dev funciona sem afetar prod. Reinstalado a cada Run. Use livremente pra testes destrutivos, force stop, idle longo.
@@ -695,7 +703,7 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 ### O que evitar
 
-- ❌ Testar em produção (https://dosy-teal.vercel.app) o que **ainda não foi mergeado** — você vai testar versão antiga e achar que mudança "não funcionou"
+- ❌ Testar em produção (https://dosy-app.vercel.app) o que **ainda não foi mergeado** — você vai testar versão antiga e achar que mudança "não funcionou"
 - ❌ Confiar que "Play Store já tem versão nova" só porque mergeou pra master — Android exige build/upload manual (até CI Android estar configurado)
 - ❌ Mexer em `master` direto durante a sessão — sempre via release branch
 - ❌ Criar branch nova `fix/*` ou `feature/*` no meio de uma sessão com `release/v*` ativa — tudo vai na release branch
@@ -725,7 +733,7 @@ Aplicável a: layout responsive, race conditions timing, latência realtime, plu
 🌿 Vou trabalhar em separado, sem mexer no que está no ar.
 
 **No ar agora (intocado):** v{atual}
-- App web: https://dosy-teal.vercel.app
+- App web: https://dosy-app.vercel.app
 - Dosy oficial Play Store: AAB v{atual}
 
 **Branch desta sessão:** `release/v{próxima}` (todas mudanças vão aqui)
@@ -854,10 +862,10 @@ Push pra master deve auto-trigger Vercel deploy (assumindo CI configurado em `ve
 
 ```bash
 # Aguardar ~2 minutos
-# Confirmar versão exibida em https://dosy-teal.vercel.app/ajustes (rodapé "Versão")
+# Confirmar versão exibida em https://dosy-app.vercel.app/ajustes (rodapé "Versão")
 ```
 
-Agente avisa user: *"Aguarda ~2min e abre https://dosy-teal.vercel.app/ajustes (Ctrl+F5 pra forçar refresh). Versão deve mostrar vX.Y.Z. Me confirma?"*
+Agente avisa user: *"Aguarda ~2min e abre https://dosy-app.vercel.app/ajustes (Ctrl+F5 pra forçar refresh). Versão deve mostrar vX.Y.Z. Me confirma?"*
 
 Se Vercel deploy falhar: agente investiga via dashboard Vercel, reporta erro, decide se rollback Play Store (problemático) ou hotfix.
 
@@ -898,7 +906,7 @@ Branch da release sempre é deletada após merge — próxima sessão cria nova 
 
 **Estado dos 3 ambientes (sincronizados):**
 - ✅ master @ commit {sha} · tag vX.Y.Z
-- ✅ Vercel produção: https://dosy-teal.vercel.app (vX.Y.Z visível em Settings)
+- ✅ Vercel produção: https://dosy-app.vercel.app (vX.Y.Z visível em Settings)
 - ✅ Play Store Internal Testing: AAB vX.Y.Z (versionCode NN) em rollout
 
 **Items fechados nesta release:** N (P0:a · P1:b · P2:c · P3:d)
@@ -1006,17 +1014,21 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `0.1.7.4` · tag `v0.1.7.4` · branch `master`
-**Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
+**Público-alvo:** amplo — pais com crianças em tratamento, pessoas organizadas com múltiplos medicamentos diários, cuidadores formais/informais, clínicas/consultórios, hospitais/instituições, idosos auto-gerindo medicação. **NÃO é app exclusivo de idosos.** Decisões UX seguem design universal — fluxos simples e legíveis servem todas personas.
+**Versão atual:** `0.1.7.4` em master · em desenvolvimento `0.1.7.5` na branch `release/v0.1.7.5` (commit `557dcd9`)
+**Vercel prod:** `https://dosy-app.vercel.app/` (master = v0.1.7.4 estável; só atualiza após release v0.1.7.5 fechar ciclo completo)
+**Vercel dev:** `https://dosy-dev.vercel.app/` (branch `release/v0.1.7.5` em desenvolvimento — validação OBRIGATÓRIA pré-merge)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28) — RLS hardening + RPC TZ fix + UX bundle (Login labels A11y, password 8+, disclaimer médico, dose-not-shown fix, pós-login redirect, husky pre-commit, PostHog/Sentry observability).
+**Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28). AAB v0.1.7.5 / 29 build pendente.
 
-**Última release:** v0.1.7.4 em 2026-05-03 — fechou #011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091 (CRÍTICO TZ fix em extend_continuous_treatments). #084 P0 security + #092 P0 egress carry-over pra v0.1.7.5.
+**Última release publicada:** v0.1.7.4 em 2026-05-03 — fechou #011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091 (CRÍTICO TZ fix em extend_continuous_treatments).
+
+**Em desenvolvimento (v0.1.7.5):** #092 P0 egress reduction (Realtime userId filter + listDoses default range + queryKey norm + staleTime tuning) + #093 P1 race condition useRealtime fix (commit `557dcd9`). #084 P0 security carry-over (USER actions). Detalhes em `updates/2026-05-03-release-v0.1.7.5.md`.
 
 **Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 + #085 + #087 Fase A resolvidos.
 
-**Bloqueadores P0 ativos:** 7 itens.
-- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — próxima sessão hotfix `v0.1.7.4`
+**Bloqueadores P0 ativos:** 5 itens (-2: #092 egress fechado código v0.1.7.5; #084 ainda pendente USER action).
+- **#084** rotação service_role JWT + JWT secret Supabase (incidente 2026-05-02 22:23 UTC, GitGuardian/GitHub Security flagged) — release `v0.1.7.5` em curso, USER actions pendentes
 - #003 rotação senha postgres + revogar PAT (~30min, manual user)
 - #004 vídeo demo FGS Play Console (~2-3h, manual user)
 - #006 device validation 3 devices físicos (1-2 dias, manual user)
@@ -1029,7 +1041,7 @@ Template:
 - #088 Dose não aparece em Início sem refresh (TanStack Query invalidate)
 - #089 Layout AdSense + header truncamento Pixel 7
 
-**Próximo passo concreto:** ver `ROADMAP.md §4`. Próxima sessão = **#084 hotfix v0.1.7.4** (security). Depois v0.1.8.0 minor (#086 + #088 + #089 + P1 batch).
+**Próximo passo concreto:** finalizar v0.1.7.5 — USER builds AAB Android Studio (versionCode 29) + USER publica Play Store + agente faz Vercel deploy CLI + USER coordena sessão #084 JWT rotation (8 fases guided). Detalhes em `updates/2026-05-03-release-v0.1.7.5.md`. Depois v0.1.8.0 minor (#086 + #089 + P1 batch).
 
 ---
 

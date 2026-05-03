@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
@@ -85,7 +85,27 @@ export default function App() {
   // a dose → query invalidates → effect re-fires → alarmes recalculados,
   // doses não-pending excluídas. Cobre caso onde Dashboard não está montada
   // (modal aberto direto via notif) e garante alarmes sempre sincronizados.
-  const { data: allDoses = [] } = useDoses()
+  //
+  // #092 (release v0.1.7.5): janela explícita -1d / +14d. AlarmManager nativo
+  // só agenda doses futuras (~72h FCM cron horizon). Antes useDoses() sem
+  // filter pulls 7000+ rows histórico — egress nuke. Janela 14d cobre buffer
+  // FCM + safe margin pra AlarmScheduler. Past 1d cobre dose recém-marcada
+  // que ainda invalidate em loop.
+  // Memoizado por hour-tick: queryKey estável dentro da hora corrente.
+  // Janela "+14d" muda a cada hora pra avançar conforme tempo passa
+  // (sem isso, app aberto 24h teria janela rolando antiga).
+  const [hourTick, setHourTick] = useState(() => Math.floor(Date.now() / 3600_000))
+  useEffect(() => {
+    const t = setInterval(() => setHourTick(Math.floor(Date.now() / 3600_000)), 3600_000)
+    return () => clearInterval(t)
+  }, [])
+  const alarmWindow = useMemo(() => {
+    const now = new Date(hourTick * 3600_000)
+    const past = new Date(now); past.setDate(past.getDate() - 1)
+    const future = new Date(now); future.setDate(future.getDate() + 14)
+    return { from: past.toISOString(), to: future.toISOString() }
+  }, [hourTick])
+  const { data: allDoses = [] } = useDoses(alarmWindow)
   const { data: allPatients = [] } = usePatients()
   useEffect(() => {
     if (!user) return

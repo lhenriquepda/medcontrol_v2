@@ -15,7 +15,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { getUserNotifPrefs, inDndWindow } from '../_shared/userPrefs.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const FCM_PROJECT = Deno.env.get('FIREBASE_PROJECT_ID')!
 const FCM_CLIENT  = Deno.env.get('FIREBASE_CLIENT_EMAIL')!
 const FCM_KEY_PEM = Deno.env.get('FIREBASE_PRIVATE_KEY')!
