@@ -208,9 +208,9 @@ export default function Dashboard() {
     <div className="pb-28">
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
-      <div className="max-w-md mx-auto px-4 pt-3">
+      <div className="max-w-md mx-auto px-4 pt-3" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Dosy v0.2.0.0 redesign — Hero sunset card + 2 MiniStat 2-up */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Card gradient padding={18} style={{ position: 'relative', overflow: 'hidden' }}>
             {/* Subtle radial highlight overlay */}
             <div style={{
@@ -242,7 +242,7 @@ export default function Dashboard() {
               </div>
             </div>
           </Card>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <MiniStat
               label="Adesão 7d"
               value={adherence == null ? '—' : `${adherence}%`}
@@ -257,7 +257,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <AdBanner className="mb-4" />
+        <AdBanner />
 
         {isLoading ? <SkeletonList count={4} /> : (
           patients.length === 0 ? (
@@ -308,12 +308,36 @@ export default function Dashboard() {
               </Link>
             </Card>
           ) : doses.length === 0 ? (
-            <EmptyState icon="pill" title="Nenhuma dose neste período"
-                        description="Ajuste os filtros ou crie um novo tratamento."
-                        action={<Link to="/tratamento/novo" className="btn-primary">+ Novo tratamento</Link>} />
+            <Card padding={28} style={{
+              textAlign: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 18,
+                background: 'var(--dosy-peach-100)',
+                color: 'var(--dosy-primary)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="pill" size={32} />
+              </div>
+              <h3 style={{
+                fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
+                fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
+                margin: 0,
+              }}>Nenhuma dose neste período</h3>
+              <p style={{
+                fontSize: 14, color: 'var(--dosy-fg-secondary)',
+                lineHeight: 1.5, margin: 0,
+              }}>Ajuste os filtros ou crie um novo tratamento.</p>
+              <Link to="/tratamento/novo" style={{ textDecoration: 'none', marginTop: 6 }}>
+                <Button kind="primary" size="md" icon={PlusIcon}>
+                  Novo tratamento
+                </Button>
+              </Link>
+            </Card>
           ) : (
             <motion.div
-              className="space-y-5"
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               initial="initial"
               animate="animate"
               variants={{ animate: { transition: { staggerChildren: TIMING.stagger, delayChildren: 0.06 } } }}
