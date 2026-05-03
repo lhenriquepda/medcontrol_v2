@@ -1,0 +1,342 @@
+/* =============================================================================
+   DOSY DESIGN TOKENS — release v0.2.0.0 redesign
+   =============================================================================
+
+   Sistema visual "warm fintech / wellness". Light-first, sunset gradient
+   signature. Coexiste com theme.css legacy (vars com nomes distintos).
+
+   ESTRATÉGIA:
+   - Componentes Dosy novos (src/components/dosy/) consomem estas vars
+   - Componentes legacy continuam usando vars de theme.css
+   - Tailwind config (tailwind.config.js) referencia ambos via classes
+     `bg-dosy-*` (novo) e `bg-brand-*` (legacy)
+   - Migração página-a-página: quando uma tela troca pra primitivos Dosy,
+     ela para de depender de theme.css implicitamente
+
+   FONTE: contexto/claude-design/dosy/project/styles/tokens.css
+   ============================================================================= */
+
+:root {
+  /* ===========================================================
+     SURFACES — never pure white. Cream/peach quente
+     =========================================================== */
+  --dosy-bg:            #FFF4EC;  /* dominante */
+  --dosy-bg-elevated:   #FFFAF5;  /* cards layered */
+  --dosy-bg-sunken:     #FBE9DC;  /* wells, inset */
+  --dosy-bg-overlay:    rgba(26, 18, 14, 0.42); /* modal scrim warm */
+
+  /* ===========================================================
+     SUNSET — gradiente assinatura
+     =========================================================== */
+  --dosy-sunset-1:      #FF3D7F;  /* magenta-rose */
+  --dosy-sunset-2:      #FF6B5B;  /* coral */
+  --dosy-sunset-3:      #FFA56B;  /* warm orange */
+  --dosy-gradient-sunset: linear-gradient(135deg, #FF3D7F 0%, #FF6B5B 50%, #FFA56B 100%);
+  --dosy-gradient-sunset-soft: linear-gradient(135deg, #FFD0DC 0%, #FFD4C2 50%, #FFE5D6 100%);
+  --dosy-gradient-sunset-radial: radial-gradient(circle at 30% 20%, #FFA56B 0%, #FF6B5B 45%, #FF3D7F 100%);
+
+  /* RGB triplets (Tailwind opacity modifier — bg-dosy-sunset-1/40) */
+  --dosy-sunset-1-rgb:  255 61 127;
+  --dosy-sunset-2-rgb:  255 107 91;
+  --dosy-sunset-3-rgb:  255 165 107;
+
+  /* Primary solid (mid sunset) */
+  --dosy-primary:       #FF6B5B;
+  --dosy-primary-hover: #F25A4B;
+  --dosy-primary-press: #E04638;
+
+  /* ===========================================================
+     PEACH ACCENTS — secondary cards, chips, leading slot bg
+     =========================================================== */
+  --dosy-peach-50:      #FFF4EC;
+  --dosy-peach-100:     #FFE5D6;
+  --dosy-peach-200:     #FFD4C2;
+  --dosy-peach-300:     #FFB99B;
+  --dosy-peach-400:     #FF9A75;
+
+  /* ===========================================================
+     FOREGROUND — almost-black, never pure
+     =========================================================== */
+  --dosy-fg:            #1A1A1A;
+  --dosy-fg-secondary:  #7A7068;  /* warm gray */
+  --dosy-fg-tertiary:   #A89F94;
+  --dosy-fg-disabled:   #C8BEB3;
+  --dosy-fg-on-sunset:  #FFFFFF;
+
+  /* ===========================================================
+     BORDERS / DIVIDERS — barely-there warm tints
+     =========================================================== */
+  --dosy-border:        rgba(26, 26, 26, 0.06);
+  --dosy-border-strong: rgba(26, 26, 26, 0.12);
+  --dosy-divider:       rgba(122, 112, 104, 0.18);
+
+  /* ===========================================================
+     SEMANTIC — warm-leaning (info nunca azul)
+     =========================================================== */
+  --dosy-success:       #6EC9A8;  /* mint */
+  --dosy-success-bg:    #DDF1E8;
+  --dosy-warning:       #F2B441;
+  --dosy-warning-bg:    #FCEACB;
+  --dosy-danger:        #E5564A;  /* coral-red */
+  --dosy-danger-bg:     #FAD8D3;
+  --dosy-info:          #C9856E;  /* warm tan */
+  --dosy-info-bg:       #F5E2D8;
+
+  /* ===========================================================
+     SHADOWS — warm rgba(74, 36, 16, ...) não cinza neutro
+     =========================================================== */
+  --dosy-shadow-xs:     0 1px 2px 0 rgba(74, 36, 16, 0.05);
+  --dosy-shadow-sm:     0 2px 6px -1px rgba(74, 36, 16, 0.07), 0 1px 2px 0 rgba(74, 36, 16, 0.04);
+  --dosy-shadow-md:     0 8px 20px -6px rgba(74, 36, 16, 0.10), 0 2px 6px -2px rgba(74, 36, 16, 0.05);
+  --dosy-shadow-lg:     0 20px 40px -12px rgba(74, 36, 16, 0.18), 0 6px 16px -6px rgba(74, 36, 16, 0.08);
+  --dosy-shadow-sunset: 0 12px 32px -8px rgba(255, 61, 127, 0.35), 0 4px 12px -4px rgba(255, 107, 91, 0.25);
+
+  /* ===========================================================
+     SPACING (4px scale)
+     =========================================================== */
+  --dosy-space-0:  0;
+  --dosy-space-1:  4px;
+  --dosy-space-2:  8px;
+  --dosy-space-3:  12px;
+  --dosy-space-4:  16px;
+  --dosy-space-5:  20px;
+  --dosy-space-6:  24px;
+  --dosy-space-8:  32px;
+  --dosy-space-10: 40px;
+  --dosy-space-12: 48px;
+  --dosy-space-16: 64px;
+  --dosy-space-20: 80px;
+
+  /* ===========================================================
+     RADII — generosos
+     =========================================================== */
+  --dosy-radius-xs:    6px;
+  --dosy-radius-sm:    12px;
+  --dosy-radius-md:    16px;   /* small cards, inputs */
+  --dosy-radius-lg:    24px;   /* main cards, hero */
+  --dosy-radius-xl:    32px;   /* modal/sheet tops */
+  --dosy-radius-pill:  9999px;
+
+  /* ===========================================================
+     TYPE — Manrope (Gilroy substitute). Mobile-first 32-48px titles
+     =========================================================== */
+  --dosy-font-display: 'Manrope', 'Gilroy', system-ui, -apple-system, sans-serif;
+  --dosy-font-body:    'Manrope', 'Gilroy', system-ui, -apple-system, sans-serif;
+  --dosy-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --dosy-w-light:   300;
+  --dosy-w-regular: 400;
+  --dosy-w-medium:  500;
+  --dosy-w-semi:    600;
+  --dosy-w-bold:    700;
+  --dosy-w-black:   800;
+
+  --dosy-fs-display:  48px;  /* hero metric */
+  --dosy-fs-h1:       36px;
+  --dosy-fs-h2:       28px;
+  --dosy-fs-h3:       22px;
+  --dosy-fs-h4:       18px;
+  --dosy-fs-body:     16px;
+  --dosy-fs-small:    14px;
+  --dosy-fs-caption:  12px;
+  --dosy-fs-overline: 11px;
+
+  --dosy-lh-tight:  1.05;
+  --dosy-lh-snug:   1.2;
+  --dosy-lh-normal: 1.45;
+  --dosy-lh-loose:  1.6;
+
+  --dosy-tracking-tight:    -0.03em;
+  --dosy-tracking-snug:     -0.02em;
+  --dosy-tracking-normal:   0;
+  --dosy-tracking-wide:     0.04em;
+  --dosy-tracking-overline: 0.12em;
+
+  /* ===========================================================
+     MOTION
+     =========================================================== */
+  --dosy-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --dosy-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dosy-dur-fast:    150ms;
+  --dosy-dur-base:    250ms;
+  --dosy-dur-slow:    400ms;
+}
+
+/* ===========================================================
+   DARK MODE — warm near-black (nunca azul-frio)
+   =========================================================== */
+:root[data-theme="dark"], html.dark {
+  --dosy-bg:            #1C1410;  /* warm near-black, brown-tinted */
+  --dosy-bg-elevated:   #261B16;
+  --dosy-bg-sunken:     #150E0A;
+  --dosy-bg-overlay:    rgba(0, 0, 0, 0.6);
+
+  --dosy-peach-50:      #2A1F18;
+  --dosy-peach-100:     #3A2820;
+  --dosy-peach-200:     #4A3128;
+  --dosy-peach-300:     #5C3D31;
+  --dosy-peach-400:     #7A4F3F;
+
+  --dosy-fg:            #FFF4EC;
+  --dosy-fg-secondary:  #C8B8AB;
+  --dosy-fg-tertiary:   #8E7F73;
+  --dosy-fg-disabled:   #5C5048;
+
+  --dosy-border:        rgba(255, 244, 236, 0.08);
+  --dosy-border-strong: rgba(255, 244, 236, 0.16);
+  --dosy-divider:       rgba(255, 244, 236, 0.10);
+
+  --dosy-success-bg:    rgba(110, 201, 168, 0.15);
+  --dosy-warning-bg:    rgba(242, 180, 65, 0.15);
+  --dosy-danger-bg:     rgba(229, 86, 74, 0.18);
+  --dosy-info-bg:       rgba(201, 133, 110, 0.18);
+
+  --dosy-shadow-xs:     0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --dosy-shadow-sm:     0 2px 6px -1px rgba(0, 0, 0, 0.35);
+  --dosy-shadow-md:     0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  --dosy-shadow-lg:     0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  --dosy-shadow-sunset: 0 12px 32px -8px rgba(255, 61, 127, 0.4);
+}
+
+/* ===========================================================
+   SEMANTIC TYPE CLASSES (utility, opt-in via className)
+   =========================================================== */
+.t-dosy-display {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-display);
+  font-weight: var(--dosy-w-black);
+  line-height: var(--dosy-lh-tight);
+  letter-spacing: var(--dosy-tracking-tight);
+}
+
+.t-dosy-h1 {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-h1);
+  font-weight: var(--dosy-w-bold);
+  line-height: var(--dosy-lh-tight);
+  letter-spacing: var(--dosy-tracking-snug);
+}
+
+.t-dosy-h2 {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-h2);
+  font-weight: var(--dosy-w-bold);
+  line-height: var(--dosy-lh-snug);
+  letter-spacing: var(--dosy-tracking-snug);
+}
+
+.t-dosy-h3 {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-h3);
+  font-weight: var(--dosy-w-semi);
+  line-height: var(--dosy-lh-snug);
+  letter-spacing: var(--dosy-tracking-snug);
+}
+
+.t-dosy-h4 {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-h4);
+  font-weight: var(--dosy-w-semi);
+  line-height: var(--dosy-lh-snug);
+}
+
+.t-dosy-body {
+  font-size: var(--dosy-fs-body);
+  font-weight: var(--dosy-w-regular);
+  line-height: var(--dosy-lh-normal);
+}
+
+.t-dosy-body-medium {
+  font-size: var(--dosy-fs-body);
+  font-weight: var(--dosy-w-medium);
+  line-height: var(--dosy-lh-normal);
+}
+
+.t-dosy-small {
+  font-size: var(--dosy-fs-small);
+  font-weight: var(--dosy-w-regular);
+  line-height: var(--dosy-lh-normal);
+  color: var(--dosy-fg-secondary);
+}
+
+.t-dosy-caption {
+  font-size: var(--dosy-fs-caption);
+  font-weight: var(--dosy-w-medium);
+  line-height: var(--dosy-lh-snug);
+  color: var(--dosy-fg-tertiary);
+}
+
+.t-dosy-overline {
+  font-size: var(--dosy-fs-overline);
+  font-weight: var(--dosy-w-semi);
+  line-height: var(--dosy-lh-snug);
+  letter-spacing: var(--dosy-tracking-overline);
+  text-transform: uppercase;
+  color: var(--dosy-fg-secondary);
+}
+
+.t-dosy-metric {
+  font-family: var(--dosy-font-display);
+  font-size: var(--dosy-fs-display);
+  font-weight: var(--dosy-w-black);
+  line-height: 1;
+  letter-spacing: var(--dosy-tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sunset text fill — gradient como cor de texto pra accents */
+.t-dosy-sunset {
+  background: var(--dosy-gradient-sunset);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ===========================================================
+   ANIMATIONS — coexistem com framer-motion (Q2 escolha A)
+   =========================================================== */
+@keyframes dosy-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dosy-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes dosy-slide-down {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes dosy-pop {
+  0%   { transform: scale(0.92); opacity: 0; }
+  60%  { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes dosy-pulse-ring {
+  0%   { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes dosy-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Press feedback (utility) — aplique em buttons/cards Dosy */
+.dosy-press {
+  transition: transform 150ms var(--dosy-ease-out), box-shadow 200ms var(--dosy-ease-out);
+}
+.dosy-press:active {
+  transform: scale(0.98);
+}
+
+/* Hide native scrollbars em Dosy scroll containers (mobile feel) */
+.dosy-scroll::-webkit-scrollbar { display: none; }
+.dosy-scroll { scrollbar-width: none; }
+
+/* Soft toast pop */
+.dosy-toast {
+  animation: dosy-pop 250ms var(--dosy-ease-out) both;
+}
+
+/* Wordmark — invert em dark mode pra logo dark virar light automaticamente */
+html.dark .dosy-wordmark { filter: invert(1) brightness(1.1); }

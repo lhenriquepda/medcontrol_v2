@@ -12,6 +12,10 @@
    ============================================================================= */
 
 @import './styles/theme.css';
+/* Dosy v0.2.0.0 redesign tokens — coexiste com theme.css legacy.
+   Componentes Dosy (src/components/dosy/) consomem essas vars via Tailwind
+   classes (bg-dosy-*) ou diretamente (var(--dosy-*)). */
+@import './styles/dosy-tokens.css';
 
 @tailwind base;
 @tailwind components;
