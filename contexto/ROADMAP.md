@@ -8,7 +8,7 @@
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
 **Versão atual:** `0.1.7.5` em desenvolvimento (branch `release/v0.1.7.5`) · master ainda em `0.1.7.4`.
-**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente). Conta de teste: `teste03@teste.com / 123456`.
+**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente). Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**

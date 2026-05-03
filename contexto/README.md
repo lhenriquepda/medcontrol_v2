@@ -313,7 +313,7 @@ Exemplo:
 > **O que é "conta admin":** sua conta principal que tem permissão especial pra mandar push de teste. Outras contas (como teste03) não.
 >
 > **Como conseguir:**
-> - Opção fácil: você loga no app web (https://dosy-teal.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
+> - Opção fácil: você loga no app web (https://dosy-app.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
 > - Opção mais técnica: pular esse teste e confiar nos 6 que passaram (risco baixo — caminho não-testado é o que já funcionava antes).
 >
 > Como você prefere?
@@ -648,8 +648,8 @@ Raras exceções pra master direto (sem branch + sem bump):
 |---|---|---|---|
 | **Local web (dev server)** | `npm run dev` → http://localhost:5173 | seu working tree (mudanças não-commitadas inclusas) | iteração rápida, qualquer mudança web |
 | **Dosy Dev (Android Studio Run)** | pkg `com.dosyapp.dosy.dev` · label "Dosy Dev" | branch `release/v*` ativa empacotada | **TODO trabalho de release branch em device físico/emulator vai aqui.** Coexiste lado-a-lado com Dosy oficial. Dados separados, alarme/notif/storage isolados. |
-| **Vercel preview** | URL única gerada pelo Vercel para a branch | branch `release/v*` ativa (não master) | demonstrar mudanças web acumuladas da sessão antes de release final |
-| **Vercel produção** | https://dosy-teal.vercel.app | master | validação final produção web |
+| **Vercel dev** | https://dosy-dev.vercel.app | branch `release/v*` ativa (re-aliased após cada `vercel deploy --yes` da branch dev) | demonstrar mudanças web acumuladas da sessão antes de release final |
+| **Vercel produção** | https://dosy-app.vercel.app | master (re-aliased após cada `vercel deploy --prod`) | validação final produção web |
 | **Dosy oficial — Play Store Internal Testing** | pkg `com.dosyapp.dosy` · URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (master ou atrás) | validação real Android **só recebe builds quando release oficial é cortada (Passo 3 do ciclo)** |
 
 **Princípio dual-app:**
@@ -695,7 +695,7 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 ### O que evitar
 
-- ❌ Testar em produção (https://dosy-teal.vercel.app) o que **ainda não foi mergeado** — você vai testar versão antiga e achar que mudança "não funcionou"
+- ❌ Testar em produção (https://dosy-app.vercel.app) o que **ainda não foi mergeado** — você vai testar versão antiga e achar que mudança "não funcionou"
 - ❌ Confiar que "Play Store já tem versão nova" só porque mergeou pra master — Android exige build/upload manual (até CI Android estar configurado)
 - ❌ Mexer em `master` direto durante a sessão — sempre via release branch
 - ❌ Criar branch nova `fix/*` ou `feature/*` no meio de uma sessão com `release/v*` ativa — tudo vai na release branch
@@ -725,7 +725,7 @@ Aplicável a: layout responsive, race conditions timing, latência realtime, plu
 🌿 Vou trabalhar em separado, sem mexer no que está no ar.
 
 **No ar agora (intocado):** v{atual}
-- App web: https://dosy-teal.vercel.app
+- App web: https://dosy-app.vercel.app
 - Dosy oficial Play Store: AAB v{atual}
 
 **Branch desta sessão:** `release/v{próxima}` (todas mudanças vão aqui)
@@ -854,10 +854,10 @@ Push pra master deve auto-trigger Vercel deploy (assumindo CI configurado em `ve
 
 ```bash
 # Aguardar ~2 minutos
-# Confirmar versão exibida em https://dosy-teal.vercel.app/ajustes (rodapé "Versão")
+# Confirmar versão exibida em https://dosy-app.vercel.app/ajustes (rodapé "Versão")
 ```
 
-Agente avisa user: *"Aguarda ~2min e abre https://dosy-teal.vercel.app/ajustes (Ctrl+F5 pra forçar refresh). Versão deve mostrar vX.Y.Z. Me confirma?"*
+Agente avisa user: *"Aguarda ~2min e abre https://dosy-app.vercel.app/ajustes (Ctrl+F5 pra forçar refresh). Versão deve mostrar vX.Y.Z. Me confirma?"*
 
 Se Vercel deploy falhar: agente investiga via dashboard Vercel, reporta erro, decide se rollback Play Store (problemático) ou hotfix.
 
@@ -898,7 +898,7 @@ Branch da release sempre é deletada após merge — próxima sessão cria nova 
 
 **Estado dos 3 ambientes (sincronizados):**
 - ✅ master @ commit {sha} · tag vX.Y.Z
-- ✅ Vercel produção: https://dosy-teal.vercel.app (vX.Y.Z visível em Settings)
+- ✅ Vercel produção: https://dosy-app.vercel.app (vX.Y.Z visível em Settings)
 - ✅ Play Store Internal Testing: AAB vX.Y.Z (versionCode NN) em rollout
 
 **Items fechados nesta release:** N (P0:a · P1:b · P2:c · P3:d)
@@ -1007,7 +1007,8 @@ Template:
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
 **Versão atual:** `0.1.7.4` em master · em desenvolvimento `0.1.7.5` na branch `release/v0.1.7.5` (commit `557dcd9`)
-**Vercel:** `https://dosy-teal.vercel.app/` rodando v0.1.7.4 (deploy v0.1.7.5 pendente)
+**Vercel prod:** `https://dosy-app.vercel.app/` (master, deploy v0.1.7.5 ativo após `vercel --prod` em 2026-05-03)
+**Vercel dev:** `https://dosy-dev.vercel.app/` (branch `release/v0.1.7.5` preview)
 **Conta teste:** `teste03@teste.com / 123456`
 **Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28). AAB v0.1.7.5 / 29 build pendente.
 
