@@ -1006,12 +1006,12 @@ Template:
 > **Atualizado a cada release no Passo 7** (ver §"Publicar release"). Se essa seção contradiz `ROADMAP.md §3` ou `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `0.1.7.3` · tag `v0.1.7.3` · branch `master`
+**Versão atual:** `0.1.7.4` · tag `v0.1.7.4` · branch `master`
 **Vercel:** `https://dosy-teal.vercel.app/` (sincronizado com master)
 **Conta teste:** `teste03@teste.com / 123456`
-**Play Store Internal Testing:** AAB v0.1.7.3 (versionCode 27) — Ajustes user respeitados (Alarme Crítico OFF não toca; DND janela silencia alarme), DND UX condicional ao Alarme Crítico.
+**Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28) — RLS hardening + RPC TZ fix + UX bundle (Login labels A11y, password 8+, disclaimer médico, dose-not-shown fix, pós-login redirect, husky pre-commit, PostHog/Sentry observability).
 
-**Última release:** v0.1.7.3 em 2026-05-02 — fechou #085 (BUG-018 alarme bypass) + #087 Fase A (BUG-020 DND UX condicional + Edges respeitam janela). Validado emulador Pixel 7 cenários A/B/C + DND dentro/fora janela. #086 (Resumo Diário) UI ocultada parqueada v0.1.8.0.
+**Última release:** v0.1.7.4 em 2026-05-03 — fechou #011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091 (CRÍTICO TZ fix em extend_continuous_treatments). #084 P0 security + #092 P0 egress carry-over pra v0.1.7.5.
 
 **Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 + #085 + #087 Fase A resolvidos.
 

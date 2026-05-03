@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.7.1` (tag `v0.1.7.1`) · branch `master` · sync com `origin/master`.
-**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.7.1. Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.1.7.4` (tag `v0.1.7.4`) · branch `master` · sync com `origin/master`.
+**Vercel deploy:** `https://dosy-teal.vercel.app/` rodando v0.1.7.4. Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,8 +58,24 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.7.3 publicada 2026-05-02 (Vercel + Play Store Internal Testing AAB versionCode 27 + tag git `v0.1.7.3`).
-**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01 (BUG-016 fechado em v0.1.7.2; #085/#087 Fase A fechados em v0.1.7.3).
+**Última release:** v0.1.7.4 publicada 2026-05-03 (Vercel + Play Store Internal Testing AAB versionCode 28 + tag git `v0.1.7.4`).
+**Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
+
+**Items fechados na release v0.1.7.4 (RLS hardening + RPC TZ fix + UX bundle):**
+- ✅ #012 #013 RLS hardening — todas policies TO authenticated + split cmd=ALL (48 policies finais)
+- ✅ #014 RPC extend_continuous_treatments recriada + reativada client Dashboard
+- ✅ #011 `<label>` Login A11y idosos + TalkBack
+- ✅ #019 password length 8 + complexity (config.toml + cloud confirmado)
+- ✅ #020 Disclaimer médico visível no signup
+- ✅ #022 typescript 6.0.3 confirmado legítimo
+- ✅ #024 husky + lint-staged pre-commit setup
+- ✅ #088 dose-not-shown viewport-specific (refetchOnMount=always)
+- ✅ #090 pós-login redirect pra Início (em vez de pathname herdado)
+- ✅ **#091 CRÍTICO BUG-024** TZ fix em extend_continuous_treatments — doses futuras com horários fixos agora respeitam America/Sao_Paulo (estavam UTC raw, gerando drift -3h)
+- ✅ #086 Resumo Diário UI ocultada (parqueado v0.1.8.0)
+- ✅ #015 PostHog Product Analytics dashboard + #016 Sentry alert "Crash spike >10/h"
+- ✅ #081 gate validação 24h idle Dosy Dev fechado definitivo
+- ✅ APP.md mapa funcional do app criado em contexto/
 
 **Items fechados na release v0.1.7.3 (Ajustes user respeitados):**
 - ✅ #085 [BUG-018] Alarme Crítico OFF agora respeitado em todos 6 caminhos (3 Edges + 2 Android nativo + 1 client React). Single source-of-truth via user_prefs.notif.criticalAlarm sincronizado em DB + localStorage + SharedPreferences. Validado emulador Pixel 7 cenários A/B/C.
@@ -248,20 +264,20 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#021** [Plan] Backup keystore 3 locais seguros. Plan FASE 18.3
 
 #### A11y
-- [ ] **#011** [Auditoria] `<label>` em inputs Login. → [07 §F2](auditoria/07-usabilidade.md#f2--inputs-sem-label-explícito-login)
+- [x] **#011** [Auditoria] `<label>` em inputs Login. → [07 §F2](auditoria/07-usabilidade.md#f2--inputs-sem-label-explícito-login)
 
 #### Defense-in-depth DB
-- [ ] **#012** [Plan] Recriar policies RLS com `TO authenticated`. Plan FASE 8.3 · [04 §15.2](auditoria/04-supabase.md#152-audit-de-policies)
-- [ ] **#013** [Plan] Splitar policies `cmd=ALL` em 4 (push_subs, user_prefs, subscriptions, security_events). Plan FASE 8.3
-- [ ] **#014** [Plan + Auditoria] Recriar RPC `extend_continuous_treatments`. → [06 BUG-004](auditoria/06-bugs.md#bug-004--extend_continuous_treatments-rpc-sumiu-pgrst202-404)
-- [ ] **#019** [Auditoria] Subir `minimum_password_length` 6 → 8. → [06 BUG-008](auditoria/06-bugs.md#bug-008--minimum_password_length--6-no-supabaseconfigtoml)
+- [x] **#012** [Plan] Recriar policies RLS com `TO authenticated`. Plan FASE 8.3 · [04 §15.2](auditoria/04-supabase.md#152-audit-de-policies)
+- [x] **#013** [Plan] Splitar policies `cmd=ALL` em 4 (push_subs, user_prefs, subscriptions, security_events). Plan FASE 8.3
+- [x] **#014** [Plan + Auditoria] Recriar RPC `extend_continuous_treatments`. → [06 BUG-004](auditoria/06-bugs.md#bug-004--extend_continuous_treatments-rpc-sumiu-pgrst202-404)
+- [x] **#019** [Auditoria] Subir `minimum_password_length` 6 → 8. → [06 BUG-008](auditoria/06-bugs.md#bug-008--minimum_password_length--6-no-supabaseconfigtoml)
 
 #### Observabilidade
-- [ ] **#015** [Plan] PostHog key + dashboards launch. Plan FASE 14.1
-- [ ] **#016** [Plan] Alertas Sentry (crash spike, error threshold). Plan FASE 14.2
+- [x] **#015** [Plan] PostHog key + dashboards launch. Plan FASE 14.1
+- [x] **#016** [Plan] Alertas Sentry (crash spike, error threshold). Plan FASE 14.2
 
 #### Compliance / SAC
-- [ ] **#020** [Plan] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
+- [x] **#020** [Plan] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
 - [ ] **#025** [Plan] Screenshots phone retrabalho 1080×1920. Plan FASE 18.9.2
 - [ ] **#026** [Plan] Provisionar caixa real `suporte@dosyapp.com`. Plan FASE 18.5
 - [ ] **#027** [Plan] Closed Testing track + 12 testers (14 dias). Plan FASE 18.9.3
@@ -273,8 +289,8 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#023** [Auditoria] `useDoses` com `refetchIntervalInBackground: false` + `staleTime`. → [05 §4.4](auditoria/05-codigo.md#44-anti-patterns-encontrados)
 
 #### DX
-- [ ] **#022** [Auditoria] Verificar legitimidade `typescript@^6.0.3`. → [06 BUG-007](auditoria/06-bugs.md#bug-007--typescript-declarado-como-603-no-packagejson)
-- [ ] **#024** [Auditoria] Pre-commit hook (husky + lint-staged). → [05 §6.3](auditoria/05-codigo.md#63-husky--pre-commit)
+- [x] **#022** [Auditoria] Verificar legitimidade `typescript@^6.0.3`. → [06 BUG-007](auditoria/06-bugs.md#bug-007--typescript-declarado-como-603-no-packagejson)
+- [x] **#024** [Auditoria] Pre-commit hook (husky + lint-staged). → [05 §6.3](auditoria/05-codigo.md#63-husky--pre-commit)
 
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
@@ -360,9 +376,9 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#083** [Sessão v0.1.7.1 → v0.1.7.2] FCM-driven alarm scheduling + 4 caminhos coordenados (idempotente). Trigger DB <2s + Cron 6h FCM data + rescheduleAll quando app abre + WorkManager 6h. Push tray inteligente: skip se alarme nativo já agendado. Fecha BUG-016 100%. Validado end-to-end no device: cadastro web → trigger DB → Edge FCM → AlarmScheduler → alarme físico tocou. (commits `23deca4` + `3465ab6` + `26c51ab`)
 - [ ] **#084** [INCIDENTE 2026-05-02 22:23 UTC] **Rotacionar service_role JWT + JWT secret do projeto Supabase**. Service role JWT foi commitado em migration `20260502091000_dose_trigger_webhook.sql` (commit 85d5e61), pushado pra GitHub público. GitGuardian + GitHub Security detectaram em ~6min (22:23-22:29). Histórico do branch reescrito via git-filter-repo + force push (commit 6310c1e), MAS chave permanece em GitHub commit cache + indexers externos. Service_role JWT bypassa RLS = expõe todos dados saúde de todos users (LGPD categoria especial). Ação: Supabase Dashboard → Settings → API → Roll JWT Secret. Atualizar VITE_SUPABASE_ANON_KEY em Vercel + .env.local + rebuild apps. Auditar logs Auth/REST janela 22:23-22:29 UTC. Bonus: reconectar Vercel↔GitHub (webhook quebrou após force push). Plano detalhado em `CHECKLIST.md §#084` (8 fases, autônomo vs USER ACTION). Próxima release v0.1.7.3. P0 security.
 - [x] **#085** [BUG-018, fechado v0.1.7.3 commit `f22f5a9`] **Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim.** User toggle OFF na tela Ajustes → cadastrou dose → alarme nativo fullscreen disparou normalmente, deveria ter recebido apenas notificação push tray. Toggle não respeitado em algum dos 4 caminhos (#083). Possíveis causas: setting não persistido em prefs ou DB; AlarmScheduler não consulta flag antes de agendar; DosyMessagingService.onMessageReceived ignora flag em FCM data path; Edge `notify-doses` skip-push logic não respeita flag user. Auditar todos 4 caminhos + criar source-of-truth single check. P1 healthcare-adjacent (trust violation + LGPD/privacy).
-- [ ] **#086** [BUG-019, reportado user 2026-05-02 v0.1.7.2] **Resumo Diário não funciona — nunca dispara na hora marcada.** Feature de resumo diário configurada em Ajustes (horário definido) nunca enviou notificação. Verificar: persistência de horário em prefs/DB, cron agendado (Edge ou pg_cron), trigger envia push, FCM token ativo, channel notif Android registrado. Se broken end-to-end, decidir: fix em v0.1.7.3 ou parquear feature até v0.1.8.0. P1 broken feature user-facing.
+- [x] **#086** [BUG-019, reportado user 2026-05-02 v0.1.7.2] **Resumo Diário não funciona — nunca dispara na hora marcada.** Feature de resumo diário configurada em Ajustes (horário definido) nunca enviou notificação. Verificar: persistência de horário em prefs/DB, cron agendado (Edge ou pg_cron), trigger envia push, FCM token ativo, channel notif Android registrado. Se broken end-to-end, decidir: fix em v0.1.7.3 ou parquear feature até v0.1.8.0. P1 broken feature user-facing.
 - [x] **#087** [BUG-020, Fase A fechada v0.1.7.3 commit `f22f5a9`; Fase B parqueada v0.1.7.4] **Verificar Não Perturbe funcional + UX condicional.** Verificar se DND atual está respeitando horários configurados (alarme deveria silenciar entre X-Y). Refactor UX: Não Perturbe deve aparecer SOMENTE quando Alarme Crítico ON (toggle pai); quando ON, sub-toggle DND habilita janela horária para desabilitar Alarme Crítico nesse intervalo. Depende de #085 fix (toggle parent precisa funcionar antes UX condicional fazer sentido). P1 UX healthcare-adjacent.
-- [ ] **#088** [BUG-021, reportado user 2026-05-02 emulador Pixel 7 API 35] **Dose cadastrada não aparece em Início sem refresh manual.** Após cadastrar dose nova, voltar pra Início mostra lista antiga — user precisa pull-to-refresh OU sair/voltar de tab. Provável causa: TanStack Query `invalidateQueries(['doses'])` não chamado após mutation INSERT em doses (ou hook useDoses não escuta eventos realtime suficientes). Verificar `dosesService.js` mutate handlers + `useDoses` queryKey invalidation. **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar comportamento atual em devices modernos. Antes de mudar `useDoses`/`dosesService`/realtime, regredir em S25 Ultra primeiro. Provável race condition timing OR latência realtime emulador-only. P1 UX healthcare-adjacent (user pode achar dose não foi salva, recadastrar = duplicata).
+- [x] **#088** [BUG-021, reportado user 2026-05-02 emulador Pixel 7 API 35] **Dose cadastrada não aparece em Início sem refresh manual.** Após cadastrar dose nova, voltar pra Início mostra lista antiga — user precisa pull-to-refresh OU sair/voltar de tab. Provável causa: TanStack Query `invalidateQueries(['doses'])` não chamado após mutation INSERT em doses (ou hook useDoses não escuta eventos realtime suficientes). Verificar `dosesService.js` mutate handlers + `useDoses` queryKey invalidation. **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar comportamento atual em devices modernos. Antes de mudar `useDoses`/`dosesService`/realtime, regredir em S25 Ultra primeiro. Provável race condition timing OR latência realtime emulador-only. P1 UX healthcare-adjacent (user pode achar dose não foi salva, recadastrar = duplicata).
 - [x] **#090** [BUG-023, fechado v0.1.7.4 commit pendente] **Pós-login redireciona pra Ajustes ao invés de Início.** Causa raiz: React Router preserva pathname após user mudar null→logged. Se URL era `/ajustes` (herdada session anterior pré-logout), App re-renderiza com user truthy + rota /ajustes existente → Settings renderiza direto sem redirecionar Início. Fix: navigate('/', {replace:true}) explícito em Login.submit após signin/signup success se path atual não é `/` nem `/reset-password` (preserva deep links legítimos com token).
 - [ ] **#089** [BUG-022, reportado user 2026-05-02 emulador Pixel 7] **Layout: AdSense banner empurrando header parcial.** Print confirma: banner "Test Ad 468x60" ocupa topo da viewport, header "Dosy ▸ Frederico" fica abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Tabs filtro (12h/24h/48h/7 dias/Tudo) e cards (Pendentes/Adesão/Atrasadas) renderizam OK abaixo. Visível em emulador Pixel 7 (1080×2400 @420dpi). **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar layout atual em devices modernos. Provável causa: posicionamento absoluto AdSense em `index.html` ou container CSS colidindo com `<header>` sem `padding-top` proporcional ao banner; viewport `<meta>` ou safe-area-inset comportamento diferente em Pixel 7. Verificar `index.html` (placement AdSense) + componentes header (`Layout.jsx`/`AppHeader.jsx`). Test cross-device obrigatório antes commit (Pixel 7 emul + S25 Ultra real + tablet baseline). P2 UX visual.
 - [ ] **#092** [BUG-025, reportado user 2026-05-02 dashboard Supabase — P0 CRÍTICO release v0.1.7.5] **Egress 20 GB / 5 GB Free Plan (400%) — risco corte service após grace period 01/Jun/2026.** Métricas dashboard: Egress 20013/5GB ❌, DB size 6% ✅, MAU <1% ✅, Edge invocations <1% ✅, Storage 0% ✅, Realtime peak 4/200 ✅. Concentração suspeita: REST queries (TanStack refetch 60s) + Realtime broadcasts (postgres_changes full row). Plano otimização: (1) `useDoses` refetchInterval 60s→5min OR remove + dependa apenas realtime; (2) reduzir SELECT * pra colunas essenciais; (3) Realtime filter agressivo (`userId=eq.{uid}` em vez broadcast geral); (4) staleTime longer + persistQueryClient mais agressivo; (5) audit Edge cron intervals (notify-doses 1min talvez 5min se aceitável); (6) reduzir payload das responses (json columns trimmed). Auditar breakdown egress no dashboard ANTES decidir mitigação principal. Meta: voltar pra <5GB/mês ou aceitar Pro $25/mês. Bloqueador release v0.1.7.5 OR upgrade pro Pro tier antes 01/Jun. P0 financial/operational.
@@ -465,9 +481,9 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 92 itens (+ #092 BUG-025 P0 egress 400% Supabase Free)
-- **Em aberto:** 75 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2; 2 fechados v0.1.7.3; v0.1.7.4 em andamento [#012/#013/#014/#011/#019/#020/#088 + #084 pendente]; #086+#089+#090 v0.1.8.0)
-- **P0:** 7 (6 manuais user + #084 security incident) · **P1:** 19 · **P2:** 24 (+#090) · **P3:** 25
+- **Total:** 92 itens
+- **Em aberto:** 63 (3 fechados v0.1.6.10; 5 fechados v0.1.7.0; 4 fechados v0.1.7.1; 1 fechado v0.1.7.2; 2 fechados v0.1.7.3; 14 fechados v0.1.7.4 [#011/#012/#013/#014/#015/#016/#019/#020/#022/#024/#086 hide/#088/#090/#091]; #084+#092+#087FaseB v0.1.7.5; #089 v0.1.8.0)
+- **P0:** 6 (5 manuais user [#003/#004/#006/#007/#008/#009] + #084 security + #092 egress carry-over) · **P1:** 11 · **P2:** 21 · **P3:** 25
 - **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
 - **Esforço P0+P1:** ~15-20 dias-pessoa
 - **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
