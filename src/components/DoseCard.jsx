@@ -80,13 +80,13 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const showRight = delta > 4  // user swiping right (confirm)
   const showLeft = delta < -4  // user swiping left (skip)
 
-  // Status → leading icon container colors + StatusPill colors.
-  // pillBg distinct from row bg-sunken pra não sumir contra fundo peach.
+  // Status → leading icon container + StatusPill colors.
+  // pendente vs pulada distintos: pendente=warm tan (info), pulada=amber (warning).
   const statusKindMap = {
-    done:    { kind: 'success', color: '#3F9E7E',                  bg: '#DDF1E8',                pillBg: '#DDF1E8' },
-    pending: { kind: 'pending', color: '#C5841A',                  bg: 'var(--dosy-peach-100)',  pillBg: '#FCEACB' },
-    overdue: { kind: 'danger',  color: 'var(--dosy-danger)',       bg: 'var(--dosy-danger-bg)',  pillBg: 'var(--dosy-danger-bg)' },
-    skipped: { kind: 'skipped', color: '#C5841A',                  bg: '#FCEACB',                pillBg: '#FCEACB' },
+    done:    { kind: 'success', color: '#3F9E7E',                  bg: '#DDF1E8',                  pillColor: '#3F9E7E',          pillBg: '#DDF1E8' },
+    pending: { kind: 'pending', color: 'var(--dosy-info)',         bg: 'var(--dosy-info-bg)',      pillColor: 'var(--dosy-info)', pillBg: 'var(--dosy-info-bg)' },
+    overdue: { kind: 'danger',  color: 'var(--dosy-danger)',       bg: 'var(--dosy-danger-bg)',    pillColor: 'var(--dosy-danger)', pillBg: 'var(--dosy-danger-bg)' },
+    skipped: { kind: 'skipped', color: '#C5841A',                  bg: '#FCEACB',                  pillColor: '#C5841A',          pillBg: '#FCEACB' },
   }
   const dosyStatus = statusKindMap[dose.status] || statusKindMap.pending
 
@@ -167,7 +167,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         }}>{formatTime(dose.scheduledAt)}</div>
         <span style={{
           fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
-          color: dosyStatus.color,
+          color: dosyStatus.pillColor || dosyStatus.color,
           background: dosyStatus.pillBg || dosyStatus.bg,
           padding: '3px 9px',
           borderRadius: 9999,
