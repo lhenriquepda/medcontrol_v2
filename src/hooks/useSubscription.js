@@ -1,15 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyTier, listAllUsers, grantTier, FREE_PATIENT_LIMIT } from '../services/subscriptionService'
 import { usePatients } from './usePatients'
+import { useAuth } from './useAuth'
 
 export { FREE_PATIENT_LIMIT }
 
 export function useMyTier() {
+  const { user } = useAuth()
   return useQuery({
-    queryKey: ['my_tier'],
+    queryKey: ['my_tier', user?.id],
     queryFn: getMyTier,
+    // BUG fix (v0.1.7.5): query só roda quando user autenticado.
+    // Antes: race com auth.getUser() retornava null cached por 30min,
+    // tratando user logado como 'free' → paywall em paciente novo
+    // mesmo pra usuários plus/pro.
+    enabled: !!user,
     // #092 (v0.1.7.5): tier raramente muda (admin grant). 60s → 30min.
-    // Realtime invalida em mutation; reconnect refresca de qualquer jeito.
     staleTime: 30 * 60_000
   })
 }
@@ -53,8 +59,12 @@ export function useShowAds() {
 
 // Retorna true se user free atingiu limite de pacientes
 export function usePatientLimitReached() {
-  const { data: tier } = useMyTier()
-  const { data: patients = [] } = usePatients()
+  const { data: tier, isLoading: tierLoading } = useMyTier()
+  const { data: patients = [], isLoading: patientsLoading } = usePatients()
+  // BUG fix (v0.1.7.5): durante loading inicial, NÃO assumir worst case.
+  // Antes: tier undefined → !PRO_FEATURE_TIERS.includes(undefined) → true se >=1 paciente.
+  // Disparava paywall em users plus/pro durante mount race.
+  if (tierLoading || patientsLoading || tier == null) return false
   if (PRO_FEATURE_TIERS.includes(tier)) return false
   return patients.length >= FREE_PATIENT_LIMIT
 }
