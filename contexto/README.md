@@ -648,9 +648,17 @@ Raras exceções pra master direto (sem branch + sem bump):
 |---|---|---|---|
 | **Local web (dev server)** | `npm run dev` → http://localhost:5173 | seu working tree (mudanças não-commitadas inclusas) | iteração rápida, qualquer mudança web |
 | **Dosy Dev (Android Studio Run)** | pkg `com.dosyapp.dosy.dev` · label "Dosy Dev" | branch `release/v*` ativa empacotada | **TODO trabalho de release branch em device físico/emulator vai aqui.** Coexiste lado-a-lado com Dosy oficial. Dados separados, alarme/notif/storage isolados. |
-| **Vercel dev** | https://dosy-dev.vercel.app | branch `release/v*` ativa (re-aliased após cada `vercel deploy --yes` da branch dev) | demonstrar mudanças web acumuladas da sessão antes de release final |
-| **Vercel produção** | https://dosy-app.vercel.app | master (re-aliased após cada `vercel deploy --prod`) | validação final produção web |
+| **Vercel dev** | https://dosy-dev.vercel.app | branch `release/v*` ativa (re-aliased após cada `vercel deploy --yes`) | **validação OBRIGATÓRIA pré-merge.** Toda release passa aqui antes de promover pra prod |
+| **Vercel produção** | https://dosy-app.vercel.app | **master estável** (atualiza APENAS após ciclo completo: validação dev → merge master → tag → AAB Play Store) | **NUNCA aponta pra release ativa.** Mantém versão estável até release fechar |
 | **Dosy oficial — Play Store Internal Testing** | pkg `com.dosyapp.dosy` · URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` | último AAB submetido (master ou atrás) | validação real Android **só recebe builds quando release oficial é cortada (Passo 3 do ciclo)** |
+
+**Princípio Vercel (regra crítica):**
+- `dosy-app.vercel.app` = sempre versão **estável publicada** (master pós-tag + AAB Play Store ativo)
+- `dosy-dev.vercel.app` = sempre **release em desenvolvimento** (branch `release/v*` corrente)
+- Validação em dev é GATE OBRIGATÓRIO antes de promover pra prod. NUNCA deploy --prod direto da release branch.
+- Comandos:
+  - Release em desenvolvimento → `vercel deploy --yes` + `vercel alias set <url> dosy-dev.vercel.app`
+  - Promover pra prod (FIM do release): merge → master + tag + AAB publicado primeiro, THEN `git checkout master && vercel --prod && vercel alias set <url> dosy-app.vercel.app`
 
 **Princípio dual-app:**
 - **Dosy Dev** (`com.dosyapp.dosy.dev`): app instalado pelo Android Studio Run em debug variant. Usa Firebase entry separada (`google-services.json` em `src/debug/`) — push FCM dev funciona sem afetar prod. Reinstalado a cada Run. Use livremente pra testes destrutivos, force stop, idle longo.
@@ -1008,8 +1016,8 @@ Template:
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
 **Público-alvo:** amplo — pais com crianças em tratamento, pessoas organizadas com múltiplos medicamentos diários, cuidadores formais/informais, clínicas/consultórios, hospitais/instituições, idosos auto-gerindo medicação. **NÃO é app exclusivo de idosos.** Decisões UX seguem design universal — fluxos simples e legíveis servem todas personas.
 **Versão atual:** `0.1.7.4` em master · em desenvolvimento `0.1.7.5` na branch `release/v0.1.7.5` (commit `557dcd9`)
-**Vercel prod:** `https://dosy-app.vercel.app/` (master, deploy v0.1.7.5 ativo após `vercel --prod` em 2026-05-03)
-**Vercel dev:** `https://dosy-dev.vercel.app/` (branch `release/v0.1.7.5` preview)
+**Vercel prod:** `https://dosy-app.vercel.app/` (master = v0.1.7.4 estável; só atualiza após release v0.1.7.5 fechar ciclo completo)
+**Vercel dev:** `https://dosy-dev.vercel.app/` (branch `release/v0.1.7.5` em desenvolvimento — validação OBRIGATÓRIA pré-merge)
 **Conta teste:** `teste03@teste.com / 123456`
 **Play Store Internal Testing:** AAB v0.1.7.4 (versionCode 28). AAB v0.1.7.5 / 29 build pendente.
 
