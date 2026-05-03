@@ -119,7 +119,7 @@ export default function MedNameInput({ value, onChange, required = true }) {
     return (
       <>
         {med.slice(0, idx)}
-        <strong className="text-brand-700 dark:text-brand-300">{med.slice(idx, idx + query.length)}</strong>
+        <strong style={{ color: 'var(--dosy-primary)' }}>{med.slice(idx, idx + query.length)}</strong>
         {med.slice(idx + query.length)}
       </>
     )
@@ -141,19 +141,41 @@ export default function MedNameInput({ value, onChange, required = true }) {
         onFocus={handleFocus}
         onBlur={handleBlur}
         placeholder="Ex: Paracetamol"
-        className="input"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={listId}
         aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
+        style={{
+          width: '100%',
+          padding: '14px 18px',
+          borderRadius: 16,
+          background: 'var(--dosy-bg-elevated)',
+          boxShadow: 'var(--dosy-shadow-xs)',
+          border: '1.5px solid transparent',
+          fontSize: 15, color: 'var(--dosy-fg)',
+          outline: 'none',
+          fontFamily: 'var(--dosy-font-body)',
+        }}
       />
 
       {open && suggestions.length > 0 && (
         <ul
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-full mt-1 z-30 max-h-60 overflow-y-auto rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg"
+          style={{
+            position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)',
+            zIndex: 30,
+            maxHeight: 240, overflowY: 'auto',
+            margin: 0, padding: '4px 0',
+            listStyle: 'none',
+            borderRadius: 16,
+            background: 'var(--dosy-bg-elevated)',
+            border: '1px solid var(--dosy-border)',
+            boxShadow: 'var(--dosy-shadow-lg)',
+            animation: 'dosy-slide-down 200ms var(--dosy-ease-out) both',
+            fontFamily: 'var(--dosy-font-body)',
+          }}
         >
           {suggestions.map((med, i) => {
             const isHl = i === highlight
@@ -164,16 +186,20 @@ export default function MedNameInput({ value, onChange, required = true }) {
                 role="option"
                 aria-selected={isHl}
                 onPointerDown={(e) => {
-                  // Prevent blur firing before pick
                   e.preventDefault()
                   pick(med)
                 }}
                 onMouseEnter={() => setHighlight(i)}
-                className={`px-4 py-2.5 text-sm cursor-pointer select-none ${
-                  isHl
-                    ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-800 dark:text-brand-100'
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
+                style={{
+                  padding: '10px 14px',
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  background: isHl ? 'var(--dosy-peach-100)' : 'transparent',
+                  color: 'var(--dosy-fg)',
+                  fontWeight: isHl ? 600 : 500,
+                  transition: 'background 150ms var(--dosy-ease-out)',
+                }}
               >
                 {highlightMatch(med, value)}
               </li>
