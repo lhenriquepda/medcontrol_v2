@@ -96,6 +96,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
   const rowBg = isOverdue ? 'var(--dosy-danger-bg)' : 'var(--dosy-bg-sunken)'
 
   const isFaded = dose.status === 'skipped' || dose.status === 'done'
+  const fadeOpacity = isFaded ? 0.6 : 1
 
   const renderInner = (bare = false) => (
     <button
@@ -112,7 +113,6 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         cursor: 'pointer',
         fontFamily: 'var(--dosy-font-body)',
         color: 'var(--dosy-fg)',
-        opacity: isFaded ? 0.55 : 1,
       }}
     >
       {/* PillIcon — squircle 40px, status colored bg */}
@@ -122,11 +122,12 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
         color: dosyStatus.color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
+        opacity: fadeOpacity,
       }}>
         <Icon name={s.iconName} size={20} />
       </div>
       {/* Text col — med + unit */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, opacity: fadeOpacity }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <p style={{
             fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em',
@@ -160,6 +161,7 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5,
         flexShrink: 0,
+        opacity: fadeOpacity,
       }}>
         <div style={{
           fontFamily: 'var(--dosy-font-display)',
