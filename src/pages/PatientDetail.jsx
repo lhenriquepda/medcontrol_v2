@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
+import { Edit3, Stethoscope, AlertTriangle, Share2, Users, Lock, Plus, Pill, ChevronRight } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
-import EmptyState from '../components/EmptyState'
-import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
 import SharePatientSheet from '../components/SharePatientSheet'
+import { Avatar, Card, StatusPill, SectionTitle } from '../components/dosy'
+import { MiniStat } from '../components/dosy/MiniStat'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatient } from '../hooks/usePatients'
 import { useTreatments } from '../hooks/useTreatments'
 import { useDoses } from '../hooks/useDoses'
@@ -29,109 +30,273 @@ export default function PatientDetail() {
   const [paywallOpen, setPaywallOpen] = useState(false)
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
-  const { data: todayDoses = [] } = useDoses({ patientId: id, from: startOfToday.toISOString(), to: endOfToday.toISOString() })
+  const { data: todayDoses = [] } = useDoses({
+    patientId: id,
+    from: startOfToday.toISOString(),
+    to: endOfToday.toISOString(),
+  })
 
   const taken = todayDoses.filter((d) => d.status === 'done').length
   const total = todayDoses.length
   const adherence = total ? Math.round((taken / total) * 100) : null
 
-  if (!patient) return (
-    <div><Header back title="Paciente" /><p className="p-4 text-sm text-slate-500">Carregando…</p></div>
-  )
+  if (!patient) {
+    return (
+      <div>
+        <PageHeader title="Paciente" back/>
+        <p style={{
+          padding: 16,
+          fontSize: 14, color: 'var(--dosy-fg-secondary)',
+          fontFamily: 'var(--dosy-font-body)',
+        }}>Carregando…</p>
+      </div>
+    )
+  }
 
   const active = treatments.filter((t) => t.status === 'active')
   const isOwner = user && patient.userId === user.id
 
   return (
     <motion.div
-      className="pb-28"
+      style={{ paddingBottom: 110 }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: TIMING.base, ease: EASE.inOut }}
     >
-      <Header back title={patient.name} right={
-        <Link to={`/pacientes/${id}/editar`} className="btn-ghost h-9 px-3 text-sm">Editar</Link>
-      } />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
-        <AdBanner />
-        <div className="card p-4 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 text-3xl flex items-center justify-center overflow-hidden">
-            {patient.photo_url
-              ? <img src={patient.photo_url} alt="" className="w-full h-full object-cover" />
-              : patient.avatar || '👤'}
-          </div>
-          <div>
-            <p className="font-semibold">{patient.name}</p>
-            <p className="text-xs text-slate-500">
-              {patient.age ? `${patient.age} anos` : 'Idade não informada'}
-              {patient.weight ? ` · ${String(patient.weight).replace('.', ',')} kg` : ''}
-            </p>
-            {patient.condition && <p className="text-xs mt-1">{patient.condition}</p>}
-            {patient.doctor && <p className="text-xs text-slate-500">Médico: {patient.doctor}</p>}
-            {patient.allergies && <p className="text-xs text-rose-600 mt-1 inline-flex items-start gap-1"><Icon name="warning" size={12} className="shrink-0 mt-0.5" /> Alergias: {patient.allergies}</p>}
-          </div>
-        </div>
+      <PageHeader
+        title={patient.name}
+        back
+        right={
+          <Link
+            to={`/pacientes/${id}/editar`}
+            aria-label="Editar"
+            className="dosy-press"
+            style={{
+              width: 38, height: 38, borderRadius: 9999,
+              background: 'var(--dosy-bg-elevated)',
+              color: 'var(--dosy-fg)',
+              boxShadow: 'var(--dosy-shadow-sm)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              textDecoration: 'none', flexShrink: 0,
+            }}
+          >
+            <Edit3 size={18} strokeWidth={1.75}/>
+          </Link>
+        }
+      />
 
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <AdBanner />
+
+        {/* Hero patient — avatar grande + nome + idade·peso·condição */}
+        <Card padding={20} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        }}>
+          {patient.photo_url ? (
+            <div style={{
+              width: 92, height: 92, borderRadius: 9999,
+              overflow: 'hidden', flexShrink: 0,
+            }}>
+              <img
+                src={patient.photo_url}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+          ) : (
+            <Avatar emoji={patient.avatar || '👤'} color="peach" size={92}/>
+          )}
+          <div style={{
+            fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
+            fontSize: 26, letterSpacing: '-0.025em', textAlign: 'center',
+            color: 'var(--dosy-fg)',
+          }}>{patient.name}</div>
+          <div style={{
+            fontSize: 13.5, color: 'var(--dosy-fg-secondary)', textAlign: 'center',
+          }}>
+            {patient.age ? `${patient.age} anos` : 'Idade não informada'}
+            {patient.weight ? ` · ${String(patient.weight).replace('.', ',')} kg` : ''}
+            {patient.condition ? ` · ${patient.condition}` : ''}
+          </div>
+        </Card>
+
+        {/* Doctor + alergias */}
+        {(patient.doctor || patient.allergies) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {patient.doctor && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'var(--dosy-bg-elevated)',
+                borderRadius: 14, boxShadow: 'var(--dosy-shadow-xs)',
+              }}>
+                <Stethoscope size={18} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-secondary)' }}/>
+                <div style={{ flex: 1, fontSize: 13.5, fontWeight: 500, color: 'var(--dosy-fg)' }}>
+                  {patient.doctor}
+                </div>
+              </div>
+            )}
+            {patient.allergies && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'var(--dosy-danger-bg)',
+                borderRadius: 14,
+              }}>
+                <AlertTriangle size={18} strokeWidth={1.75} style={{ color: 'var(--dosy-danger)' }}/>
+                <div style={{ flex: 1, fontSize: 13, color: 'var(--dosy-danger)', fontWeight: 600 }}>
+                  Alergias: {patient.allergies}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Compartilhar (Pro) ou banner shared-with-me */}
         {isOwner ? (
           <button
+            type="button"
             onClick={() => isPro ? setShareOpen(true) : setPaywallOpen(true)}
-            className="w-full card p-3 flex items-center gap-3 active:scale-[0.99] transition text-left"
+            className="dosy-press"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '12px 14px',
+              background: 'var(--dosy-bg-elevated)',
+              borderRadius: 14, cursor: 'pointer',
+              boxShadow: 'var(--dosy-shadow-xs)',
+              border: 'none', textAlign: 'left',
+              width: '100%', color: 'var(--dosy-fg)',
+              fontFamily: 'var(--dosy-font-body)',
+            }}
           >
-            <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-200 flex items-center justify-center text-lg">
-              🤝
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">Compartilhar paciente</p>
-              <p className="text-[11px] text-slate-500">
+            <Share2 size={18} strokeWidth={1.75}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>Compartilhar paciente</div>
+              <div style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
                 {shares.length > 0
                   ? `Compartilhado com ${shares.length} pessoa${shares.length > 1 ? 's' : ''}`
                   : 'Trabalhe em conjunto com outro usuário · PRO'}
-              </p>
+              </div>
             </div>
-            <span className="text-slate-400">›</span>
+            {shares.length > 0 && (
+              <StatusPill label={`${shares.length} cuidador${shares.length > 1 ? 'es' : ''}`} kind="info"/>
+            )}
+            {!isPro && <Lock size={14} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)' }}/>}
           </button>
         ) : (
-          <div className="card p-3 flex items-center gap-3 bg-brand-50 dark:bg-brand-500/10">
-            <div className="w-10 h-10 rounded-full bg-brand-500 text-white flex items-center justify-center text-lg">👥</div>
-            <div className="text-xs">
-              <p className="font-semibold text-brand-700 dark:text-brand-200">Paciente compartilhado com você</p>
-              <p className="text-slate-500">Edições aparecem em tempo real para ambos.</p>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '12px 14px',
+            background: 'var(--dosy-info-bg)',
+            borderRadius: 14,
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 9999,
+              background: 'var(--dosy-info)',
+              color: 'var(--dosy-fg-on-sunset)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Users size={20} strokeWidth={1.75}/>
+            </div>
+            <div style={{ fontSize: 12.5 }}>
+              <div style={{ fontWeight: 700, color: 'var(--dosy-info)' }}>
+                Paciente compartilhado com você
+              </div>
+              <div style={{ color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
+                Edições aparecem em tempo real para ambos.
+              </div>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl p-3 bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300">
-            <div className="text-[10px] uppercase tracking-wide">Adesão hoje</div>
-            <div className="text-xl font-bold">{adherence == null ? '—' : `${adherence}%`}</div>
-          </div>
-          <div className="rounded-2xl p-3 bg-slate-100 dark:bg-slate-800">
-            <div className="text-[10px] uppercase tracking-wide">Tratamentos ativos</div>
-            <div className="text-xl font-bold">{active.length}</div>
-          </div>
+        {/* Stats 2-up */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <MiniStat
+            label="Adesão hoje"
+            value={adherence == null ? '—' : `${adherence}%`}
+            tone={adherence == null ? 'neutral' : 'success'}
+          />
+          <MiniStat
+            label="Tratamentos"
+            value={active.length}
+            unit="ativos"
+            tone="neutral"
+          />
         </div>
 
+        {/* Tratamentos ativos */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-sm">Tratamentos ativos</h3>
-            <Link to={`/tratamento/novo?patientId=${id}`} className="text-xs text-brand-600">+ Novo</Link>
-          </div>
+          <SectionTitle
+            style={{ padding: '4px 4px 8px' }}
+            action={
+              <Link
+                to={`/tratamento/novo?patientId=${id}`}
+                style={{
+                  textDecoration: 'none',
+                  fontSize: 12.5, fontWeight: 700,
+                  color: 'var(--dosy-primary)',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontFamily: 'var(--dosy-font-display)',
+                }}
+              >
+                <Plus size={14} strokeWidth={2}/> Novo
+              </Link>
+            }
+          >Tratamentos ativos</SectionTitle>
+
           {active.length === 0 ? (
-            <EmptyState icon="pill" title="Sem tratamentos ativos" />
+            <Card padding={20} style={{
+              textAlign: 'center', color: 'var(--dosy-fg-tertiary)',
+              fontSize: 13.5, fontWeight: 500,
+            }}>
+              <Pill size={28} strokeWidth={1.5} style={{ margin: '0 auto 8px', display: 'block' }}/>
+              Sem tratamentos ativos
+            </Card>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {active.map((t) => (
-                <Link key={t.id} to={`/tratamento/${t.id}`} className="card p-3 block">
-                  <p className="font-medium">{t.medName}</p>
-                  <p className="text-xs text-slate-500">
-                    {t.unit} · {t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'} · {t.isContinuous ? '♾ Contínuo' : `${t.durationDays} dias`}
-                  </p>
+                <Link
+                  key={t.id}
+                  to={`/tratamento/${t.id}`}
+                  className="dosy-press"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: 12,
+                    background: 'var(--dosy-bg-elevated)',
+                    borderRadius: 16, boxShadow: 'var(--dosy-shadow-xs)',
+                    textDecoration: 'none', color: 'var(--dosy-fg)',
+                  }}
+                >
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 14,
+                    background: 'var(--dosy-peach-100)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <Pill size={20} strokeWidth={1.75}/>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.01em',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{t.medName}</div>
+                    <div style={{
+                      fontSize: 12.5, color: 'var(--dosy-fg-secondary)',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {t.unit} · {t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'}
+                      {t.isContinuous ? ' · ♾ Contínuo' : ` · ${t.durationDays} dias`}
+                    </div>
+                  </div>
+                  <ChevronRight size={18} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)' }}/>
                 </Link>
               ))}
             </div>
           )}
         </div>
       </div>
+
       <SharePatientSheet open={shareOpen} onClose={() => setShareOpen(false)} patient={patient} />
       <PaywallModal
         open={paywallOpen}
