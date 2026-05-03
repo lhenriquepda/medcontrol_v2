@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
+import { FileText, BarChart3, Lock, Loader2 } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import PaywallModal from '../components/PaywallModal'
-import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
+import PatientPicker from '../components/PatientPicker'
+import { Card, Button, Input } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
@@ -16,6 +18,13 @@ import { escapeHtml as esc } from '../utils/sanitize'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
 const isNative = Capacitor.isNativePlatform()
+
+const STATUS_DOSY_COLOR = {
+  done: '#3F9E7E',
+  skipped: '#C5841A',
+  overdue: 'var(--dosy-danger)',
+  pending: 'var(--dosy-fg-secondary)',
+}
 
 export default function Reports() {
   // Aud 4.5.4 G2 — relatórios contém histórico médico completo
@@ -35,7 +44,7 @@ export default function Reports() {
   const { data: doses = [] } = useDoses({
     patientId: patientId || undefined,
     from: from ? fromDatetimeLocalInput(from) : undefined,
-    to: to ? fromDatetimeLocalInput(to) : undefined
+    to: to ? fromDatetimeLocalInput(to) : undefined,
   })
 
   const patient = patients.find((p) => p.id === patientId)
@@ -64,15 +73,14 @@ export default function Reports() {
         formatDateTime(d.scheduledAt),
         d.actualTime ? formatDateTime(d.actualTime) : '',
         statusLabel(d.status), d.type === 'sos' ? 'S.O.S' : 'Agendada',
-        (d.observation || '').replace(/\r?\n/g, ' ')
+        (d.observation || '').replace(/\r?\n/g, ' '),
       ]
     })
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const csvWithBom = '\ufeff' + csv
+    const csvWithBom = '﻿' + csv
     const filename = buildFilename('csv')
 
     if (isNative) {
-      // Native: write to cache dir + share via system sheet
       setExporting('csv')
       ;(async () => {
         try {
@@ -83,19 +91,17 @@ export default function Reports() {
             data: csvWithBom,
             directory: Directory.Documents,
             encoding: Encoding.UTF8,
-            recursive: true
+            recursive: true,
           })
           const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents })
           toast.show({ message: `CSV salvo em Documentos · ${filename}`, kind: 'success', duration: 6000 })
           setExporting(null)
           Share.share({
-            title: 'Relat\u00f3rio Dosy',
+            title: 'Relatório Dosy',
             url: uri,
-            dialogTitle: 'Compartilhar relat\u00f3rio'
+            dialogTitle: 'Compartilhar relatório',
           }).catch((shareErr) => {
-            if (!/cancel/i.test(shareErr?.message || '')) {
-              console.warn('Share failed:', shareErr)
-            }
+            if (!/cancel/i.test(shareErr?.message || '')) console.warn('Share failed:', shareErr)
           })
         } catch (e) {
           toast.show({ message: 'Falha ao exportar CSV: ' + (e?.message || e), kind: 'error' })
@@ -127,24 +133,21 @@ export default function Reports() {
        -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{max-width:860px;margin:0 auto;background:#fff;min-height:100vh}
 
-  /* Header */
-  .header{background:linear-gradient(135deg,#0d1535 0%,#1a2660 100%);padding:28px 36px;display:flex;align-items:center;justify-content:space-between;
+  .header{background:linear-gradient(135deg,#FF3D7F 0%,#FF6B5B 50%,#FFA56B 100%);padding:28px 36px;display:flex;align-items:center;justify-content:space-between;
           -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .brand{display:flex;align-items:center;gap:16px}
   .brand img{height:48px;width:auto}
-  .brand-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px}
-  .header-meta{text-align:right;color:rgba(255,255,255,0.7);font-size:11px;line-height:1.7}
+  .brand-sub{font-size:11px;color:rgba(255,255,255,0.75);margin-top:3px}
+  .header-meta{text-align:right;color:rgba(255,255,255,0.85);font-size:11px;line-height:1.7}
   .header-meta strong{color:#fff;font-size:13px;display:block;margin-bottom:2px}
 
-  /* Stats */
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #e2e8f0}
   .stat{padding:16px 20px;text-align:center;border-right:1px solid #e2e8f0}
   .stat:last-child{border-right:none}
   .stat-val{font-size:24px;font-weight:700;line-height:1}
   .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-top:4px}
-  .green{color:#059669}.red{color:#dc2626}.amber{color:#d97706}.blue{color:#2563eb}
+  .green{color:#3F9E7E}.red{color:#E5564A}.amber{color:#C5841A}.coral{color:#FF6B5B}
 
-  /* Table */
   .section{padding:24px 36px}
   .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:12px}
   table{width:100%;border-collapse:collapse}
@@ -154,17 +157,16 @@ export default function Reports() {
   tr:last-child td{border-bottom:none}
   .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;
          -webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .badge-done{background:#d1fae5;color:#065f46}
-  .badge-skipped{background:#fef3c7;color:#92400e}
-  .badge-overdue{background:#fee2e2;color:#991b1b}
-  .badge-pending{background:#dbeafe;color:#1e40af}
-  .sos{font-size:10px;color:#7c3aed;background:#ede9fe;padding:1px 5px;border-radius:4px;margin-left:4px;
+  .badge-done{background:#DDF1E8;color:#3F9E7E}
+  .badge-skipped{background:#FCEFCF;color:#C5841A}
+  .badge-overdue{background:#FCE6E2;color:#E5564A}
+  .badge-pending{background:#FFE9D9;color:#9A4724}
+  .sos{font-size:10px;color:#FF3D7F;background:#FFE9D9;padding:1px 5px;border-radius:4px;margin-left:4px;
        -webkit-print-color-adjust:exact;print-color-adjust:exact}
 
-  /* Footer */
   .footer{padding:16px 36px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;
           -webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .footer-brand{font-size:11px;font-weight:700;color:#2B3EDF}
+  .footer-brand{font-size:11px;font-weight:700;color:#FF3D7F}
   .footer-note{font-size:10px;color:#94a3b8}
 </style></head><body>
 <div class="page">
@@ -172,7 +174,7 @@ export default function Reports() {
   <div class="header">
     <div class="brand">
       <img src="${origin}/dosy-logo-light.png" alt="Dosy" />
-      <div style="border-left:1px solid rgba(255,255,255,0.2);padding-left:14px">
+      <div style="border-left:1px solid rgba(255,255,255,0.3);padding-left:14px">
         <div class="brand-sub">Relatório de adesão</div>
       </div>
     </div>
@@ -222,7 +224,6 @@ export default function Reports() {
 <script>window.onload=()=>window.print()</script>
 </body></html>`
     if (isNative) {
-      // Native: render HTML offscreen → html2canvas → jsPDF → save + share
       setExporting('pdf')
       ;(async () => {
         try {
@@ -230,39 +231,33 @@ export default function Reports() {
             import('html2canvas'),
             import('jspdf'),
             import('@capacitor/filesystem'),
-            import('@capacitor/share')
+            import('@capacitor/share'),
           ])
           const { jsPDF } = jsPDFmod
 
-          // Render em iframe sandbox — DOM isolado, offscreen + opacity 0
           const iframe = document.createElement('iframe')
           iframe.style.cssText = 'position:fixed;top:0;left:-99999px;width:860px;height:1200px;border:0;opacity:0;pointer-events:none;'
           iframe.setAttribute('aria-hidden', 'true')
-          // Strip auto-print script
           const cleanedHtml = html.replace(/<script[\s\S]*?<\/script>/gi, '')
           document.body.appendChild(iframe)
           await new Promise((res) => {
             iframe.onload = res
             iframe.srcdoc = cleanedHtml
-            setTimeout(res, 2000) // fallback timeout
+            setTimeout(res, 2000)
           })
-          // Resize iframe height para conteúdo full
           const idoc = iframe.contentDocument
           const target = idoc.querySelector('.page') || idoc.body
           iframe.style.height = target.scrollHeight + 'px'
-          // Aguarda imagens carregarem
           const imgs = idoc.querySelectorAll('img')
           await Promise.all(Array.from(imgs).map((img) =>
             img.complete ? Promise.resolve() :
-              new Promise((res) => { img.onload = res; img.onerror = res; setTimeout(res, 1500) })
+              new Promise((res) => { img.onload = res; img.onerror = res; setTimeout(res, 1500) }),
           ))
-          await new Promise(r => setTimeout(r, 200))
-          // scale 1 + JPEG = ~10x menor que scale 2 + PNG → evita OOM bridge
+          await new Promise((r) => setTimeout(r, 200))
           const canvas = await html2canvas(target, {
             scale: 1, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
             windowWidth: 860, windowHeight: target.scrollHeight,
-            // Use iframe document, não main document
-            foreignObjectRendering: false
+            foreignObjectRendering: false,
           })
           document.body.removeChild(iframe)
 
@@ -274,7 +269,6 @@ export default function Reports() {
           if (imgH <= pageH) {
             pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH)
           } else {
-            // Multi-page split
             let heightLeft = imgH
             let position = 0
             pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
@@ -288,7 +282,6 @@ export default function Reports() {
           }
 
           const filename = buildFilename('pdf')
-          // Chunk write — Capacitor bridge OOM em strings >~30MB. Split base64 em chunks 512KB.
           const base64 = pdf.output('datauristring').split(',')[1]
           const CHUNK = 512 * 1024
           if (base64.length <= CHUNK) {
@@ -305,11 +298,9 @@ export default function Reports() {
           Share.share({
             title: 'Relatório Dosy',
             url: uri,
-            dialogTitle: 'Compartilhar PDF'
+            dialogTitle: 'Compartilhar PDF',
           }).catch((shareErr) => {
-            if (!/cancel/i.test(shareErr?.message || '')) {
-              console.warn('Share failed:', shareErr)
-            }
+            if (!/cancel/i.test(shareErr?.message || '')) console.warn('Share failed:', shareErr)
           })
         } catch (e) {
           toast.show({ message: 'Falha ao exportar PDF: ' + (e?.message || e), kind: 'error' })
@@ -319,112 +310,178 @@ export default function Reports() {
       return
     }
 
-    // Web: legacy window.print() flow
     const w = window.open('', '_blank')
     if (!w) { toast.show({ message: 'Permita pop-ups para exportar PDF.', kind: 'error' }); return }
     w.document.open(); w.document.write(html); w.document.close()
   }
 
+  const adherencePct = doses.length > 0
+    ? Math.round((doses.filter((d) => d.status === 'done').length / doses.length) * 100)
+    : null
+
   return (
     <motion.div
-      className="pb-28"
+      style={{ paddingBottom: 110 }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: TIMING.base, ease: EASE.inOut }}
     >
-      <Header back title="Relatórios" />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+      <PageHeader title="Relatórios" back/>
+
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
-        <Field label="Paciente">
-          <select className="input" value={patientId} onChange={(e) => setPatientId(e.target.value)}>
-            <option value="">Todos</option>
-            {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="De">
-            <input type="datetime-local" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </Field>
-          <Field label="Até">
-            <input type="datetime-local" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
-          </Field>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <label style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
+            fontFamily: 'var(--dosy-font-display)',
+          }}>Paciente</label>
+          <PatientPicker
+            patients={patients}
+            value={patientId || null}
+            onChange={(v) => setPatientId(v || '')}
+            allowAll
+            placeholder="Todos pacientes"
+          />
         </div>
 
-        {/* Preview */}
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{doses.length} dose(s)</span>
-            {doses.length > 0 && (() => {
-              const done = doses.filter((d) => d.status === 'done').length
-              const pct = Math.round((done / doses.length) * 100)
-              return <span className="text-xs font-bold text-emerald-600">{pct}% adesão</span>
-            })()}
-          </div>
-          {doses.length === 0
-            ? <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhuma dose no período.</p>
-            : <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
-                {doses.slice(0, 50).map((d) => {
-                  const p = patients.find((x) => x.id === d.patientId)
-                  const statusColors = { done: 'text-emerald-600', skipped: 'text-amber-500', overdue: 'text-rose-500', pending: 'text-blue-500' }
-                  return (
-                    <li key={d.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{d.medName}
-                          {!patientId && p && <span className="ml-1.5 text-[11px] text-slate-400">· {p.name.split(' ')[0]}</span>}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{formatDate(d.scheduledAt)} {formatTime(d.scheduledAt)}</p>
-                      </div>
-                      <span className={`text-[11px] font-semibold shrink-0 ${statusColors[d.status] || 'text-slate-500'}`}>{statusLabel(d.status)}</span>
-                    </li>
-                  )
-                })}
-                {doses.length > 50 && <li className="px-4 py-2 text-center text-xs text-slate-400">+{doses.length - 50} mais no export</li>}
-              </ul>
-          }
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Input
+            label="De"
+            type="datetime-local"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <Input
+            label="Até"
+            type="datetime-local"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </div>
+
+        <Card padding={0}>
+          <div style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--dosy-divider)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>{doses.length} dose(s)</span>
+            {adherencePct != null && (
+              <span style={{
+                fontSize: 12, fontWeight: 800,
+                color: adherencePct >= 80 ? '#3F9E7E' : adherencePct >= 50 ? '#C5841A' : 'var(--dosy-danger)',
+                fontFamily: 'var(--dosy-font-display)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>{adherencePct}% adesão</span>
+            )}
+          </div>
+          {doses.length === 0 ? (
+            <p style={{
+              padding: '20px 16px', textAlign: 'center',
+              fontSize: 13, color: 'var(--dosy-fg-tertiary)', margin: 0,
+            }}>Nenhuma dose no período.</p>
+          ) : (
+            <ul style={{
+              maxHeight: 256, overflowY: 'auto',
+              listStyle: 'none', margin: 0, padding: 0,
+            }}>
+              {doses.slice(0, 50).map((d, i) => {
+                const p = patients.find((x) => x.id === d.patientId)
+                return (
+                  <li key={d.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 16px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--dosy-divider)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: 13, fontWeight: 600, margin: 0,
+                        color: 'var(--dosy-fg)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {d.medName}
+                        {!patientId && p && (
+                          <span style={{
+                            marginLeft: 6, fontSize: 11, fontWeight: 500,
+                            color: 'var(--dosy-fg-tertiary)',
+                          }}>· {p.name.split(' ')[0]}</span>
+                        )}
+                      </p>
+                      <p style={{
+                        fontSize: 11, color: 'var(--dosy-fg-tertiary)',
+                        margin: '2px 0 0 0', fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {formatDate(d.scheduledAt)} {formatTime(d.scheduledAt)}
+                      </p>
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      color: STATUS_DOSY_COLOR[d.status] || 'var(--dosy-fg-secondary)',
+                      fontFamily: 'var(--dosy-font-display)',
+                    }}>{statusLabel(d.status)}</span>
+                  </li>
+                )
+              })}
+              {doses.length > 50 && (
+                <li style={{
+                  padding: '8px 16px', textAlign: 'center',
+                  fontSize: 11, color: 'var(--dosy-fg-tertiary)',
+                  borderTop: '1px solid var(--dosy-divider)',
+                }}>+{doses.length - 50} mais no export</li>
+              )}
+            </ul>
+          )}
+        </Card>
 
         {!isPro && (
-          <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 p-3 text-xs flex items-start gap-1.5">
-            <Icon name="lock" size={14} className="shrink-0 mt-0.5" /> <span>Exportar PDF/CSV é um recurso <strong>PRO</strong>. Toque em um botão para assinar.</span>
-          </div>
+          <Card padding={12} style={{
+            background: 'var(--dosy-warning-bg)',
+            border: '1px solid rgba(197,132,26,0.2)',
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+          }}>
+            <Lock size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2, color: '#C5841A' }}/>
+            <span style={{ fontSize: 12, color: '#C5841A', lineHeight: 1.4 }}>
+              Exportar PDF/CSV é recurso <strong>PRO</strong>. Toque num botão para assinar.
+            </span>
+          </Card>
         )}
-        <button
+
+        <Button
+          kind="primary"
+          full
+          size="lg"
+          icon={exporting === 'pdf' ? Loader2 : (!isPro ? Lock : FileText)}
+          disabled={!!exporting}
           onClick={gate(exportPDF)}
-          disabled={!!exporting}
-          className={`btn-primary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''} ${exporting ? 'opacity-70 cursor-wait' : ''}`}
         >
-          {exporting === 'pdf' ? (
-            <>
-              <span className="inline-block w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-              Gerando PDF…
-            </>
-          ) : (
-            <>{!isPro && <Icon name="lock" size={14} />} <Icon name="file-text" size={16} /> Exportar PDF</>
-          )}
-        </button>
-        <button
+          {exporting === 'pdf' ? 'Gerando PDF…' : 'Exportar PDF'}
+        </Button>
+
+        <Button
+          kind="secondary"
+          full
+          size="lg"
+          icon={exporting === 'csv' ? Loader2 : (!isPro ? Lock : BarChart3)}
+          disabled={!!exporting}
           onClick={gate(exportCSV)}
-          disabled={!!exporting}
-          className={`btn-secondary w-full inline-flex items-center justify-center gap-1.5 ${!isPro ? 'opacity-60' : ''} ${exporting ? 'opacity-70 cursor-wait' : ''}`}
         >
-          {exporting === 'csv' ? (
-            <>
-              <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-400/40 border-t-slate-700 dark:border-t-slate-200 animate-spin" />
-              Gerando CSV…
-            </>
-          ) : (
-            <>{!isPro && <Icon name="lock" size={14} />} <Icon name="bar-chart" size={16} /> Exportar CSV</>
-          )}
-        </button>
+          {exporting === 'csv' ? 'Gerando CSV…' : 'Exportar CSV'}
+        </Button>
       </div>
-      <PaywallModal open={paywall} onClose={() => setPaywall(false)}
-                    reason="Exportar PDF e CSV é um recurso PRO. Assine para liberar relatórios completos." />
+
+      <PaywallModal
+        open={paywall}
+        onClose={() => setPaywall(false)}
+        reason="Exportar PDF e CSV é um recurso PRO. Assine para liberar relatórios completos."
+      />
     </motion.div>
   )
-}
-
-function Field({ label, children }) {
-  return <label className="block"><span className="block text-xs font-medium mb-1">{label}</span>{children}</label>
 }
 
 function downloadBlob(blob, filename) {

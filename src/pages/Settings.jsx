@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
+import { Bell, BellOff, Sun, Moon, AlarmClock, Trash2, Download, ChevronRight, HelpCircle, ArrowUpCircle } from 'lucide-react'
 import Dropdown from '../components/Dropdown'
-import TierBadge from '../components/TierBadge'
 import { TIMING, EASE } from '../animations'
 import ConfirmDialog from '../components/ConfirmDialog'
-import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
+import { Card, Button, Input, Toggle } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { track, EVENTS } from '../services/analytics'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
@@ -20,6 +20,8 @@ import { displayName } from '../utils/userDisplay'
 import { hasSupabase, supabase } from '../services/supabase'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
+import { useMyTier } from '../hooks/useSubscription'
+import { TIER_LABELS } from '../utils/tierUtils'
 
 const ADVANCE_OPTIONS = [
   { value: 0,  label: 'Na hora' },
@@ -30,19 +32,26 @@ const ADVANCE_OPTIONS = [
   { value: 60, label: '1h antes' },
 ]
 
+const SECTION_LABEL_STYLE = {
+  fontSize: 11, fontWeight: 700,
+  letterSpacing: '0.08em', textTransform: 'uppercase',
+  color: 'var(--dosy-fg-secondary)',
+  margin: '0 0 12px 0',
+  fontFamily: 'var(--dosy-font-display)',
+}
+
 export default function Settings() {
   const { theme, setTheme } = useTheme()
   const { signOut, user, updateProfile } = useAuth()
   const toast = useToast()
   const { supported, permState, subscribed, loading, subscribe, unsubscribe, scheduleDoses } = usePushNotifications()
   const { data: patients = [] } = usePatients()
-  // Fetch upcoming doses (next 48h) — used to re-schedule when notification prefs change
+  const { data: tier = 'free' } = useMyTier()
   const { data: upcomingDoses = [] } = useDoses({
     from: new Date().toISOString(),
-    to: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
+    to: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
   })
 
-  // User-level prefs synced via DB (medcontrol.user_prefs) — same view across devices
   const { data: notif = DEFAULT_PREFS } = useUserPrefs()
   const updatePrefsMut = useUpdateUserPrefs()
   const update = useAppUpdate()
@@ -62,12 +71,9 @@ export default function Settings() {
       toast.show({ message: err.message || 'Falha ao salvar preferência.', kind: 'error' })
       return
     }
-    // Re-schedule sempre que pref relevante mudar — daily summary é independente
-    // do estado `subscribed`, então não gated. scheduleDoses internamente respeita
-    // prefs.push pra decidir sobre dose notifs/alarms.
     const triggers = ['push', 'dailySummary', 'summaryTime', 'advanceMins', 'criticalAlarm', 'dndEnabled', 'dndStart', 'dndEnd']
-    if (triggers.some(k => k in patch)) {
-      scheduleDoses(upcomingDoses).catch(e => console.warn('reschedule:', e?.message))
+    if (triggers.some((k) => k in patch)) {
+      scheduleDoses(upcomingDoses).catch((e) => console.warn('reschedule:', e?.message))
     }
   }
 
@@ -107,11 +113,8 @@ export default function Settings() {
 
   async function handleAdvanceChange(val) {
     updateNotif({ advanceMins: val })
-    // If already subscribed, update DB with new advance time
     if (subscribed) {
-      try {
-        await subscribe(val) // upsert updates advanceMins
-      } catch {}
+      try { await subscribe(val) } catch {}
     }
   }
 
@@ -124,7 +127,7 @@ export default function Settings() {
       const [dosesRes, treatmentsRes, subsRes] = await Promise.all([
         supabase.from('doses').select('id, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'),
         supabase.from('treatments').select('id, patientId, medName, unit, intervalHours, durationDays, startDate, status'),
-        supabase.from('subscriptions').select('tier, expiresAt').eq('userId', user.id).maybeSingle()
+        supabase.from('subscriptions').select('tier, expiresAt').eq('userId', user.id).maybeSingle(),
       ])
       const dump = {
         exportedAt: new Date().toISOString(),
@@ -132,7 +135,7 @@ export default function Settings() {
         patients,
         treatments: treatmentsRes.data || [],
         doses: dosesRes.data || [],
-        subscription: subsRes.data || null
+        subscription: subsRes.data || null,
       }
       const json = JSON.stringify(dump, null, 2)
       const d = new Date()
@@ -141,7 +144,6 @@ export default function Settings() {
       const filename = `dosy-backup-${ymd}-${hash}.json`
 
       if (Capacitor.isNativePlatform()) {
-        // Native: Documents dir → persistente, Share sheet → user salva via "Save to Files"
         const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
         const { Share } = await import('@capacitor/share')
         await Filesystem.writeFile({
@@ -149,23 +151,21 @@ export default function Settings() {
           data: json,
           directory: Directory.Documents,
           encoding: Encoding.UTF8,
-          recursive: true
+          recursive: true,
         })
         const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents })
         toast.show({ message: `Backup salvo em Documentos · ${filename}`, kind: 'success', duration: 6000 })
-        // File saved → libera loader ANTES do share (share pode não resolver em alguns webviews)
         setExportingData(false)
         Share.share({
           title: 'Meus dados Dosy',
           url: uri,
-          dialogTitle: 'Compartilhar backup'
+          dialogTitle: 'Compartilhar backup',
         }).catch((shareErr) => {
           if (!/cancel/i.test(shareErr?.message || '')) {
             console.warn('Share failed:', shareErr)
           }
         })
       } else {
-        // Web: blob + anchor download
         const blob = new Blob([json], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -184,7 +184,6 @@ export default function Settings() {
   async function handleDeleteAccount() {
     if (!hasSupabase || !user) return
     try {
-      // Chama Edge Function que deleta dados + auth.users com service_role
       const { error } = await supabase.functions.invoke('delete-account')
       if (error) throw error
       await signOut()
@@ -211,293 +210,387 @@ export default function Settings() {
     : 'Ative para receber lembretes de dose.'
 
   return (
-    <div className="pb-28">
-      <Header back title="Ajustes" />
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader title="Ajustes" back/>
+
       <motion.div
-        className="max-w-md mx-auto px-4 pt-3 space-y-1"
+        className="max-w-md mx-auto px-4 pt-1"
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         initial="initial"
         animate="animate"
         variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
       >
         <AdBanner />
 
-        {/* Tier destaque */}
+        {/* Plan card */}
         <motion.div
           variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}
-          className="flex items-center justify-between bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl px-4 py-3 mb-2"
         >
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Seu plano</p>
-            <p className="text-xs text-slate-500 mt-0.5">Tier ativo da conta</p>
-          </div>
-          <TierBadge variant="large" />
+          <Card padding={16} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'var(--dosy-gradient-sunset-soft)',
+          }}>
+            <div>
+              <p style={{
+                fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                color: 'var(--dosy-fg-secondary)', margin: 0,
+                fontFamily: 'var(--dosy-font-display)',
+              }}>Seu plano</p>
+              <p style={{
+                fontSize: 12, color: 'var(--dosy-fg-secondary)',
+                margin: '2px 0 0 0',
+              }}>Tier ativo da conta</p>
+            </div>
+            <span style={{
+              fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
+              padding: '6px 14px',
+              background: tier === 'pro' || tier === 'admin'
+                ? 'var(--dosy-gradient-sunset)'
+                : 'var(--dosy-bg-elevated)',
+              color: tier === 'pro' || tier === 'admin'
+                ? 'var(--dosy-fg-on-sunset)'
+                : 'var(--dosy-fg)',
+              borderRadius: 9999,
+              boxShadow: 'var(--dosy-shadow-sm)',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>{TIER_LABELS[tier]}</span>
+          </Card>
         </motion.div>
 
         {/* Aparência */}
-        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Aparência</p>
-          <div className="flex items-center justify-between">
-            <span className="text-sm">Modo escuro</span>
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className={`w-12 h-7 rounded-full p-0.5 transition ${theme === 'dark' ? 'bg-brand-600' : 'bg-slate-300'}`}
-            >
-              <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${theme === 'dark' ? 'translate-x-5' : ''}`} />
-            </button>
-          </div>
-
-          {/* Estilo de ícones (flat lucide vs emojis legado) */}
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Estilo de ícones</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Flat = visual moderno · Emoji = legado colorido</p>
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+          <Card padding={16}>
+            <p style={SECTION_LABEL_STYLE}>Aparência</p>
+            <Row
+              icon={theme === 'dark' ? Moon : Sun}
+              label="Modo escuro"
+              right={<Toggle value={theme === 'dark'} onChange={(v) => setTheme(v ? 'dark' : 'light')}/>}
+            />
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)', margin: 0 }}>Estilo de ícones</p>
+                <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                  Flat = visual moderno · Emoji = legado colorido
+                </p>
+              </div>
+              <select
+                defaultValue={typeof window !== 'undefined' ? (localStorage.getItem('dosy_icon_style') || 'flat') : 'flat'}
+                onChange={(e) => {
+                  if (e.target.value === 'flat') localStorage.removeItem('dosy_icon_style')
+                  else localStorage.setItem('dosy_icon_style', e.target.value)
+                  window.location.reload()
+                }}
+                style={{
+                  fontSize: 13, fontWeight: 600,
+                  padding: '8px 12px', borderRadius: 12,
+                  background: 'var(--dosy-bg-sunken)',
+                  color: 'var(--dosy-fg)',
+                  border: 'none', outline: 'none',
+                  fontFamily: 'var(--dosy-font-body)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="flat">Flat</option>
+                <option value="emoji">Emoji</option>
+              </select>
             </div>
-            <select
-              defaultValue={typeof window !== 'undefined' ? (localStorage.getItem('dosy_icon_style') || 'flat') : 'flat'}
-              onChange={(e) => {
-                if (e.target.value === 'flat') localStorage.removeItem('dosy_icon_style')
-                else localStorage.setItem('dosy_icon_style', e.target.value)
-                window.location.reload()
-              }}
-              className="text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
-            >
-              <option value="flat">Flat</option>
-              <option value="emoji">Emoji</option>
-            </select>
-          </div>
+          </Card>
         </motion.section>
 
         {/* Notificações */}
-        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Notificações</p>
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+          <Card padding={16}>
+            <p style={SECTION_LABEL_STYLE}>Notificações</p>
 
-          {/* Push toggle */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Notificações push</p>
-              <p className="text-xs text-slate-500 mt-0.5">{pushSubtitle}</p>
-              {pushActive && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                  {pushLabel}
-                </span>
-              )}
-              {!pushActive && supported && permState !== 'denied' && (
-                <span className="text-[11px] text-slate-400">{pushLabel}</span>
-              )}
-              {permState === 'denied' && (
-                <span className="text-[11px] text-rose-500">{pushLabel}</span>
-              )}
+            {/* Push toggle */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  fontSize: 14, fontWeight: 600,
+                  color: 'var(--dosy-fg)', margin: 0,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Bell size={14} strokeWidth={1.75}/>
+                  Notificações push
+                </p>
+                <p style={{
+                  fontSize: 11.5, color: 'var(--dosy-fg-secondary)',
+                  margin: '2px 0 0 0', lineHeight: 1.4,
+                }}>{pushSubtitle}</p>
+                {pushActive && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, color: '#3F9E7E', fontWeight: 600,
+                    marginTop: 4,
+                  }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: 9999,
+                      background: '#3F9E7E', display: 'inline-block',
+                      animation: 'dosy-pulse-ring 1.4s ease-out infinite',
+                    }}/>
+                    {pushLabel}
+                  </span>
+                )}
+                {!pushActive && supported && permState !== 'denied' && (
+                  <span style={{ fontSize: 11, color: 'var(--dosy-fg-tertiary)' }}>{pushLabel}</span>
+                )}
+                {permState === 'denied' && (
+                  <span style={{ fontSize: 11, color: 'var(--dosy-danger)' }}>{pushLabel}</span>
+                )}
+              </div>
+              <Toggle
+                value={pushActive}
+                onChange={togglePush}
+                disabled={loading || !supported || permState === 'denied'}
+                ariaLabel="Notificações push"
+              />
             </div>
+
+            {/* Permissões verificar */}
             <button
-              onClick={togglePush}
-              disabled={loading || !supported || permState === 'denied'}
-              className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition disabled:opacity-40
-                ${pushActive ? 'bg-brand-600' : 'bg-slate-300'}`}
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('dosy:checkPermissions'))}
+              className="dosy-press"
+              style={{
+                width: '100%', textAlign: 'left',
+                marginTop: 12,
+                padding: '10px 14px',
+                background: 'var(--dosy-bg-sunken)',
+                border: 'none', borderRadius: 12,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                fontFamily: 'var(--dosy-font-body)',
+              }}
             >
-              <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${pushActive ? 'translate-x-5' : ''}`} />
-            </button>
-          </div>
-
-          {/* Re-check Android special-access permissions (alarme estilo despertador) */}
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('dosy:checkPermissions'))}
-            className="w-full text-left flex items-center justify-between rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Verificar permissões do alarme</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Alarme estilo despertador exige 4 permissões especiais Android.
-              </p>
-            </div>
-            <span className="text-brand-600 dark:text-brand-400 ml-3">→</span>
-          </button>
-
-          {/* Advance time — only shown when push is active */}
-          {pushActive && (
-            <Dropdown
-              label="Avisar com antecedência"
-              value={notif.advanceMins ?? 0}
-              onChange={(v) => handleAdvanceChange(Number(v))}
-              options={ADVANCE_OPTIONS}
-              size="sm"
-            />
-          )}
-
-          {/* Alarme crítico (estilo despertador) */}
-          {pushActive && (
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1">
-                <p className="text-sm font-medium inline-flex items-center gap-1.5"><Icon name="alarm" size={14} /> Alarme crítico</p>
-                <p className="text-xs text-slate-500 leading-tight mt-0.5">
-                  Toca som contínuo, tela cheia, ignora silencioso e modo Não Perturbe.
-                  Recomendado para doses essenciais.
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--dosy-fg)', margin: 0 }}>
+                  Verificar permissões do alarme
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                  Alarme estilo despertador exige 4 permissões especiais Android.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  const next = !(notif.criticalAlarm !== false)
-                  updateNotif({ criticalAlarm: next })
-                  track(EVENTS.CRITICAL_ALARM_TOGGLED, { enabled: next })
-                }}
-                className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.criticalAlarm !== false ? 'bg-rose-500' : 'bg-slate-300'}`}
-              >
-                <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.criticalAlarm !== false ? 'translate-x-5' : ''}`} />
-              </button>
-            </div>
-          )}
+              <ChevronRight size={16} strokeWidth={1.75} style={{ color: 'var(--dosy-primary)' }}/>
+            </button>
 
-          {/* Não perturbe — janela silenciosa (Item #087: aparece só se Alarme Crítico ON) */}
-          {pushActive && notif.criticalAlarm !== false && (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium inline-flex items-center gap-1.5"><Icon name="bell-off" size={14} /> Não perturbe</p>
-                  <p className="text-xs text-slate-500 leading-tight mt-0.5">
-                    Define janela em que o alarme crítico não toca. Doses no horário recebem só
-                    notificação push (sem despertador). Útil pra noite/madrugada.
+            {/* Advance time — só com push ativo */}
+            {pushActive && (
+              <div style={{ marginTop: 14 }}>
+                <Dropdown
+                  label="Avisar com antecedência"
+                  value={notif.advanceMins ?? 0}
+                  onChange={(v) => handleAdvanceChange(Number(v))}
+                  options={ADVANCE_OPTIONS}
+                  size="sm"
+                />
+              </div>
+            )}
+
+            {/* Alarme crítico */}
+            {pushActive && (
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{
+                    fontSize: 14, fontWeight: 600,
+                    color: 'var(--dosy-fg)', margin: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <AlarmClock size={14} strokeWidth={1.75}/>
+                    Alarme crítico
+                  </p>
+                  <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                    Toca som contínuo, tela cheia, ignora silencioso e modo Não Perturbe.
+                    Recomendado para doses essenciais.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    const next = !notif.dndEnabled
-                    updateNotif({ dndEnabled: next })
-                    track(EVENTS.DND_TOGGLED, { enabled: next })
+                <Toggle
+                  value={notif.criticalAlarm !== false}
+                  onChange={(v) => {
+                    updateNotif({ criticalAlarm: v })
+                    track(EVENTS.CRITICAL_ALARM_TOGGLED, { enabled: v })
                   }}
-                  className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 transition ${notif.dndEnabled ? 'bg-indigo-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`block w-6 h-6 rounded-full bg-white shadow transform transition ${notif.dndEnabled ? 'translate-x-5' : ''}`} />
-                </button>
+                  ariaLabel="Alarme crítico"
+                />
               </div>
-              {notif.dndEnabled && (
-                <div className="grid grid-cols-2 gap-2 pl-1">
-                  <label className="block">
-                    <span className="block text-[11px] font-medium mb-1 text-slate-500">De</span>
-                    <input
+            )}
+
+            {/* Não perturbe — cascata: aparece só se Alarme Crítico ON */}
+            {pushActive && notif.criticalAlarm !== false && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: 14, fontWeight: 600,
+                      color: 'var(--dosy-fg)', margin: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}>
+                      <BellOff size={14} strokeWidth={1.75}/>
+                      Não perturbe
+                    </p>
+                    <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                      Define janela em que o alarme crítico não toca. Doses no horário recebem só
+                      notificação push (sem despertador). Útil pra noite/madrugada.
+                    </p>
+                  </div>
+                  <Toggle
+                    value={notif.dndEnabled}
+                    onChange={(v) => {
+                      updateNotif({ dndEnabled: v })
+                      track(EVENTS.DND_TOGGLED, { enabled: v })
+                    }}
+                    ariaLabel="Não perturbe"
+                  />
+                </div>
+                {notif.dndEnabled && (
+                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <Input
+                      label="De"
                       type="time"
                       value={notif.dndStart || '23:00'}
                       onChange={(e) => updateNotif({ dndStart: e.target.value })}
-                      className="input text-sm py-1.5"
                     />
-                  </label>
-                  <label className="block">
-                    <span className="block text-[11px] font-medium mb-1 text-slate-500">Até</span>
-                    <input
+                    <Input
+                      label="Até"
                       type="time"
                       value={notif.dndEnd || '07:00'}
                       onChange={(e) => updateNotif({ dndEnd: e.target.value })}
-                      className="input text-sm py-1.5"
                     />
-                  </label>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Resumo diário — Item #086 (BUG-019): UI ocultada em v0.1.7.3.
-              Feature broken end-to-end (LocalNotifications client-side só
-              dispara se app abrir; sem cron server-side equivalente).
-              Reativar quando Edge daily-summary-cron estiver pronta em
-              release v0.1.8.0. Toggle/horário ainda persistem em DB se
-              setados anteriormente — apenas escondidos visualmente. */}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
         </motion.section>
 
         {/* Conta */}
-        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Conta</p>
-          <label className="block">
-            <span className="block text-xs font-medium mb-1">Seu nome</span>
-            <div className="flex gap-2">
-              <input
-                className="input flex-1"
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+          <Card padding={16}>
+            <p style={SECTION_LABEL_STYLE}>Conta</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Input
+                label="Seu nome"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Como quer ser chamado"
               />
-              <button
+              <Button
+                kind="primary"
+                full
                 onClick={saveName}
                 disabled={savingName || !name.trim()}
-                className="btn-primary px-4"
               >
-                {savingName ? '…' : 'Salvar'}
-              </button>
+                {savingName ? 'Salvando…' : 'Salvar nome'}
+              </Button>
+              <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: '4px 0 0 4px' }}>
+                {user?.email || 'Demo'}
+              </p>
+              <Button kind="secondary" full onClick={() => setConfirmLogout(true)}>
+                Sair
+              </Button>
             </div>
-          </label>
-          <p className="text-xs text-slate-500">{user?.email || 'Demo'}</p>
-          <button onClick={() => setConfirmLogout(true)} className="btn-secondary w-full">Sair</button>
+          </Card>
         </motion.section>
 
         {/* Dados & Privacidade */}
         {hasSupabase && user && (
-          <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Dados & Privacidade</p>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Conforme a LGPD, você pode exportar ou excluir todos os seus dados a qualquer momento.
-            </p>
-            <button onClick={exportUserData} disabled={exportingData} className={`btn-secondary w-full text-sm inline-flex items-center justify-center gap-2 ${exportingData ? 'opacity-70 cursor-wait' : ''}`}>
-              {exportingData ? (
-                <>
-                  <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-400/40 border-t-slate-700 dark:border-t-slate-200 animate-spin" />
-                  Gerando backup…
-                </>
-              ) : (
-                <>📦 {Capacitor.isNativePlatform() ? 'Compartilhar meus dados (JSON)' : 'Exportar meus dados (JSON)'}</>
-              )}
-            </button>
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="w-full rounded-xl border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 py-2.5 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
-            >
-              <span className="inline-flex items-center justify-center gap-1.5"><Icon name="trash" size={14} /> Excluir minha conta e todos os dados</span>
-            </button>
+          <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+            <Card padding={16}>
+              <p style={SECTION_LABEL_STYLE}>Dados & Privacidade</p>
+              <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', lineHeight: 1.5, margin: '0 0 12px 0' }}>
+                Conforme a LGPD, você pode exportar ou excluir todos os seus dados a qualquer momento.
+              </p>
+              <Button
+                kind="secondary"
+                full
+                icon={Download}
+                onClick={exportUserData}
+                disabled={exportingData}
+              >
+                {exportingData
+                  ? 'Gerando backup…'
+                  : (Capacitor.isNativePlatform() ? 'Compartilhar meus dados (JSON)' : 'Exportar meus dados (JSON)')}
+              </Button>
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  kind="danger"
+                  full
+                  icon={Trash2}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Excluir minha conta e todos os dados
+                </Button>
+              </div>
+            </Card>
           </motion.section>
         )}
 
-        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }} className="card p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs">
-              <p className="font-semibold text-slate-700 dark:text-slate-200">Versão</p>
-              <p className="text-slate-500 dark:text-slate-400 mt-0.5">
-                Dosy v{update.current} · pt-BR
-              </p>
-            </div>
-            {update.available ? (
-              <button
-                onClick={async () => {
-                  if (Capacitor.isNativePlatform()) {
-                    try {
-                      const { Browser } = await import('@capacitor/browser')
-                      await Browser.open({ url: 'https://dosy-teal.vercel.app' + (update.latest?.installUrl || '/install') })
-                    } catch {
-                      window.open('https://dosy-teal.vercel.app' + (update.latest?.installUrl || '/install'), '_blank')
+        {/* Versão / Update / FAQ */}
+        <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+          <Card padding={16}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)', margin: 0,
+                  fontFamily: 'var(--dosy-font-display)',
+                }}>Versão</p>
+                <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0' }}>
+                  Dosy v{update.current} · pt-BR
+                </p>
+              </div>
+              {update.available ? (
+                <Button
+                  kind="primary"
+                  size="sm"
+                  icon={ArrowUpCircle}
+                  onClick={async () => {
+                    if (Capacitor.isNativePlatform()) {
+                      try {
+                        const { Browser } = await import('@capacitor/browser')
+                        await Browser.open({ url: 'https://dosy-app.vercel.app' + (update.latest?.installUrl || '/install') })
+                      } catch {
+                        window.open('https://dosy-app.vercel.app' + (update.latest?.installUrl || '/install'), '_blank')
+                      }
+                    } else {
+                      window.location.reload()
                     }
-                  } else {
-                    window.location.reload()
-                  }
-                }}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95"
-              >
-                ↑ Atualizar v{update.latest?.version}
-              </button>
-            ) : (
-              <span className="text-[11px] text-slate-400">Atualizado</span>
+                  }}
+                >
+                  Atualizar v{update.latest?.version}
+                </Button>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--dosy-fg-tertiary)' }}>Atualizado</span>
+              )}
+            </div>
+            {update.available && (
+              <p style={{ fontSize: 11, color: '#3F9E7E', margin: '8px 0 0 0' }}>
+                Nova versão disponível com correções e melhorias.
+              </p>
             )}
-          </div>
-          {update.available && (
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-              Nova versão disponível com correções e melhorias.
-            </p>
-          )}
-          <Link
-            to="/faq"
-            className="mt-2 flex items-center justify-between text-xs px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-          >
-            <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
-              <Icon name="info" size={14} /> Dúvidas frequentes
-            </span>
-            <Icon name="chevron" size={14} className="text-slate-400" />
-          </Link>
+            <Link
+              to="/faq"
+              className="dosy-press"
+              style={{
+                marginTop: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px',
+                background: 'var(--dosy-bg-sunken)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'var(--dosy-fg)',
+                fontFamily: 'var(--dosy-font-body)',
+              }}
+            >
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 13, fontWeight: 600,
+              }}>
+                <HelpCircle size={14} strokeWidth={1.75}/> Dúvidas frequentes
+              </span>
+              <ChevronRight size={14} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)' }}/>
+            </Link>
+          </Card>
         </motion.section>
       </motion.div>
 
@@ -518,6 +611,21 @@ export default function Settings() {
         onConfirm={handleDeleteAccount}
         danger
       />
+    </div>
+  )
+}
+
+function Row({ icon: IconCmp, label, hint, right }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        {IconCmp && <IconCmp size={16} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-secondary)' }}/>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)', margin: 0 }}>{label}</p>
+          {hint && <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0' }}>{hint}</p>}
+        </div>
+      </div>
+      {right}
     </div>
   )
 }

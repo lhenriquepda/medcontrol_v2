@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import Header from '../components/Header'
+import { Search, X as XIcon, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
-import Icon from '../components/Icon'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
+import { Card, Chip, Input } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { formatTime, pad } from '../utils/dateUtils'
@@ -29,21 +30,25 @@ function dayLabel(date) {
   return { label: weekday, sub: dateStr, highlight: false }
 }
 
+const DOSE_STATUS_DOSY = {
+  done:    { color: '#3F9E7E', bg: '#DDF1E8' },
+  pending: { color: 'var(--dosy-fg-secondary)', bg: 'var(--dosy-peach-100)' },
+  overdue: { color: 'var(--dosy-danger)', bg: 'var(--dosy-danger-bg)' },
+  skipped: { color: 'var(--dosy-fg-tertiary)', bg: 'var(--dosy-bg-sunken)' },
+}
+
 export default function DoseHistory() {
   // Aud 4.5.4 G2 — histórico de doses (info médica longitudinal)
   usePrivacyScreen()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState(null)
-  const [period, setPeriod] = useState(7) // days back
-  const [offset, setOffset] = useState(0)  // periods back (0 = current)
+  const [period, setPeriod] = useState(7)
+  const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState(null)
-  const [search, setSearch] = useState('')  // FASE 15 — text search por medName/observation
+  const [search, setSearch] = useState('')
 
-  // Window: [periodStart, periodEnd]
   const { periodStart, periodEnd } = useMemo(() => {
     const base = startOfDay(new Date())
-    // offset=0: last `period` days ending today
-    // offset=1: the period before that, etc.
     const end = addDays(base, -(offset * period))
     const start = addDays(end, -(period - 1))
     return { periodStart: startOfDay(start), periodEnd: endOfDay(end) }
@@ -52,21 +57,19 @@ export default function DoseHistory() {
   const { data: rawDoses = [], isLoading } = useDoses({
     from: periodStart.toISOString(),
     to: periodEnd.toISOString(),
-    patientId: patientId || undefined
+    patientId: patientId || undefined,
   })
 
-  // FASE 15 — filtra client-side por search (medName / unit / observation case-insensitive)
   const doses = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return rawDoses
     return rawDoses.filter((d) =>
       (d.medName || '').toLowerCase().includes(term) ||
       (d.unit || '').toLowerCase().includes(term) ||
-      (d.observation || '').toLowerCase().includes(term)
+      (d.observation || '').toLowerCase().includes(term),
     )
   }, [rawDoses, search])
 
-  // Group doses by calendar day (descending)
   const days = useMemo(() => {
     const map = new Map()
     for (const d of doses) {
@@ -74,15 +77,12 @@ export default function DoseHistory() {
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(d)
     }
-    // Sort each day's doses by scheduledAt ascending
     for (const list of map.values()) list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
-    // Days descending
     return [...map.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([key, list]) => ({ date: new Date(key), list }))
   }, [doses])
 
-  // Aggregate for the period header
   const summary = useMemo(() => {
     const past = doses.filter((d) => new Date(d.scheduledAt) <= new Date())
     const done = past.filter((d) => d.status === 'done').length
@@ -102,40 +102,63 @@ export default function DoseHistory() {
   }
 
   return (
-    <div className="pb-28">
-      <Header back title="Histórico de doses" />
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader title="Histórico de doses" back/>
 
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
-        {/* Period selector */}
-        <div className="flex items-center gap-2">
-          <div className="flex p-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">
+
+        {/* Period chips + nav */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
             {[7, 14, 30].map((d) => (
-              <button key={d}
+              <Chip
+                key={d}
+                size="sm"
+                active={period === d}
                 onClick={() => { setPeriod(d); setOffset(0) }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  period === d ? 'bg-white dark:bg-slate-900 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-slate-500'
-                }`}>
+              >
                 {d === 7 ? '7d' : d === 14 ? '14d' : '30d'}
-              </button>
+              </Chip>
             ))}
           </div>
-          <div className="flex-1" />
-          {/* Navigation arrows */}
+          <div style={{ flex: 1 }} />
           <button
+            type="button"
             onClick={() => setOffset((o) => o + 1)}
-            className="w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95"
             aria-label="Período anterior"
-          >‹</button>
-          <span className="text-xs text-slate-500 min-w-[90px] text-center">{periodLabel()}</span>
+            className="dosy-press"
+            style={{
+              width: 38, height: 38, borderRadius: 9999,
+              background: 'var(--dosy-bg-elevated)',
+              color: 'var(--dosy-fg)',
+              boxShadow: 'var(--dosy-shadow-sm)',
+              border: 'none', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          ><ChevronLeft size={18} strokeWidth={1.75}/></button>
+          <span style={{
+            fontSize: 11, color: 'var(--dosy-fg-secondary)',
+            minWidth: 90, textAlign: 'center',
+            fontFamily: 'var(--dosy-font-display)', fontWeight: 600,
+            letterSpacing: '-0.01em',
+          }}>{periodLabel()}</span>
           <button
+            type="button"
             onClick={() => setOffset((o) => Math.max(0, o - 1))}
             disabled={isCurrentPeriod}
-            className={`w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95 ${
-              isCurrentPeriod ? 'opacity-30' : ''
-            }`}
             aria-label="Próximo período"
-          >›</button>
+            className="dosy-press"
+            style={{
+              width: 38, height: 38, borderRadius: 9999,
+              background: 'var(--dosy-bg-elevated)',
+              color: 'var(--dosy-fg)',
+              boxShadow: 'var(--dosy-shadow-sm)',
+              border: 'none', cursor: isCurrentPeriod ? 'not-allowed' : 'pointer',
+              opacity: isCurrentPeriod ? 0.3 : 1,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          ><ChevronRight size={18} strokeWidth={1.75}/></button>
         </div>
 
         {/* Patient filter */}
@@ -149,68 +172,93 @@ export default function DoseHistory() {
           />
         )}
 
-        {/* FASE 15 — Text search */}
-        <div className="relative">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por medicamento ou observação…"
-            aria-label="Buscar doses"
-            className="input pl-9"
-          />
-          <Icon
-            name="search"
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-          {search && (
+        {/* Search */}
+        <Input
+          icon={Search}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por medicamento ou observação…"
+          suffix={search ? (
             <button
+              type="button"
               onClick={() => setSearch('')}
               aria-label="Limpar busca"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400"
-            >
-              <Icon name="close" size={14} />
-            </button>
-          )}
-        </div>
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--dosy-fg-tertiary)',
+                padding: 2, display: 'inline-flex',
+              }}
+            ><XIcon size={14} strokeWidth={2}/></button>
+          ) : null}
+        />
 
-        {/* Summary bar */}
+        {/* Summary card */}
         {summary.total > 0 && (
-          <div className="card p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-500">Adesão no período</span>
-              <span className={`text-sm font-bold ${
-                summary.pct == null ? 'text-slate-400'
-                : summary.pct >= 80 ? 'text-emerald-600 dark:text-emerald-400'
-                : summary.pct >= 50 ? 'text-amber-600 dark:text-amber-400'
-                : 'text-rose-600 dark:text-rose-400'
-              }`}>
+          <Card padding={14}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                color: 'var(--dosy-fg-secondary)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>Adesão no período</span>
+              <span style={{
+                fontFamily: 'var(--dosy-font-display)', fontWeight: 800, fontSize: 14,
+                color: summary.pct == null ? 'var(--dosy-fg-tertiary)'
+                  : summary.pct >= 80 ? '#3F9E7E'
+                  : summary.pct >= 50 ? '#C5841A'
+                  : 'var(--dosy-danger)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
                 {summary.pct == null ? '—' : `${summary.pct}%`}
               </span>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-2">
-              <div className="h-full bg-brand-500 rounded-full transition-all"
-                style={{ width: `${summary.pct ?? 0}%` }} />
+            <div style={{
+              height: 8, borderRadius: 9999,
+              background: 'var(--dosy-bg-sunken)',
+              overflow: 'hidden', marginBottom: 8,
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'var(--dosy-gradient-sunset)',
+                borderRadius: 9999,
+                width: `${summary.pct ?? 0}%`,
+                transition: 'width 600ms var(--dosy-ease-out)',
+              }}/>
             </div>
-            <div className="flex gap-3 text-[11px] text-slate-500">
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ {summary.done} tomadas</span>
-              <span className="text-amber-600 dark:text-amber-400">↷ {summary.skipped} puladas</span>
-              <span className="text-rose-600 dark:text-rose-400">! {summary.missed} perdidas</span>
+            <div style={{
+              display: 'flex', gap: 12,
+              fontSize: 11, color: 'var(--dosy-fg-secondary)',
+            }}>
+              <span style={{ color: '#3F9E7E', fontWeight: 600 }}>✓ {summary.done} tomadas</span>
+              <span style={{ color: '#C5841A' }}>↷ {summary.skipped} puladas</span>
+              <span style={{ color: 'var(--dosy-danger)' }}>! {summary.missed} perdidas</span>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Day groups */}
         {isLoading ? (
           <SkeletonList count={5} />
         ) : days.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-slate-500">
-            <p className="text-3xl mb-2">📋</p>
-            Nenhuma dose registrada neste período.
-          </div>
+          <Card padding={28} style={{
+            textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 18,
+              background: 'var(--dosy-peach-100)',
+              color: 'var(--dosy-primary)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FileText size={28} strokeWidth={1.75}/>
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--dosy-fg-secondary)', margin: 0 }}>
+              Nenhuma dose registrada neste período.
+            </p>
+          </Card>
         ) : (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {days.map(({ date, list }) => {
               const { label, sub, highlight } = dayLabel(date)
               const dayDone = list.filter((d) => d.status === 'done').length
@@ -218,59 +266,106 @@ export default function DoseHistory() {
               return (
                 <section key={date.toISOString()}>
                   {/* Day header */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-xl text-center flex-shrink-0 ${
-                      highlight
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}>
-                      <span className="text-[10px] font-medium leading-none">{label}</span>
-                      <span className="text-[11px] font-bold leading-tight">{sub}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 12,
+                      background: highlight ? 'var(--dosy-gradient-sunset)' : 'var(--dosy-bg-sunken)',
+                      color: highlight ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg)',
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                      fontFamily: 'var(--dosy-font-display)',
+                    }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1 }}>{label}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.1, marginTop: 1 }}>{sub}</span>
                     </div>
-                    <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+                    <div style={{ flex: 1, height: 1, background: 'var(--dosy-divider)' }}/>
                     {dayTotal > 0 && (
-                      <span className={`text-[11px] font-medium ${
-                        dayDone === dayTotal ? 'text-emerald-600 dark:text-emerald-400'
-                        : dayDone > 0 ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-rose-500'
-                      }`}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: dayDone === dayTotal ? '#3F9E7E'
+                          : dayDone > 0 ? '#C5841A'
+                          : 'var(--dosy-danger)',
+                      }}>
                         {dayDone}/{dayTotal}
                       </span>
                     )}
                   </div>
 
                   {/* Doses */}
-                  <div className="space-y-1.5 ml-1">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {list.map((dose) => {
                       const s = STATUS_CONFIG[dose.status] || STATUS_CONFIG.pending
+                      const dosyStyle = DOSE_STATUS_DOSY[dose.status] || DOSE_STATUS_DOSY.pending
                       const patient = patients.find((p) => p.id === dose.patientId)
                       return (
                         <button
                           key={dose.id}
+                          type="button"
                           onClick={() => setSelected(dose)}
-                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 active:scale-[0.97] active:opacity-90 transition"
+                          className="dosy-press"
+                          style={{
+                            width: '100%', textAlign: 'left',
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px',
+                            borderRadius: 14,
+                            background: 'var(--dosy-bg-elevated)',
+                            border: '1px solid var(--dosy-border)',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--dosy-font-body)',
+                            color: 'var(--dosy-fg)',
+                          }}
                         >
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${s.color}`}>
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 9999,
+                            background: dosyStyle.bg,
+                            color: dosyStyle.color,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 12, fontWeight: 800,
+                            flexShrink: 0,
+                            fontFamily: 'var(--dosy-font-display)',
+                          }}>
                             {s.icon}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-medium truncate">{dose.medName}</p>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <p style={{
+                                fontSize: 13.5, fontWeight: 600,
+                                color: 'var(--dosy-fg)', margin: 0,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              }}>{dose.medName}</p>
                               {dose.type === 'sos' && (
-                                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600 text-white flex-shrink-0">SOS</span>
+                                <span style={{
+                                  fontSize: 9, fontWeight: 800,
+                                  padding: '1px 5px', borderRadius: 4,
+                                  background: 'var(--dosy-danger)',
+                                  color: 'var(--dosy-fg-on-sunset)',
+                                  flexShrink: 0,
+                                  fontFamily: 'var(--dosy-font-display)',
+                                }}>SOS</span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-500 truncate">
+                            <p style={{
+                              fontSize: 11, color: 'var(--dosy-fg-secondary)', margin: 0,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>
                               {dose.unit}
                               {patient && patients.length > 1 && ` · ${patient.name.split(' ')[0]}`}
                             </p>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <p style={{
+                              fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+                              margin: 0, fontVariantNumeric: 'tabular-nums',
+                            }}>
                               {formatTime(dose.scheduledAt)}
                             </p>
                             {dose.status === 'done' && dose.actualTime && (
-                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                              <p style={{
+                                fontSize: 10, color: '#3F9E7E', margin: 0,
+                                fontVariantNumeric: 'tabular-nums',
+                              }}>
                                 → {formatTime(dose.actualTime)}
                               </p>
                             )}
@@ -292,7 +387,6 @@ export default function DoseHistory() {
         onClose={() => setSelected(null)}
         patientName={selectedPatient?.name}
       />
-      <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}`}</style>
     </div>
   )
 }

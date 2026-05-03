@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AnimatePresence, motion } from 'framer-motion'
-import Header from '../components/Header'
+import { Search, X as XIcon, ChevronRight, Mail } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
+import { Card, Button, Chip } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { FAQ as FAQ_DATA, FAQ_CATEGORIES, searchFaq } from '../data/faq'
 import { track, EVENTS } from '../services/analytics'
 
@@ -13,24 +15,13 @@ const SUPPORT_EMAIL = 'suporte@dosyapp.com'
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 /* eslint-enable no-undef */
 
-/**
- * FAQ — perguntas frequentes (FASE 18.5).
- * - Search box no topo (filtra por question + keywords + answer)
- * - Lista por categoria, accordion expandable
- * - Empty state com CTA "Falar com suporte" (mailto)
- * - Eventos PostHog: faq_opened, faq_search_query, faq_question_expanded, faq_support_email_clicked
- */
 export default function FAQ() {
   const [query, setQuery] = useState('')
   const [openIds, setOpenIds] = useState(new Set())
   const [activeCategory, setActiveCategory] = useState('all')
 
-  // PostHog: pageview manual (rotas SPA já capturam, mas garante intent explícita)
-  useEffect(() => {
-    track(EVENTS.FAQ_OPENED)
-  }, [])
+  useEffect(() => { track(EVENTS.FAQ_OPENED) }, [])
 
-  // Debounce track de search query (não loga cada tecla)
   useEffect(() => {
     if (!query.trim()) return
     const t = setTimeout(() => {
@@ -45,7 +36,6 @@ export default function FAQ() {
     return r
   }, [query, activeCategory])
 
-  // Agrupa por categoria pra render
   const grouped = useMemo(() => {
     const map = new Map()
     for (const cat of FAQ_CATEGORIES) map.set(cat.id, [])
@@ -79,7 +69,7 @@ export default function FAQ() {
         `Não apague — info técnica:\n` +
         `Versão: ${APP_VERSION}\n` +
         `Plataforma: ${platform}\n` +
-        `User-Agent: ${ua}\n`
+        `User-Agent: ${ua}\n`,
     )
     return `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`
   }
@@ -92,115 +82,158 @@ export default function FAQ() {
   const totalQuestions = FAQ_DATA.length
 
   return (
-    <div className="pb-28">
-      <Header back title="Ajuda / FAQ" subtitle={`${totalQuestions} perguntas frequentes`} />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader
+        title="Ajuda / FAQ"
+        subtitle={`${totalQuestions} perguntas frequentes`}
+        back
+      />
+
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
 
         {/* Search box */}
-        <div className="card p-3">
-          <label className="flex items-center gap-2">
-            <Icon name="search" size={18} className="text-slate-400 shrink-0" />
+        <Card padding={12}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Search size={18} strokeWidth={2} style={{ color: 'var(--dosy-fg-tertiary)', flexShrink: 0 }}/>
             <input
               type="search"
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400"
-              placeholder="Buscar pergunta ou palavra-chave..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar pergunta ou palavra-chave…"
               aria-label="Buscar no FAQ"
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                fontSize: 14, color: 'var(--dosy-fg)',
+                fontFamily: 'var(--dosy-font-body)',
+              }}
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="Limpar busca"
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <Icon name="close" size={16} />
-              </button>
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: 'var(--dosy-fg-tertiary)',
+                  display: 'inline-flex', padding: 2,
+                }}
+              ><XIcon size={16} strokeWidth={2}/></button>
             )}
           </label>
-        </div>
+        </Card>
 
         {/* Category chips */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
-          <Chip
-            active={activeCategory === 'all'}
-            onClick={() => setActiveCategory('all')}
-            label="Todas"
-          />
+        <div className="dosy-scroll" style={{
+          display: 'flex', gap: 6, overflowX: 'auto', padding: '2px',
+        }}>
+          <Chip size="sm" active={activeCategory === 'all'} onClick={() => setActiveCategory('all')}>
+            Todas
+          </Chip>
           {FAQ_CATEGORIES.map((c) => (
             <Chip
               key={c.id}
+              size="sm"
               active={activeCategory === c.id}
               onClick={() => setActiveCategory(c.id)}
-              label={c.label}
-            />
+            >
+              {c.label}
+            </Chip>
           ))}
         </div>
 
         {/* Empty state */}
         {!hasResults && (
-          <div className="card p-6 text-center space-y-3">
-            <div className="text-4xl">🤔</div>
-            <p className="font-semibold">Nenhuma resposta encontrada</p>
-            <p className="text-xs text-slate-500">
-              Tente outras palavras-chave ou fale direto com o suporte abaixo.
+          <Card padding={24} style={{
+            textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{ fontSize: 36 }}>🤔</div>
+            <p style={{
+              fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)', margin: 0,
+              fontFamily: 'var(--dosy-font-display)',
+            }}>Nenhuma resposta encontrada</p>
+            <p style={{
+              fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: 0,
+              lineHeight: 1.5,
+            }}>
+              Tente outras palavras-chave ou fale direto com o suporte.
             </p>
             <a
               href={buildSupportMailto()}
               onClick={onSupportClick}
-              className="btn-primary inline-flex items-center gap-1.5 mt-2"
+              style={{ textDecoration: 'none', marginTop: 4 }}
             >
-              <Icon name="mail" size={16} /> Falar com suporte
+              <Button kind="primary" icon={Mail} size="md">Falar com suporte</Button>
             </a>
-          </div>
+          </Card>
         )}
 
         {/* Lista agrupada */}
-        {hasResults &&
-          FAQ_CATEGORIES.map((cat) => {
-            const items = grouped.get(cat.id) || []
-            if (items.length === 0) return null
-            return (
-              <section key={cat.id} className="space-y-2">
-                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-2">
-                  <Icon name={cat.icon} size={14} />
-                  <span>{cat.label}</span>
-                  <span className="text-[10px] font-normal text-slate-400">({items.length})</span>
-                </h2>
-                <div className="space-y-1">
-                  {items.map((q) => (
-                    <FaqItem
-                      key={q.id}
-                      item={q}
-                      open={openIds.has(q.id)}
-                      onToggle={() => toggle(q.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
+        {hasResults && FAQ_CATEGORIES.map((cat) => {
+          const items = grouped.get(cat.id) || []
+          if (items.length === 0) return null
+          return (
+            <section key={cat.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <h2 style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
+                margin: '6px 0 2px 4px',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>
+                <Icon name={cat.icon} size={14} />
+                <span>{cat.label}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 500,
+                  color: 'var(--dosy-fg-tertiary)',
+                  letterSpacing: 0,
+                  textTransform: 'none',
+                }}>({items.length})</span>
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {items.map((q) => (
+                  <FaqItem
+                    key={q.id}
+                    item={q}
+                    open={openIds.has(q.id)}
+                    onToggle={() => toggle(q.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        })}
 
-        {/* CTA suporte ao final (sempre visível) */}
+        {/* CTA suporte */}
         {hasResults && (
-          <div className="card p-4 text-center mt-4">
-            <p className="text-sm font-semibold mb-1">Não achou o que procurava?</p>
-            <p className="text-xs text-slate-500 mb-3">
-              Nossa equipe responde em até 24h dias úteis.
-            </p>
+          <Card padding={16} style={{
+            textAlign: 'center', marginTop: 8,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          }}>
+            <p style={{
+              fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)',
+              margin: 0, fontFamily: 'var(--dosy-font-display)',
+            }}>Não achou o que procurava?</p>
+            <p style={{
+              fontSize: 12, color: 'var(--dosy-fg-secondary)',
+              margin: '0 0 8px 0',
+            }}>Nossa equipe responde em até 24h dias úteis.</p>
             <a
               href={buildSupportMailto()}
               onClick={onSupportClick}
-              className="btn-secondary inline-flex items-center gap-1.5"
+              style={{ textDecoration: 'none' }}
             >
-              <Icon name="mail" size={16} /> Falar com suporte
+              <Button kind="secondary" icon={Mail} size="md">Falar com suporte</Button>
             </a>
-          </div>
+          </Card>
         )}
 
-        <p className="text-[10px] text-center text-slate-400 pt-2">
+        <p style={{
+          fontSize: 10, textAlign: 'center',
+          color: 'var(--dosy-fg-tertiary)',
+          paddingTop: 4, margin: 0,
+        }}>
           Dosy v{APP_VERSION} · O Dosy não substitui orientação médica.
         </p>
       </div>
@@ -208,37 +241,43 @@ export default function FAQ() {
   )
 }
 
-function Chip({ active, onClick, label }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition ${
-        active
-          ? 'bg-brand-600 text-white'
-          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
 function FaqItem({ item, open, onToggle }) {
   return (
-    <div className="card overflow-hidden">
+    <div style={{
+      background: 'var(--dosy-bg-elevated)',
+      border: '1px solid var(--dosy-border)',
+      borderRadius: 16,
+      overflow: 'hidden',
+      boxShadow: 'var(--dosy-shadow-xs)',
+    }}>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full flex items-center gap-3 p-4 text-left active:scale-[0.99]"
+        className="dosy-press"
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+          padding: 14, textAlign: 'left',
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          fontFamily: 'var(--dosy-font-body)',
+          color: 'var(--dosy-fg)',
+        }}
       >
-        <span className="flex-1 font-medium text-sm leading-snug">{item.question}</span>
+        <span style={{
+          flex: 1, fontSize: 13.5, fontWeight: 600, lineHeight: 1.4,
+          color: 'var(--dosy-fg)',
+        }}>{item.question}</span>
         <span
-          className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
           aria-hidden="true"
+          style={{
+            flexShrink: 0,
+            transition: 'transform 200ms var(--dosy-ease-out)',
+            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            color: 'var(--dosy-fg-tertiary)',
+            display: 'inline-flex',
+          }}
         >
-          <Icon name="chevron" size={18} className="text-slate-400" />
+          <ChevronRight size={18} strokeWidth={2}/>
         </span>
       </button>
       <AnimatePresence initial={false}>
@@ -248,10 +287,13 @@ function FaqItem({ item, open, onToggle }) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: TIMING.base, ease: EASE.inOut }}
-            className="overflow-hidden"
+            style={{ overflow: 'hidden' }}
           >
-            <div className="px-4 pb-4 pt-0">
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+            <div style={{ padding: '0 14px 14px 14px' }}>
+              <p style={{
+                fontSize: 13, color: 'var(--dosy-fg-secondary)',
+                lineHeight: 1.6, whiteSpace: 'pre-line', margin: 0,
+              }}>
                 {item.answer}
               </p>
             </div>

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
+import { Lock } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import LockedOverlay from '../components/LockedOverlay'
-import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
+import { Card, Chip } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
@@ -12,7 +13,7 @@ import { formatDate } from '../utils/dateUtils'
 
 export default function Analytics() {
   const { data: patients = [] } = usePatients()
-  const [period, setPeriod] = useState('week') // week | month
+  const [period, setPeriod] = useState('week')
   const [patientId, setPatientId] = useState(null)
 
   const days = period === 'week' ? 7 : 30
@@ -22,7 +23,7 @@ export default function Analytics() {
   const to = useMemo(() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d }, [])
 
   const { data: doses = [] } = useDoses({
-    from: from.toISOString(), to: to.toISOString(), patientId: patientId || undefined
+    from: from.toISOString(), to: to.toISOString(), patientId: patientId || undefined,
   })
 
   const adherenceByPatient = useMemo(() => {
@@ -37,11 +38,10 @@ export default function Analytics() {
     return [...map.entries()].map(([pid, m]) => ({
       patient: patients.find((p) => p.id === pid),
       percent: m.total ? Math.round((m.done / m.total) * 100) : 0,
-      ...m
+      ...m,
     }))
   }, [doses, patients])
 
-  // calendário heatmap simples
   const calendar = useMemo(() => {
     const grid = []
     for (let i = 0; i < days; i++) {
@@ -54,18 +54,17 @@ export default function Analytics() {
       })
       const total = inDay.length
       const done = inDay.filter((x) => x.status === 'done').length
-      let tone = 'bg-slate-200 dark:bg-slate-800'
+      let bg = 'var(--dosy-bg-sunken)'
       if (total > 0) {
-        if (done === total) tone = 'bg-emerald-500'
-        else if (done > 0) tone = 'bg-amber-400'
-        else tone = 'bg-rose-500'
+        if (done === total) bg = '#6EC9A8'
+        else if (done > 0) bg = '#F2B441'
+        else bg = 'var(--dosy-danger)'
       }
-      grid.push({ date: d, total, done, tone })
+      grid.push({ date: d, total, done, bg })
     }
     return grid
   }, [from, days, doses])
 
-  // sos usage por med
   const sosByMed = useMemo(() => {
     const map = new Map()
     for (const d of doses) if (d.type === 'sos') map.set(d.medName, (map.get(d.medName) || 0) + 1)
@@ -73,88 +72,206 @@ export default function Analytics() {
   }, [doses])
 
   const maxSos = Math.max(1, ...sosByMed.map(([, v]) => v))
-
   const isPro = useIsPro()
 
   return (
-    <div className="pb-28">
-      <Header back title="Análises" right={!isPro && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 inline-flex items-center gap-1"><Icon name="lock" size={10} /> PRO</span>} />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader
+        title="Análises"
+        back
+        right={!isPro && (
+          <span style={{
+            fontSize: 10, fontWeight: 800,
+            padding: '4px 8px', borderRadius: 9999,
+            background: 'var(--dosy-warning-bg)',
+            color: '#C5841A',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontFamily: 'var(--dosy-font-display)',
+          }}>
+            <Lock size={10} strokeWidth={2}/> PRO
+          </span>
+        )}
+      />
+
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
+
         {!isPro && (
           <LockedOverlay reason="Análises detalhadas de adesão, calendário e S.O.S são exclusivas do PRO." label="Desbloquear Análises">
-            <div className="card p-4 space-y-3">
-              <p className="text-sm font-semibold">Prévia</p>
-              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full bg-brand-500 w-3/4" /></div>
-              <div className="grid grid-cols-7 gap-1">
+            <Card padding={16}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)', margin: '0 0 12px 0' }}>Prévia</p>
+              <div style={{
+                height: 8, borderRadius: 9999,
+                background: 'var(--dosy-bg-sunken)', overflow: 'hidden',
+                marginBottom: 12,
+              }}>
+                <div style={{
+                  height: '100%', background: 'var(--dosy-gradient-sunset)',
+                  width: '75%',
+                }}/>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
                 {Array.from({ length: 14 }).map((_, i) => (
-                  <div key={i} className={`aspect-square rounded ${i % 3 === 0 ? 'bg-emerald-500' : i % 4 === 0 ? 'bg-rose-500' : 'bg-slate-200 dark:bg-slate-800'}`} />
+                  <div
+                    key={i}
+                    style={{
+                      aspectRatio: '1 / 1',
+                      borderRadius: 6,
+                      background: i % 3 === 0 ? '#6EC9A8' : i % 4 === 0 ? 'var(--dosy-danger)' : 'var(--dosy-bg-sunken)',
+                    }}
+                  />
                 ))}
               </div>
-            </div>
+            </Card>
           </LockedOverlay>
         )}
-        <div className={`${isPro ? 'space-y-4' : 'hidden'}`}>
-        <div className="flex gap-2">
-          <button onClick={() => setPeriod('week')} className={`chip ${period === 'week' ? 'chip-active' : ''}`}>7 dias</button>
-          <button onClick={() => setPeriod('month')} className={`chip ${period === 'month' ? 'chip-active' : ''}`}>30 dias</button>
-        </div>
-        <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
-          <button onClick={() => setPatientId(null)} className={`chip whitespace-nowrap ${!patientId ? 'chip-active' : ''}`}>Todos</button>
-          {patients.map((p) => (
-            <button key={p.id} onClick={() => setPatientId(p.id)}
-                    className={`chip whitespace-nowrap ${patientId === p.id ? 'chip-active' : ''}`}>{p.name.split(' ')[0]}</button>
-          ))}
-        </div>
 
-        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
-          <h3 className="font-semibold text-sm mb-3">Adesão por paciente</h3>
-          {adherenceByPatient.length === 0 && <p className="text-xs text-slate-500">Sem dados no período.</p>}
-          <div className="space-y-3">
-            {adherenceByPatient.map((a) => (
-              <div key={a.patient?.id || 'x'}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span>{a.patient?.avatar} {a.patient?.name || '—'}</span>
-                  <span className="font-medium">{a.percent}% ({a.done}/{a.total})</span>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full bg-brand-500" style={{ width: `${a.percent}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.section>
+        {isPro && (
+          <>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Chip size="sm" active={period === 'week'} onClick={() => setPeriod('week')}>7 dias</Chip>
+              <Chip size="sm" active={period === 'month'} onClick={() => setPeriod('month')}>30 dias</Chip>
+            </div>
 
-        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
-          <h3 className="font-semibold text-sm mb-3">Calendário de adesão</h3>
-          <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${period === 'week' ? 7 : 10}, minmax(0, 1fr))` }}>
-            {calendar.map((c, i) => (
-              <div key={i} title={`${formatDate(c.date)} — ${c.done}/${c.total}`}
-                   className={`aspect-square rounded-md ${c.tone}`} />
-            ))}
-          </div>
-          <div className="flex gap-3 mt-3 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" /> todas</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> parcial</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500 inline-block" /> nenhuma</span>
-          </div>
-        </motion.section>
+            <div className="dosy-scroll" style={{
+              display: 'flex', gap: 6, overflowX: 'auto', padding: '2px',
+            }}>
+              <Chip size="sm" active={!patientId} onClick={() => setPatientId(null)}>Todos</Chip>
+              {patients.map((p) => (
+                <Chip
+                  key={p.id}
+                  size="sm"
+                  active={patientId === p.id}
+                  onClick={() => setPatientId(p.id)}
+                >
+                  {p.name.split(' ')[0]}
+                </Chip>
+              ))}
+            </div>
 
-        <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }} className="card p-4">
-          <h3 className="font-semibold text-sm mb-3">Uso de S.O.S por medicamento</h3>
-          {sosByMed.length === 0 && <p className="text-xs text-slate-500">Sem registros de S.O.S no período.</p>}
-          <div className="space-y-2">
-            {sosByMed.map(([med, count]) => (
-              <div key={med}>
-                <div className="flex justify-between text-xs mb-1"><span>{med}</span><span>{count}</span></div>
-                <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full bg-rose-500" style={{ width: `${(count / maxSos) * 100}%` }} />
+            {/* Adesão por paciente */}
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+              <Card padding={16}>
+                <h3 style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 700, fontSize: 14, margin: '0 0 12px 0',
+                  color: 'var(--dosy-fg)',
+                }}>Adesão por paciente</h3>
+                {adherenceByPatient.length === 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: 0 }}>Sem dados no período.</p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {adherenceByPatient.map((a) => (
+                    <div key={a.patient?.id || 'x'}>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between',
+                        fontSize: 12, marginBottom: 4,
+                      }}>
+                        <span style={{ color: 'var(--dosy-fg)' }}>{a.patient?.avatar} {a.patient?.name || '—'}</span>
+                        <span style={{
+                          fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+                          color: 'var(--dosy-fg)',
+                        }}>{a.percent}% ({a.done}/{a.total})</span>
+                      </div>
+                      <div style={{
+                        height: 8, borderRadius: 9999,
+                        background: 'var(--dosy-bg-sunken)', overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          height: '100%', background: 'var(--dosy-gradient-sunset)',
+                          width: `${a.percent}%`,
+                          transition: 'width 600ms var(--dosy-ease-out)',
+                        }}/>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        </motion.section>
-        </div>
+              </Card>
+            </motion.div>
+
+            {/* Calendário heatmap */}
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+              <Card padding={16}>
+                <h3 style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 700, fontSize: 14, margin: '0 0 12px 0',
+                  color: 'var(--dosy-fg)',
+                }}>Calendário de adesão</h3>
+                <div style={{
+                  display: 'grid', gap: 4,
+                  gridTemplateColumns: `repeat(${period === 'week' ? 7 : 10}, minmax(0, 1fr))`,
+                }}>
+                  {calendar.map((c, i) => (
+                    <div
+                      key={i}
+                      title={`${formatDate(c.date)} — ${c.done}/${c.total}`}
+                      style={{
+                        aspectRatio: '1 / 1',
+                        borderRadius: 6,
+                        background: c.bg,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{
+                  display: 'flex', gap: 12, marginTop: 12,
+                  fontSize: 11, color: 'var(--dosy-fg-secondary)',
+                }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 4, background: '#6EC9A8' }}/>
+                    todas
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 4, background: '#F2B441' }}/>
+                    parcial
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 4, background: 'var(--dosy-danger)' }}/>
+                    nenhuma
+                  </span>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* SOS por medicamento */}
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+              <Card padding={16}>
+                <h3 style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 700, fontSize: 14, margin: '0 0 12px 0',
+                  color: 'var(--dosy-fg)',
+                }}>Uso de S.O.S por medicamento</h3>
+                {sosByMed.length === 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: 0 }}>
+                    Sem registros de S.O.S no período.
+                  </p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {sosByMed.map(([med, count]) => (
+                    <div key={med}>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between',
+                        fontSize: 12, marginBottom: 4, color: 'var(--dosy-fg)',
+                      }}>
+                        <span>{med}</span>
+                        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+                      </div>
+                      <div style={{
+                        height: 8, borderRadius: 9999,
+                        background: 'var(--dosy-bg-sunken)', overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          height: '100%', background: 'var(--dosy-danger)',
+                          width: `${(count / maxSos) * 100}%`,
+                        }}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          </>
+        )}
       </div>
     </div>
   )
