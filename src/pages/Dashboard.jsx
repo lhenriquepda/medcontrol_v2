@@ -124,17 +124,38 @@ export default function Dashboard() {
     return Math.round((taken / past.length) * 100)
   })()
 
+  // Merge: forward-window doses + sempre-overdue. Atrasadas semana passada
+  // aparecem mesmo no filtro '12h'. Quando user escolhe status explícito ou
+  // 'Tudo', merge é skip (evita dup ou poluição).
+  const shouldMergeOverdue = !filters.status && filters.range !== 'all'
+  const mergedDoses = useMemo(() => {
+    if (!shouldMergeOverdue) return doses
+    const seen = new Map()
+    for (const d of doses) seen.set(d.id, d)
+    for (const d of overdueAll) if (!seen.has(d.id)) seen.set(d.id, d)
+    return [...seen.values()]
+  }, [doses, overdueAll, shouldMergeOverdue])
+
   const grouped = useMemo(() => {
     const map = new Map()
-    for (const d of doses) {
+    for (const d of mergedDoses) {
       if (!map.has(d.patientId)) map.set(d.patientId, [])
       map.get(d.patientId).push(d)
     }
+    // Sort within each group: overdue primeiro, depois pending por scheduledAt asc
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const rank = (s) => s === 'overdue' ? 0 : s === 'pending' ? 1 : s === 'done' ? 2 : 3
+        const dr = rank(a.status) - rank(b.status)
+        if (dr !== 0) return dr
+        return a.scheduledAt.localeCompare(b.scheduledAt)
+      })
+    }
     return [...map.entries()].map(([pid, list]) => ({
       patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
-      list
+      list,
     }))
-  }, [doses, patients])
+  }, [mergedDoses, patients])
 
   const selectedPatient = selected && patients.find((p) => p.id === selected.patientId)
 
@@ -306,7 +327,7 @@ export default function Dashboard() {
                 </Button>
               </Link>
             </Card>
-          ) : doses.length === 0 ? (
+          ) : mergedDoses.length === 0 ? (
             <Card padding={28} style={{
               textAlign: 'center',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
