@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
-import AppHeader from './components/AppHeader'
+import AppHeader from './components/dosy/AppHeader'
 import BottomNav from './components/BottomNav'
 // Aud 4.5.5 G1: route-level code splitting com React.lazy.
 // Pages carregam sob demanda — bundle main reduz, time-to-interactive cai em rotas leves.
