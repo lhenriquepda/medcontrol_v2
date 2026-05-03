@@ -9,8 +9,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     StatusBar: {
-      style: 'dark',
-      backgroundColor: '#0d1535',
+      style: 'light',
+      backgroundColor: '#FFF4EC',
       overlaysWebView: false
     },
     Keyboard: {
@@ -18,7 +18,7 @@ const config: CapacitorConfig = {
     },
     SplashScreen: {
       launchShowDuration: 2500,
-      backgroundColor: '#4f4cc8',
+      backgroundColor: '#FFF4EC',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
@@ -30,7 +30,7 @@ const config: CapacitorConfig = {
     },
     LocalNotifications: {
       smallIcon: 'ic_stat_dosy',
-      iconColor: '#2B3EDF',
+      iconColor: '#FF6B5B',
       sound: 'default'
     }
   }
