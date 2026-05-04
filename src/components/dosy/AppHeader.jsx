@@ -1,31 +1,60 @@
 /**
- * Dosy AppHeader — release v0.2.0.0 redesign.
- * Source design: contexto/claude-design/dosy/project/src/Primitives.jsx (AppHeader).
+ * Dosy AppHeader — release v0.2.0.3 redesign #116.
  *
- * Sticky top, glass blur bg. Logo wordmark (inverte em dark via filter) +
- * greeting compacta + tier dot + BellAlerts (R3 padrão consolidado:
- * overdue, update available, future alerts) + Settings cog.
+ * Sticky top, glass blur bg. Logo wordmark + greeting + tier dot +
+ * direct-action alert icons + Settings cog.
  *
- * MANTÉM lógica/comportamento legacy:
- * - useDoses overdue lookup (mesmo filter window 90d)
- * - useAuth current user → firstName(user) na saudação
- * - useAppUpdate detecta update available → BellAlerts mostra
- * - navigate('/?filter=overdue') ao tap atrasadas
- * - Link to '/' no logo (volta Dashboard)
- * - Link to '/ajustes' no settings cog
- * - ResizeObserver pra --app-header-height (FilterBar offset)
- * - safe-area-inset-top + ad-banner-height + update-banner-height no top
+ * Item #116 (release v0.2.0.3): sino dropdown SUBSTITUÍDO por ícones
+ * diretos. Cada tipo de alerta = ícone próprio com badge + click direto.
+ * Padrão WhatsApp/Gmail: glance imediato, 1 tap pra ação.
+ *
+ * Tipos de alerta (renderizados condicionalmente — só aparece se count > 0):
+ *   - AlertCircle (danger)  → doses atrasadas → /?filter=overdue
+ *   - Users (info)          → paciente compartilhado novo → /pacientes
+ *   - Pill (warning)        → tratamento acabando ≤3d → /pacientes
+ *   - Download (update)     → app update disponível → startUpdate()
+ *
+ * UpdateBanner verde no topo é mantido (redundância intencional —
+ * banner full-width chama atenção, ícone permite acesso rápido).
  */
 import { useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon } from 'lucide-react'
+import {
+  Settings as SettingsIcon,
+  AlertCircle,
+  Users,
+  Pill,
+  Download,
+} from 'lucide-react'
 import TierBadge from '../TierBadge'
-import { BellAlerts } from './BellAlerts'
+import HeaderAlertIcon from './HeaderAlertIcon'
 import { useAuth } from '../../hooks/useAuth'
 import { useDoses } from '../../hooks/useDoses'
+import { useTreatments } from '../../hooks/useTreatments'
+import { useReceivedShares } from '../../hooks/useShares'
 import { useAppUpdate } from '../../hooks/useAppUpdate'
 import { firstName } from '../../utils/userDisplay'
 import logoMonoDark from '../../assets/dosy/logo-mono-dark.png'
+
+// localStorage keys — track "last seen" timestamps por tipo de alerta.
+// Permite badge zerar quando user clica (sem persistir backend).
+const LS_SHARES_SEEN = 'dosy_shares_seen_at'
+const LS_ENDING_SEEN = 'dosy_ending_seen_at'
+
+/**
+ * Computa endDate de tratamento finito (não-contínuo).
+ * Returns null pra tratamentos contínuos OU sem startDate/durationDays.
+ */
+function endingSoon(t, msHorizon) {
+  if (t.isContinuous) return false
+  if (t.status !== 'active') return false
+  if (!t.startDate || !t.durationDays) return false
+  const start = new Date(t.startDate).getTime()
+  if (Number.isNaN(start)) return false
+  const end = start + t.durationDays * 86_400_000
+  const now = Date.now()
+  return end >= now && end - now <= msHorizon
+}
 
 export default function DosyAppHeader() {
   const { user } = useAuth()
@@ -47,33 +76,41 @@ export default function DosyAppHeader() {
   // user marcar overdue como tomada/pulada/encerrar tratamento.
   const overdueCount = overdueDoses.filter((d) => d.status === 'overdue').length
 
-  // App update — integra mesmo padrão BellAlerts via R3
-  const { available: updateAvailable, latest, startUpdate } = useAppUpdate()
+  // App update — Play Store In-App / web reload
+  const { available: updateAvailable, startUpdate } = useAppUpdate()
 
-  // Build alerts array — passa pra BellAlerts. Outros tipos (avisos sistema)
-  // adicionam aqui no futuro.
-  const alerts = useMemo(() => {
-    const arr = []
-    if (overdueCount > 0) {
-      arr.push({
-        id: 'overdue',
-        kind: 'danger',
-        message: `${overdueCount} dose${overdueCount > 1 ? 's' : ''} atrasada${overdueCount > 1 ? 's' : ''}`,
-        count: overdueCount,
-        onClick: () => nav('/?filter=overdue'),
-      })
-    }
-    if (updateAvailable && latest?.version) {
-      arr.push({
-        id: 'update',
-        kind: 'update',
-        message: `Atualizar pra v${latest.version}`,
-        count: 1,
-        onClick: () => startUpdate(),
-      })
-    }
-    return arr
-  }, [overdueCount, updateAvailable, latest, nav, startUpdate])
+  // Item #117: shares recebidos (paciente compartilhado comigo).
+  // Compara createdAt vs lastSeen localStorage → conta NEW shares.
+  const { data: receivedShares = [] } = useReceivedShares()
+  const newSharesCount = useMemo(() => {
+    const seenAt = localStorage.getItem(LS_SHARES_SEEN) || '1970-01-01T00:00:00Z'
+    return receivedShares.filter((s) => s.createdAt > seenAt).length
+  }, [receivedShares])
+
+  // Item #118: tratamentos acabando ≤3 dias (não-contínuos, status active).
+  const { data: treatments = [] } = useTreatments()
+  const endingSoonList = useMemo(() => {
+    const HORIZON = 3 * 86_400_000 // 3 dias
+    return treatments.filter((t) => endingSoon(t, HORIZON))
+  }, [treatments])
+  const endingSoonNew = useMemo(() => {
+    const seenAt = localStorage.getItem(LS_ENDING_SEEN) || '1970-01-01T00:00:00Z'
+    // count only treatments cujo updatedAt > seenAt (notificou desde última visualização)
+    // OR todos se nunca abriu — first-time user vê todos.
+    return endingSoonList.filter((t) => (t.updatedAt || t.createdAt || '') > seenAt).length
+  }, [endingSoonList])
+
+  // Click handlers — limpam localStorage seen + navegam.
+  const onClickOverdue = () => nav('/?filter=overdue')
+  const onClickShares = () => {
+    localStorage.setItem(LS_SHARES_SEEN, new Date().toISOString())
+    nav('/pacientes')
+  }
+  const onClickEnding = () => {
+    localStorage.setItem(LS_ENDING_SEEN, new Date().toISOString())
+    nav('/pacientes')
+  }
+  const onClickUpdate = () => startUpdate()
 
   // ResizeObserver — mantém --app-header-height pra FilterBar offset legacy
   const headerRef = useRef(null)
@@ -144,8 +181,44 @@ export default function DosyAppHeader() {
             <TierBadge variant="dot" />
           </div>
 
-          {/* Bell + alerts (overdue + update + future) */}
-          <BellAlerts alerts={alerts} />
+          {/* Item #116: ícones de alerta diretos (sem dropdown).
+              Cada ícone só renderiza se count > 0. */}
+          {overdueCount > 0 && (
+            <HeaderAlertIcon
+              icon={AlertCircle}
+              count={overdueCount}
+              tone="danger"
+              pulse
+              onClick={onClickOverdue}
+              ariaLabel={`${overdueCount} dose${overdueCount > 1 ? 's' : ''} atrasada${overdueCount > 1 ? 's' : ''}`}
+            />
+          )}
+          {newSharesCount > 0 && (
+            <HeaderAlertIcon
+              icon={Users}
+              count={newSharesCount}
+              tone="info"
+              onClick={onClickShares}
+              ariaLabel={`${newSharesCount} paciente${newSharesCount > 1 ? 's' : ''} compartilhado${newSharesCount > 1 ? 's' : ''} comigo`}
+            />
+          )}
+          {endingSoonNew > 0 && (
+            <HeaderAlertIcon
+              icon={Pill}
+              count={endingSoonNew}
+              tone="warning"
+              onClick={onClickEnding}
+              ariaLabel={`${endingSoonNew} tratamento${endingSoonNew > 1 ? 's' : ''} acabando em 3 dias`}
+            />
+          )}
+          {updateAvailable && (
+            <HeaderAlertIcon
+              icon={Download}
+              tone="update"
+              onClick={onClickUpdate}
+              ariaLabel="Atualização disponível"
+            />
+          )}
 
           {/* Settings cog */}
           <Link

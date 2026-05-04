@@ -321,14 +321,14 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#030** [Plan SECURITY + Auditoria] Refatorar `services/notifications.js` (588 LOC) em 4 módulos
 - [ ] **#031** [Auditoria] Confirmar `FORCE_RLS` em todas tabelas. → [04 §15.6](auditoria/04-supabase.md#156-force_rls-em-todas-as-tabelas)
 - [ ] **#032** [Auditoria] Confirmar `SET search_path` em todas SECURITY DEFINER. → [04 §15.3](auditoria/04-supabase.md#153-audit-de-security-definer--search_path)
-- [ ] **#033** [Auditoria] React.memo em DoseCard, PatientCard, TreatmentCard
+- [x] **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
 - [ ] **#034** [Plan] Virtualização DoseHistory + Patients (`@tanstack/react-virtual`). Plan FASE 13
 - [ ] **#035** [Plan] Integration tests (`useDoses`, `useUserPrefs` mocks). Plan FASE 9.4
 - [ ] **#036** [Plan] Skeleton screens completos. Plan FASE 15
 - [ ] **#037** [Plan] Erros inline em forms. Plan FASE 15
 - [ ] **#038** [Plan] Pen test interno completo documentado. Plan FASE 8.4 + 20.3
 - [ ] **#039** [Plan] Confirmação dupla delete batch (>10). Plan FASE 15
-- [ ] **#040** [Plan] Subir contraste textos secundários no dark. Plan FASE 15
+- [x] **#040** [Plan, fechado v0.2.0.3] Subir contraste textos secundários no dark. fg-secondary #C8B8AB → #DDC8B6 (ratio 8.7→10.5), fg-tertiary #8E7F73 → #B0A091 (ratio 4.35→5.8 — passa AA), border alpha bumps.
 - [ ] **#041** [Plan] Hierarquia headings + Dynamic Type via `rem`. Plan FASE 15
 - [ ] **#042** [Plan] Lighthouse mobile ≥90 em Reports + Dashboard. Plan FASE 17
 - [ ] **#043** [Plan] Performance scroll lista 200+ doses sem jank (já coberto por #034)
@@ -411,6 +411,12 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#110** [P2 native, Sentry DOSY-3 REGRESSED + DOSY-7] **Android native crashes — art::ArtMethod::Invoke IllegalInstruction + Segfault unknown.** DOSY-3: 2 events 2 users, REGRESSED 4d ago. DOSY-7: 1 event Segfault unknown stack. Native code crash em ART runtime. Sem symbols completos, difícil pinpoint. Investigar: (a) AlarmActivity refactor v0.2.0.0 introduziu ValueAnimator + FrameLayout — possível crash em devices antigos sem suporte hardware, (b) DosyMessagingService FCM data handler, (c) plugin nativo (criticalAlarm/local-notifications) versão mismatch, (d) ProGuard/R8 rules — código keepers podem estar removendo classes nativas necessárias, (e) habilitar Sentry NDK / native symbols upload pra próximas releases. P2 (low frequency mas crítico — silent crash). **Update v0.2.0.2:** debug symbols ndk habilitados (#074) — próxima crash terá stack symbolicado.
 
 - [x] **#114** [P1 BUG-038, fechado v0.2.0.2] **Avatar foto sem UI de crop manual.** Antes (v0.2.0.1): center-square auto-crop sem deixar user escolher região — sujeito off-center cortava errado. Fix: integrado `react-easy-crop` em `CropModal` component novo. PatientForm onPhoto → modal abre com zoom slider 1-3x + drag pan (cropShape circular live preview) → confirm gera canvas 512×512 jpeg q0.78 (~50KB) salvo em `photo_url`. Reset input após cancel/confirm pra permitir mesmo arquivo de novo. P1 UX healthcare-adjacent.
+
+- [x] **#116** [P1 UX, fechado v0.2.0.3] **Header alertas: sino dropdown → ícones diretos.** Antes: 1 sino com badge total → click abre lista expandida → user clica item específico (2 taps + dropdown intermediário, padrão confuso reportado pelo user). Agora: cada tipo de alerta tem ícone próprio no header com badge contador + click direto dispara ação. Padrão WhatsApp/Gmail. Componente `HeaderAlertIcon` primitive (4 tones: danger/warning/info/update). AppHeader renderiza condicionalmente: AlertCircle pulse (overdue → /?filter=overdue), Users (shares novos → /pacientes), Pill (tratamentos acabando ≤3d → /pacientes), Download (update → startUpdate). UpdateBanner verde no topo MANTIDO (redundância intencional). BellAlerts component fica deprecated mas exportado pra compat.
+
+- [x] **#117** [P2 UX, fechado v0.2.0.3] **Alerta header: paciente compartilhado comigo (novo `patient_share` recebido).** Service `listReceivedShares` consulta `patient_shares WHERE sharedWithUserId = me`. Hook `useReceivedShares` (staleTime 60s). Header conta shares cujo `createdAt > localStorage[dosy_shares_seen_at]`. Click → seenAt=now → nav /pacientes. Decay automático.
+
+- [x] **#118** [P2 UX, fechado v0.2.0.3] **Alerta header: tratamento acabando ≤3 dias.** Computa endDate = startDate + durationDays*24h em memória (sem coluna nova). Filtra: !isContinuous && status='active' && endDate >= now && endDate-now ≤ 3d. seenAt-based decay igual ao #117. Click → nav /pacientes. Useful pra renovação de receitas + visibilidade de fim de uso.
 
 - [x] **#115** [P0 cost+UX, fechado v0.2.0.2] **Avatar foto não aparecia na lista/Início + risco egress.** Antes (v0.2.0.1 commit `e6c9423`): #101 fix removeu `photo_url` de PATIENT_COLS_LIST por egress (50KB-2MB × refetch frequente = MB/min). Side effect: Patients list + Dashboard mostravam emoji em vez da foto. Fix: nova coluna `photo_version` SMALLINT na tabela patients (migration `replace_photo_thumb_with_photo_version` 2026-05-04). Lista carrega só `photo_version` (2B). Hook `usePatientPhoto(id, version)` checa `localStorage[dosy_photo_<id>] = {v, data}` — match version → render instant ZERO request da imagem. Mismatch (1ª vez OU edit externo) → 1 fetch único via `getPatient` → cache forever. PatientForm submit bump version quando foto muda → realtime invalida lista nos outros devices → mismatch detectado → re-fetch automático. `primePatientPhotoCache` em PatientForm + PatientDetail pré-aquece cache. `pruneStalePhotoCaches` em Patients screen limpa entries de pacientes deletados. Componente `PatientAvatar` wrapper centraliza lógica. Resultado: foto baixa 1 vez por device, lista vê só version int. Storage budget: 100 pacientes × 50KB = 5MB localStorage. P0 cost (volta foto na lista sem regredir egress fix #101).
 

@@ -178,13 +178,20 @@
   --dosy-peach-400:     #7A4F3F;
 
   --dosy-fg:            #FFF4EC;
-  --dosy-fg-secondary:  #C8B8AB;
-  --dosy-fg-tertiary:   #8E7F73;
-  --dosy-fg-disabled:   #5C5048;
+  /* Item #040 (release v0.2.0.3): contraste textos secundários no dark.
+     Antes: fg-secondary #C8B8AB (ratio 8.7), fg-tertiary #8E7F73 (ratio
+     4.35 — abaixo de AA 4.5). User reportou textos secundários "muito
+     apagados" no dark. Bump:
+       fg-secondary  #C8B8AB → #DDC8B6 (ratio ~10.5)
+       fg-tertiary   #8E7F73 → #B0A091 (ratio ~5.8 — passa AA)
+     Border-strong de 0.16 → 0.20 alpha pra cards/dividers respirarem. */
+  --dosy-fg-secondary:  #DDC8B6;
+  --dosy-fg-tertiary:   #B0A091;
+  --dosy-fg-disabled:   #6E6256;
 
-  --dosy-border:        rgba(255, 244, 236, 0.08);
-  --dosy-border-strong: rgba(255, 244, 236, 0.16);
-  --dosy-divider:       rgba(255, 244, 236, 0.10);
+  --dosy-border:        rgba(255, 244, 236, 0.10);
+  --dosy-border-strong: rgba(255, 244, 236, 0.20);
+  --dosy-divider:       rgba(255, 244, 236, 0.12);
 
   --dosy-success-bg:    rgba(110, 201, 168, 0.15);
   --dosy-warning-bg:    rgba(242, 180, 65, 0.15);
@@ -319,6 +326,11 @@
 @keyframes dosy-shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+/* Item #116: badge pulse pra alertas de urgência alta (overdue) */
+@keyframes dosy-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
 }
 
 /* Press feedback (utility) — aplique em buttons/cards Dosy */
