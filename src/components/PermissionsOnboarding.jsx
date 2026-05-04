@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
-import Icon from './Icon'
+import { AlarmClock, Check, Circle, ChevronRight } from 'lucide-react'
+import { Button } from './dosy'
 import {
   checkAllPermissions,
   openExactAlarmSettings,
@@ -11,34 +13,11 @@ import {
 } from '../services/criticalAlarm'
 
 const isNative = Capacitor.isNativePlatform()
-// Storage key armazena a VERSÃO em que foi dismissed.
-// Após update (APP_VERSION muda), Android reseta toggles especiais
-// (full-screen intent, overlay, etc.) → re-disparar verificação.
 const STORAGE_KEY = 'dosy_permissions_dismissed_version'
 /* eslint-disable no-undef */
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 /* eslint-enable no-undef */
 
-/**
- * PermissionsOnboarding — first-launch screen guiding user through Android
- * special-access permissions required for alarme estilo despertador.
- *
- * Required for full notif behavior:
- *   1. POST_NOTIFICATIONS         (Android 13+ runtime — auto-prompt when first scheduling)
- *   2. SCHEDULE_EXACT_ALARM       (Android 12+ — usually auto via USE_EXACT_ALARM)
- *   3. USE_FULL_SCREEN_INTENT     (Android 14+ — needs Settings grant)
- *   4. SYSTEM_ALERT_WINDOW        (any version — needs Settings grant for BAL bypass)
- *
- * Without #3 + #4, fullscreen alarm activity is blocked on unlocked screen.
- * Sound + heads-up notif still work.
- *
- * UX:
- *   - Modal overlay on top of Dashboard, blocking until grants OR explicit skip
- *   - Each item shows status (✓ granted / ✗ missing) + button to open Settings
- *   - Auto re-checks on app resume (Capacitor lifecycle)
- *   - Once allGranted=true, dismisses + writes localStorage flag
- *   - User can skip; banner reappears in Settings/Dashboard if still missing
- */
 export default function PermissionsOnboarding({ onComplete, onClose }) {
   const [perms, setPerms] = useState(null)
   const [open, setOpen] = useState(false)
@@ -54,8 +33,6 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
     try {
       const status = await checkAllPermissions()
       setPerms(status)
-      // Dismissed só vale pra ESTA versão. Update do app reseta toggles
-      // especiais do Android, então re-disparamos check forçando re-prompt.
       const dismissedVersion = localStorage.getItem(STORAGE_KEY)
       const dismissedThisVersion = dismissedVersion === APP_VERSION
       const shouldShow = !status.allGranted && !dismissedThisVersion
@@ -65,7 +42,6 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
         onComplete?.()
         onClose?.()
       } else if (!shouldShow) {
-        // Já dismissed nesta versão
         onClose?.()
       }
     } catch (e) {
@@ -73,13 +49,8 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
     }
   }, [onComplete, onClose])
 
-  // Initial check
-  useEffect(() => {
-    refresh()
-  }, [refresh])
+  useEffect(() => { refresh() }, [refresh])
 
-  // External trigger: Settings button OR any caller dispatches this event
-  // to force the modal open (re-check permissions on demand).
   useEffect(() => {
     const handler = async () => {
       localStorage.removeItem(STORAGE_KEY)
@@ -100,7 +71,6 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
     return () => window.removeEventListener('dosy:checkPermissions', handler)
   }, [])
 
-  // Re-check when app returns from Settings (Capacitor lifecycle)
   useEffect(() => {
     if (!isNative) return
     let resumeHandle
@@ -120,7 +90,6 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
       desc: 'Permita o app enviar notificações de doses.',
       action: openAppNotificationSettings,
       granted: perms.notifsEnabled,
-      essential: true,
     },
     {
       key: 'canScheduleExact',
@@ -128,15 +97,13 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
       desc: 'Permite que o alarme dispare no horário exato da dose.',
       action: openExactAlarmSettings,
       granted: perms.canScheduleExact,
-      essential: true,
     },
     {
       key: 'canFullScreenIntent',
       title: 'Notificações em tela cheia',
-      desc: 'Mostra a tela do alarme automaticamente quando a dose fica.',
+      desc: 'Mostra a tela do alarme automaticamente quando a dose toca.',
       action: openFullScreenIntentSettings,
       granted: perms.canFullScreenIntent,
-      essential: true,
     },
     {
       key: 'canDrawOverlay',
@@ -144,11 +111,10 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
       desc: 'Permite o alarme abrir mesmo com você usando outro app.',
       action: openOverlaySettings,
       granted: perms.canDrawOverlay,
-      essential: true,
     },
   ]
 
-  const grantedCount = items.filter(i => i.granted).length
+  const grantedCount = items.filter((i) => i.granted).length
   const total = items.length
 
   async function handleAction(action) {
@@ -159,58 +125,140 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
   }
 
   function dismiss() {
-    // Marca dismissed para a versão atual. Próximo update reseta automaticamente.
     localStorage.setItem(STORAGE_KEY, APP_VERSION)
     setOpen(false)
     onClose?.()
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
-          <Icon name="alarm" size={28} className="mb-2 text-brand-600" />
-          <h2 className="text-lg font-semibold">Configurar alarmes</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Pra você nunca esquecer uma dose, libere as permissões abaixo. O alarme funciona como um despertador.
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(28,20,16,0.55)',
+        backdropFilter: 'blur(14px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 448,
+        maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        background: 'var(--dosy-bg-elevated)',
+        borderRadius: 28,
+        boxShadow: 'var(--dosy-shadow-lg)',
+        border: '1px solid var(--dosy-border)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '20px 20px 16px',
+          borderBottom: '1px solid var(--dosy-divider)',
+          background: 'var(--dosy-bg-elevated)',
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: 'var(--dosy-peach-100)',
+            color: 'var(--dosy-primary)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 10,
+          }}>
+            <AlarmClock size={26} strokeWidth={1.75}/>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--dosy-font-display)',
+            fontWeight: 800, fontSize: 20, letterSpacing: '-0.02em',
+            color: 'var(--dosy-fg)', margin: 0, lineHeight: 1.2,
+          }}>Configurar alarmes</h2>
+          <p style={{
+            fontSize: 13.5, color: 'var(--dosy-fg-secondary)',
+            lineHeight: 1.5, margin: '6px 0 0 0',
+          }}>
+            Pra nunca esquecer uma dose, libere as permissões abaixo. O alarme funciona como um despertador.
           </p>
-          <div className="flex items-center gap-2 mt-3 text-xs">
-            <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 transition-all"
-                style={{ width: `${(grantedCount / total) * 100}%` }}
-              />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginTop: 14,
+          }}>
+            <div style={{
+              flex: 1, height: 6, borderRadius: 9999,
+              background: 'var(--dosy-bg-sunken)', overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', width: `${(grantedCount / total) * 100}%`,
+                background: 'var(--dosy-gradient-sunset)',
+                borderRadius: 9999,
+                transition: 'width 600ms var(--dosy-ease-out)',
+              }}/>
             </div>
-            <span className="font-medium text-slate-600 dark:text-slate-300">
-              {grantedCount}/{total}
-            </span>
+            <span style={{
+              fontSize: 12, fontWeight: 700,
+              color: 'var(--dosy-fg-secondary)',
+              fontFamily: 'var(--dosy-font-display)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>{grantedCount}/{total}</span>
           </div>
         </div>
 
-        <ul className="p-3 space-y-2">
+        {/* Items list */}
+        <ul className="dosy-scroll" style={{
+          listStyle: 'none', margin: 0, padding: '12px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+          overflowY: 'auto', flex: 1,
+        }}>
           {items.map((item) => (
             <li
               key={item.key}
-              className={`rounded-xl border p-3 transition ${
-                item.granted
-                  ? 'border-emerald-200 dark:border-emerald-700/50 bg-emerald-50 dark:bg-emerald-500/10'
-                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50'
-              }`}
+              style={{
+                padding: 14,
+                borderRadius: 14,
+                background: item.granted ? 'var(--dosy-success-bg)' : 'var(--dosy-bg-sunken)',
+                border: item.granted
+                  ? '1px solid rgba(110,201,168,0.35)'
+                  : '1px solid var(--dosy-border)',
+              }}
             >
-              <div className="flex items-start gap-3">
-                <span className={`text-xl shrink-0 ${item.granted ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {item.granted ? '✓' : '○'}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{
+                  width: 24, height: 24, flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  color: item.granted ? '#3F9E7E' : 'var(--dosy-fg-tertiary)',
+                  marginTop: 1,
+                }}>
+                  {item.granted
+                    ? <Check size={18} strokeWidth={2.5}/>
+                    : <Circle size={18} strokeWidth={1.75}/>}
                 </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{
+                    fontSize: 13.5, fontWeight: 700, margin: 0,
+                    color: 'var(--dosy-fg)',
+                    fontFamily: 'var(--dosy-font-display)',
+                    letterSpacing: '-0.01em',
+                  }}>{item.title}</p>
+                  <p style={{
+                    fontSize: 12, color: 'var(--dosy-fg-secondary)',
+                    margin: '2px 0 0 0', lineHeight: 1.4,
+                  }}>{item.desc}</p>
                   {!item.granted && (
                     <button
+                      type="button"
                       onClick={() => handleAction(item.action)}
                       disabled={busy}
-                      className="mt-2 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                      style={{
+                        marginTop: 8,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        padding: 0,
+                        fontSize: 12, fontWeight: 700,
+                        color: 'var(--dosy-primary)',
+                        fontFamily: 'var(--dosy-font-display)',
+                        display: 'inline-flex', alignItems: 'center', gap: 2,
+                      }}
                     >
-                      Abrir configurações →
+                      Abrir configurações
+                      <ChevronRight size={13} strokeWidth={2.5}/>
                     </button>
                   )}
                 </div>
@@ -219,28 +267,32 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
           ))}
         </ul>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex gap-2 sticky bottom-0 bg-white dark:bg-slate-900">
-          <button
-            onClick={dismiss}
-            className="flex-1 py-2.5 text-sm rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
+        {/* Footer */}
+        <div style={{
+          padding: 14,
+          borderTop: '1px solid var(--dosy-divider)',
+          display: 'flex', gap: 8,
+          background: 'var(--dosy-bg-elevated)',
+        }}>
+          <Button kind="ghost" onClick={dismiss} full size="md">
             Pular por agora
-          </button>
-          <button
-            onClick={refresh}
-            disabled={busy}
-            className="flex-1 py-2.5 text-sm rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium"
-          >
+          </Button>
+          <Button kind="primary" onClick={refresh} disabled={busy} full size="md">
             Verificar de novo
-          </button>
+          </Button>
         </div>
 
         {grantedCount < total && (
-          <p className="px-4 pb-4 text-[11px] text-slate-400 text-center">
+          <p style={{
+            padding: '0 16px 14px',
+            fontSize: 11, textAlign: 'center',
+            color: 'var(--dosy-fg-tertiary)', margin: 0,
+          }}>
             Pode pular agora e configurar depois em <strong>Ajustes</strong>.
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

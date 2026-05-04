@@ -12,7 +12,7 @@ import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
-import { formatDate, formatDateTime, formatTime, toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
+import { formatDate, formatDateTime, formatTime } from '../utils/dateUtils'
 import { statusLabel } from '../utils/statusUtils'
 import { escapeHtml as esc } from '../utils/sanitize'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
@@ -31,10 +31,27 @@ export default function Reports() {
   usePrivacyScreen()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState('')
+  // Date inputs YYYY-MM-DD (sem hora). Convertidos a ISO start-of-day / end-of-day no query.
+  function toDateInput(iso) {
+    const d = new Date(iso)
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+  function dateInputToIsoStart(s) {
+    if (!s) return undefined
+    const [y, m, d] = s.split('-').map(Number)
+    const dt = new Date(y, m - 1, d, 0, 0, 0, 0)
+    return dt.toISOString()
+  }
+  function dateInputToIsoEnd(s) {
+    if (!s) return undefined
+    const [y, m, d] = s.split('-').map(Number)
+    const dt = new Date(y, m - 1, d, 23, 59, 59, 999)
+    return dt.toISOString()
+  }
   const now = new Date()
   const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30)
-  const [from, setFrom] = useState(toDatetimeLocalInput(monthAgo.toISOString()))
-  const [to, setTo] = useState(toDatetimeLocalInput(now.toISOString()))
+  const [from, setFrom] = useState(toDateInput(monthAgo.toISOString()))
+  const [to, setTo] = useState(toDateInput(now.toISOString()))
   const toast = useToast()
   const isPro = useIsPro()
   const [paywall, setPaywall] = useState(false)
@@ -43,8 +60,8 @@ export default function Reports() {
 
   const { data: doses = [] } = useDoses({
     patientId: patientId || undefined,
-    from: from ? fromDatetimeLocalInput(from) : undefined,
-    to: to ? fromDatetimeLocalInput(to) : undefined,
+    from: dateInputToIsoStart(from),
+    to: dateInputToIsoEnd(to),
   })
 
   const patient = patients.find((p) => p.id === patientId)
@@ -349,13 +366,13 @@ export default function Reports() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <Input
             label="De"
-            type="datetime-local"
+            type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
           />
           <Input
             label="Até"
-            type="datetime-local"
+            type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
           />
