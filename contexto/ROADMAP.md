@@ -282,6 +282,7 @@ ESTADO ATUAL: Internal Testing ativo
 #### Mobile / Android
 - [x] **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813` — validado S25 Ultra] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados + setColor accent peach. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
 - [x] **#017** [Plan, fechado v0.2.0.6 commit `869ab34` — validado S25 Ultra] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings "Privacidade e segurança" + timeout configurável + biometric-auth allowDeviceCredential fallback. Plan FASE 11.3
+- [ ] **#128** [BUG-040, P1 healthcare-adjacent] Multi-dose alarm mostra só 1 medicamento + paciente "Sem Paciente" quando 6+ doses simultâneas (2 pacientes). Reproduzido S25 Ultra Dosy Dev v0.2.0.7 2026-05-04. AlarmActivity falha ao agrupar doses cross-patient OU FCM payload só carrega 1 ID OU lookup paciente falha. Investigar logcat + Edge notify-doses + Realtime delivery. Detalhe CHECKLIST §#128.
 - [ ] **#021** [Plan] Backup keystore 3 locais seguros. Plan FASE 18.3
 
 #### A11y
