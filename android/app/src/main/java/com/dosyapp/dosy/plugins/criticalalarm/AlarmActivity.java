@@ -34,7 +34,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -77,15 +76,6 @@ public class AlarmActivity extends Activity {
     }
 
     private boolean muted = false;
-
-    // Local state — per-dose mark (visual only, real backend update via "Tomei todas" → MainActivity queue)
-    private final Map<String, Boolean> takenLocal = new HashMap<>();
-    private Button btnAckRef;
-    // Refs per-dose row pra atualizar visual quando marcado
-    private final Map<String, LinearLayout> doseRowViews = new HashMap<>();
-    private final Map<String, TextView> doseCheckLabels = new HashMap<>();
-    private final Map<String, View> patientCheckIndicators = new HashMap<>();
-    private final Map<String, List<DoseItem>> patientDoseGroups = new LinkedHashMap<>();
 
     /** Listens for AlarmActionReceiver finishing this activity when user resolves via notif action. */
     private final BroadcastReceiver finishReceiver = new BroadcastReceiver() {
@@ -443,25 +433,7 @@ public class AlarmActivity extends Activity {
             patTextCol.addView(patCount);
 
             patHeader.addView(patTextCol);
-
-            // Patient check indicator (visible when all doses do paciente marcadas)
-            TextView patCheck = new TextView(this);
-            patCheck.setText("✓");
-            patCheck.setTextColor(Color.parseColor("#3F9E7E"));
-            patCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            patCheck.setTypeface(null, android.graphics.Typeface.BOLD);
-            patCheck.setGravity(Gravity.CENTER);
-            GradientDrawable patCheckBg = new GradientDrawable();
-            patCheckBg.setShape(GradientDrawable.OVAL);
-            patCheckBg.setColor(Color.parseColor("#F5FFFFFF"));
-            patCheck.setBackground(patCheckBg);
-            patCheck.setVisibility(View.GONE);
-            LinearLayout.LayoutParams patCheckLp = new LinearLayout.LayoutParams(dp(26), dp(26));
-            patHeader.addView(patCheck, patCheckLp);
-            patientCheckIndicators.put(patientName, patCheck);
-
             section.addView(patHeader);
-            patientDoseGroups.put(patientName, patientDoses);
 
             // Dose rows for this patient (glass cards)
             for (DoseItem d : patientDoses) {
@@ -529,36 +501,11 @@ public class AlarmActivity extends Activity {
 
                 card.addView(textCol);
 
-                // Per-dose check button — circle 38px white com ✓ sunset
-                GradientDrawable checkBtnBg = new GradientDrawable();
-                checkBtnBg.setShape(GradientDrawable.OVAL);
-                checkBtnBg.setColor(Color.WHITE);
-
-                TextView checkText = new TextView(this);
-                checkText.setText("✓");
-                checkText.setTextColor(Color.parseColor("#FF3D7F"));
-                checkText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-                checkText.setTypeface(null, android.graphics.Typeface.BOLD);
-                checkText.setGravity(Gravity.CENTER);
-                checkText.setBackground(checkBtnBg);
-                checkText.setClickable(true);
-                checkText.setFocusable(true);
-                checkText.setElevation(dp(2));
-                final String fdoseId = d.doseId;
-                final String fpatientName = patientName;
-                checkText.setOnClickListener(v -> markDoseTaken(fdoseId, fpatientName));
-                LinearLayout.LayoutParams checkTextLp = new LinearLayout.LayoutParams(dp(38), dp(38));
-                card.addView(checkText, checkTextLp);
-
                 LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 );
                 cardLp.setMargins(0, dp(4), 0, dp(4));
                 section.addView(card, cardLp);
-                if (d.doseId != null && !d.doseId.isEmpty()) {
-                    doseRowViews.put(d.doseId, card);
-                    doseCheckLabels.put(d.doseId, checkText);
-                }
             }
 
             cardList.addView(section);
@@ -574,21 +521,21 @@ public class AlarmActivity extends Activity {
         ackBg.setColor(Color.WHITE);
         ackBg.setCornerRadius(dp(22));
 
-        btnAckRef = new Button(this);
-        btnAckRef.setText(doses.size() <= 1 ? "✓  Tomei" : "✓  Tomei todas (" + doses.size() + ")");
-        btnAckRef.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        btnAckRef.setTextColor(Color.parseColor("#FF3D7F"));
-        btnAckRef.setTypeface(null, android.graphics.Typeface.BOLD);
-        btnAckRef.setBackground(ackBg);
-        btnAckRef.setStateListAnimator(null);
-        btnAckRef.setPadding(0, dp(17), 0, dp(17));
-        btnAckRef.setAllCaps(false);
-        btnAckRef.setLetterSpacing(-0.02f);
-        btnAckRef.setOnClickListener(v -> handleAction("acknowledge"));
+        Button btnAck = new Button(this);
+        btnAck.setText(doses.size() <= 1 ? "✓  Ciente" : "✓  Ciente (" + doses.size() + ")");
+        btnAck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        btnAck.setTextColor(Color.parseColor("#FF3D7F"));
+        btnAck.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnAck.setBackground(ackBg);
+        btnAck.setStateListAnimator(null);
+        btnAck.setPadding(0, dp(17), 0, dp(17));
+        btnAck.setAllCaps(false);
+        btnAck.setLetterSpacing(-0.02f);
+        btnAck.setOnClickListener(v -> handleAction("acknowledge"));
         LinearLayout.LayoutParams ackLp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        buttonBar.addView(btnAckRef, ackLp);
+        buttonBar.addView(btnAck, ackLp);
 
         // Row: Adiar 10min + Pular (translucent glass)
         LinearLayout secondaryRow = new LinearLayout(this);
@@ -685,60 +632,6 @@ public class AlarmActivity extends Activity {
         anim.start();
     }
 
-    /** Mark dose as taken locally — visual fade + pat check indicator + ack button label refresh. */
-    private void markDoseTaken(String doseId, String patientName) {
-        if (doseId == null || takenLocal.containsKey(doseId)) return;
-        takenLocal.put(doseId, Boolean.TRUE);
-
-        // Row visual: opacity 0.6
-        LinearLayout row = doseRowViews.get(doseId);
-        if (row != null) row.setAlpha(0.6f);
-
-        // Check button: bg green tint + checkmark green
-        TextView checkLabel = doseCheckLabels.get(doseId);
-        if (checkLabel != null) {
-            checkLabel.setTextColor(Color.parseColor("#3F9E7E"));
-            GradientDrawable greenBg = new GradientDrawable();
-            greenBg.setShape(GradientDrawable.OVAL);
-            greenBg.setColor(Color.parseColor("#F5FFFFFF"));
-            checkLabel.setBackground(greenBg);
-            checkLabel.setClickable(false);
-        }
-
-        // Patient indicator if all of group taken
-        List<DoseItem> group = patientDoseGroups.get(patientName);
-        if (group != null) {
-            boolean allTaken = true;
-            for (DoseItem dx : group) {
-                if (dx.doseId == null || dx.doseId.isEmpty()) continue;
-                if (!Boolean.TRUE.equals(takenLocal.get(dx.doseId))) { allTaken = false; break; }
-            }
-            View patIndicator = patientCheckIndicators.get(patientName);
-            if (patIndicator != null) patIndicator.setVisibility(allTaken ? View.VISIBLE : View.GONE);
-        }
-
-        // Ack button label refresh
-        updateAckButton();
-    }
-
-    /** Update primary "Tomei todas" button label based on takenLocal count. */
-    private void updateAckButton() {
-        if (btnAckRef == null) return;
-        int total = doses.size();
-        int taken = 0;
-        for (DoseItem d : doses) {
-            if (d.doseId != null && Boolean.TRUE.equals(takenLocal.get(d.doseId))) taken++;
-        }
-        if (total <= 1) {
-            btnAckRef.setText("✓  Tomei");
-        } else if (taken == 0) {
-            btnAckRef.setText("✓  Tomei todas (" + total + ")");
-        } else if (taken < total) {
-            btnAckRef.setText("✓  Tomar restantes (" + (total - taken) + ")");
-        } else {
-            btnAckRef.setText("✓  Tudo pronto");
-        }
-    }
 
     /** Group doses by patient name. Preserves insertion order via LinkedHashMap. */
     private Map<String, List<DoseItem>> groupByPatient() {
