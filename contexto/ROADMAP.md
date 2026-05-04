@@ -316,11 +316,11 @@ ESTADO ATUAL: Internal Testing ativo
 
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
-- [ ] **#028** [Auditoria] Rate limit `delete-account`. → [06 BUG-003](auditoria/06-bugs.md#bug-003--edge-function-delete-account-sem-rate-limit-auditoria-estática)
+- [x] **#028** [Auditoria, fechado v0.2.0.4] Rate limit `delete-account`. Edge fn v7 deployed prod. Max 1 attempt/user/60s via security_events table check. Resposta 429 + Retry-After. Insert event antes da operação. → [06 BUG-003](auditoria/06-bugs.md#bug-003--edge-function-delete-account-sem-rate-limit-auditoria-estática)
 - [ ] **#029** [Plan + Auditoria] Refatorar `Settings.jsx` (541 LOC). Plan FASE 15
 - [ ] **#030** [Plan SECURITY + Auditoria] Refatorar `services/notifications.js` (588 LOC) em 4 módulos
-- [ ] **#031** [Auditoria] Confirmar `FORCE_RLS` em todas tabelas. → [04 §15.6](auditoria/04-supabase.md#156-force_rls-em-todas-as-tabelas)
-- [ ] **#032** [Auditoria] Confirmar `SET search_path` em todas SECURITY DEFINER. → [04 §15.3](auditoria/04-supabase.md#153-audit-de-security-definer--search_path)
+- [x] **#031** [Auditoria, fechado v0.2.0.4 — verificado] Confirmar `FORCE_RLS` em todas tabelas. Audit: 13/13 tabelas medcontrol com `relrowsecurity=true` AND `relforcerowsecurity=true`. ✓
+- [x] **#032** [Auditoria, fechado v0.2.0.4] Confirmar `SET search_path` em todas SECURITY DEFINER. Audit revelou 1 função sem SET (`handle_new_user_plus_promo`). Resolvido indiretamente em #119-followup: trigger + função droppadas (eram da promo beta encerrada). 0/0 funções pendentes agora.
 - [x] **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
 - [ ] **#034** [Plan] Virtualização DoseHistory + Patients (`@tanstack/react-virtual`). Plan FASE 13
 - [ ] **#035** [Plan] Integration tests (`useDoses`, `useUserPrefs` mocks). Plan FASE 9.4
@@ -332,7 +332,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#041** [Plan] Hierarquia headings + Dynamic Type via `rem`. Plan FASE 15
 - [ ] **#042** [Plan] Lighthouse mobile ≥90 em Reports + Dashboard. Plan FASE 17
 - [ ] **#043** [Plan] Performance scroll lista 200+ doses sem jank (já coberto por #034)
-- [ ] **#044** [Plan] Auditar continuidade RPC `register_sos_dose` (drift schema)
+- [x] **#044** [Plan, fechado v0.2.0.4 — verificado] Auditar continuidade RPC `register_sos_dose` (drift schema). Audit: SECURITY DEFINER ✓, search_path SET ✓, has_patient_access check ✓, sos_rules lookup case-insensitive ✓, minIntervalHours validate ✓, maxDosesIn24h validate ✓, INSERT com auth.uid() ✓. Sem schema drift.
 - [x] **#045** [Auditoria, fechado v0.2.0.2 — verificado] Confirmar `coverage/` no `.gitignore`. Já presente (linha única). → [06 BUG-010](auditoria/06-bugs.md#bug-010--coverage-versionado-no-repo-provável)
 - [ ] **#046** [Plan] Documentar runbook DR. Plan FASE 23.4
 - [ ] **#047** [Plan] Google Play Integrity API. Plan FASE 23 backlog
@@ -429,6 +429,8 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#123** [P2 UX/security, fechado v0.2.0.3] **Sessão não invalida após DELETE auth.users.** Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Se retornar erro/null, força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation. Quando app abre/refresh, JWT antigo é validado server-side → invalidação imediata.
 
 - [x] **#118-followup** [P1 UX, fechado v0.2.0.3] **Pill amarelo (tratamento acabando) navegava silenciosamente.** Antes: click → /pacientes sem explicar alerta. Agora: abre `EndingSoonSheet` componente novo com lista de tratamentos acabando + paciente avatar + medicamento + dias restantes ("termina hoje", "termina amanhã", "N dias"). Click row → patient detail. Resolve confusão "não sei o que esse ícone está alertando". Reproduzir: app aberto logado como teste03 → admin DELETE FROM auth.users WHERE email='teste03@teste.com' → app continua mostrando "Bom dia, teste03" até refresh manual / TOKEN_REFRESHED. RPCs vão falhar com JWT inválido (low risk, fail-safe). Mas UX confusa. Fix: useAuth listener `onAuthStateChange` evento `USER_DELETED` (Supabase emit?) OR detect 401 em qualquer request → forçar signOut local. Edge case raro mas afeta delete-account flow.
+
+- [x] **#119-followup** [P1 truth, fechado v0.2.0.4] **Promo `free → plus` server-side trigger remoção.** v0.2.0.3 removeu promo só client. Server-side trigger `on_auth_user_signup_plus` em auth.users continuava chamando `handle_new_user_plus_promo()` que inseria tier='plus' source='beta_promo' pra todo novo signup. Migration `drop_signup_plus_promo_trigger` v0.2.0.4: DROP TRIGGER + DROP FUNCTION. Novos signups agora começam tier='free' real. Side-effect: resolve #032 (função sem search_path SET sumiu).
 
 - [x] **#119** [P1 cost+truth, fechado v0.2.0.3] **Promo `free → plus` removida do client.** Antes (v0.1.7.x): subscriptionService.getMyTier mapeava `free → plus` durante beta interno, bypass paywall pra qualquer user free. Agora (v0.2.0.3): tier vem direto do DB via RPC `my_tier`. Paywall ativo pra users free reais. Reais (lhenrique admin, daffiny+ela pro) não afetados — tier real DB já é admin/pro. Mesmo bypass removido em `listAllUsers` (admin panel agora mostra tier real, não mapped). Permite testar paywall via teste-free@teste.com.
 
