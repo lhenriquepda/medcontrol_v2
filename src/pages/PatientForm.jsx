@@ -114,11 +114,40 @@ export default function PatientForm() {
     nav('/pacientes')
   }
 
+  // Item #099 BUG-031: photo upload resize + center-crop client-side.
+  // Antes: FileReader → base64 raw da foto inteira → photo_url string ~MB.
+  // Causava: (a) DB text potencialmente sem persistir / queries lentas,
+  // (b) avatar redondo cortava errado a foto retangular.
+  // Agora: canvas 512x512 square center-crop + JPEG 0.78. Resultado ~50KB,
+  // já no aspect 1:1 que o avatar redondo precisa.
   function onPhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => set('photo_url', reader.result)
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const TARGET = 512
+        const canvas = document.createElement('canvas')
+        canvas.width = TARGET
+        canvas.height = TARGET
+        const ctx = canvas.getContext('2d')
+        // Center-square crop: pega menor dimensão, recorta centralizado
+        const side = Math.min(img.width, img.height)
+        const sx = (img.width - side) / 2
+        const sy = (img.height - side) / 2
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, TARGET, TARGET)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78)
+        set('photo_url', dataUrl)
+      }
+      img.onerror = () => {
+        toast.show({ message: 'Falha ao processar imagem.', kind: 'error' })
+      }
+      img.src = ev.target.result
+    }
+    reader.onerror = () => {
+      toast.show({ message: 'Falha ao ler arquivo.', kind: 'error' })
+    }
     reader.readAsDataURL(file)
   }
 
