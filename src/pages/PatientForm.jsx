@@ -58,8 +58,13 @@ export default function PatientForm() {
 
   useEffect(() => {
     if (existing) setForm({
-      name: existing.name || '', age: existing.age || '', avatar: existing.avatar || '👤',
-      weight: existing.weight || '', condition: existing.condition || '',
+      name: existing.name || '',
+      age: existing.age != null ? String(existing.age) : '',
+      avatar: existing.avatar || '👤',
+      // Item #108 BUG-036: weight DB é numeric. Coerce String pra <input> + evita
+      // .replace TypeError no submit.
+      weight: existing.weight != null ? String(existing.weight) : '',
+      condition: existing.condition || '',
       doctor: existing.doctor || '', allergies: existing.allergies || '', photo_url: existing.photo_url || '',
     })
   }, [existing])
@@ -72,7 +77,10 @@ export default function PatientForm() {
     const payload = {
       ...form,
       age: form.age ? Number(form.age) : null,
-      weight: form.weight ? Number(form.weight.replace(',', '.')) : null,
+      // Item #108 BUG-036: existing.weight (numeric DB) carregado direto em state
+      // sem coerce → weight pode ser number, não string → .replace throws TypeError.
+      // Fix: coerce String(weight) antes de replace.
+      weight: form.weight ? Number(String(form.weight).replace(',', '.')) : null,
     }
     try {
       if (editing) {
