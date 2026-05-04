@@ -36,6 +36,8 @@ import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
 import UpdateBanner from './components/UpdateBanner'
+import LockScreen from './components/LockScreen'
+import { useAppLock } from './hooks/useAppLock'
 
 // Fallback minimalista enquanto chunk carrega
 function PageSkeleton() {
@@ -53,6 +55,7 @@ export default function App() {
   useRealtime()
   useAppResume()
   useAdMobBanner()
+  const { locked, biometricAvailable, unlock } = useAppLock()
   const [showSummary, setShowSummary] = useState(false)
   // Tour shows after permissions modal closes (granted OR skipped). Web also shows immediately
   // since web has no special permissions modal.
@@ -261,6 +264,10 @@ export default function App() {
     setup()
     return () => { urlHandle?.remove() }
   }, [navigate])
+
+  if (locked) {
+    return <LockScreen unlock={unlock} biometricAvailable={biometricAvailable} />
+  }
 
   if (loading) {
     return (

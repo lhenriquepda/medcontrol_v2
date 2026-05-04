@@ -42,6 +42,7 @@ export function useAppLock() {
   const [locked, setLocked] = useState(() => false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [isEnabled, setIsEnabled] = useState(() => readEnabled())
+  const [timeoutMin, setTimeoutMinState] = useState(() => readTimeout())
   const lastActiveRef = useRef(Date.now())
 
   // Check biometric availability on mount
@@ -97,14 +98,20 @@ export function useAppLock() {
   }, [unlock])
 
   const disable = useCallback(async () => {
-    if (!isNative) return
-    // Confirm with biometry before disabling (anti-tamper)
+    if (!isNative) return false
     const ok = await unlock()
-    if (!ok) return
+    if (!ok) return false
     localStorage.setItem(PREFS_ENABLED, 'false')
     setIsEnabled(false)
     setLocked(false)
+    return true
   }, [unlock])
+
+  const setTimeoutMin = useCallback((n) => {
+    const v = Math.max(1, Math.min(60, parseInt(n, 10) || DEFAULT_TIMEOUT_MIN))
+    localStorage.setItem(PREFS_TIMEOUT, String(v))
+    setTimeoutMinState(v)
+  }, [])
 
   // App lifecycle: lock on background after timeout
   useEffect(() => {
@@ -115,7 +122,7 @@ export function useAppLock() {
         lastActiveRef.current = Date.now()
       })
       fgListener = await CapApp.addListener('resume', () => {
-        const timeoutMs = readTimeout() * 60 * 1000
+        const timeoutMs = timeoutMin * 60 * 1000
         if (Date.now() - lastActiveRef.current >= timeoutMs) {
           setLocked(true)
         }
@@ -125,7 +132,7 @@ export function useAppLock() {
       bgListener?.remove?.()
       fgListener?.remove?.()
     }
-  }, [isEnabled])
+  }, [isEnabled, timeoutMin])
 
   // On mount, lock immediately if enabled
   useEffect(() => {
@@ -140,10 +147,7 @@ export function useAppLock() {
     lock,
     enable,
     disable,
-    timeoutMin: readTimeout(),
-    setTimeoutMin: (n) => {
-      const v = Math.max(1, Math.min(60, parseInt(n, 10) || DEFAULT_TIMEOUT_MIN))
-      localStorage.setItem(PREFS_TIMEOUT, String(v))
-    },
+    timeoutMin,
+    setTimeoutMin,
   }
 }

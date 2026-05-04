@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bell, BellOff, Sun, Moon, AlarmClock, Trash2, Download, ChevronRight, HelpCircle, ArrowUpCircle } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, AlarmClock, Trash2, Download, ChevronRight, HelpCircle, ArrowUpCircle, Lock } from 'lucide-react'
 import Dropdown from '../components/Dropdown'
 import { TIMING, EASE } from '../animations'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -15,6 +15,7 @@ import { useToast } from '../hooks/useToast'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { useUserPrefs, useUpdateUserPrefs, DEFAULT_PREFS } from '../hooks/useUserPrefs'
 import { useAppUpdate } from '../hooks/useAppUpdate'
+import { useAppLock } from '../hooks/useAppLock'
 import { Capacitor } from '@capacitor/core'
 import { displayName } from '../utils/userDisplay'
 import { hasSupabase, supabase } from '../services/supabase'
@@ -55,6 +56,8 @@ export default function Settings() {
   const { data: notif = DEFAULT_PREFS } = useUserPrefs()
   const updatePrefsMut = useUpdateUserPrefs()
   const update = useAppUpdate()
+  const appLock = useAppLock()
+  const isNative = Capacitor.isNativePlatform()
 
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -463,6 +466,64 @@ export default function Settings() {
             )}
           </Card>
         </motion.section>
+
+        {/* Privacidade e segurança — App Lock biometria (item #017) */}
+        {isNative && (
+          <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
+            <Card padding={16}>
+              <p style={SECTION_LABEL_STYLE}>Privacidade e segurança</p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{
+                    fontSize: 14, fontWeight: 600,
+                    color: 'var(--dosy-fg)', margin: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <Lock size={14} strokeWidth={1.75}/>
+                    Bloqueio do app
+                  </p>
+                  <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                    {appLock.biometricAvailable
+                      ? 'Exige biometria (digital/face) ou senha do celular para abrir Dosy.'
+                      : 'Sem biometria configurada. Vai usar a senha do celular.'}
+                  </p>
+                </div>
+                <Toggle
+                  value={appLock.isEnabled}
+                  onChange={async (v) => {
+                    if (v) {
+                      const ok = await appLock.enable()
+                      if (ok) toast.show({ message: 'Bloqueio ativado.', kind: 'success' })
+                      else toast.show({ message: 'Não foi possível ativar o bloqueio.', kind: 'error' })
+                    } else {
+                      const ok = await appLock.disable()
+                      if (ok) toast.show({ message: 'Bloqueio desativado.', kind: 'info' })
+                    }
+                  }}
+                  ariaLabel="Bloqueio do app"
+                />
+              </div>
+
+              {appLock.isEnabled && (
+                <div style={{ marginTop: 14 }}>
+                  <Dropdown
+                    label="Bloquear após inatividade"
+                    value={appLock.timeoutMin}
+                    onChange={(v) => appLock.setTimeoutMin(Number(v))}
+                    options={[
+                      { value: 1, label: '1 minuto' },
+                      { value: 5, label: '5 minutos' },
+                      { value: 15, label: '15 minutos' },
+                      { value: 30, label: '30 minutos' },
+                      { value: 60, label: '1 hora' },
+                    ]}
+                    size="sm"
+                  />
+                </div>
+              )}
+            </Card>
+          </motion.section>
+        )}
 
         {/* Conta */}
         <motion.section variants={{ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0, transition: { duration: TIMING.base, ease: EASE.inOut } } }}>
