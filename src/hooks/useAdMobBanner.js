@@ -47,10 +47,11 @@ export function useAdMobBanner() {
           AdMob.addListener('bannerAdSize', (info) => {
             const h = info?.height
             if (typeof h === 'number' && h > 0) {
-              // Native ad container tem margem extra (densidade DP, scaling, etc).
-              // Plugin reporta altura content-only — overlay real é maior. Buffer
-              // generoso evita overlap com sticky elements abaixo.
-              document.documentElement.style.setProperty('--ad-banner-height', `${h + 16}px`)
+              // #113 [Note 10 fix 2026-05-04]: buffer +16 era exagerado, gerava
+              // gap visual grande abaixo do ad em viewports menores (Note 10
+              // ~80px gap). Plugin reporta altura content overlay real ~match.
+              // +4 cobre rounding DP→CSS px sem inflar gap.
+              document.documentElement.style.setProperty('--ad-banner-height', `${h + 4}px`)
             }
           }).catch(() => {})
 
@@ -71,9 +72,9 @@ export function useAdMobBanner() {
 
           // PRE-APLICA padding default ANTES do showBanner pra evitar race condition.
           // Banner native overlay renderiza rápido (~ms); listeners bannerAdLoaded/AdSize
-          // chegam depois. Sem padding inicial, header sticky:top=0 ficaria sobreposto.
-          // bannerAdFailedToLoad colapsa de volta a 0 se no-fill.
-          document.documentElement.style.setProperty('--ad-banner-height', '76px')
+          // chegam depois. #113: 60px é altura típica banner ADAPTIVE_BANNER (50dp ~50-65
+          // px content + minimal scaling). bannerAdSize listener corrige pra real ms depois.
+          document.documentElement.style.setProperty('--ad-banner-height', '60px')
           document.body.classList.add('has-ad-banner')
 
           await AdMob.showBanner({

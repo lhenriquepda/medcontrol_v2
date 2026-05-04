@@ -55,6 +55,12 @@ export function useRealtime() {
     let watchdogTimer = null
     let reconnectAttempts = 0
     let generation = 0 // #093: ignora callbacks de canais antigos
+    // Item #109 BUG-037: lock evita concurrent subscribe() de paths múltiplos
+    // (status reconnect + watchdog + TOKEN_REFRESHED + native resume convergindo).
+    // Sem lock, 2+ subscribes paralelos disputam Supabase channel state, alguns
+    // ch.on() chamados após .subscribe() interno do supabase-js → throws
+    // "cannot add postgres_changes callbacks for realtime:..." (Sentry DOSY-9).
+    let subscribing = false
 
     const onStatusChange = (myGen) => (status) => {
       if (myGen !== generation) return // canal antigo — ignore
@@ -80,33 +86,46 @@ export function useRealtime() {
     }
 
     const subscribe = async () => {
-      if (channel) return
-      generation++
-      const myGen = generation
-      // #093: nome único por subscribe — evita race com removeChannel async
-      const chanName = `realtime:${user.id}:${myGen}:${Date.now()}`
-      const ch = supabase.channel(chanName)
-      for (const table of Object.keys(TABLE_TO_KEYS)) {
-        // #092: filter postgres_changes server-side por userId.
-        // Sem filter, Realtime stream MUDA TODAS rows pra TODOS clients
-        // conectados (multi-tenant egress nuke). Filter força broker
-        // rotear apenas changes do meu userId.
-        // Exceção: patient_shares (recurso multi-user — preciso saber
-        // quando alguém compartilha paciente comigo).
-        const opts = { event: '*', schema: SCHEMA, table }
-        if (table !== 'patient_shares') {
-          opts.filter = `userId=eq.${user.id}`
-        }
-        ch.on('postgres_changes', opts, () => {
-          if (myGen !== generation) return // callback de canal antigo
-          // #092: invalidate APENAS keys da tabela mudada
-          for (const key of TABLE_TO_KEYS[table]) {
-            qc.invalidateQueries({ queryKey: key })
+      // #109: lock + check existing channel — evita concurrent subscribe race.
+      if (channel || subscribing) return
+      subscribing = true
+      try {
+        generation++
+        const myGen = generation
+        // #093: nome único por subscribe — evita race com removeChannel async
+        const chanName = `realtime:${user.id}:${myGen}:${Date.now()}`
+        const ch = supabase.channel(chanName)
+        for (const table of Object.keys(TABLE_TO_KEYS)) {
+          // #092: filter postgres_changes server-side por userId.
+          // Sem filter, Realtime stream MUDA TODAS rows pra TODOS clients
+          // conectados (multi-tenant egress nuke). Filter força broker
+          // rotear apenas changes do meu userId.
+          // Exceção: patient_shares (recurso multi-user — preciso saber
+          // quando alguém compartilha paciente comigo).
+          const opts = { event: '*', schema: SCHEMA, table }
+          if (table !== 'patient_shares') {
+            opts.filter = `userId=eq.${user.id}`
           }
-        })
+          // #109: try/catch defensive — se channel state transitou pra
+          // 'subscribed' antes desse loop terminar (race interno supabase-js),
+          // .on() throws. Logamos warning sem crashar setup do canal inteiro.
+          try {
+            ch.on('postgres_changes', opts, () => {
+              if (myGen !== generation) return // callback de canal antigo
+              // #092: invalidate APENAS keys da tabela mudada
+              for (const key of TABLE_TO_KEYS[table]) {
+                qc.invalidateQueries({ queryKey: key })
+              }
+            })
+          } catch (e) {
+            console.warn(`[useRealtime] ch.on(${table}) failed:`, e?.message)
+          }
+        }
+        ch.subscribe(onStatusChange(myGen))
+        channel = ch
+      } finally {
+        subscribing = false
       }
-      ch.subscribe(onStatusChange(myGen))
-      channel = ch
     }
 
     const unsubscribe = async () => {

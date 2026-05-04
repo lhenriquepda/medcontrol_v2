@@ -58,8 +58,13 @@ export default function PatientForm() {
 
   useEffect(() => {
     if (existing) setForm({
-      name: existing.name || '', age: existing.age || '', avatar: existing.avatar || '👤',
-      weight: existing.weight || '', condition: existing.condition || '',
+      name: existing.name || '',
+      age: existing.age != null ? String(existing.age) : '',
+      avatar: existing.avatar || '👤',
+      // Item #108 BUG-036: weight DB é numeric. Coerce String pra <input> + evita
+      // .replace TypeError no submit.
+      weight: existing.weight != null ? String(existing.weight) : '',
+      condition: existing.condition || '',
       doctor: existing.doctor || '', allergies: existing.allergies || '', photo_url: existing.photo_url || '',
     })
   }, [existing])
@@ -72,7 +77,10 @@ export default function PatientForm() {
     const payload = {
       ...form,
       age: form.age ? Number(form.age) : null,
-      weight: form.weight ? Number(form.weight.replace(',', '.')) : null,
+      // Item #108 BUG-036: existing.weight (numeric DB) carregado direto em state
+      // sem coerce → weight pode ser number, não string → .replace throws TypeError.
+      // Fix: coerce String(weight) antes de replace.
+      weight: form.weight ? Number(String(form.weight).replace(',', '.')) : null,
     }
     try {
       if (editing) {
@@ -106,11 +114,40 @@ export default function PatientForm() {
     nav('/pacientes')
   }
 
+  // Item #099 BUG-031: photo upload resize + center-crop client-side.
+  // Antes: FileReader → base64 raw da foto inteira → photo_url string ~MB.
+  // Causava: (a) DB text potencialmente sem persistir / queries lentas,
+  // (b) avatar redondo cortava errado a foto retangular.
+  // Agora: canvas 512x512 square center-crop + JPEG 0.78. Resultado ~50KB,
+  // já no aspect 1:1 que o avatar redondo precisa.
   function onPhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => set('photo_url', reader.result)
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const TARGET = 512
+        const canvas = document.createElement('canvas')
+        canvas.width = TARGET
+        canvas.height = TARGET
+        const ctx = canvas.getContext('2d')
+        // Center-square crop: pega menor dimensão, recorta centralizado
+        const side = Math.min(img.width, img.height)
+        const sx = (img.width - side) / 2
+        const sy = (img.height - side) / 2
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, TARGET, TARGET)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78)
+        set('photo_url', dataUrl)
+      }
+      img.onerror = () => {
+        toast.show({ message: 'Falha ao processar imagem.', kind: 'error' })
+      }
+      img.src = ev.target.result
+    }
+    reader.onerror = () => {
+      toast.show({ message: 'Falha ao ler arquivo.', kind: 'error' })
+    }
     reader.readAsDataURL(file)
   }
 

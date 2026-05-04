@@ -35,7 +35,11 @@ export default function DosyBottomNav() {
       style={{
         position: 'fixed',
         left: 12, right: 12,
-        bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+        // #112 [Note 10 fix]: env(safe-area-inset-bottom) reportava 50px+ em
+        // devices Samsung com 3-button nav clássico, empurrando BottomNav
+        // muito acima do bottom edge. Cap em 16px via min() — suficiente pra
+        // gesture nav modern (S25) sem inflar em Note 10 / 3-button.
+        bottom: 'calc(8px + min(env(safe-area-inset-bottom, 0px), 16px))',
         zIndex: 30,
         pointerEvents: 'none',
       }}
