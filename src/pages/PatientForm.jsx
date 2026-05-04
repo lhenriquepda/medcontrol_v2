@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Camera, X as XIcon } from 'lucide-react'
@@ -6,12 +6,14 @@ import { TIMING, EASE } from '../animations'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
+import CropModal from '../components/CropModal'
 import { Card, Button, Input } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatient, useCreatePatient, useUpdatePatient } from '../hooks/usePatients'
 import { usePatientLimitReached, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 import { useUndoableDelete } from '../hooks/useUndoableDelete'
+import { primePatientPhotoCache, dropPatientPhotoCache } from '../hooks/usePatientPhoto'
 import { useQueryClient } from '@tanstack/react-query'
 import { deletePatient } from '../services/patientsService'
 
@@ -53,8 +55,13 @@ export default function PatientForm() {
   const [avatarGroup, setAvatarGroup] = useState(0)
 
   const [form, setForm] = useState({
-    name: '', age: '', avatar: '👤', weight: '', condition: '', doctor: '', allergies: '', photo_url: '',
+    name: '', age: '', avatar: '👤', weight: '', condition: '', doctor: '', allergies: '',
+    photo_url: '', photo_version: 0,
   })
+  // Item #114: track se photo mudou nesta sessão (bump photo_version no submit).
+  const photoChangedRef = useRef(false)
+  // CropModal state: src é raw data URL antes do crop.
+  const [cropSrc, setCropSrc] = useState(null)
 
   useEffect(() => {
     if (existing) setForm({
@@ -65,7 +72,9 @@ export default function PatientForm() {
       // .replace TypeError no submit.
       weight: existing.weight != null ? String(existing.weight) : '',
       condition: existing.condition || '',
-      doctor: existing.doctor || '', allergies: existing.allergies || '', photo_url: existing.photo_url || '',
+      doctor: existing.doctor || '', allergies: existing.allergies || '',
+      photo_url: existing.photo_url || '',
+      photo_version: existing.photo_version || 0,
     })
   }, [existing])
 
@@ -74,6 +83,13 @@ export default function PatientForm() {
   async function submit(e) {
     e.preventDefault()
     if (!editing && limitReached) { setPaywall(true); return }
+    // Item #115: photo_version bump quando foto mudou nesta sessão.
+    // Outros devices vão ver mismatch via realtime → re-fetch único + cache.
+    // Cleared photo (set to '') também bump pra invalidar cache antigo.
+    let nextVersion = form.photo_version || 0
+    if (photoChangedRef.current) {
+      nextVersion = (form.photo_version || 0) + 1
+    }
     const payload = {
       ...form,
       age: form.age ? Number(form.age) : null,
@@ -81,14 +97,24 @@ export default function PatientForm() {
       // sem coerce → weight pode ser number, não string → .replace throws TypeError.
       // Fix: coerce String(weight) antes de replace.
       weight: form.weight ? Number(String(form.weight).replace(',', '.')) : null,
+      photo_version: nextVersion,
     }
     try {
+      let saved
       if (editing) {
-        await update.mutateAsync({ id, patch: payload })
+        saved = await update.mutateAsync({ id, patch: payload })
         toast.show({ message: 'Paciente atualizado.', kind: 'success' })
       } else {
-        await create.mutateAsync(payload)
+        saved = await create.mutateAsync(payload)
         toast.show({ message: 'Paciente cadastrado.', kind: 'success' })
+      }
+      // Pre-warm cache local (skip 1 round-trip no próximo render da lista).
+      if (saved?.id && photoChangedRef.current) {
+        if (form.photo_url) {
+          primePatientPhotoCache(saved.id, nextVersion, form.photo_url)
+        } else {
+          dropPatientPhotoCache(saved.id)
+        }
       }
       nav('/pacientes')
     } catch (err) {
@@ -114,41 +140,40 @@ export default function PatientForm() {
     nav('/pacientes')
   }
 
-  // Item #099 BUG-031: photo upload resize + center-crop client-side.
-  // Antes: FileReader → base64 raw da foto inteira → photo_url string ~MB.
-  // Causava: (a) DB text potencialmente sem persistir / queries lentas,
-  // (b) avatar redondo cortava errado a foto retangular.
-  // Agora: canvas 512x512 square center-crop + JPEG 0.78. Resultado ~50KB,
-  // já no aspect 1:1 que o avatar redondo precisa.
+  // Item #114 BUG-038 (release v0.2.0.2): photo upload com crop UI.
+  // Antes (v0.2.0.1): center-crop automático sem deixar user escolher
+  // região — sujeito off-center cortava errado.
+  // Agora: lê arquivo → CropModal abre com zoom + drag pan → confirm
+  // gera canvas 512x512 jpeg q0.78 (~50KB). photoChangedRef trigga
+  // photo_version bump no submit (Item #115).
   function onPhoto(e) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const img = new Image()
-      img.onload = () => {
-        const TARGET = 512
-        const canvas = document.createElement('canvas')
-        canvas.width = TARGET
-        canvas.height = TARGET
-        const ctx = canvas.getContext('2d')
-        // Center-square crop: pega menor dimensão, recorta centralizado
-        const side = Math.min(img.width, img.height)
-        const sx = (img.width - side) / 2
-        const sy = (img.height - side) / 2
-        ctx.drawImage(img, sx, sy, side, side, 0, 0, TARGET, TARGET)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.78)
-        set('photo_url', dataUrl)
-      }
-      img.onerror = () => {
-        toast.show({ message: 'Falha ao processar imagem.', kind: 'error' })
-      }
-      img.src = ev.target.result
+      setCropSrc(ev.target.result)
     }
     reader.onerror = () => {
       toast.show({ message: 'Falha ao ler arquivo.', kind: 'error' })
     }
     reader.readAsDataURL(file)
+    // Reset input pra permitir mesmo arquivo de novo se user cancelar crop
+    e.target.value = ''
+  }
+
+  function onCropConfirm({ full }) {
+    set('photo_url', full)
+    photoChangedRef.current = true
+    setCropSrc(null)
+  }
+
+  function onCropCancel() {
+    setCropSrc(null)
+  }
+
+  function clearPhoto() {
+    set('photo_url', '')
+    photoChangedRef.current = true
   }
 
   return (
@@ -206,7 +231,7 @@ export default function PatientForm() {
             {form.photo_url && (
               <button
                 type="button"
-                onClick={() => set('photo_url', '')}
+                onClick={clearPhoto}
                 style={{
                   fontSize: 12, color: 'var(--dosy-danger)',
                   background: 'transparent', border: 'none', cursor: 'pointer',
@@ -381,6 +406,13 @@ export default function PatientForm() {
         open={paywall}
         onClose={() => setPaywall(false)}
         reason={`No plano grátis você pode ter até ${FREE_PATIENT_LIMIT} paciente.`}
+      />
+
+      <CropModal
+        open={!!cropSrc}
+        src={cropSrc}
+        onConfirm={onCropConfirm}
+        onCancel={onCropCancel}
       />
     </motion.div>
   )

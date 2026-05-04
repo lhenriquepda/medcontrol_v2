@@ -7,8 +7,8 @@ android {
         applicationId "com.dosyapp.dosy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 34
-        versionName "0.2.0.1"
+        versionCode 35
+        versionName "0.2.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -82,6 +82,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             resValue "string", "app_name_override", "Dosy"
             manifestPlaceholders = [appLabel: "@string/app_name_override"]
+            // Item #074 (release v0.2.0.2): habilita upload de debug symbols nativos.
+            // Resolve aviso recorrente Play Console "App Bundle contém código nativo,
+            // e você não fez upload dos símbolos de depuração". Melhora stack traces
+            // de crashes/ANRs (Sentry DOSY-3 native ART crashes precisam disso).
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
             // Apply signing config only if keystore exists (avoid breaking debug builds)
             if (keystoreFile != null && keystoreFile.exists()) {
                 signingConfig signingConfigs.release

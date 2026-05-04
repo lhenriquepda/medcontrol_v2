@@ -9,8 +9,14 @@ const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt ||
 // `avatar`); photo_url só carrega no detail/edit (getPatient COLS_FULL).
 // allergies/condition/doctor mantidos no LIST (texto pequeno, useful em
 // subtitles).
-const PATIENT_COLS_LIST = 'id, userId, name, age, avatar, weight, condition, doctor, allergies, createdAt, updatedAt'
-const PATIENT_COLS_FULL = 'id, userId, name, age, avatar, photo_url, weight, condition, doctor, allergies, createdAt, updatedAt'
+//
+// Item #115 [P0 UX+cost, v0.2.0.2]: photo_version (smallint 2B) na lista
+// permite client cachear photo_url em localStorage por (id, version).
+// Bump no PatientForm submit quando foto muda → outros devices detectam
+// mismatch via realtime → refetch ÚNICO via getPatient → re-cache.
+// Resultado: foto baixa 1 vez por device, lista vê só version int.
+const PATIENT_COLS_LIST = 'id, userId, name, age, avatar, photo_version, weight, condition, doctor, allergies, createdAt, updatedAt'
+const PATIENT_COLS_FULL = 'id, userId, name, age, avatar, photo_url, photo_version, weight, condition, doctor, allergies, createdAt, updatedAt'
 
 export async function listPatients() {
   if (hasSupabase) {
