@@ -14,6 +14,7 @@ import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 // Dosy v0.2.0.0 redesign — primitives + hero/stats
 import { Card, Avatar, StatusPill, Button } from '../components/dosy'
+import PatientAvatar from '../components/PatientAvatar'
 import { HeroGauge } from '../components/dosy/HeroGauge'
 import { MiniStat } from '../components/dosy/MiniStat'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
@@ -396,7 +397,7 @@ export default function Dashboard() {
                         textAlign: 'left',
                       }}
                     >
-                      <Avatar emoji={patient.avatar || '👤'} color="peach" size={40}/>
+                      <PatientAvatar patient={patient} color="peach" size={40}/>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
                           fontFamily: 'var(--dosy-font-display)',

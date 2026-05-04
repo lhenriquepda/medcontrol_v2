@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Edit3, Stethoscope, AlertTriangle, Share2, Users, Lock, Plus, Pill, ChevronRight } from 'lucide-react'
@@ -9,6 +9,7 @@ import { Avatar, Card, StatusPill, SectionTitle } from '../components/dosy'
 import { MiniStat } from '../components/dosy/MiniStat'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatient } from '../hooks/usePatients'
+import { primePatientPhotoCache } from '../hooks/usePatientPhoto'
 import { useTreatments } from '../hooks/useTreatments'
 import { useDoses } from '../hooks/useDoses'
 import { usePatientShares } from '../hooks/useShares'
@@ -28,6 +29,14 @@ export default function PatientDetail() {
   const isPro = useIsPro()
   const [shareOpen, setShareOpen] = useState(false)
   const [paywallOpen, setPaywallOpen] = useState(false)
+
+  // Item #115: detail page tem photo_url full carregado. Pré-aquece cache
+  // local pra acelerar próximo render da lista (skip 1 round-trip).
+  useEffect(() => {
+    if (patient?.id && patient?.photo_url && patient?.photo_version) {
+      primePatientPhotoCache(patient.id, patient.photo_version, patient.photo_url)
+    }
+  }, [patient?.id, patient?.photo_version, patient?.photo_url])
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
   const { data: todayDoses = [] } = useDoses({

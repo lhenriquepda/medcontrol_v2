@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Plus, Info, ChevronRight, Users } from 'lucide-react'
@@ -6,9 +6,11 @@ import { TIMING, EASE } from '../animations'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
-import { Card, IconButton, Button, Avatar } from '../components/dosy'
+import { Card, IconButton, Button } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
+import PatientAvatar from '../components/PatientAvatar'
 import { usePatients } from '../hooks/usePatients'
+import { pruneStalePhotoCaches } from '../hooks/usePatientPhoto'
 import { usePatientLimitReached, useMyTier, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 
 export default function Patients() {
@@ -22,6 +24,13 @@ export default function Patients() {
     if (limitReached) { setPaywall(true); return }
     nav('/pacientes/novo')
   }
+
+  // Item #115: limpa caches de fotos cujo paciente foi deletado.
+  useEffect(() => {
+    if (patients.length > 0) {
+      pruneStalePhotoCaches(patients.map((p) => p.id))
+    }
+  }, [patients])
 
   return (
     <div style={{ paddingBottom: 110 }}>
@@ -116,21 +125,7 @@ export default function Patients() {
                     color: 'var(--dosy-fg)',
                   }}
                 >
-                  {p.photo_url ? (
-                    <div style={{
-                      width: 52, height: 52, borderRadius: 9999,
-                      overflow: 'hidden', flexShrink: 0,
-                    }}>
-                      <img
-                        src={p.photo_url}
-                        alt=""
-                        loading="lazy"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    </div>
-                  ) : (
-                    <Avatar emoji={p.avatar || '👤'} color="peach" size={52}/>
-                  )}
+                  <PatientAvatar patient={p} size={52} color="peach"/>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontFamily: 'var(--dosy-font-display)', fontWeight: 800,

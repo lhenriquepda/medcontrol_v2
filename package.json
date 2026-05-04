@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "0.2.0.1",
+  "version": "0.2.0.2",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -59,6 +59,7 @@
     "posthog-js": "^1.372.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-easy-crop": "^5.5.7",
     "react-router-dom": "^6.26.0",
     "react-simple-pull-to-refresh": "^1.3.4",
     "react-swipeable": "^7.0.2"
