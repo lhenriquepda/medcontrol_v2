@@ -799,7 +799,8 @@ public class AlarmActivity extends Activity {
             : "💊 " + doses.size() + " doses pendentes";
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_dosy)
+            .setColor(0xFFFF6B5B)
             .setContentTitle(title)
             .setContentText(body.toString())
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body.toString()))
