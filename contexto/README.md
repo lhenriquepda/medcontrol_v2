@@ -326,6 +326,41 @@ Antes de mandar resposta longa, agente revisa:
 - Resumo em 1 linha está no topo? Se não, adicionar.
 - Pedi pro user fazer algo técnico? Se sim, oferecer alternativa fácil ou pular.
 
+### Regra 9 — Automação web admin via Claude in Chrome MCP (CRÍTICA)
+
+**User é não-dev.** Listas de 10-15 passos manuais em Play Console, Vercel, Supabase Studio, GitHub = fricção alta + risco erro humano. Agente DEVE dirigir browser via `mcp__Claude_in_Chrome__*` em vez de pedir clicks manuais.
+
+**Quando aplicar:**
+- Play Console: criar release, upload AAB metadata, salvar release notes, start rollout, ler crashes/ANRs
+- Vercel dashboard: verificar deploy status, ler logs, revalidar env vars
+- Supabase Studio: aplicar migration via UI, ler logs, conferir RLS policies, ver dashboard egress
+- GitHub: criar release, ler Actions logs, conferir webhooks
+- Sentry: criar alert rule, conferir release tag, ler issue details
+- Qualquer console web admin
+
+**Padrão de execução:**
+1. Agente abre/seleciona aba via `navigate` ou `select_browser` → `tabs_create_mcp`
+2. Agente lê estado da página com `get_page_text` ou `read_page` ou `preview_snapshot`
+3. Agente preenche forms via `form_input` ou `javascript_tool` (set value + dispatch event)
+4. Agente clica botões via `find` + `javascript_tool` (`.click()`) ou `mcp__Claude_in_Chrome__computer`
+5. Agente valida resultado via `read_console_messages` + `get_page_text` re-check
+
+**Único ponto de pausa OBRIGATÓRIO:** **upload de arquivo** (AAB drag-drop, screenshot upload, certs, JSON cred, CSV).
+- Agente para, mostra ao user: "preciso que arraste `{arquivo}` em `{seletor visual}` na página atual. Aviso quando estiver pronto."
+- User confirma upload → agente valida via `get_page_text` que arquivo apareceu → continua.
+
+**Conta Google ativa para Play Console / Google Workspace:** `dosy.med@gmail.com`. Antes de iniciar fluxo Play Console / Search Console / qualquer painel Google, agente DEVE conferir conta logada (geralmente avatar no canto superior direito). Se outra conta estiver ativa, agente pausa e pede user pra trocar pra `dosy.med@gmail.com` antes de continuar (não tem como agente trocar conta — exige interação user com o seletor de contas Google).
+
+**Não confundir com:** login Google + 2FA push + senha — manuais user-only por questão de segurança. Agente nunca digita credencial em form de login.
+
+**Fallback se Chrome MCP indisponível:** lista textual de passos manuais (formato anterior). Mas Chrome MCP é o caminho preferido sempre que possível.
+
+**Reporte ao user:**
+```
+Vou dirigir o Play Console / Vercel / etc pra você. Pause só pra upload do AAB.
+{passo a passo automatizado começa}
+```
+
 ---
 
 ## 🎯 Quando o usuário pede algo
