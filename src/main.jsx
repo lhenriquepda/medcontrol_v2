@@ -88,14 +88,31 @@ const persister = createSyncStoragePersister({
   throttleTime: 1000
 })
 
-// Native StatusBar config (one-time on init)
+// Native StatusBar overlay config one-time. Style + background color são
+// sincronizados dinamicamente pelo ThemeProvider conforme theme light/dark.
 if (Capacitor.isNativePlatform()) {
   ;(async () => {
     try {
-      const { StatusBar, Style } = await import('@capacitor/status-bar')
-      await StatusBar.setStyle({ style: Style.Dark })
-      await StatusBar.setBackgroundColor({ color: '#0d1535' })
+      const { StatusBar } = await import('@capacitor/status-bar')
       await StatusBar.setOverlaysWebView({ overlay: false })
+    } catch {}
+  })()
+
+  // Dosy Dev (debug variant `.dev` package): força PrivacyScreen.disable() no
+  // boot pra liberar screenshot + screen recording pra captura de assets store /
+  // demos / vídeo FGS sem ritual. Plugin community privacy-screen aplica
+  // FLAG_SECURE automaticamente no load() nativo (sem precisar hook chamar
+  // enable). Precisa cancelar explicitamente.
+  // Dosy oficial (release variant): bloco abaixo NÃO roda (id sem .dev) →
+  // FLAG_SECURE permanece ativo como sempre.
+  ;(async () => {
+    try {
+      const { App: CapApp } = await import('@capacitor/app')
+      const info = await CapApp.getInfo().catch(() => null)
+      if (info?.id?.endsWith('.dev')) {
+        const { PrivacyScreen } = await import('@capacitor-community/privacy-screen')
+        await PrivacyScreen.disable()
+      }
     } catch {}
   })()
 }

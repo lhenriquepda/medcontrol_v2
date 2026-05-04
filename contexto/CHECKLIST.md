@@ -1276,6 +1276,29 @@ Comportamento desejado por user:
   - Sentry source maps upload roda automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
 - **Impacto:** sem CI verde, source maps Sentry não sobem → crash investigation pós-launch fica sem stack trace symbolicado. Precisa fechar antes de Open Testing.
 
+### #128 — BUG-040: Multi-dose alarm mostra só 1 medicamento + paciente "Sem Paciente"
+- **Status:** ⏳ Aberto
+- **Origem:** reproduzido S25 Ultra Dosy Dev v0.2.0.7 durante captura assets #025 (2026-05-04)
+- **Esforço:** 2-4h (investigação + fix + reteste device)
+- **Dependências:** nenhuma
+- **Aceitação:**
+  - Reproduzir: cadastrar 6 doses simultâneas (`scheduledAt` idêntico) distribuídas entre 2 pacientes — 3 Lucas + 3 Maria — confirma que ainda mostra só 1 med + "Sem Paciente"
+  - Fix: AlarmActivity render multi-dose deve listar TODAS doses agendadas pra mesmo `scheduledAt` (com nome paciente correto cada uma) — não só uma
+  - Validar nome paciente preenchido em qualquer caminho (Receiver / Activity / Service)
+  - Re-teste S25 Ultra: 6 doses simultâneas → tela Alarme mostra 6 itens com nome de cada paciente
+- **Hipóteses iniciais:**
+  - (a) `AlarmReceiver` agrupa doses pelo `scheduledAt` exato mas falha quando 2 pacientes diferentes — group key pode estar derivando só do timestamp e perdendo lista patientId/medName
+  - (b) FCM data path entrega só 1 dose ID no payload (não array completo) → AlarmActivity carrega só essa
+  - (c) Patient name lookup no Activity falha (RPC call falha → fallback "Sem Paciente")
+  - (d) `AlarmScheduler` agenda múltiplos `setAlarmClock()` mas só primeiro dispara, others suprimidos pelo OS por timing idêntico
+- **Investigar primeiro:**
+  - Logs `adb logcat` filtro `AlarmReceiver|AlarmActivity|AlarmService|AlarmScheduler|DosyMessagingService` durante repro
+  - DB: `SELECT id, "patientId", "medName" FROM doses WHERE "scheduledAt" = X` confirma 6 doses no DB
+  - Conferir se Realtime entregou todas 6 ao app antes do alarme disparar
+  - Conferir Edge `notify-doses` logs — quantos FCM envelopes foram enviados (1 com array vs 6 separados?)
+- **Detalhe:** Bug isolado fora de auditoria formal. Catalogar em `auditoria-live-2026-05-04/` se virar item recorrente. Por hora só ROADMAP.
+- **P1 healthcare-adjacent** (trust violation: usuário não vê todas medicações que precisa tomar; LGPD-adjacent: paciente perde identificação da dose).
+
 ---
 
 ## Resumo
