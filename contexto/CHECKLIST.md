@@ -103,14 +103,15 @@
 - **Justificativa:** SEM esta métrica, regressão em alarmes (a coisa mais crítica do app) passa despercebida em produção. Healthcare = não-negociável.
 
 ### #008 — Configurar `SENTRY_AUTH_TOKEN` + `ORG` + `PROJECT` em GitHub Secrets
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (verificado 2026-05-04 — secrets criados em 2026-04-28)
 - **Origem:** [Plan.md] FASE 10.1 manual pendente
 - **Esforço:** 15 min
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - Secrets configurados em GitHub Actions
-  - Próximo build CI envia source maps automaticamente para Sentry
-  - Validar via Sentry → Releases → ver release tag `dosy@0.1.6.10` (próxima versão)
+  - ✅ Secrets configurados em GitHub Actions: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG=lhp-tech`, `SENTRY_PROJECT=dosy`, `VITE_SENTRY_DSN` (criados 2026-04-28)
+  - ✅ Workflows `.github/workflows/ci.yml` + `android-release.yml` referenciam os 4 secrets corretamente em build step
+  - ⚠️ Próximo build CI envia source maps — **bloqueado por #127** (CI failing por lint errors pré-existentes em AnimatedRoutes.jsx, não relacionados aos secrets). Quando CI passar, upload funciona auto.
+- **Validação pendente:** Sentry → Releases → ver release tag `dosy@0.2.0.6` aparecer após próximo CI run bem-sucedido (depende #127)
 
 ### #009 — Configurar PITR (Point-in-Time Recovery) e testar restore drill
 - **Status:** ⏳ Aberto
@@ -1261,6 +1262,19 @@ Comportamento desejado por user:
 - [ ] DND OFF (com Alarme Crítico ON) → alarme fullscreen normal independente de horário
 - [ ] DND ON com janela inválida (start > end, atravessa meia-noite) é tratado corretamente
 - [ ] Persistência DB OK — relogar mantém config
+
+### #127 — CI failing (lint errors react-hooks pré-existentes em AnimatedRoutes.jsx)
+- **Status:** ⏳ Aberto
+- **Origem:** descoberto durante validação #008 (2026-05-04)
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Aceitação:**
+  - 2 errors `react-hooks/refs` em `src/components/AnimatedRoutes.jsx:45:49` + `:48:19` resolvidos (`Cannot access refs during render`)
+  - Fix: lift `directionRef.current` pra useState OR mover leitura pra dentro de effect/handler
+  - `npm run lint` retorna 0 errors (warnings ok)
+  - GitHub CI workflow Lint+Test+Build passa
+  - Sentry source maps upload roda automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
+- **Impacto:** sem CI verde, source maps Sentry não sobem → crash investigation pós-launch fica sem stack trace symbolicado. Precisa fechar antes de Open Testing.
 
 ---
 

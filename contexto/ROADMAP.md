@@ -161,10 +161,11 @@ Pendente nesta release:
 1. ~~#003 Rotacionar senha postgres + revogar PAT + INFOS.md~~ ✅ fechado 2026-05-04
 2. #004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE` (~2-3h)
 3. #006 Device validation 3 devices físicos (1-2 dias)
-4. #008 Sentry GitHub Secrets (~15min)
+4. ~~#008 Sentry GitHub Secrets~~ ✅ fechado 2026-05-04 (verificado — secrets criados 2026-04-28; aceitação completa pendente #127 CI lint fix)
 5. #009 PITR + DR drill (depende upgrade Pro plan)
 6. #007 Telemetria PostHog `notification_delivered` (depende #018)
 7. #025 Screenshots phone 1080×1920 retrabalho (~1h)
+8. **#127** CI lint fix `AnimatedRoutes.jsx` react-hooks/refs errors (~30min, P1, libera #008 aceitação)
 
 ---
 
@@ -273,7 +274,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#007** [Auditoria] Telemetria PostHog `notification_delivered` + alert queda. → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
 
 #### Setup CI / DR
-- [ ] **#008** [Plan] GitHub Secrets `SENTRY_AUTH_TOKEN+ORG+PROJECT`. Plan FASE 10.1
+- [x] **#008** [Plan, fechado 2026-05-04 — secrets criados 2026-04-28] GitHub Secrets `SENTRY_AUTH_TOKEN`/`SENTRY_ORG=lhp-tech`/`SENTRY_PROJECT=dosy`/`VITE_SENTRY_DSN` configurados em Actions. Workflows referenciam corretamente. Aceitação completa pendente #127 (CI lint fix → source maps upload roda auto). Plan FASE 10.1
 - [ ] **#009** [Auditoria] PITR Supabase + drill restore + runbook DR. → [04 §11](auditoria/04-supabase.md#11-backups-e-pitr)
 
 ### 🟠 P1 — Alta Prioridade
@@ -577,7 +578,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 - **Total:** ~95 itens (numeração até #126 hoje)
 - **Em aberto (CHECKLIST grep):** ~72 (74 antes da v0.2.0.6 - 2 P1 fechados)
-- **P0:** 3 manuais user (#004 vídeo FGS + #006 device validation + #008 Sentry secrets) + #025 screenshots + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código. (#003 pwd postgres fechado 2026-05-04.)
+- **P0:** 2 manuais user (#004 vídeo FGS + #006 device validation) + #025 screenshots + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código. (#003 pwd postgres + #008 Sentry secrets fechados 2026-05-04.)
+- **P1 novo:** #127 CI lint fix AnimatedRoutes.jsx (~30min código).
 - **Esforço P0 restante:** ~3-5 dias manual user (zero código)
 - **Wallclock até Open Testing pública:** ~5-6 semanas (Closed Testing 14 dias + ramp + estabilização)
 
