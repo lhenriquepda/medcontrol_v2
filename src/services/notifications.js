@@ -486,8 +486,11 @@ async function bindFcmListenersOnce() {
 
   await ensureFcmChannel()
 
-  // Token recebido — persistir via RPC
+  // Token recebido — persistir via RPC + cachear pra re-upsert em troca de user
   await PushNotifications.addListener('registration', async ({ value: deviceToken }) => {
+    // Cache pra useAuth SIGNED_IN re-upsert em troca de user.
+    // Listener 'registration' só dispara em install/refresh, não em re-login.
+    try { localStorage.setItem('dosy_fcm_token', deviceToken) } catch {}
     if (!hasSupabase) return
     try {
       const { data: { user } } = await supabase.auth.getUser()
