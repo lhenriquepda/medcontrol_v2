@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.6` (tag `v0.2.0.6`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.6 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.7` (tag `v0.2.0.7`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.7 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
@@ -59,8 +59,9 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.6 publicada 2026-05-04 19:13 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 39 + tag git `v0.2.0.6`).
-**Items v0.2.0.6 fechados:** #010 ic_stat_dosy notification icon (BUG-005) + #017 LockScreen biometria (Plan FASE 11.3) + sync docs (ROADMAP/PROJETO/README + Regra 9 Chrome MCP automation).
+**Última release:** v0.2.0.7 publicada 2026-05-04 23:18 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 40 + tag git `v0.2.0.7`).
+**Items v0.2.0.7 fechados:** Dosy Dev FLAG_SECURE off (debug variant `.dev` libera screenshot/screen recording pra captura de assets store) + StatusBar tema sync (light → dark icons + bg peach; dark → light icons + bg dark warm — fix ícones invisíveis em modo claro) + #128 BUG-040 catalogado (multi-dose alarm cross-patient mostra só 1 medicamento + "Sem Paciente").
+**Items v0.2.0.6:** #010 ic_stat_dosy + #017 LockScreen biometria + sync docs + Regra 9 Chrome MCP.
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
 
 **Items fechados nas releases v0.2.0.0 → v0.2.0.5 (resumo — detalhe em §6):**
