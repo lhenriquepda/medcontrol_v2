@@ -184,10 +184,13 @@ export default function Dashboard() {
       qc.refetchQueries({ queryKey: ['patients'] }),
       qc.refetchQueries({ queryKey: ['user_prefs'] }),
       qc.refetchQueries({ queryKey: ['my_tier'] }),
-      // Item #014 — refresh sob-demanda do horizon de tratamentos contínuos
+      // Item #014 — refresh sob-demanda do horizon de tratamentos contínuos.
+      // BUG-035 (#107): supabase.rpc() retorna PostgrestFilterBuilder (PromiseLike,
+      // só .then), NÃO Promise nativo. .catch() direto throws TypeError. Usa
+      // .then(handler, errHandler) — 2-arg form funciona em PromiseLike.
       hasSupabase
         ? supabase.schema('medcontrol').rpc('extend_continuous_treatments', { p_days_ahead: 5 })
-            .catch(err => console.warn('[refresh] extend_continuous err:', err?.message))
+            .then(undefined, err => console.warn('[refresh] extend_continuous err:', err?.message))
         : Promise.resolve()
     ])
   }
