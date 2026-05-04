@@ -867,6 +867,22 @@ public class AlarmActivity extends Activity {
     }
 
     @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        // Item #102 — atalho hardware silenciar alarme. Comportamento padrão
+        // Android (clock app stock + Samsung): volume up/down silencia alarme
+        // tocando, sem dismiss. User ainda precisa Ciente/Adiar/Pular pra
+        // resolver. Mantém volume real do device intacto (consume event).
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP
+            || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (!muted) {
+                toggleMute();
+            }
+            return true; // consume — não passa pra AudioManager
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         stopSoundAndVibration();
