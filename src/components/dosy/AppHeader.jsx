@@ -17,7 +17,7 @@
  * UpdateBanner verde no topo é mantido (redundância intencional —
  * banner full-width chama atenção, ícone permite acesso rápido).
  */
-import { useMemo, useEffect, useRef } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Settings as SettingsIcon,
@@ -28,12 +28,14 @@ import {
 } from 'lucide-react'
 import TierBadge from '../TierBadge'
 import HeaderAlertIcon from './HeaderAlertIcon'
+import EndingSoonSheet from '../EndingSoonSheet'
 import { useAuth } from '../../hooks/useAuth'
 import { useDoses } from '../../hooks/useDoses'
 import { useTreatments } from '../../hooks/useTreatments'
+import { usePatients } from '../../hooks/usePatients'
 import { useReceivedShares } from '../../hooks/useShares'
 import { useAppUpdate } from '../../hooks/useAppUpdate'
-import { firstName } from '../../utils/userDisplay'
+import { shortName } from '../../utils/userDisplay'
 import logoMonoDark from '../../assets/dosy/logo-mono-dark.png'
 
 // localStorage keys — track "last seen" timestamps por tipo de alerta.
@@ -61,7 +63,7 @@ export default function DosyAppHeader() {
   const nav = useNavigate()
   const hour = new Date().getHours()
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
-  const name = firstName(user) || ''
+  const name = shortName(user) || ''
 
   // Overdue window — 90d. Mantém comportamento legacy (sem `to` pra refetch
   // detectar dose recém-overdue dynamic).
@@ -89,10 +91,12 @@ export default function DosyAppHeader() {
 
   // Item #118: tratamentos acabando ≤3 dias (não-contínuos, status active).
   const { data: treatments = [] } = useTreatments()
+  const { data: patients = [] } = usePatients()
   const endingSoonList = useMemo(() => {
     const HORIZON = 3 * 86_400_000 // 3 dias
     return treatments.filter((t) => endingSoon(t, HORIZON))
   }, [treatments])
+  const [endingSheetOpen, setEndingSheetOpen] = useState(false)
   const endingSoonNew = useMemo(() => {
     const seenAt = localStorage.getItem(LS_ENDING_SEEN) || '1970-01-01T00:00:00Z'
     // count only treatments cujo updatedAt > seenAt (notificou desde última visualização)
@@ -106,9 +110,12 @@ export default function DosyAppHeader() {
     localStorage.setItem(LS_SHARES_SEEN, new Date().toISOString())
     nav('/pacientes')
   }
+  // Item #118-followup (release v0.2.0.3): user reportou que click no ícone
+  // amarelo (Pill) navegava silenciosamente sem explicar. Agora abre Sheet
+  // com lista de tratamentos acabando + dias restantes + click row → patient.
   const onClickEnding = () => {
     localStorage.setItem(LS_ENDING_SEEN, new Date().toISOString())
-    nav('/pacientes')
+    setEndingSheetOpen(true)
   }
   const onClickUpdate = () => startUpdate()
 
@@ -239,6 +246,14 @@ export default function DosyAppHeader() {
           </Link>
         </div>
       </div>
+
+      {/* Item #118-followup: sheet explica alerta + lista tratamentos */}
+      <EndingSoonSheet
+        open={endingSheetOpen}
+        onClose={() => setEndingSheetOpen(false)}
+        treatments={endingSoonList}
+        patients={patients}
+      />
     </header>
   )
 }

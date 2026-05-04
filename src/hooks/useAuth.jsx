@@ -27,6 +27,27 @@ export function AuthProvider({ children }) {
         const initialUser = data.session?.user || null
         setUser(initialUser)
         if (initialUser?.id) identifyUser(initialUser.id)
+        // Item #123 (release v0.2.0.3): valida session no boot. JWT pode ter
+        // sido invalidado server-side (user deletado, banned, etc) sem evento
+        // local. supabase.auth.getUser() bate na API e retorna erro se token
+        // não vale mais → forçar signOut local pra limpar cache stale.
+        if (initialUser) {
+          try {
+            const { data: u, error } = await supabase.auth.getUser()
+            if (error || !u?.user) {
+              console.warn('[useAuth] session invalid on boot, signing out:', error?.message)
+              await supabase.auth.signOut()
+              setUser(null)
+              qc.clear()
+              try {
+                localStorage.removeItem('medcontrol_notif')
+                localStorage.removeItem('dashCollapsed')
+              } catch { /* ignore */ }
+            }
+          } catch (e) {
+            console.warn('[useAuth] getUser check failed:', e?.message)
+          }
+        }
         const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
           const u = s?.user || null
           setUser(u)
