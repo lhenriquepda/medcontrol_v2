@@ -158,12 +158,13 @@ Pendente nesta release:
 - ✅ Auditoria externa multidisciplinar 2026-05-01
 
 **Bloqueando avanço para Closed Testing (P0 manuais user):**
-1. #003 Rotacionar senha postgres + revogar PAT + INFOS.md → vault (~30min)
+1. ~~#003 Rotacionar senha postgres + revogar PAT + INFOS.md~~ ✅ fechado 2026-05-04
 2. #004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE` (~2-3h)
 3. #006 Device validation 3 devices físicos (1-2 dias)
 4. #008 Sentry GitHub Secrets (~15min)
 5. #009 PITR + DR drill (depende upgrade Pro plan)
 6. #007 Telemetria PostHog `notification_delivered` (depende #018)
+7. #025 Screenshots phone 1080×1920 retrabalho (~1h)
 
 ---
 
@@ -257,7 +258,7 @@ ESTADO ATUAL: Internal Testing ativo
 #### Segurança server-side
 - [x] **#001** [Auditoria] Admin auth check em `send-test-push` Edge Function. → [04 §7.2](auditoria/04-supabase.md#72-send-test-pushindexts-120-linhas--crítico) · [06 BUG-002](auditoria/06-bugs.md#bug-002--edge-function-send-test-push-não-valida-autorização-auditoria-estática) · [03 §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function)
 - [x] **#002** [Auditoria] Sanitizar erro email enumeration. → [06 BUG-015](auditoria/06-bugs.md#bug-015--resposta-de-erro-user-not-found-em-send-test-push-permite-enumeration)
-- [ ] **#003** [Plan + Auditoria] Rotacionar senha postgres + revogar PAT + INFOS.md → vault. → [archive/security-original.md](archive/security-original.md)
+- [x] **#003** [Plan + Auditoria, fechado 2026-05-04] Senha postgres rotacionada via Supabase Dashboard (auto-gen 16-char, salva password manager user). PAT `sbp_aedc82d7` (conta `lhenrique.pda@gmail.com` kids-paint) já revogado anteriormente — verificado conta sem tokens. INFOS.md ausente local + git history. → [archive/security-original.md](archive/security-original.md)
 
 #### Bloqueador Play Console
 - [ ] **#004** [Plan] Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE YouTube unlisted. Plan FASE 18.9.1
@@ -576,7 +577,7 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 - **Total:** ~95 itens (numeração até #126 hoje)
 - **Em aberto (CHECKLIST grep):** ~72 (74 antes da v0.2.0.6 - 2 P1 fechados)
-- **P0:** 4 manuais user (#003 pwd postgres + #004 vídeo FGS + #006 device validation + #008 Sentry secrets) + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código
+- **P0:** 3 manuais user (#004 vídeo FGS + #006 device validation + #008 Sentry secrets) + #025 screenshots + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código. (#003 pwd postgres fechado 2026-05-04.)
 - **Esforço P0 restante:** ~3-5 dias manual user (zero código)
 - **Wallclock até Open Testing pública:** ~5-6 semanas (Closed Testing 14 dias + ramp + estabilização)
 

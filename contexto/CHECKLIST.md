@@ -43,15 +43,15 @@
 - **Detalhe:** [auditoria/06-bugs.md#bug-015](auditoria/06-bugs.md#bug-015--resposta-de-erro-user-not-found-em-send-test-push-permite-enumeration)
 
 ### #003 — Rotacionar senha postgres histórica + revogar PAT kids-paint
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-04)
 - **Origem:** [Plan.md (SECURITY.md) + Auditoria] (BUG-013)
 - **Esforço:** 30 min (manual)
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - Senha postgres rotacionada via Supabase Dashboard → Project `dosy-app` → Settings → Database → Reset password
-  - PAT `sbp_aedc82d7...` revogado em https://supabase.com/dashboard/account/tokens (conta dona kids-paint)
-  - Nova senha em password manager (1Password/Bitwarden), não em arquivo plain text
-  - `INFOS.md` na raiz movido para vault + deletado do disco + lixeira esvaziada
+  - ✅ Senha postgres rotacionada via Supabase Dashboard `guefraaqbkcehofchnrc/database/settings` → Reset password (auto-generated 16-char strong, salva password manager user)
+  - ✅ PAT `sbp_aedc82d7...` (conta `lhenrique.pda@gmail.com` dona kids-paint) já revogado anteriormente — verificado 2026-05-04: "No access tokens found" naquela conta
+  - ✅ Nova senha em password manager user (entrada `Supabase Dosy postgres pwd (production)`)
+  - ✅ `INFOS.md` ausente localmente e do git history (limpo via git-filter-repo durante #084 v0.1.7.5)
 - **Detalhe:** [archive/security-original.md](archive/security-original.md) seções "CRÍTICO" e "ALTO"
 
 ### #004 — Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE para Play Console
