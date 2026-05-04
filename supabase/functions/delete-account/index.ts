@@ -46,6 +46,32 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Item #028 (release v0.2.0.4): rate limit via security_events.
+    // Antes: delete-account aceitava chamadas ilimitadas. User podia spam
+    // accidentally OR atacante via JWT roubado podia tentar DoS account
+    // (apesar de auth.uid scope, ainda DoS via repeated calls + admin ops).
+    // Agora: max 1 tentativa por user por 60s. Insert security_event +
+    // checa contagem últimos 60s. Resposta 429 + Retry-After.
+    const sixtySecAgo = new Date(Date.now() - 60_000).toISOString()
+    const { count: recentAttempts } = await adminClient
+      .from('security_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('event_type', 'delete_account_attempt')
+      .gte('created_at', sixtySecAgo)
+    if ((recentAttempts ?? 0) > 0) {
+      return new Response(JSON.stringify({ error: 'rate_limit', message: 'Aguarde 60s antes de tentar novamente.' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' }
+      })
+    }
+    await adminClient.from('security_events').insert({
+      user_id: user.id,
+      event_type: 'delete_account_attempt',
+      ip_address: req.headers.get('x-forwarded-for') ?? null,
+      user_agent: req.headers.get('user-agent') ?? null,
+    })
+
     // 2. Delete user data via RPC (handles all medcontrol cascade)
     const { error: rpcErr } = await adminClient.rpc('delete_my_account')
     if (rpcErr) {

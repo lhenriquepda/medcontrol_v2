@@ -308,7 +308,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
 
 #### Performance & custo
-- [ ] **#023** [Auditoria] `useDoses` com `refetchIntervalInBackground: false` + `staleTime`. → [05 §4.4](auditoria/05-codigo.md#44-anti-patterns-encontrados)
+- [x] **#023** [Auditoria, fechado v0.2.0.4 — verificado] `useDoses` já tem `refetchIntervalInBackground: false` + `staleTime: 2min` (set em #092 v0.1.7.5). Verificado em release v0.2.0.4. → [05 §4.4](auditoria/05-codigo.md#44-anti-patterns-encontrados)
 
 #### DX
 - [x] **#022** [Auditoria] Verificar legitimidade `typescript@^6.0.3`. → [06 BUG-007](auditoria/06-bugs.md#bug-007--typescript-declarado-como-603-no-packagejson)
@@ -316,27 +316,27 @@ ESTADO ATUAL: Internal Testing ativo
 
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
-- [ ] **#028** [Auditoria] Rate limit `delete-account`. → [06 BUG-003](auditoria/06-bugs.md#bug-003--edge-function-delete-account-sem-rate-limit-auditoria-estática)
+- [x] **#028** [Auditoria, fechado v0.2.0.4] Rate limit `delete-account`. Edge fn v7 deployed prod. Max 1 attempt/user/60s via security_events table check. Resposta 429 + Retry-After. Insert event antes da operação. → [06 BUG-003](auditoria/06-bugs.md#bug-003--edge-function-delete-account-sem-rate-limit-auditoria-estática)
 - [ ] **#029** [Plan + Auditoria] Refatorar `Settings.jsx` (541 LOC). Plan FASE 15
 - [ ] **#030** [Plan SECURITY + Auditoria] Refatorar `services/notifications.js` (588 LOC) em 4 módulos
-- [ ] **#031** [Auditoria] Confirmar `FORCE_RLS` em todas tabelas. → [04 §15.6](auditoria/04-supabase.md#156-force_rls-em-todas-as-tabelas)
-- [ ] **#032** [Auditoria] Confirmar `SET search_path` em todas SECURITY DEFINER. → [04 §15.3](auditoria/04-supabase.md#153-audit-de-security-definer--search_path)
+- [x] **#031** [Auditoria, fechado v0.2.0.4 — verificado] Confirmar `FORCE_RLS` em todas tabelas. Audit: 13/13 tabelas medcontrol com `relrowsecurity=true` AND `relforcerowsecurity=true`. ✓
+- [x] **#032** [Auditoria, fechado v0.2.0.4] Confirmar `SET search_path` em todas SECURITY DEFINER. Audit revelou 1 função sem SET (`handle_new_user_plus_promo`). Resolvido indiretamente em #119-followup: trigger + função droppadas (eram da promo beta encerrada). 0/0 funções pendentes agora.
 - [x] **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
 - [ ] **#034** [Plan] Virtualização DoseHistory + Patients (`@tanstack/react-virtual`). Plan FASE 13
 - [ ] **#035** [Plan] Integration tests (`useDoses`, `useUserPrefs` mocks). Plan FASE 9.4
 - [ ] **#036** [Plan] Skeleton screens completos. Plan FASE 15
-- [ ] **#037** [Plan] Erros inline em forms. Plan FASE 15
+- [x] **#037** [Plan, fechado v0.2.0.4] Erros inline em forms. PatientForm valida nome/idade/peso + TreatmentForm valida medName/unit/durationDays via state errors + Input.error prop (já existia no primitive). Erro limpa onChange do field. Substitui HTML5 required tooltip nativo (UX inconsistente browser/native).
 - [ ] **#038** [Plan] Pen test interno completo documentado. Plan FASE 8.4 + 20.3
 - [ ] **#039** [Plan] Confirmação dupla delete batch (>10). Plan FASE 15
 - [x] **#040** [Plan, fechado v0.2.0.3] Subir contraste textos secundários no dark. fg-secondary #C8B8AB → #DDC8B6 (ratio 8.7→10.5), fg-tertiary #8E7F73 → #B0A091 (ratio 4.35→5.8 — passa AA), border alpha bumps.
 - [ ] **#041** [Plan] Hierarquia headings + Dynamic Type via `rem`. Plan FASE 15
 - [ ] **#042** [Plan] Lighthouse mobile ≥90 em Reports + Dashboard. Plan FASE 17
 - [ ] **#043** [Plan] Performance scroll lista 200+ doses sem jank (já coberto por #034)
-- [ ] **#044** [Plan] Auditar continuidade RPC `register_sos_dose` (drift schema)
+- [x] **#044** [Plan, fechado v0.2.0.4 — verificado] Auditar continuidade RPC `register_sos_dose` (drift schema). Audit: SECURITY DEFINER ✓, search_path SET ✓, has_patient_access check ✓, sos_rules lookup case-insensitive ✓, minIntervalHours validate ✓, maxDosesIn24h validate ✓, INSERT com auth.uid() ✓. Sem schema drift.
 - [x] **#045** [Auditoria, fechado v0.2.0.2 — verificado] Confirmar `coverage/` no `.gitignore`. Já presente (linha única). → [06 BUG-010](auditoria/06-bugs.md#bug-010--coverage-versionado-no-repo-provável)
 - [ ] **#046** [Plan] Documentar runbook DR. Plan FASE 23.4
 - [ ] **#047** [Plan] Google Play Integrity API. Plan FASE 23 backlog
-- [ ] **#048** [Auditoria] Remover `tools/supabase.exe` do git (se versionado)
+- [x] **#048** [Auditoria, fechado v0.2.0.4 — verificado] Remover `tools/supabase.exe` do git (se versionado). Verificado: tools/supabase.exe + supabase.tar.gz NÃO tracked (gitignore cobre). False alarm.
 - [ ] **#049** [Plan] Pen test profissional. Plan FASE 20
 
 ### 🟢 P3 — Melhorias (90 dias)
@@ -430,7 +430,11 @@ ESTADO ATUAL: Internal Testing ativo
 
 - [x] **#118-followup** [P1 UX, fechado v0.2.0.3] **Pill amarelo (tratamento acabando) navegava silenciosamente.** Antes: click → /pacientes sem explicar alerta. Agora: abre `EndingSoonSheet` componente novo com lista de tratamentos acabando + paciente avatar + medicamento + dias restantes ("termina hoje", "termina amanhã", "N dias"). Click row → patient detail. Resolve confusão "não sei o que esse ícone está alertando". Reproduzir: app aberto logado como teste03 → admin DELETE FROM auth.users WHERE email='teste03@teste.com' → app continua mostrando "Bom dia, teste03" até refresh manual / TOKEN_REFRESHED. RPCs vão falhar com JWT inválido (low risk, fail-safe). Mas UX confusa. Fix: useAuth listener `onAuthStateChange` evento `USER_DELETED` (Supabase emit?) OR detect 401 em qualquer request → forçar signOut local. Edge case raro mas afeta delete-account flow.
 
+- [x] **#119-followup** [P1 truth, fechado v0.2.0.4] **Promo `free → plus` server-side trigger remoção.** v0.2.0.3 removeu promo só client. Server-side trigger `on_auth_user_signup_plus` em auth.users continuava chamando `handle_new_user_plus_promo()` que inseria tier='plus' source='beta_promo' pra todo novo signup. Migration `drop_signup_plus_promo_trigger` v0.2.0.4: DROP TRIGGER + DROP FUNCTION. Novos signups agora começam tier='free' real. Side-effect: resolve #032 (função sem search_path SET sumiu).
+
 - [x] **#119** [P1 cost+truth, fechado v0.2.0.3] **Promo `free → plus` removida do client.** Antes (v0.1.7.x): subscriptionService.getMyTier mapeava `free → plus` durante beta interno, bypass paywall pra qualquer user free. Agora (v0.2.0.3): tier vem direto do DB via RPC `my_tier`. Paywall ativo pra users free reais. Reais (lhenrique admin, daffiny+ela pro) não afetados — tier real DB já é admin/pro. Mesmo bypass removido em `listAllUsers` (admin panel agora mostra tier real, não mapped). Permite testar paywall via teste-free@teste.com.
+
+- [x] **#125** [P1 BUG-039, fechado v0.2.0.4] **Splash distorcido em S25 Ultra (Android 12+).** User reportou que pós-v0.2.0.3 splash continuava errado. **Causa:** `android/app/src/main/res/drawable/splash_icon.png` era 3224×1292 stale (legado wide). Theme.SplashScreen Android 12+ aponta `windowSplashScreenAnimatedIcon=@drawable/splash_icon` esperando ícone quadrado 1:1 — sistema esticava 3224×1292 pra preencher safe zone 240dp causando aparência "comprida". Source `resources/splash_icon.png` JÁ ERA 1024×1024 quadrado correto (logo "doosy" peach centralizado, bg transparent). Pipeline `@capacitor/assets` NÃO regenera `drawable/splash_icon.png` — esse path requer cópia manual. **Fix:** `cp resources/splash_icon.png android/app/src/main/res/drawable/splash_icon.png`. Android 12+ Splash agora mostra ícone quadrado centralizado + bg color #FFF4EC (define em colors.xml `dosy_splash_bg`) escala perfeito em qualquer aspect ratio (incluindo S25 Ultra 1440×3120 2.17:1). Android <12 fallback usa `drawable/splash.png` legacy (CENTER_CROP fullscreen — pode ainda ter compromise visual em ultra-wide, mas só afeta devices Android 11 ou anterior).
 
 - [x] **#106** [P0 BUG-034, fix completo v0.2.0.3 — REGRESSÃO IDENTIFICADA] **Ícone launcher + splash continuavam antigos.** Após reinstall em S25 Ultra v0.2.0.2, user reportou ícone azul/"doosy" wordmark + splash distorcido. **Causa raiz:** pasta `assets/` legacy com `icon-only.png` antigo (azul wordmark) + `icon.png` antigo TEM PRECEDÊNCIA sobre `resources/` no `@capacitor/assets generate` ("By default will check `assets` and `resources` directories, in that order"). Pipeline lia `assets/icon-only.png` antigo, ignorando `resources/icon-foreground.png` + `icon-background.png` peach corretos. **Fix v0.2.0.3:** (a) deletado `assets/` legado completo, (b) criado `resources/icon-only.png` composto (foreground sobre background) pra cap/assets ter source single, (c) deletado todos `mipmap-*/ic_launcher*.png` + `drawable-port-*/splash.png` + `drawable-land-*/splash.png` stale, (d) re-run `npx @capacitor/assets generate --android` → 86→61 outputs novos com source correto, (e) outputs validados visualmente: ic_launcher peach pill com gradient sunset, ic_launcher_foreground peach pill transparent, ic_launcher_background gradient sunset, splash full peach gradient com "doosy" wordmark center. P0 brand consistency.
 

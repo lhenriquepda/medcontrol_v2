@@ -47,6 +47,9 @@ export default function TreatmentForm() {
   const nav = useNavigate()
   const qc = useQueryClient()
 
+  // Item #037 (release v0.2.0.4): erros inline por campo.
+  const [errors, setErrors] = useState({})
+
   const [form, setForm] = useState({
     patientId: preselectPatient || '',
     medName: '', unit: '',
@@ -94,6 +97,15 @@ export default function TreatmentForm() {
 
   async function submit(e) {
     e.preventDefault()
+    // Item #037 (release v0.2.0.4): valida campos obrigatórios inline.
+    const errs = {}
+    if (!form.medName?.trim()) errs.medName = 'Medicamento obrigatório.'
+    if (!form.unit?.trim()) errs.unit = 'Dose/unidade obrigatório.'
+    if (!form.isContinuous && (!form.durationDays || Number(form.durationDays) < 1)) {
+      errs.durationDays = 'Duração obrigatória (≥ 1 dia).'
+    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setErrors({})
     if (!form.patientId) { toast.show({ message: 'Selecione um paciente.', kind: 'error' }); return }
     try {
       const payload = {
@@ -231,15 +243,23 @@ export default function TreatmentForm() {
             letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
             fontFamily: 'var(--dosy-font-display)',
           }}>Medicamento <span style={{ color: 'var(--dosy-danger)' }}>*</span></label>
-          <MedNameInput value={form.medName} onChange={(v) => set('medName', v)} />
+          <MedNameInput value={form.medName} onChange={(v) => { set('medName', v); if (errors.medName) setErrors({ ...errors, medName: undefined }) }} />
+          {errors.medName && (
+            <p style={{
+              fontSize: 11.5, color: 'var(--dosy-danger)',
+              margin: '2px 0 0 4px',
+              fontFamily: 'var(--dosy-font-body)',
+            }}>{errors.medName}</p>
+          )}
         </div>
 
         <Input
           label="Dose / unidade"
           required
           value={form.unit}
-          onChange={(e) => set('unit', e.target.value)}
+          onChange={(e) => { set('unit', e.target.value); if (errors.unit) setErrors({ ...errors, unit: undefined }) }}
           placeholder="Ex: 1 comprimido, 15 gotas"
+          error={errors.unit}
         />
 
         {/* Mode + frequency card */}
@@ -403,7 +423,8 @@ export default function TreatmentForm() {
                 inputMode="numeric"
                 min={1}
                 value={form.durationDays}
-                onChange={(e) => set('durationDays', e.target.value)}
+                onChange={(e) => { set('durationDays', e.target.value); if (errors.durationDays) setErrors({ ...errors, durationDays: undefined }) }}
+                error={errors.durationDays}
               />
             )}
             <Input
