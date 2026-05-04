@@ -7,8 +7,9 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.5` (tag `v0.2.0.5`) · branch `master` · sync com `origin/master`. **Em desenvolvimento:** `release/v0.2.0.6`.
-**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.2.0.5 (master). `dosy-dev.vercel.app` = release branch ativa. Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.2.0.6` (tag `v0.2.0.6`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.6 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Conta de teste: `teste03@teste.com / 123456`.
+**⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,8 +59,8 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.5 publicada 2026-05-04 (Vercel `dosy-app.vercel.app` + Play Store Internal Testing AAB versionCode 38 + tag git `v0.2.0.5`).
-**Em desenvolvimento:** `release/v0.2.0.6` — começou 2026-05-04 (sync docs stale + #010 ic_stat_dosy + #017 LockScreen biometria).
+**Última release:** v0.2.0.6 publicada 2026-05-04 19:13 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 39 + tag git `v0.2.0.6`).
+**Items v0.2.0.6 fechados:** #010 ic_stat_dosy notification icon (BUG-005) + #017 LockScreen biometria (Plan FASE 11.3) + sync docs (ROADMAP/PROJETO/README + Regra 9 Chrome MCP automation).
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
 
 **Items fechados nas releases v0.2.0.0 → v0.2.0.5 (resumo — detalhe em §6):**
@@ -168,12 +169,9 @@ Pendente nesta release:
 
 ## 4. Próximo passo imediato
 
-**Sessão atual — release v0.2.0.6 (caminho Open Testing — código P1 visível):**
-- **#010** [P1 BUG-005] Criar `ic_stat_dosy` notification icon (drawable vetor + PNG monocromático fallback). Resolve fallback errado pra ic_launcher na system tray.
-- **#017** [P1 Plan FASE 11.3] Wire LockScreen UI + biometria (`useAppLock`). Toggle App Lock em Settings + auto-lock 5min background + biometria desbloqueia + fallback PIN. Aceitação completa exige device físico.
-- **Sync docs:** ROADMAP §3/§12 + PROJETO header (estavam stale, paralisados em v0.1.7.5/v0.2.0.4).
+**Próxima sessão de código (sugerida):** atacar P1/P2 backlog — #029 refactor Settings.jsx 541 LOC, #030 split notifications.js 588 LOC em 4 módulos, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
 
-Branch: `release/v0.2.0.6` (criada 2026-05-04 a partir de master @ a4d8e3c v0.2.0.5).
+Branch a criar quando começar: `release/v0.2.0.7`.
 
 **P0 restantes (todos manuais user — bloqueiam Open Testing):**
 
@@ -572,16 +570,16 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-> ⚠️ **Stale — reconciliação completa pendente.** Master rodou v0.2.0.0 → v0.2.0.5 enquanto §12 ficou paralisado em v0.1.7.5. Re-auditar contadores na próxima release. Contagem grep CHECKLIST atual: 74 abertos.
+> ⚠️ **Stale — reconciliação completa pendente.** Master rodou v0.2.0.0 → v0.2.0.6 enquanto §12 ficou paralisado em v0.1.7.5. Re-auditar contadores na próxima release.
 >
-> Fechados em v0.2.0.6 (este branch): #010 (P1 BUG-005 ic_stat_dosy) + #017 (P1 LockScreen biometria) = 2 P1.
+> Fechados em v0.2.0.6: #010 (P1 BUG-005 ic_stat_dosy) + #017 (P1 LockScreen biometria) = 2 P1.
 
 - **Total:** ~95 itens (numeração até #126 hoje)
-- **Em aberto (CHECKLIST grep):** 74 - 2 (v0.2.0.6) = 72
+- **Em aberto (CHECKLIST grep):** ~72 (74 antes da v0.2.0.6 - 2 P1 fechados)
 - **P0:** 4 manuais user (#003 pwd postgres + #004 vídeo FGS + #006 device validation + #008 Sentry secrets) + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código
 - **Esforço P0 restante:** ~3-5 dias manual user (zero código)
 - **Wallclock até Open Testing pública:** ~5-6 semanas (Closed Testing 14 dias + ramp + estabilização)
 
 ---
 
-🚀 **Próximo passo concreto:** publicar release v0.2.0.6 (sync docs + #010 ic_stat_dosy + #017 LockScreen biometria) → AAB Play Console → device validation USER (#006 + #017 device test). Em paralelo USER executa P0 manuais (#003 rotação pwd postgres + #004 vídeo FGS + #008 Sentry secrets + #025 screenshots). Caminho mais rápido pra Closed Testing → Open Testing.
+🚀 **Próximo passo concreto:** v0.2.0.6 publicada 2026-05-04 19:13 UTC (Vercel dosymed.app v0.2.0.6 + AAB versionCode 39 Internal Testing live + tag v0.2.0.6 + master sync). USER executa P0 manuais em paralelo (#003 rotação pwd postgres + #004 vídeo FGS + #008 Sentry secrets + #025 screenshots + #006 device validation 3 devices) — destrava Closed Testing 14 dias → Open Testing público.
