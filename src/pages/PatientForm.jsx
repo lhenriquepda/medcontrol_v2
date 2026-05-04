@@ -53,6 +53,10 @@ export default function PatientForm() {
   const limitReached = usePatientLimitReached()
   const [paywall, setPaywall] = useState(false)
   const [avatarGroup, setAvatarGroup] = useState(0)
+  // Item #037 (release v0.2.0.4): erros inline por campo. Antes: only HTML5
+  // required tooltip (UX inconsistente entre browsers/native). Agora: validação
+  // explícita + Input.error prop renderiza mensagem abaixo do campo afetado.
+  const [errors, setErrors] = useState({})
 
   const [form, setForm] = useState({
     name: '', age: '', avatar: '👤', weight: '', condition: '', doctor: '', allergies: '',
@@ -82,6 +86,15 @@ export default function PatientForm() {
 
   async function submit(e) {
     e.preventDefault()
+    // Item #037: validação inline por campo.
+    const errs = {}
+    if (!form.name?.trim()) errs.name = 'Nome obrigatório.'
+    if (form.age && Number.isNaN(Number(form.age))) errs.age = 'Idade inválida.'
+    if (form.weight && Number.isNaN(Number(String(form.weight).replace(',', '.')))) {
+      errs.weight = 'Peso inválido.'
+    }
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setErrors({})
     if (!editing && limitReached) { setPaywall(true); return }
     // Item #115: photo_version bump quando foto mudou nesta sessão.
     // Outros devices vão ver mismatch via realtime → re-fetch único + cache.
@@ -313,23 +326,26 @@ export default function PatientForm() {
           label="Nome"
           required
           value={form.name}
-          onChange={(e) => set('name', e.target.value)}
+          onChange={(e) => { set('name', e.target.value); if (errors.name) setErrors({ ...errors, name: undefined }) }}
           placeholder="Nome completo"
+          error={errors.name}
         />
         <Input
           label="Idade"
           type="number"
           inputMode="numeric"
           value={form.age}
-          onChange={(e) => set('age', e.target.value)}
+          onChange={(e) => { set('age', e.target.value); if (errors.age) setErrors({ ...errors, age: undefined }) }}
           placeholder="Ex: 45"
+          error={errors.age}
         />
         <Input
           label="Peso (kg)"
           inputMode="decimal"
           value={form.weight}
-          onChange={(e) => set('weight', e.target.value)}
+          onChange={(e) => { set('weight', e.target.value); if (errors.weight) setErrors({ ...errors, weight: undefined }) }}
           placeholder="Ex: 78,5"
+          error={errors.weight}
         />
         <Input
           label="Condição / Diagnóstico"
