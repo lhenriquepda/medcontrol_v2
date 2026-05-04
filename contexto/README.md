@@ -488,7 +488,7 @@ Durante outro trabalho ou uso casual, achou bug:
 
 1. `git fetch origin && git branch --list 'release/*'` — descobrir se já existe release branch ativa
 2. **Se existe** (ex.: retornou `release/v0.1.6.10`): `git checkout release/v0.1.6.10` — continuar acumulando commits da sessão anterior. **Modelo permite só 1 ativa por vez.** Se aparecer mais de uma → erro de manutenção, reportar antes de tudo.
-3. **Se NÃO existe:** confirmar com user a próxima versão proposta (patch/minor/major a partir do master atual) → criar branch `release/v{versão}` a partir de master atualizada
+3. **Se NÃO existe:** criar branch `release/v{próximo}` (incremento último dígito do master atual; ver §"Versão da branch") direto, sem perguntar bump
 4. `git status` — working tree limpo? Branch correta?
 5. `git log -1 --format="%h %s"` — último commit conhecido
 6. **Se itens P0 ou destrutivos na fila:** confirmar com usuário antes de codar
@@ -540,7 +540,7 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Types:** `feat` · `fix` · `security` · `chore` · `docs` · `refactor` · `test` · `perf` · `ci`
 
-**Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
+**Versão:** sempre incremento último dígito (regra Dosy — ver §"Versão da branch").
 
 ### Branch / PR — modelo "1 sessão = 1 branch versionada = 1 release"
 
@@ -601,11 +601,13 @@ Sempre. Único formato. Ex.: `release/v0.1.6.10`, `release/v0.1.7.0`, `release/v
 
 #### Versão da branch = versão proposta da release
 
-- **Patch** (`X.Y.Z+1`): bug fixes, sem novo comportamento
-- **Minor** (`X.Y+1.0`): feature nova, comportamento visível ao user
-- **Major** (`X+1.0.0`): breaking change (raro pré-1.0)
+**Regra Dosy:** sempre incrementar **último dígito** (`X.Y.Z.W → X.Y.Z.(W+1)`), independente do escopo (bug fix, feature visível, breaking change). Numeração linear simples, NÃO semver tradicional.
 
-Agente decide bump no Passo 1 do release com base nos commits acumulados na branch e confirma com user.
+- Master em `0.2.0.5` → próxima branch `release/v0.2.0.6`
+- Master em `0.2.0.9` → próxima branch `release/v0.2.0.10`
+- Não sugerir minor (`0.2.1.0`) ou major (`0.3.0.0`) bump.
+
+Agente cria branch `release/v{próximo}` no início da sessão sem perguntar bump (só confirma master atual + próxima versão proposta como info, não como decisão).
 
 #### Múltiplas sessões antes de release
 

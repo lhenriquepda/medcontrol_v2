@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.1.7.5` (tag `v0.1.7.5`) · branch `master` · sync com `origin/master`.
-**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.1.7.5 (master). `dosy-dev.vercel.app` = release branch ativa (atualmente espelha master). Conta de teste: `teste03@teste.com / 123456`.
+**Versão atual:** `0.2.0.5` (tag `v0.2.0.5`) · branch `master` · sync com `origin/master`. **Em desenvolvimento:** `release/v0.2.0.6`.
+**Vercel deploy:** `https://dosy-app.vercel.app/` rodando v0.2.0.5 (master). `dosy-dev.vercel.app` = release branch ativa. Conta de teste: `teste03@teste.com / 123456`.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
@@ -58,8 +58,17 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.1.7.5 publicada 2026-05-03 (Vercel `dosy-app.vercel.app` + Play Store Internal Testing AAB versionCode 30 + tag git `v0.1.7.5`).
+**Última release:** v0.2.0.5 publicada 2026-05-04 (Vercel `dosy-app.vercel.app` + Play Store Internal Testing AAB versionCode 38 + tag git `v0.2.0.5`).
+**Em desenvolvimento:** `release/v0.2.0.6` — começou 2026-05-04 (sync docs stale + #010 ic_stat_dosy + #017 LockScreen biometria).
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
+
+**Items fechados nas releases v0.2.0.0 → v0.2.0.5 (resumo — detalhe em §6):**
+- v0.2.0.0: redesign visual Dosy (peach/sunset palette + primitives)
+- v0.2.0.1: #099 avatar crop + #102 atalho hardware silenciar + #103 UpdateBanner + #104 skeleton + #105 MultiDoseModal + #106-old launcher fix partial + #108 PatientForm weight + #109 useRealtime race lock + #096 admin panel tier
+- v0.2.0.2: #074 debug symbols NDK + #114 avatar crop UI + #115 photo cache versioned + #045/#048 audits
+- v0.2.0.3: #033 React.memo + #040 contraste + #106 launcher full fix + #116 header alertas direct icons + #117 patient_share alert + #118 ending soon + #118-followup + #119 promo client + #120 Plus copy + #121 Escape close + #122 shortName + #123 deleted user signOut
+- v0.2.0.4: #028 rate limit + #031/#032/#044/#048 audits + #037 inline errors + #119-followup trigger drop + #125 splash S25 Ultra fix
+- v0.2.0.5: #126 gitleaks pre-commit + root cause vazamentos secrets + #024 husky reforçado
 
 **Items fechados na release v0.1.7.5 (egress + race + JWT rotation):**
 - ✅ **#092 [P0 CRÍTICO BUG-025]** Egress reduction Supabase: Realtime postgres_changes filter `userId=eq` server-side; subscriptions removido do Realtime; listDoses default range fail-safe (-30d/+60d) + paginate cap 5 pages; useDoses queryKey timestamps normalizados pra hour boundary; useDoses refetchInterval 60s→5min, staleTime 30s→2min; staleTime bump em useUserPrefs/usePatients/useTreatments/useMyTier; App.jsx alarm scope -1d/+14d. Critical alarm path NÃO regrediu.
@@ -159,24 +168,14 @@ Pendente nesta release:
 
 ## 4. Próximo passo imediato
 
-**Próxima sessão dedicada — release v0.1.7.4 (hotfix security):**
-- **#084** [P0 security] Rotacionar service_role JWT + JWT secret Supabase + reconectar Vercel↔GitHub (incidente 2026-05-02). Plano 8-fase em CHECKLIST §#084.
-- **#087 Fase B** [opcional P1] Android nativo respeitar DND fire time.
-- **#081 gate validação 24h** [opcional] em andamento, pode fechar antes ou junto.
+**Sessão atual — release v0.2.0.6 (caminho Open Testing — código P1 visível):**
+- **#010** [P1 BUG-005] Criar `ic_stat_dosy` notification icon (drawable vetor + PNG monocromático fallback). Resolve fallback errado pra ic_launcher na system tray.
+- **#017** [P1 Plan FASE 11.3] Wire LockScreen UI + biometria (`useAppLock`). Toggle App Lock em Settings + auto-lock 5min background + biometria desbloqueia + fallback PIN. Aceitação completa exige device físico.
+- **Sync docs:** ROADMAP §3/§12 + PROJETO header (estavam stale, paralisados em v0.1.7.5/v0.2.0.4).
 
-Branch nova: `release/v0.1.7.4` (criar a partir de master atualizada quando começar sessão).
+Branch: `release/v0.2.0.6` (criada 2026-05-04 a partir de master @ a4d8e3c v0.2.0.5).
 
-**Sequência sugerida (sessão dedicada):**
-```
-Pré-sessão: USER cadastra dose teste +24-30h em Vercel prod + FECHA Dosy Dev (gate #081 começa)
-Hora 0-1: validação 24h pós v0.1.7.2 (Sentry, Play Console, dose_alarms_scheduled, logs Supabase JWT janela)
-Hora 1-5: #085 alarme toggle bypass (refactor source-of-truth)
-Hora 5-9: #087 DND UX condicional (reusa fix #085)
-Hora 9-12: #086 resumo diário (paralelo possível)
-Hora ~24: USER reporta se alarme da dose teste disparou no horário → fecha #081 gate
-Hora final: #084 rotação JWT (último, requer redeploy tudo)
-Cleanup + release v0.1.7.3
-```
+**P0 restantes (todos manuais user — bloqueiam Open Testing):**
 
 **P0 restantes (todos manuais user):**
 
@@ -189,7 +188,7 @@ Cleanup + release v0.1.7.3
 | #007 | Telemetria PostHog `notification_delivered` | 1-2h | depende #018 manual user |
 | #009 | PITR + DR drill | 30min config + 2h drill | depende upgrade Pro plan |
 
-**Próxima sessão de código (sugerida pós-#084):** atacar P1 batch — RLS policies refinement (#012 + #013), recriar RPC `extend_continuous_treatments` (#014), `<label>` Login (#011), `ic_stat_dosy` icon (#010), `useDoses` refactor (#023), `minimum_password_length` 6→8 (#019). Release `v0.1.8.0` minor.
+**Próxima sessão de código (pós v0.2.0.6):** atacar P1/P2 backlog — #029 refactor Settings.jsx, #030 split notifications.js 588 LOC, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
 
 ---
 
@@ -281,8 +280,8 @@ ESTADO ATUAL: Internal Testing ativo
 ### 🟠 P1 — Alta Prioridade
 
 #### Mobile / Android
-- [ ] **#010** [Auditoria] Criar `ic_stat_dosy` notification icon. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
-- [ ] **#017** [Plan] Wire LockScreen UI + biometria (`useAppLock`). Plan FASE 11.3 → 12 ou 23
+- [x] **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813`] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados de `ic_launcher` → `ic_stat_dosy` + setColor accent peach. Pendente verificação visual device. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
+- [x] **#017** [Plan, fechado v0.2.0.6 commit `869ab34` — pendente device test] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings "Privacidade e segurança" + timeout configurável + biometric-auth com fallback device credential. Plan FASE 11.3
 - [ ] **#021** [Plan] Backup keystore 3 locais seguros. Plan FASE 18.3
 
 #### A11y
@@ -573,13 +572,16 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-- **Total:** 95 itens (+#094 paywall + #095 versão)
-- **Em aberto:** 58 (-5 em v0.1.7.5: #092 + #093 + #094 + #095 + #084). Ainda: 3 v0.1.6.10; 5 v0.1.7.0; 4 v0.1.7.1; 1 v0.1.7.2; 2 v0.1.7.3; 14 v0.1.7.4; #087FaseB; #089 v0.1.8.0
-- **P0:** 4 (manuais user; #084 fechado) · **P1:** 10 · **P2:** 21 · **P3:** 25
-- **Esforço P0 restante:** ~3-5 dias manual user + ~1-2 dias código (#079/#080 release v0.1.8.0)
-- **Esforço P0+P1:** ~15-20 dias-pessoa
-- **Wallclock até Produção pública:** ~6 semanas (inclui 14 dias passivos Closed Testing)
+> ⚠️ **Stale — reconciliação completa pendente.** Master rodou v0.2.0.0 → v0.2.0.5 enquanto §12 ficou paralisado em v0.1.7.5. Re-auditar contadores na próxima release. Contagem grep CHECKLIST atual: 74 abertos.
+>
+> Fechados em v0.2.0.6 (este branch): #010 (P1 BUG-005 ic_stat_dosy) + #017 (P1 LockScreen biometria) = 2 P1.
+
+- **Total:** ~95 itens (numeração até #126 hoje)
+- **Em aberto (CHECKLIST grep):** 74 - 2 (v0.2.0.6) = 72
+- **P0:** 4 manuais user (#003 pwd postgres + #004 vídeo FGS + #006 device validation + #008 Sentry secrets) + 2 dependentes (#007 PostHog, #009 PITR) — todos non-código
+- **Esforço P0 restante:** ~3-5 dias manual user (zero código)
+- **Wallclock até Open Testing pública:** ~5-6 semanas (Closed Testing 14 dias + ramp + estabilização)
 
 ---
 
-🚀 **Próximo passo concreto:** abrir [CHECKLIST.md §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function) e fechar item #001 (`send-test-push` admin check, 30 min).
+🚀 **Próximo passo concreto:** publicar release v0.2.0.6 (sync docs + #010 ic_stat_dosy + #017 LockScreen biometria) → AAB Play Console → device validation USER (#006 + #017 device test). Em paralelo USER executa P0 manuais (#003 rotação pwd postgres + #004 vídeo FGS + #008 Sentry secrets + #025 screenshots). Caminho mais rápido pra Closed Testing → Open Testing.
