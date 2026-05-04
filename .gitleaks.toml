@@ -1,0 +1,72 @@
+# Item #126 (release v0.2.0.5): gitleaks pre-commit secret scanning.
+# Detecta secrets ANTES de commit. Bloqueia push de creds hardcoded.
+# Investigação pós-incidentes #126: 3 leaks históricos (postgres pwd em
+# tools/*.cjs, VAPID private em Contexto.md). Husky atual rodava só
+# eslint — gap de segurança.
+#
+# Uso: gitleaks protect --staged --config=.gitleaks.toml
+# Pre-commit hook (.husky/pre-commit) roda automaticamente.
+
+title = "Dosy gitleaks config"
+
+[extend]
+# Stack de regras default do gitleaks (postgres, JWT, AWS, GCP, Supabase, etc)
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service role JWT (eyJ... aud=service_role)"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]+(?:[a-zA-Z0-9_-]*service_role[a-zA-Z0-9_-]*)?\.[A-Za-z0-9_-]+'''
+keywords = ["service_role", "supabase"]
+
+[[rules]]
+id = "postgres-connection-string-with-password"
+description = "PostgreSQL connection string with embedded password"
+regex = '''postgres(?:ql)?://[a-zA-Z0-9_]+:[^@\s'"]{8,}@'''
+keywords = ["postgres://", "postgresql://"]
+
+[[rules]]
+id = "vapid-private-key"
+description = "VAPID private key (Web Push)"
+regex = '''VAPID_PRIVATE_KEY\s*[:=]\s*['"]?[A-Za-z0-9_-]{40,}['"]?'''
+keywords = ["VAPID_PRIVATE_KEY", "vapid"]
+
+[[rules]]
+id = "supabase-publishable-but-not-anon-format"
+description = "Supabase publishable key (sb_publishable_*)"
+regex = '''sb_(?:publishable|secret)_[A-Za-z0-9_-]{20,}'''
+keywords = ["sb_publishable", "sb_secret"]
+
+[allowlist]
+# Placeholders OK em docs e .env.example
+description = "Whitelist placeholders + arquivos com tokens semi-públicos"
+regexes = [
+  '''<.+>''',
+  '''sua_.+_aqui''',
+  '''your_.+_here''',
+  '''example\.com''',
+  '''xxxxx+''',
+  '''postgres(?:ql)?://postgres:\$\{.+?\}@''',
+  '''postgres(?:ql)?://postgres:password@localhost''',
+  '''sb_publishable_[A-Za-z0-9_-]+''',  # publishable keys são OK ser públicas
+]
+paths = [
+  '''\.env\.example''',
+  '''\.gitleaks\.toml''',
+  # .env*.local + .env*.production gitignored — secrets reais ficam aí
+  # (gitleaks protect --staged não escaneia gitignored, mas dir-scan sim)
+  '''^\.env$''',
+  '''^\.env\.production$''',
+  '''^\.env\.local$''',
+  '''^\.env\..+\.local$''',
+  '''contexto/auditoria/.+\.md''',
+  '''contexto/archive/.+\.md''',
+  # Firebase google-services.json: convenção mobile OK ser tracked
+  # (Google API key restringida por package + SHA-1 fingerprint)
+  '''(?i)google-services\.json$''',
+  # Build artifacts gitignored mas filesystem scan acha
+  '''\.vercel/''',
+  '''android/app/build/''',
+  '''dist/''',
+  '''node_modules/''',
+]

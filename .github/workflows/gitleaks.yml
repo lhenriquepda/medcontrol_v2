@@ -1,0 +1,26 @@
+name: Secret scanning
+
+# Item #126 (release v0.2.0.5): segunda camada de defesa contra secrets vazados.
+# Pre-commit local (.husky/pre-commit) é primeira linha — pode ser bypassed
+# com --no-verify. CI roda em TODOS os pushes/PRs sem chance de bypass.
+# Falha vermelho = bloqueia merge se branch protection ativa.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master]
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history pra detectar leaks históricos
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE não obrigatório pra repos pessoais (free).
+          GITLEAKS_CONFIG: .gitleaks.toml
