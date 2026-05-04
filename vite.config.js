@@ -95,6 +95,8 @@ export default defineConfig(({ mode }) => {
             if (/[\\/]react[\\/]/.test(id)) return 'vendor-react'
             // Libs que requerem React top-level (parseInt(React.version) etc) — bundle junto pra ordem de load OK
             if (id.includes('focus-trap-react') || id.includes('focus-trap') || id.includes('tabbable')) return 'vendor-react'
+            // react-easy-crop importa React.Component — TEM que carregar após React (Item #114)
+            if (id.includes('react-easy-crop')) return 'vendor-react'
             // framer-motion: bundle junto com React pra garantir ordem de import
             if (id.includes('framer-motion') || id.includes('motion-utils') || id.includes('motion-dom')) return 'vendor-react'
             if (id.includes('@supabase') || id.includes('@tanstack')) return 'vendor-data'
