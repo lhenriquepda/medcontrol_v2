@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listPatientShares, sharePatientByEmail, unsharePatient } from '../services/sharesService'
+import { listPatientShares, listReceivedShares, sharePatientByEmail, unsharePatient } from '../services/sharesService'
 
 export function usePatientShares(patientId) {
   return useQuery({
@@ -17,6 +17,15 @@ export function useSharePatient() {
       qc.invalidateQueries({ queryKey: ['patient_shares', vars.patientId] })
       qc.invalidateQueries({ queryKey: ['patients'] })
     }
+  })
+}
+
+// Item #117 (release v0.2.0.3): shares recebidos por mim (alerta header).
+export function useReceivedShares() {
+  return useQuery({
+    queryKey: ['received_shares'],
+    queryFn: listReceivedShares,
+    staleTime: 60_000,
   })
 }
 

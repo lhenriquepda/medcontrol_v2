@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import Icon from './Icon'
 import { formatTime, relativeLabel } from '../utils/dateUtils'
@@ -21,7 +21,7 @@ const AXIS_LOCK_RATIO = 1.5   // horizontal must beat vertical by this factor to
  * with the action's color + label. On release past threshold, action fires;
  * otherwise card springs back to 0.
  */
-export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
+function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
   const s = STATUS_CONFIG[dose.status] || STATUS_CONFIG.pending
   const isActionable = dose.status === 'pending' || dose.status === 'overdue'
   const isOverdue = dose.status === 'overdue'
@@ -234,3 +234,10 @@ export default function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip })
     </div>
   )
 }
+
+// Item #033 (release v0.2.0.3): React.memo evita re-render quando props
+// não mudaram. Lista 50+ doses (Dashboard byPatient grouped) re-rendava
+// inteira a cada poll de useDoses (mesmo sem mudança real). Memo equality
+// shallow nas refs (dose obj, callbacks) — dose é stable pelo React Query
+// cache, callbacks devem usar useCallback no caller (Dashboard já usa).
+export default memo(DoseCard)

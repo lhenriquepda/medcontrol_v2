@@ -90,7 +90,12 @@ export default function SharePatientSheet({ open, onClose, patient }) {
                 margin: 0, paddingLeft: 4,
               }}>
                 <Lock size={11} strokeWidth={1.75}/>
-                Você está no plano Free. Assine PRO para compartilhar.
+                {/* Item #120 (release v0.2.0.3): copy condicional baseado em tier real.
+                    Plus user via "plano Plus" não "plano Free". Compartilhar é exclusivo
+                    pro/admin. */}
+                {tier === 'plus'
+                  ? 'Você está no plano Plus. Compartilhar é exclusivo PRO.'
+                  : 'Você está no plano Free. Assine PRO para compartilhar.'}
               </p>
             )}
           </form>

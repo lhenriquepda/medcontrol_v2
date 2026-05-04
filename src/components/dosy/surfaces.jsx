@@ -92,6 +92,15 @@ export function Sheet({
     return () => { document.body.style.overflow = prev }
   }, [open])
 
+  // Item #121 (release v0.2.0.3): Escape fecha o sheet/modal.
+  // Antes: nenhum keydown listener → keyboard a11y quebrada.
+  useEffect(() => {
+    if (!open || !onClose) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
   if (!open) return null
   if (typeof document === 'undefined') return null
 
@@ -180,6 +189,14 @@ export function Modal({
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [open])
+
+  // Item #121 (release v0.2.0.3): Escape fecha modal — keyboard a11y.
+  useEffect(() => {
+    if (!open || !onClose) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
 
   if (!open) return null
   if (typeof document === 'undefined') return null

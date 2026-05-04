@@ -47,3 +47,19 @@ export async function unsharePatient(patientId, targetUserId) {
   })
   if (error) throw mapErr(error)
 }
+
+// Item #117 (release v0.2.0.3): shares onde current user é o destinatário.
+// Usado pelo HeaderAlertIcon "paciente compartilhado comigo". RLS permite ver
+// rows onde sharedWithUserId = auth.uid() (mesma policy que dá acesso ao paciente).
+export async function listReceivedShares() {
+  if (!hasSupabase) return []
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('patient_shares')
+    .select('id, patientId, ownerId, createdAt')
+    .eq('sharedWithUserId', user.id)
+    .order('createdAt', { ascending: false })
+  if (error) throw error
+  return data || []
+}
