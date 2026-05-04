@@ -26,7 +26,13 @@ async function getRealVersion() {
 }
 
 // Web-only fallback. Native ignora — usa Play Store In-App Updates API.
-const VERSION_URL = 'https://dosy-teal.vercel.app/version.json'
+// Item #103 BUG-032: URL hardcoded apontava 'dosy-teal.vercel.app' (preview
+// antigo). Domínio real prod = dosy-app.vercel.app. Fetch ia 404 silent →
+// latest=null → available=false → banner nunca aparecia. Fix: usar origin
+// runtime quando web (mesmo deployment). Native ignora essa URL.
+const VERSION_URL = typeof window !== 'undefined' && window.location?.origin
+  ? `${window.location.origin}/version.json`
+  : 'https://dosy-app.vercel.app/version.json'
 const CHECK_INTERVAL_MS = 30 * 60 * 1000  // every 30 min while open
 const DISMISS_KEY = 'dosy_update_dismissed_version'
 
