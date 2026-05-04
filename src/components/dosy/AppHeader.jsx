@@ -42,7 +42,10 @@ export default function DosyAppHeader() {
     return { from: from.toISOString(), status: 'overdue' }
   }, [])
   const { data: overdueDoses = [] } = useDoses(overdueFilter)
-  const overdueCount = overdueDoses.length
+  // Filter por status atual: cache patch (mark taken/skipped) muta dose dentro do
+  // array sem alterar length. Sem este filter, sino fica com count stale após
+  // user marcar overdue como tomada/pulada/encerrar tratamento.
+  const overdueCount = overdueDoses.filter((d) => d.status === 'overdue').length
 
   // App update — integra mesmo padrão BellAlerts via R3
   const { available: updateAvailable, latest, startUpdate } = useAppUpdate()
