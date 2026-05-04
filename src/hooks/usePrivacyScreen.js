@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { App as CapApp } from '@capacitor/app'
 
 /**
  * usePrivacyScreen — Aud 4.5.4 G2/G3.
@@ -8,7 +9,11 @@ import { Capacitor } from '@capacitor/core'
  *
  * Usar em telas com info médica sensível: DoseModal, PatientDetail, Reports, DoseHistory.
  *
- * No-op em web (Notification.permission etc não aplicável).
+ * Pulado no Dosy Dev (debug variant `.dev` package) — permite screenshots + screen recording
+ * pra captura de assets store / demos / vídeos sem ritual. Dosy oficial (release variant)
+ * mantém FLAG_SECURE ativo normalmente.
+ *
+ * No-op em web.
  */
 export function usePrivacyScreen(active = true) {
   useEffect(() => {
@@ -17,6 +22,8 @@ export function usePrivacyScreen(active = true) {
     let plugin = null
     ;(async () => {
       try {
+        const info = await CapApp.getInfo().catch(() => null)
+        if (info?.id?.endsWith('.dev')) return
         const mod = await import('@capacitor-community/privacy-screen')
         plugin = mod.PrivacyScreen
         if (cancelled) return
