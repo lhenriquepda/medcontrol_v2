@@ -3,11 +3,18 @@ import { mock } from './mockStore'
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
-const PATIENT_COLS = 'id, userId, name, age, avatar, photo_url, weight, condition, doctor, allergies, createdAt, updatedAt'
+// Item #101 [P0 cost, v0.2.0.1]: PATIENT_COLS_LIST omits photo_url —
+// foto base64 pode ser 50KB-2MB por paciente, multiplicado por refetch
+// frequente = MB/min de egress. Lista index mostra emoji avatar (campo
+// `avatar`); photo_url só carrega no detail/edit (getPatient COLS_FULL).
+// allergies/condition/doctor mantidos no LIST (texto pequeno, useful em
+// subtitles).
+const PATIENT_COLS_LIST = 'id, userId, name, age, avatar, weight, condition, doctor, allergies, createdAt, updatedAt'
+const PATIENT_COLS_FULL = 'id, userId, name, age, avatar, photo_url, weight, condition, doctor, allergies, createdAt, updatedAt'
 
 export async function listPatients() {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').select(PATIENT_COLS)
+    const { data, error } = await supabase.from('patients').select(PATIENT_COLS_LIST)
     if (error) throw error
     return (data || []).sort(byCreatedDesc)
   }
@@ -18,7 +25,7 @@ export async function getPatient(id) {
   if (hasSupabase) {
     // maybeSingle() retorna null se 0 rows (vs .single() que dispara PGRST116/406).
     // Acontece quando paciente foi deletado mas hook ainda tem id no cache.
-    const { data, error } = await supabase.from('patients').select(PATIENT_COLS).eq('id', id).maybeSingle()
+    const { data, error } = await supabase.from('patients').select(PATIENT_COLS_FULL).eq('id', id).maybeSingle()
     if (error) throw error
     return data
   }
