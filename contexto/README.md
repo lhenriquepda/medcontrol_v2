@@ -310,7 +310,7 @@ Exemplo:
 
 > Pra testar o último cenário, preciso fazer login com sua conta admin no app.
 >
-> **O que é "conta admin":** sua conta principal que tem permissão especial pra mandar push de teste. Outras contas (como teste03) não.
+> **O que é "conta admin":** sua conta principal que tem permissão especial pra mandar push de teste. Outras contas (teste-free, teste-plus) não.
 >
 > **Como conseguir:**
 > - Opção fácil: você loga no app web (https://dosy-app.vercel.app), eu te guio passo a passo pra rodar o teste a partir do navegador.
@@ -721,7 +721,7 @@ Raras exceções pra master direto (sem branch + sem bump):
 
 1. Agente diz: *"Mudança X pronta na branch release/v0.1.7.1. Testa local:"*
 2. Comandos exatos: `git checkout release/v0.1.7.1 && npm install && npm run dev`
-3. Abre http://localhost:5173, loga `teste03@teste.com / 123456`
+3. Abre http://localhost:5173, loga `teste-plus@teste.com / 123456` (ou `teste-free@teste.com` se for testar paywall)
 4. Reporta: "funcionou" ou "não funcionou"
 
 **Cenário Android: agente quer que você teste em device físico (alarme, idle, plugin nativo).**
@@ -730,7 +730,7 @@ Raras exceções pra master direto (sem branch + sem bump):
 2. Android Studio aberto + branch `release/v*` checked out + sync Gradle OK
 3. Click **Run ▶** — Studio compila + instala **Dosy Dev** (`com.dosyapp.dosy.dev`)
 4. **Dosy Dev** abre no celular — ícone separado de Dosy oficial
-5. Login `teste03@teste.com / 123456` (mesmo backend Supabase, mas dados isolados por package se preferir contas diferentes)
+5. Login `teste-plus@teste.com / 123456` (mesmo backend Supabase; pra testar paywall use `teste-free@teste.com / 123456`)
 6. Pode desconectar cabo — app instalado roda independente
 7. Faz testes (criar dose, force stop, esperar idle, etc) **APENAS no Dosy Dev**
 8. **Dosy oficial Play Store** continua funcionando paralelo, intocado, com seus dados/medicamentos reais
@@ -1055,7 +1055,7 @@ Template:
 **Versão atual:** `0.1.7.5` (tag `v0.1.7.5`) · branch `master`
 **Vercel prod:** `https://dosy-app.vercel.app/` (master = v0.1.7.5)
 **Vercel dev:** `https://dosy-dev.vercel.app/` (release branch ativa — atualmente espelha master)
-**Conta teste:** `teste03@teste.com / 123456`
+**Contas teste:** `teste-free@teste.com / 123456` (tier free) + `teste-plus@teste.com / 123456` (tier plus). Antiga `teste03@teste.com` deletada.
 **Play Store Internal Testing:** AAB versionCode 30 / versionName 0.1.7.5.
 
 **Última release publicada:** v0.1.7.5 em 2026-05-03 — fechou #084 (JWT rotation) / #092 (egress) / #093 (Realtime race) / #094 (paywall race) / #095 (versão real).

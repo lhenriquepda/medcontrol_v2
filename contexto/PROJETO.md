@@ -978,5 +978,6 @@ git branch -D claude/NAME
 
 - `lhenrique.pda@gmail.com` — admin
 - `daffiny.estevam@gmail.com` — tester pro
-- `teste02@teste.com` / senha — tester plus (paciente Frederico Augusto + tratamentos Losartana 50mg)
-- `teste03@teste.com` / 123456 — tester plus signup fresh (paciente João Teste + tratamento Paracetamol 500mg)
+- `teste-free@teste.com` / `123456` — tester tier `free` (paywall ativo, 1 paciente máx)
+- `teste-plus@teste.com` / `123456` — tester tier `plus` (sem limite paciente, sem share)
+- (legado) `teste02@teste.com` + `teste03@teste.com` deletados — não usar

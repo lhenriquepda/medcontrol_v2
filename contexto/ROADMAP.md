@@ -8,7 +8,7 @@
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
 **Versão atual:** `0.2.0.6` (tag `v0.2.0.6`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.6 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Conta de teste: `teste03@teste.com / 123456`.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.6 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
