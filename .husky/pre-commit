@@ -1,1 +1,29 @@
+# Item #126 (release v0.2.0.5): pre-commit secret scan + lint.
+# Husky hook chamado pelo git em toda tentativa de commit.
+# Ordem: gitleaks PRIMEIRO (bloqueia secrets antes de gastar tempo em lint).
+
+# 1. Scan secrets — bloqueia commit se detectar credentials hardcoded.
+#    Usa gitleaks via npx (auto-download). --staged limita a arquivos staged.
+#    Exit code != 0 aborta commit (Husky padrão).
+#    Skip se gitleaks indisponível offline (warn mas não bloqueia).
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --config=.gitleaks.toml --redact || {
+    echo ""
+    echo "❌ gitleaks detectou secret(s) nos arquivos staged."
+    echo "   Remova credentials hardcoded ou adicione exceção em .gitleaks.toml."
+    echo "   Bypass emergency: git commit --no-verify (NUNCA pra master)."
+    exit 1
+  }
+elif npx --no-install gitleaks --version >/dev/null 2>&1; then
+  npx --no-install gitleaks protect --staged --config=.gitleaks.toml --redact || {
+    echo ""
+    echo "❌ gitleaks detectou secret(s) nos arquivos staged."
+    exit 1
+  }
+else
+  echo "⚠️  gitleaks não instalado. Instale via: brew install gitleaks  (ou choco install gitleaks)"
+  echo "    Pulando scan de secrets — VOCÊ é responsável por revisar manualmente."
+fi
+
+# 2. Lint + format
 npx lint-staged

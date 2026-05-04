@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-04 — pós release v0.2.0.3 (versionCode 36 / versionName 0.2.0.3). Em desenvolvimento: `release/v0.2.0.4`.
+> **Última revisão:** 2026-05-04 — pós release v0.2.0.4 (versionCode 37 / versionName 0.2.0.4). Em desenvolvimento: `release/v0.2.0.5`.
 
 ---
 
