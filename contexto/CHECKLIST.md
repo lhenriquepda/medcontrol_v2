@@ -128,14 +128,14 @@
 ## 🟠 P1 — Alta Prioridade (pré-soft-launch)
 
 ### #010 — Criar `ic_stat_dosy` notification icon
-- **Status:** ✅ Concluído @ commit cbfc813 (2026-05-04)
+- **Status:** ✅ Concluído @ commit cbfc813 (2026-05-04) — validado device S25 Ultra
 - **Origem:** [Auditoria] (BUG-005)
 - **Esforço:** 1h (designer + ImageMagick + cap sync)
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - `ic_stat_dosy.xml` vector drawable 24dp em `android/app/src/main/res/drawable/` (single source escala todas densidades; substituiu PNG colorida 96x96 stale).
-  - 3 paths Java nativos (AlarmReceiver/AlarmActivity/AlarmService) trocados de `R.mipmap.ic_launcher` (color block em status tray) → `R.drawable.ic_stat_dosy` + `setColor(0xFFFF6B5B)` accent peach.
-  - Pendente: APK rebuild + verificação visual em device físico (Dosy Dev).
+  - ✅ `ic_stat_dosy.xml` vector drawable 24dp em `android/app/src/main/res/drawable/` (single source escala todas densidades; substituiu PNG colorida 96x96 stale).
+  - ✅ 3 paths Java nativos (AlarmReceiver/AlarmActivity/AlarmService) trocados de `R.mipmap.ic_launcher` → `R.drawable.ic_stat_dosy` + `setColor(0xFFFF6B5B)` accent peach.
+  - ✅ Validação visual S25 Ultra Dosy Dev: notificação dispara, status tray mostra silhueta correta.
 - **Detalhe:** [auditoria/06-bugs.md#bug-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
 
 ### #011 — Adicionar `<label>` explícito em inputs Login (A11y universal — TalkBack/screen readers)
@@ -199,17 +199,19 @@
   - Threshold: ANR rate > 0.5%
 
 ### #017 — Wire LockScreen UI + integração biometria (`useAppLock`)
-- **Status:** ✅ Concluído @ commit 869ab34 (2026-05-04) — pendente device test
+- **Status:** ✅ Concluído @ commit 869ab34 (2026-05-04) — validado device S25 Ultra
 - **Origem:** [Plan.md] FASE 11.3 → 12 ou 23
 - **Esforço:** 4-6h
-- **Dependências:** device físico para teste (pendente)
-- **Aceitação:**
+- **Dependências:** nenhuma
+- **Aceitação (todos validados em S25 Ultra Dosy Dev):**
   - ✅ LockScreen overlay em App.jsx (camada lógica equivalente a main.jsx — AuthProvider necessário pra signOut escape hatch)
-  - ✅ Toggle "Bloqueio do app" em Settings seção "Privacidade e segurança" (native-only, default OFF)
-  - ✅ Auto-lock após 5min em background (default 5, configurável 1/5/15/30/60min via Dropdown)
+  - ✅ Toggle "Bloqueio do app" em Settings seção "Privacidade e segurança" (native-only, default OFF) — toast feedback + dropdown timeout aparece quando ON
+  - ✅ Auto-lock após N min em background (validado timeout 1min, configurável 1/5/15/30/60min via Dropdown)
   - ✅ Biometria desbloqueia (digital/face) via `@aparajita/capacitor-biometric-auth` 10.x
-  - ✅ Fallback senha celular via `allowDeviceCredential: true` (sem PIN app-internal)
-  - ⏸ Tested em device físico — pendente Dosy Dev USER
+  - ✅ Cold start: app abre direto na tela de bloqueio
+  - ✅ Cancelar prompt biometria (back button) mantém bloqueado + botões Desbloquear/Sair-da-conta visíveis
+  - ✅ Disable toggle exige biometria (anti-tamper)
+  - ✅ Fallback senha celular via `allowDeviceCredential: true`
 
 ### #018 — AdSense IDs reais (web — não-bloqueante Android)
 - **Status:** ⏳ Aberto

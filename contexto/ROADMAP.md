@@ -280,8 +280,8 @@ ESTADO ATUAL: Internal Testing ativo
 ### 🟠 P1 — Alta Prioridade
 
 #### Mobile / Android
-- [x] **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813`] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados de `ic_launcher` → `ic_stat_dosy` + setColor accent peach. Pendente verificação visual device. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
-- [x] **#017** [Plan, fechado v0.2.0.6 commit `869ab34` — pendente device test] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings "Privacidade e segurança" + timeout configurável + biometric-auth com fallback device credential. Plan FASE 11.3
+- [x] **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813` — validado S25 Ultra] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados + setColor accent peach. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
+- [x] **#017** [Plan, fechado v0.2.0.6 commit `869ab34` — validado S25 Ultra] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings "Privacidade e segurança" + timeout configurável + biometric-auth allowDeviceCredential fallback. Plan FASE 11.3
 - [ ] **#021** [Plan] Backup keystore 3 locais seguros. Plan FASE 18.3
 
 #### A11y
