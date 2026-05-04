@@ -120,13 +120,10 @@ export function BellAlerts({ alerts = [], open, onOpenChange, className = '', st
     return () => document.removeEventListener('pointerdown', onDocClick, true)
   }, [isOpen])
 
-  if (alerts.length === 0) {
-    return (
-      <span ref={bellRef} style={{ display: 'inline-flex' }}>
-        <BellButton count={0} onClick={() => setOpen(!isOpen)} className={className} style={style}/>
-      </span>
-    )
-  }
+  // User request 2026-05-04: sino invisível quando 0 alertas — não mostra
+  // ícone vazio que apenas ocupa espaço sem ação útil. Reaparece automático
+  // quando overdueCount > 0 ou update available.
+  if (alerts.length === 0) return null
 
   return (
     <>
