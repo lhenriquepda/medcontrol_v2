@@ -19,7 +19,14 @@ export async function listAllUsers() {
   if (!hasSupabase) return []
   const { data, error } = await supabase.rpc('admin_list_users')
   if (error) throw error
-  return data || []
+  // Item #096 BUG-028: aplica mesma promo `free → plus` que getMyTier aplica
+  // pro client logado. Sem isso, Admin panel mostra users como "free" mas
+  // app deles trata como "plus" (inconsistência tier display).
+  // Remover quando assinatura lançar e promo for desativada.
+  return (data || []).map((u) => ({
+    ...u,
+    effectiveTier: u.effectiveTier === 'free' ? 'plus' : u.effectiveTier,
+  }))
 }
 
 export async function grantTier({ userId, tier, expiresAt = null, source = 'admin_panel' }) {
