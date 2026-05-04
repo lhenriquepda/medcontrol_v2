@@ -1,24 +1,32 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
+import { Calendar, Pill, BarChart3, FileText, Settings as SettingsIcon, HelpCircle, Lock, ChevronRight, Crown } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
-import Icon from '../components/Icon'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
+import { Card, Avatar } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { useAuth } from '../hooks/useAuth'
-import { displayName, initial } from '../utils/userDisplay'
+import { displayName } from '../utils/userDisplay'
 import { useIsAdmin, useIsPro, useMyTier } from '../hooks/useSubscription'
-import { TIER_LABELS, TIER_COLORS_BOLD as TIER_COLORS } from '../utils/tierUtils'
+import { TIER_LABELS } from '../utils/tierUtils'
 
 const ITEMS = [
-  { to: '/historico', icon: 'calendar', label: 'Histórico', hint: 'Doses por dia, adesão', pro: false },
-  { to: '/tratamentos', icon: 'pill', label: 'Tratamentos', hint: 'Lista e gerenciamento', pro: false },
-  { to: '/relatorios-analise', icon: 'bar-chart', label: 'Análises', hint: 'Adesão e calendários', pro: true },
-  { to: '/relatorios', icon: 'file-text', label: 'Relatórios', hint: 'Exportar PDF / CSV', pro: true },
-  { to: '/ajustes', icon: 'settings', label: 'Ajustes', hint: 'Tema, notificações, conta', pro: false },
-  { to: '/faq', icon: 'info', label: 'Ajuda / FAQ', hint: 'Dúvidas, suporte e tutoriais', pro: false }
+  { to: '/historico',          Icon: Calendar,     label: 'Histórico',     hint: 'Doses por dia, adesão',           pro: false },
+  { to: '/tratamentos',        Icon: Pill,         label: 'Tratamentos',   hint: 'Lista e gerenciamento',           pro: false },
+  { to: '/relatorios-analise', Icon: BarChart3,    label: 'Análises',      hint: 'Adesão e calendários',            pro: true },
+  { to: '/relatorios',         Icon: FileText,     label: 'Relatórios',    hint: 'Exportar PDF / CSV',              pro: true },
+  { to: '/ajustes',            Icon: SettingsIcon, label: 'Ajustes',       hint: 'Tema, notificações, conta',       pro: false },
+  { to: '/faq',                Icon: HelpCircle,   label: 'Ajuda / FAQ',   hint: 'Dúvidas, suporte e tutoriais',    pro: false },
 ]
+
+const TIER_BADGE_STYLE = {
+  free:  { background: 'var(--dosy-peach-100)',          color: 'var(--dosy-fg-secondary)' },
+  plus:  { background: 'var(--dosy-info-bg)',            color: 'var(--dosy-info)' },
+  pro:   { background: 'var(--dosy-gradient-sunset)',    color: 'var(--dosy-fg-on-sunset)' },
+  admin: { background: 'var(--dosy-fg)',                 color: 'var(--dosy-bg)' },
+}
 
 export default function More() {
   const { user } = useAuth()
@@ -26,7 +34,6 @@ export default function More() {
   const isPro = useIsPro()
   const { data: tier = 'free' } = useMyTier()
   const [paywall, setPaywall] = useState(false)
-  const nav = useNavigate()
 
   function handleItem(it, e) {
     if (it.pro && !isPro) {
@@ -36,34 +43,76 @@ export default function More() {
   }
 
   return (
-    <div className="pb-28">
-      <Header title="Mais" />
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-4">
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader title="Mais" />
+
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
+
         {user && (
-          <div className="card p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-bold">
-              {initial(user)}
+          <Card padding={16} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Avatar name={displayName(user)} color="sunset" size={48}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontFamily: 'var(--dosy-font-display)', fontWeight: 700, fontSize: 15,
+                letterSpacing: '-0.01em', color: 'var(--dosy-fg)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{displayName(user)}</div>
+              <div style={{
+                fontSize: 12, color: 'var(--dosy-fg-secondary)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{user.email}</div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold truncate">{displayName(user)}</p>
-              <p className="text-xs text-slate-500 truncate">{user.email}</p>
-              <p className="text-[10px] text-slate-400">Plano <strong>{TIER_LABELS[tier]}</strong></p>
-            </div>
-            <span className={`chip ${TIER_COLORS[tier]}`}>{TIER_LABELS[tier]}</span>
-          </div>
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: '0.05em',
+              padding: '4px 10px', borderRadius: 9999,
+              ...(TIER_BADGE_STYLE[tier] || TIER_BADGE_STYLE.free),
+              textTransform: 'uppercase', flexShrink: 0,
+              fontFamily: 'var(--dosy-font-display)',
+            }}>{TIER_LABELS[tier]}</span>
+          </Card>
         )}
 
         {tier === 'free' && (
-          <button onClick={() => setPaywall(true)}
-                  className="w-full rounded-2xl p-4 bg-gradient-to-r from-brand-600 to-brand-500 text-white text-left active:scale-[0.99]">
-            <p className="font-bold">Conheça o Dosy PRO</p>
-            <p className="text-xs opacity-90">Pacientes ilimitados · Relatórios · Análises</p>
+          <button
+            type="button"
+            onClick={() => setPaywall(true)}
+            className="dosy-press"
+            style={{
+              width: '100%', textAlign: 'left',
+              padding: 18,
+              background: 'var(--dosy-gradient-sunset)',
+              color: 'var(--dosy-fg-on-sunset)',
+              border: 'none', borderRadius: 24,
+              cursor: 'pointer',
+              boxShadow: '0 16px 36px -10px rgba(255,61,127,0.4), 0 6px 14px -6px rgba(255,107,91,0.24)',
+              display: 'flex', alignItems: 'center', gap: 12,
+              fontFamily: 'var(--dosy-font-body)',
+            }}
+          >
+            <div style={{
+              width: 44, height: 44, borderRadius: 14,
+              background: 'rgba(255,255,255,0.2)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Crown size={22} strokeWidth={1.75}/>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontFamily: 'var(--dosy-font-display)',
+                fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em',
+              }}>Conheça o Dosy PRO</div>
+              <div style={{ fontSize: 12.5, opacity: 0.92, marginTop: 2 }}>
+                Pacientes ilimitados · Relatórios · Análises
+              </div>
+            </div>
+            <ChevronRight size={20} strokeWidth={2}/>
           </button>
         )}
 
         <motion.div
-          className="space-y-1"
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
           initial="initial"
           animate="animate"
           variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
@@ -78,43 +127,100 @@ export default function More() {
                   animate: { opacity: 1, x: 0, transition: { duration: TIMING.base, ease: EASE.inOut } },
                 }}
               >
-              <Link to={it.to}
-                    onClick={(e) => handleItem(it, e)}
-                    className={`card p-4 flex items-center gap-3 active:scale-[0.97] ${locked ? 'opacity-60' : ''}`}>
-                <span className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0">
-                  <Icon name={it.icon} size={22} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium flex items-center gap-2">
-                    {it.label}
-                    {locked && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 inline-flex items-center gap-1">
-                        <Icon name="lock" size={11} /> PRO
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-slate-500">{it.hint}</p>
-                </div>
-                <Icon name={locked ? 'lock' : 'chevron'} size={18} className="text-slate-400 shrink-0" />
-              </Link>
+                <Link
+                  to={it.to}
+                  onClick={(e) => handleItem(it, e)}
+                  className="dosy-press"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: 14,
+                    background: 'var(--dosy-bg-elevated)',
+                    borderRadius: 18,
+                    boxShadow: 'var(--dosy-shadow-sm)',
+                    textDecoration: 'none',
+                    color: 'var(--dosy-fg)',
+                    opacity: locked ? 0.7 : 1,
+                  }}
+                >
+                  <span style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: 'var(--dosy-peach-100)',
+                    color: 'var(--dosy-primary)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <it.Icon size={22} strokeWidth={1.75}/>
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontWeight: 600, fontSize: 14.5,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      color: 'var(--dosy-fg)',
+                    }}>
+                      {it.label}
+                      {locked && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 800,
+                          padding: '2px 6px',
+                          background: 'var(--dosy-warning-bg)',
+                          color: '#C5841A',
+                          borderRadius: 6,
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                          fontFamily: 'var(--dosy-font-display)',
+                        }}>
+                          <Lock size={10} strokeWidth={2}/> PRO
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
+                      {it.hint}
+                    </div>
+                  </div>
+                  {locked
+                    ? <Lock size={16} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)', flexShrink: 0 }}/>
+                    : <ChevronRight size={18} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)', flexShrink: 0 }}/>
+                  }
+                </Link>
               </motion.div>
             )
           })}
 
           {isAdmin && (
-            <Link to="/admin" className="card p-4 flex items-center gap-3 active:scale-[0.99] border-2 border-rose-200 dark:border-rose-500/30">
-              <span className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0">
-                <Icon name="crown" size={22} />
+            <Link
+              to="/admin"
+              className="dosy-press"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: 14,
+                background: 'var(--dosy-bg-elevated)',
+                borderRadius: 18,
+                boxShadow: 'var(--dosy-shadow-sm)',
+                border: '2px solid rgba(229,86,74,0.3)',
+                textDecoration: 'none',
+                color: 'var(--dosy-fg)',
+              }}
+            >
+              <span style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: 'var(--dosy-danger-bg)',
+                color: 'var(--dosy-danger)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Crown size={22} strokeWidth={1.75}/>
               </span>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium">Painel Admin</p>
-                <p className="text-xs text-slate-500">Gerenciar usuários e assinaturas</p>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--dosy-fg)' }}>
+                  Painel Admin
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
+                  Gerenciar usuários e assinaturas
+                </div>
               </div>
-              <Icon name="chevron" size={18} className="text-slate-400 shrink-0" />
+              <ChevronRight size={18} strokeWidth={1.75} style={{ color: 'var(--dosy-fg-tertiary)', flexShrink: 0 }}/>
             </Link>
           )}
         </motion.div>
-
       </div>
 
       <PaywallModal open={paywall} onClose={() => setPaywall(false)} />

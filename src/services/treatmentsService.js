@@ -88,6 +88,73 @@ export async function deleteTreatment(id) {
   mock.remove('treatments', id)
 }
 
+/** Cancel all pending future doses (scheduledAt > now). Used when pausing/ending. */
+async function cancelFutureDoses(treatmentId) {
+  if (hasSupabase) {
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase
+      .from('doses')
+      .delete()
+      .eq('treatmentId', treatmentId)
+      .eq('status', 'pending')
+      .gt('scheduledAt', nowIso)
+    if (error) throw error
+    return
+  }
+  // Mock: filter out future pending doses
+  const all = mock.list('doses', { treatmentId })
+  const nowMs = Date.now()
+  for (const d of all) {
+    if (d.status === 'pending' && new Date(d.scheduledAt).getTime() > nowMs) {
+      mock.remove('doses', d.id)
+    }
+  }
+}
+
+/** Pausa tratamento: status=paused + cancela doses futuras pendentes (alarmes param). Reversível. */
+export async function pauseTreatment(id) {
+  if (hasSupabase) {
+    const { error } = await supabase.from('treatments').update({ status: 'paused' }).eq('id', id)
+    if (error) throw error
+  } else {
+    mock.update('treatments', id, { status: 'paused' })
+  }
+  await cancelFutureDoses(id)
+}
+
+/** Retoma tratamento pausado: status=active. Doses futuras regeneradas via RPC update_treatment_schedule. */
+export async function resumeTreatment(id) {
+  if (hasSupabase) {
+    // Try RPC first — regenera doses futuras se necessário
+    try {
+      const { error } = await supabase.rpc('update_treatment_schedule', {
+        p_treatment_id: id,
+        p_patch: { status: 'active' },
+      })
+      if (error) throw error
+      return
+    } catch (e) {
+      // Fallback: simple status update (doses não regeneradas — user pode editar treatment pra forçar)
+      console.warn('[resumeTreatment] RPC failed, falling back to status update:', e?.message)
+      const { error } = await supabase.from('treatments').update({ status: 'active' }).eq('id', id)
+      if (error) throw error
+    }
+  } else {
+    mock.update('treatments', id, { status: 'active' })
+  }
+}
+
+/** Encerra tratamento permanentemente: status=ended + cancela doses futuras. Não reversível. */
+export async function endTreatment(id) {
+  if (hasSupabase) {
+    const { error } = await supabase.from('treatments').update({ status: 'ended' }).eq('id', id)
+    if (error) throw error
+  } else {
+    mock.update('treatments', id, { status: 'ended' })
+  }
+  await cancelFutureDoses(id)
+}
+
 export async function listTemplates() {
   if (hasSupabase) {
     const { data, error } = await supabase.from('treatment_templates').select(

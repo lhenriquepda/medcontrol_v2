@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listTreatments, getTreatment, createTreatmentWithDoses, updateTreatment, deleteTreatment, listTemplates, createTemplate } from '../services/treatmentsService'
+import { listTreatments, getTreatment, createTreatmentWithDoses, updateTreatment, deleteTreatment, listTemplates, createTemplate, pauseTreatment, resumeTreatment, endTreatment } from '../services/treatmentsService'
 import { track, EVENTS } from '../services/analytics'
 
 export function useTreatments(filter = {}) {
@@ -46,6 +46,42 @@ export function useDeleteTreatment() {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
     }
+  })
+}
+export function usePauseTreatment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: pauseTreatment,
+    onSuccess: () => {
+      track(EVENTS.TREATMENT_PAUSED || 'treatment_paused')
+      qc.invalidateQueries({ queryKey: ['treatments'] })
+      qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['user_medications'] })
+    },
+  })
+}
+export function useResumeTreatment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: resumeTreatment,
+    onSuccess: () => {
+      track(EVENTS.TREATMENT_RESUMED || 'treatment_resumed')
+      qc.invalidateQueries({ queryKey: ['treatments'] })
+      qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['user_medications'] })
+    },
+  })
+}
+export function useEndTreatment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: endTreatment,
+    onSuccess: () => {
+      track(EVENTS.TREATMENT_ENDED || 'treatment_ended')
+      qc.invalidateQueries({ queryKey: ['treatments'] })
+      qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['user_medications'] })
+    },
   })
 }
 export function useTemplates() {

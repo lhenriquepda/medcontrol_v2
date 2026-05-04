@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#4f4cc8</color>
-    <color name="colorPrimaryDark">#3a37b0</color>
-    <color name="colorAccent">#EC4899</color>
-    <!-- Splash background (matches resources/splash.png corner color, ~roxo) -->
-    <color name="dosy_splash_bg">#4f4cc8</color>
+    <!-- Dosy v0.2.0.0 — sunset palette -->
+    <color name="colorPrimary">#FF6B5B</color>
+    <color name="colorPrimaryDark">#E04638</color>
+    <color name="colorAccent">#FF3D7F</color>
+    <!-- Splash background — matches dosy-bg cream peach -->
+    <color name="dosy_splash_bg">#FFF4EC</color>
 </resources>

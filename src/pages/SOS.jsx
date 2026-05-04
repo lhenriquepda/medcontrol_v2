@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import Header from '../components/Header'
-import Icon from '../components/Icon'
+import { Siren } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
-import Field from '../components/Field'
 import PatientPicker from '../components/PatientPicker'
 import MedNameInput from '../components/MedNameInput'
+import { Card, Button, Input } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule } from '../hooks/useDoses'
 import { validateSos } from '../services/dosesService'
@@ -27,7 +27,10 @@ export default function SOS() {
   const register = useRegisterSos()
   const toast = useToast()
 
-  const currentRule = useMemo(() => rules.find((r) => r.medName.toLowerCase() === medName.toLowerCase()), [rules, medName])
+  const currentRule = useMemo(
+    () => rules.find((r) => r.medName.toLowerCase() === medName.toLowerCase()),
+    [rules, medName],
+  )
   const [ruleMin, setRuleMin] = useState('')
   const [ruleMax, setRuleMax] = useState('')
 
@@ -36,7 +39,7 @@ export default function SOS() {
     await upsertRule.mutateAsync({
       id: currentRule?.id, patientId, medName: medName.trim(),
       minIntervalHours: ruleMin ? Number(ruleMin) : null,
-      maxDosesIn24h: ruleMax ? Number(ruleMax) : null
+      maxDosesIn24h: ruleMax ? Number(ruleMax) : null,
     })
     toast.show({ message: 'Regra de segurança salva.', kind: 'success' })
     setRuleMin(''); setRuleMax('')
@@ -52,7 +55,7 @@ export default function SOS() {
     if (!v.ok) {
       toast.show({
         message: `${v.reason}${v.nextAt ? ' Próxima permitida: ' + formatDateTime(v.nextAt) : ''}`,
-        kind: 'error', duration: 7000
+        kind: 'error', duration: 7000,
       })
       return
     }
@@ -63,16 +66,30 @@ export default function SOS() {
 
   return (
     <motion.div
-      className="pb-28 bg-rose-50/60 dark:bg-rose-950/30 min-h-screen"
+      style={{
+        paddingBottom: 110,
+        background: 'var(--dosy-danger-bg)',
+        minHeight: '100vh',
+      }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: TIMING.base, ease: EASE.inOut }}
     >
-      <Header title="S.O.S" subtitle="Dose extra fora do agendado" />
-      <form onSubmit={submit} className="max-w-md mx-auto px-4 pt-3 space-y-4">
+      <PageHeader title="S.O.S" subtitle="Dose extra fora do agendado"/>
+
+      <form
+        onSubmit={submit}
+        className="max-w-md mx-auto px-4 pt-1"
+        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+      >
         <AdBanner />
-        <div>
-          <p className="text-xs font-medium mb-1">Paciente *</p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <label style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
+            fontFamily: 'var(--dosy-font-display)',
+          }}>Paciente <span style={{ color: 'var(--dosy-danger)' }}>*</span></label>
           <PatientPicker
             patients={patients}
             value={patientId}
@@ -81,47 +98,109 @@ export default function SOS() {
           />
         </div>
 
-        <Field label="Medicamento *">
-          <MedNameInput value={medName} onChange={setMedName} required />
-        </Field>
-        <Field label="Dose *">
-          <input required className="input" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Ex: 1 comprimido" />
-        </Field>
-        <Field label="Horário">
-          <input type="datetime-local" className="input" value={when} onChange={(e) => setWhen(e.target.value)} />
-        </Field>
-        <Field label="Observação">
-          <textarea className="input" rows={2} value={observation} onChange={(e) => setObservation(e.target.value)} placeholder="Ex: Dor de cabeça forte" />
-        </Field>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <label style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
+            fontFamily: 'var(--dosy-font-display)',
+          }}>Medicamento <span style={{ color: 'var(--dosy-danger)' }}>*</span></label>
+          <MedNameInput value={medName} onChange={setMedName} required/>
+        </div>
+
+        <Input
+          label="Dose"
+          required
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="Ex: 1 comprimido"
+        />
+        <Input
+          label="Horário"
+          type="datetime-local"
+          value={when}
+          onChange={(e) => setWhen(e.target.value)}
+        />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <label style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
+            fontFamily: 'var(--dosy-font-display)',
+          }}>Observação</label>
+          <textarea
+            rows={2}
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
+            placeholder="Ex: Dor de cabeça forte"
+            style={{
+              width: '100%',
+              padding: '14px 18px',
+              borderRadius: 16,
+              background: 'var(--dosy-bg-elevated)',
+              boxShadow: 'var(--dosy-shadow-xs)',
+              border: '1.5px solid transparent',
+              fontSize: 15, color: 'var(--dosy-fg)',
+              outline: 'none',
+              fontFamily: 'var(--dosy-font-body)',
+              resize: 'vertical',
+            }}
+          />
+        </div>
 
         {patientId && medName && (
-          <div className="card p-4 space-y-3">
-            <p className="text-xs font-medium">Regras de segurança para “{medName}”</p>
+          <Card padding={16}>
+            <p style={{
+              fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: 'var(--dosy-fg-secondary)',
+              margin: '0 0 8px 0',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>Regras de segurança para "{medName}"</p>
             {currentRule ? (
-              <div className="text-xs text-slate-500">
+              <div style={{ fontSize: 12.5, color: 'var(--dosy-fg-secondary)', marginBottom: 12 }}>
                 {currentRule.minIntervalHours ? `Intervalo mínimo: ${currentRule.minIntervalHours}h · ` : ''}
                 {currentRule.maxDosesIn24h ? `Máx: ${currentRule.maxDosesIn24h}/24h` : ''}
               </div>
             ) : (
-              <p className="text-xs text-slate-500">Nenhuma regra definida.</p>
+              <p style={{ fontSize: 12.5, color: 'var(--dosy-fg-secondary)', marginBottom: 12, margin: '0 0 12px 0' }}>
+                Nenhuma regra definida.
+              </p>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <input className="input" placeholder="Intervalo mín. (h)" value={ruleMin}
-                     onChange={(e) => setRuleMin(e.target.value)} type="number" inputMode="decimal" min={0} />
-              <input className="input" placeholder="Máx/24h" value={ruleMax}
-                     onChange={(e) => setRuleMax(e.target.value)} type="number" inputMode="numeric" min={0} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+              <Input
+                placeholder="Intervalo mín. (h)"
+                value={ruleMin}
+                onChange={(e) => setRuleMin(e.target.value)}
+                type="number"
+                inputMode="decimal"
+                min={0}
+              />
+              <Input
+                placeholder="Máx/24h"
+                value={ruleMax}
+                onChange={(e) => setRuleMax(e.target.value)}
+                type="number"
+                inputMode="numeric"
+                min={0}
+              />
             </div>
-            <button type="button" onClick={saveRule} className="btn-secondary w-full text-sm">
+            <Button type="button" kind="secondary" full onClick={saveRule}>
               {currentRule ? 'Atualizar regra' : 'Salvar regra'}
-            </button>
-          </div>
+            </Button>
+          </Card>
         )}
 
-        <button type="submit" className="btn-danger w-full" disabled={register.isPending}>
-          <span className="inline-flex items-center justify-center gap-2"><Icon name="sos" size={18} /> Registrar S.O.S</span>
-        </button>
+        <Button
+          type="submit"
+          kind="danger-solid"
+          full
+          size="lg"
+          icon={Siren}
+          disabled={register.isPending}
+        >
+          Registrar S.O.S
+        </Button>
       </form>
     </motion.div>
   )
 }
-

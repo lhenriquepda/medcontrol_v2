@@ -1,15 +1,33 @@
-import BottomSheet from './BottomSheet'
+import { Modal, Button } from './dosy'
 
-export default function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger, onConfirm, onClose }) {
+export default function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  danger,
+  onConfirm,
+  onClose,
+}) {
   return (
-    <BottomSheet open={open} onClose={onClose} title={title}>
-      <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{message}</p>
-      <div className="flex gap-2">
-        <button className="btn-secondary flex-1" onClick={onClose}>{cancelLabel}</button>
-        <button className={danger ? 'btn-danger flex-1' : 'btn-primary flex-1'} onClick={() => { onConfirm?.(); onClose?.() }}>
+    <Modal open={open} onClose={onClose} title={title}>
+      <p style={{
+        fontSize: 14, color: 'var(--dosy-fg-secondary)',
+        lineHeight: 1.5, margin: '0 0 18px 0',
+      }}>{message}</p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button kind="secondary" onClick={onClose} full>
+          {cancelLabel}
+        </Button>
+        <Button
+          kind={danger ? 'danger-solid' : 'primary'}
+          onClick={() => { onConfirm?.(); onClose?.() }}
+          full
+        >
           {confirmLabel}
-        </button>
+        </Button>
       </div>
-    </BottomSheet>
+    </Modal>
   )
 }

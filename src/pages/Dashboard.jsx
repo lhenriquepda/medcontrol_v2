@@ -9,10 +9,14 @@ import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
 import MultiDoseModal from '../components/MultiDoseModal'
-import EmptyState from '../components/EmptyState'
 import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
+// Dosy v0.2.0.0 redesign — primitives + hero/stats
+import { Card, Avatar, StatusPill, Button } from '../components/dosy'
+import { HeroGauge } from '../components/dosy/HeroGauge'
+import { MiniStat } from '../components/dosy/MiniStat'
+import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useDoses, useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
 import { usePatients } from '../hooks/usePatients'
@@ -111,7 +115,10 @@ export default function Dashboard() {
   const { data: todayDoses = [] } = useDoses(windows.today)
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
   const { data: overdueAll = [] } = useDoses(windows.overdue)
-  const overdueNow = overdueAll.length
+  // overdueAll cache pode conter doses com status atualizado post-patch
+  // (status='done' ou 'skipped' após user marcar). Filtra por status atual
+  // pra count refletir tempo-real sem precisar refetch + revisitar tela.
+  const overdueNow = overdueAll.filter((d) => d.status === 'overdue').length
   const { data: weekDoses = [] } = useDoses(windows.week)
   const adherence = (() => {
     const past = weekDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
@@ -120,17 +127,37 @@ export default function Dashboard() {
     return Math.round((taken / past.length) * 100)
   })()
 
+  // Merge: forward-window doses + sempre-overdue. Atrasadas semana passada
+  // aparecem mesmo no filtro '12h'. Quando user escolhe status explícito ou
+  // 'Tudo', merge é skip (evita dup ou poluição).
+  const shouldMergeOverdue = !filters.status && filters.range !== 'all'
+  const mergedDoses = useMemo(() => {
+    if (!shouldMergeOverdue) return doses
+    const seen = new Map()
+    for (const d of doses) seen.set(d.id, d)
+    for (const d of overdueAll) if (!seen.has(d.id)) seen.set(d.id, d)
+    return [...seen.values()]
+  }, [doses, overdueAll, shouldMergeOverdue])
+
   const grouped = useMemo(() => {
     const map = new Map()
-    for (const d of doses) {
+    for (const d of mergedDoses) {
       if (!map.has(d.patientId)) map.set(d.patientId, [])
       map.get(d.patientId).push(d)
     }
-    return [...map.entries()].map(([pid, list]) => ({
-      patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
-      list
-    }))
-  }, [doses, patients])
+    // Doses dentro do grupo: cronológico asc (data + hora) independente do status.
+    for (const list of map.values()) {
+      list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+    }
+    // Pacientes: alfabético por name (locale pt-BR, case-insensitive).
+    const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
+    return [...map.entries()]
+      .map(([pid, list]) => ({
+        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
+        list,
+      }))
+      .sort((a, b) => collator.compare(a.patient.name || '', b.patient.name || ''))
+  }, [mergedDoses, patients])
 
   const selectedPatient = selected && patients.find((p) => p.id === selected.patientId)
 
@@ -203,54 +230,136 @@ export default function Dashboard() {
     <div className="pb-28">
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 
-      <div className="max-w-md mx-auto px-4 pt-3">
-        <motion.div
-          className="grid grid-cols-3 gap-2 mb-4"
-          initial="initial"
-          animate="animate"
-          variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
-        >
-          {[
-            ['Pendentes hoje', pendingToday, 'brand', false],
-            ['Adesão 7d', adherence == null ? '—' : `${adherence}%`, 'emerald', false],
-            ['Atrasadas', overdueNow, overdueNow > 0 ? 'rose' : 'slate', overdueNow > 0],
-          ].map(([label, value, tone, alert]) => (
-            <motion.div
-              key={label}
-              variants={{
-                initial: { opacity: 0, y: 16, scale: 0.92 },
-                animate: { opacity: 1, y: 0, scale: 1, transition: { ...EASE.spring } },
-              }}
-            >
-              <Stat label={label} value={value} tone={tone} alert={alert} />
-            </motion.div>
-          ))}
-        </motion.div>
+      <div className="max-w-md mx-auto px-4 pt-3" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Dosy v0.2.0.0 redesign — Hero sunset card + 2 MiniStat 2-up */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Card gradient padding={18} style={{ position: 'relative', overflow: 'hidden' }}>
+            {/* Subtle radial highlight overlay */}
+            <div style={{
+              position: 'absolute', top: -50, right: -40, width: 200, height: 200,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }}/>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative' }}>
+              <HeroGauge taken={todayDoses.filter(d => d.status === 'done').length} total={Math.max(todayDoses.length, 1)} size={108}/>
+              <div style={{ flex: 1, color: '#fff' }}>
+                <div style={{
+                  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em',
+                  textTransform: 'uppercase', opacity: 0.85,
+                  fontFamily: 'var(--dosy-font-display)',
+                }}>Hoje</div>
+                <div style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 800, fontSize: 30,
+                  lineHeight: 1.05, letterSpacing: '-0.025em', marginTop: 4,
+                }}>
+                  {pendingToday} {pendingToday === 1 ? 'pendente' : 'pendentes'}
+                </div>
+                <div style={{ fontSize: 12.5, opacity: 0.92, marginTop: 6, lineHeight: 1.4 }}>
+                  {overdueNow > 0
+                    ? `${overdueNow} atrasada${overdueNow > 1 ? 's' : ''} agora`
+                    : 'Tá em dia.'}
+                </div>
+              </div>
+            </div>
+          </Card>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <MiniStat
+              label="Adesão 7d"
+              value={adherence == null ? '—' : `${adherence}%`}
+              tone="success"
+            />
+            <MiniStat
+              label="Atrasadas"
+              value={overdueNow}
+              unit={overdueNow > 0 ? 'agora' : undefined}
+              tone={overdueNow > 0 ? 'danger' : 'neutral'}
+            />
+          </div>
+        </div>
 
-        <AdBanner className="mb-4" />
+        <AdBanner />
 
         {isLoading ? <SkeletonList count={4} /> : (
           patients.length === 0 ? (
-            <div className="card p-5 mt-2">
-              <Icon name="hand" size={40} className="mb-2 text-brand-600" />
-              <h3 className="font-semibold text-lg">Bem-vindo ao Dosy!</h3>
-              <p className="text-sm text-slate-500 mt-1 mb-4">
-                Comece cadastrando as pessoas que você vai acompanhar — você, seus filhos, familiares…
+            <Card padding={20} style={{ marginTop: 8 }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16,
+                background: 'var(--dosy-peach-100)',
+                color: 'var(--dosy-primary)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 12,
+              }}>
+                <HandIcon size={28} strokeWidth={1.75}/>
+              </div>
+              <h3 style={{
+                fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
+                fontSize: 22, letterSpacing: '-0.025em', color: 'var(--dosy-fg)',
+              }}>Bem-vindo ao Dosy!</h3>
+              <p style={{
+                fontSize: 14, color: 'var(--dosy-fg-secondary)',
+                lineHeight: 1.5, marginTop: 6, marginBottom: 18,
+              }}>
+                Comece cadastrando as pessoas que você vai acompanhar — você,
+                seus filhos, familiares, pacientes sob seu cuidado…
               </p>
-              <ol className="text-sm space-y-2 mb-4">
-                <li className="flex gap-2"><span className="font-bold text-brand-600">1.</span> Cadastre os pacientes</li>
-                <li className="flex gap-2"><span className="font-bold text-brand-600">2.</span> Crie um tratamento para cada medicamento</li>
-                <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Acompanhe as doses por aqui</li>
+              <ol style={{
+                listStyle: 'none', padding: 0, margin: '0 0 18px 0',
+                display: 'flex', flexDirection: 'column', gap: 10,
+                fontSize: 14, color: 'var(--dosy-fg)',
+              }}>
+                {[
+                  'Cadastre os pacientes',
+                  'Crie um tratamento para cada medicamento',
+                  'Acompanhe as doses por aqui',
+                ].map((step, i) => (
+                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="t-dosy-sunset" style={{
+                      fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
+                      fontSize: 16, fontVariantNumeric: 'tabular-nums',
+                    }}>{i + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
               </ol>
-              <Link to="/pacientes/novo" className="btn-primary w-full inline-flex items-center justify-center gap-1.5"><Icon name="add" size={16} /> Cadastrar primeiro paciente</Link>
-            </div>
-          ) : doses.length === 0 ? (
-            <EmptyState icon="pill" title="Nenhuma dose neste período"
-                        description="Ajuste os filtros ou crie um novo tratamento."
-                        action={<Link to="/tratamento/novo" className="btn-primary">+ Novo tratamento</Link>} />
+              <Link to="/pacientes/novo" style={{ textDecoration: 'none' }}>
+                <Button kind="primary" size="md" full icon={PlusIcon}>
+                  Cadastrar primeiro paciente
+                </Button>
+              </Link>
+            </Card>
+          ) : mergedDoses.length === 0 ? (
+            <Card padding={28} style={{
+              textAlign: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 18,
+                background: 'var(--dosy-peach-100)',
+                color: 'var(--dosy-primary)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="pill" size={32} />
+              </div>
+              <h3 style={{
+                fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
+                fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
+                margin: 0,
+              }}>Nenhuma dose neste período</h3>
+              <p style={{
+                fontSize: 14, color: 'var(--dosy-fg-secondary)',
+                lineHeight: 1.5, margin: 0,
+              }}>Ajuste os filtros ou crie um novo tratamento.</p>
+              <Link to="/tratamento/novo" style={{ textDecoration: 'none', marginTop: 6 }}>
+                <Button kind="primary" size="md" icon={PlusIcon}>
+                  Novo tratamento
+                </Button>
+              </Link>
+            </Card>
           ) : (
             <motion.div
-              className="space-y-5"
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               initial="initial"
               animate="animate"
               variants={{ animate: { transition: { staggerChildren: TIMING.stagger, delayChildren: 0.06 } } }}
@@ -266,26 +375,54 @@ export default function Dashboard() {
                       initial: { opacity: 0, y: 18, scale: 0.98 },
                       animate: { opacity: 1, y: 0, scale: 1, transition: { duration: TIMING.base, ease: EASE.out } },
                     }}
-                    className={idx > 0 ? 'pt-5 border-t border-white/[0.08]' : ''}
+                    style={{
+                      background: 'var(--dosy-bg-elevated)',
+                      borderRadius: 22,
+                      boxShadow: 'var(--dosy-shadow-sm)',
+                      overflow: 'hidden',
+                    }}
                   >
                     <button
                       onClick={() => toggleCollapse(patient.id)}
-                      className="w-full flex items-center gap-2 mb-2 group"
+                      className="dosy-press"
+                      style={{
+                        width: '100%',
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '14px 14px',
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
                     >
-                      <span className="text-lg">{patient.avatar || '👤'}</span>
-                      <h2 className="font-semibold">{patient.name}</h2>
-                      <span className="text-xs text-slate-500">({list.length})</span>
+                      <Avatar emoji={patient.avatar || '👤'} color="peach" size={40}/>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontFamily: 'var(--dosy-font-display)',
+                          fontWeight: 800, fontSize: 15.5,
+                          letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
+                        }}>{patient.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
+                          {list.length} dose{list.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
                       {overdueCount > 0 && (
-                        <span className="text-[10px] font-semibold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">
-                          {overdueCount} atrasada{overdueCount > 1 ? 's' : ''}
-                        </span>
+                        <StatusPill
+                          label={`${overdueCount} atrasada${overdueCount > 1 ? 's' : ''}`}
+                          kind="danger"
+                        />
                       )}
                       {isCollapsed && pendingCount > 0 && overdueCount === 0 && (
-                        <span className="text-[10px] font-semibold bg-brand-500/20 text-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-full">
-                          {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
-                        </span>
+                        <StatusPill
+                          label={`${pendingCount} pendente${pendingCount > 1 ? 's' : ''}`}
+                          kind="pending"
+                        />
                       )}
-                      <span className={`ml-auto text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
+                      <span style={{
+                        color: 'var(--dosy-fg-tertiary)',
+                        fontSize: 12,
+                        transition: 'transform 200ms var(--dosy-ease-out)',
+                        transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                        flexShrink: 0,
+                      }}>▶</span>
                     </button>
                     <AnimatePresence initial={false}>
                       {!isCollapsed && (
@@ -307,8 +444,12 @@ export default function Dashboard() {
                             height: 0,
                             transition: { duration: TIMING.fast, ease: EASE.inOut, staggerChildren: 0.02, staggerDirection: -1 },
                           }}
-                          className="space-y-1 overflow-hidden"
+                          style={{ overflow: 'hidden' }}
                         >
+                          <div style={{
+                            padding: '0 10px 10px',
+                            display: 'flex', flexDirection: 'column', gap: 10,
+                          }}>
                           {list.map((d) => (
                             <motion.div
                               key={d.id}
@@ -349,6 +490,7 @@ export default function Dashboard() {
                               />
                             </motion.div>
                           ))}
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>

@@ -45,8 +45,46 @@ export function AuthProvider({ children }) {
               refreshToken: s.refresh_token,
               schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
             }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
+
+            // Item #098 — re-bind FCM deviceToken cached ao novo user.
+            // Listener PushNotifications 'registration' só dispara em install/
+            // refresh do FCM token; troca de user (logout→login) não refire,
+            // deixando push_subscriptions com userId antigo. Aqui força upsert
+            // RPC com cached token → DELETE other-user subs + INSERT pro user
+            // atual. Resolve push de user A chegar em device logado user B
+            // (que quebrava refresh chain → logout sozinho).
+            if (event === 'SIGNED_IN' && isNative) {
+              try {
+                const cachedToken = localStorage.getItem('dosy_fcm_token')
+                if (cachedToken) {
+                  supabase.schema('medcontrol').rpc('upsert_push_subscription', {
+                    p_device_token: cachedToken,
+                    p_platform: 'android',
+                    p_advance_mins: 15,
+                    p_user_agent: 'capacitor-android',
+                  }).then(({ error }) => {
+                    if (error) console.warn('[useAuth] re-upsert push_sub err:', error.message)
+                    else console.log('[useAuth] push_sub re-bound to user', s.user.id)
+                  })
+                }
+              } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }
+            }
           } else if (event === 'SIGNED_OUT') {
             clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
+
+            // Item #098 — limpar push_subscription deste device do user que saiu
+            // (precisa rodar ANTES do auth.signOut completar o cache clear).
+            // Best-effort: se token cached + user atual disponível, delete sub.
+            try {
+              const cachedToken = localStorage.getItem('dosy_fcm_token')
+              if (cachedToken) {
+                supabase.schema('medcontrol').from('push_subscriptions')
+                  .delete().eq('deviceToken', cachedToken)
+                  .then(({ error }) => {
+                    if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
+                  })
+              }
+            } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
           }
         })
         unsub = () => sub.subscription.unsubscribe()

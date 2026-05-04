@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { TIMING, EASE } from '../animations'
+import { Card, Button, Input } from '../components/dosy'
 
 function validatePassword(pwd) {
   const errors = []
@@ -46,12 +48,7 @@ export default function Login() {
         setMode('signin')
       }
       // Item #090 (release v0.1.7.4) — BUG-023: pós-login não redirecionava
-      // pra Início se URL atual era rota authenticated-only (ex: /ajustes
-      // herdada da session anterior pré-logout). React Router preservava
-      // pathname após user mudar null→logged, fazendo Settings renderizar
-      // direto. Fix: navigate('/') explícito após signin/signup success
-      // se path atual não é raiz nem reset-password (preserva deep links
-      // legítimos como /reset-password com token).
+      // pra Início se URL atual era rota authenticated-only.
       if (mode === 'signin' || mode === 'signup') {
         if (location.pathname !== '/' && location.pathname !== '/reset-password') {
           navigate('/', { replace: true })
@@ -64,144 +61,255 @@ export default function Login() {
     }
   }
 
+  const submitLabel = mode === 'signin' ? 'Entrar'
+    : mode === 'signup' ? 'Criar conta'
+    : 'Enviar link de recuperação'
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#0d1535] to-[#1a2660]">
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--dosy-gradient-sunset)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: '24px 16px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Decorative radial glow */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', inset: 0,
+        background: 'radial-gradient(circle at 50% 0%, rgba(255,255,255,0.25), transparent 60%)',
+        pointerEvents: 'none',
+      }}/>
+
       <motion.div
-        className="w-full max-w-sm"
+        style={{ width: '100%', maxWidth: 384, position: 'relative', zIndex: 1 }}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: TIMING.base, ease: EASE.inOut }}
       >
-        <div className="text-center mb-8">
-          <img src="/dosy-logo-light.png" alt="Dosy" className="h-20 w-auto mx-auto mb-4 object-contain" />
-          <p className="text-sm text-white/60 mt-1">Gestão simples de medicamentos</p>
+        {/* Hero */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img
+            src="/dosy-logo-light.png"
+            alt="Dosy"
+            style={{ height: 72, width: 'auto', margin: '0 auto 12px', objectFit: 'contain' }}
+          />
+          <p style={{
+            fontSize: 13, color: 'rgba(255,255,255,0.85)',
+            margin: 0, fontFamily: 'var(--dosy-font-body)',
+          }}>Gestão simples de medicamentos</p>
         </div>
 
-        <div className="card p-5 space-y-4">
+        <Card padding={20} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Mode toggle / forgot header */}
           {mode !== 'forgot' ? (
-            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-              <button onClick={() => setMode('signin')}
-                      className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signin' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Entrar</button>
-              <button onClick={() => setMode('signup')}
-                      className={`flex-1 py-2 text-sm rounded-lg ${mode === 'signup' ? 'bg-white dark:bg-slate-900 shadow font-medium' : 'text-slate-500'}`}>Criar conta</button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
+            <div style={{
+              display: 'flex',
+              background: 'var(--dosy-bg-sunken)',
+              borderRadius: 12, padding: 4,
+            }}>
               <button
                 type="button"
                 onClick={() => setMode('signin')}
-                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                style={{
+                  flex: 1, padding: '8px 12px',
+                  borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: mode === 'signin' ? 'var(--dosy-bg-elevated)' : 'transparent',
+                  boxShadow: mode === 'signin' ? 'var(--dosy-shadow-xs)' : 'none',
+                  color: mode === 'signin' ? 'var(--dosy-fg)' : 'var(--dosy-fg-secondary)',
+                  fontWeight: mode === 'signin' ? 700 : 500,
+                  fontSize: 13,
+                  fontFamily: 'var(--dosy-font-display)',
+                  transition: 'all 200ms var(--dosy-ease-out)',
+                }}
+              >Entrar</button>
+              <button
+                type="button"
+                onClick={() => setMode('signup')}
+                style={{
+                  flex: 1, padding: '8px 12px',
+                  borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: mode === 'signup' ? 'var(--dosy-bg-elevated)' : 'transparent',
+                  boxShadow: mode === 'signup' ? 'var(--dosy-shadow-xs)' : 'none',
+                  color: mode === 'signup' ? 'var(--dosy-fg)' : 'var(--dosy-fg-secondary)',
+                  fontWeight: mode === 'signup' ? 700 : 500,
+                  fontSize: 13,
+                  fontFamily: 'var(--dosy-font-display)',
+                  transition: 'all 200ms var(--dosy-ease-out)',
+                }}
+              >Criar conta</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setMode('signin')}
                 aria-label="Voltar"
-              >
-                ←
-              </button>
-              <h2 className="text-base font-semibold flex-1">Recuperar senha</h2>
+                className="dosy-press"
+                style={{
+                  width: 32, height: 32, borderRadius: 9999,
+                  border: 'none', cursor: 'pointer',
+                  background: 'var(--dosy-bg-sunken)',
+                  color: 'var(--dosy-fg)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              ><ArrowLeft size={16} strokeWidth={2}/></button>
+              <h2 style={{
+                flex: 1, fontSize: 15, fontWeight: 700, margin: 0,
+                color: 'var(--dosy-fg)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>Recuperar senha</h2>
             </div>
           )}
 
           {mode === 'forgot' && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p style={{
+              fontSize: 12, color: 'var(--dosy-fg-secondary)',
+              lineHeight: 1.5, margin: 0,
+            }}>
               Informe seu email cadastrado. Enviaremos um link para você redefinir a senha.
             </p>
           )}
 
-          <form onSubmit={submit} className="space-y-3">
-            {/* Item #011 (release v0.1.7.4) — labels explícitos pra A11y idosos
-                + TalkBack lê corretamente. Mantém placeholder pra UX visual. */}
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {mode === 'signup' && (
-              <div>
-                <label htmlFor="login-name" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
-                  Nome
-                </label>
-                <input id="login-name" type="text" required placeholder="Seu nome" className="input"
-                       value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-              </div>
+              <Input
+                id="login-name"
+                label="Nome"
+                type="text"
+                required
+                placeholder="Seu nome"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
             )}
-            <div>
-              <label htmlFor="login-email" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
-                Email
-              </label>
-              <input id="login-email" type="email" required placeholder="seu@email.com" className="input"
-                     value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-            </div>
+            <Input
+              id="login-email"
+              label="Email"
+              type="email"
+              required
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
             {mode !== 'forgot' && (
-              <div>
-                <label htmlFor="login-password" className="block text-xs font-medium mb-1 text-slate-600 dark:text-slate-300">
-                  Senha
-                </label>
-                <input id="login-password" type="password" required placeholder="••••••••" className="input"
-                       value={password} onChange={(e) => setPassword(e.target.value)}
-                       minLength={mode === 'signup' ? 8 : undefined}
-                       autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
-              </div>
+              <Input
+                id="login-password"
+                label="Senha"
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={mode === 'signup' ? 8 : undefined}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              />
             )}
             {mode === 'signin' && (
-              <div className="flex justify-end">
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={() => setMode('forgot')}
-                  className="text-xs text-brand-600 dark:text-brand-400 hover:underline"
-                >
-                  Esqueci minha senha
-                </button>
+                  style={{
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600,
+                    color: 'var(--dosy-primary)',
+                    fontFamily: 'var(--dosy-font-display)',
+                    padding: 2,
+                  }}
+                >Esqueci minha senha</button>
               </div>
             )}
             {mode === 'signup' && (
               <>
-                <p className="text-[10px] text-slate-400">Senha: mín. 8 chars, uma maiúscula, um número.</p>
-                <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+                <p style={{
+                  fontSize: 10, color: 'var(--dosy-fg-tertiary)', margin: 0,
+                }}>
+                  Senha: mín. 8 chars, uma maiúscula, um número.
+                </p>
+                <label style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  fontSize: 12, color: 'var(--dosy-fg-secondary)',
+                  cursor: 'pointer', lineHeight: 1.5,
+                }}>
                   <input
                     type="checkbox"
                     checked={consent}
                     onChange={(e) => setConsent(e.target.checked)}
-                    className="mt-0.5 shrink-0"
+                    style={{ marginTop: 2, flexShrink: 0, accentColor: 'var(--dosy-primary)' }}
                   />
                   <span>
                     Li e aceito a{' '}
-                    <a href="/privacidade" className="text-brand-600 dark:text-brand-400 underline" target="_blank" rel="noopener noreferrer">
-                      Política de Privacidade
-                    </a>
+                    <a
+                      href="/privacidade"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--dosy-primary)', textDecoration: 'underline', fontWeight: 600 }}
+                    >Política de Privacidade</a>
                     {' '}e consinto com o tratamento dos meus dados de saúde conforme a LGPD.
                   </span>
                 </label>
-                {/* Item #020 (release v0.1.7.4) — Disclaimer médico no signup.
-                    Plan FASE 18.5.1 + Auditoria Dim 16. Aparece visivelmente
-                    pra deixar claro escopo do Dosy antes de criar conta. */}
-                <div className="rounded-lg border border-amber-300/60 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-900/20 p-3 text-xs text-amber-900 dark:text-amber-100 leading-snug">
-                  <strong className="block mb-1">⚠️ Aviso importante</strong>
-                  Dosy é uma ferramenta de organização e lembrete de medicação.
-                  <strong> Não substitui prescrição, diagnóstico ou orientação de profissional de saúde.</strong>{' '}
-                  Em caso de dúvida sobre seu tratamento, consulte seu médico ou farmacêutico.
+                {/* Disclaimer médico */}
+                <div style={{
+                  borderRadius: 12,
+                  background: 'var(--dosy-warning-bg)',
+                  border: '1px solid rgba(197,132,26,0.2)',
+                  padding: 12,
+                  display: 'flex', gap: 8,
+                  fontSize: 12, lineHeight: 1.5,
+                  color: '#9A6313',
+                }}>
+                  <AlertTriangle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }}/>
+                  <div>
+                    <strong style={{ display: 'block', marginBottom: 2 }}>Aviso importante</strong>
+                    Dosy é uma ferramenta de organização e lembrete de medicação.{' '}
+                    <strong>Não substitui prescrição, diagnóstico ou orientação de profissional de saúde.</strong>{' '}
+                    Em caso de dúvida sobre seu tratamento, consulte seu médico ou farmacêutico.
+                  </div>
                 </div>
               </>
             )}
-            <button type="submit" className="btn-primary w-full" disabled={busy}>
-              {busy ? 'Aguarde…' : (
-                mode === 'signin' ? 'Entrar' :
-                mode === 'signup' ? 'Criar conta' :
-                'Enviar link de recuperação'
-              )}
-            </button>
+            <Button
+              type="submit"
+              kind="primary"
+              full
+              size="lg"
+              disabled={busy}
+            >
+              {busy ? 'Aguarde…' : submitLabel}
+            </Button>
           </form>
 
           {!hasSupabase && (
             <>
-              <div className="flex items-center gap-3 text-xs text-slate-400">
-                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                fontSize: 11, color: 'var(--dosy-fg-tertiary)',
+              }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--dosy-divider)' }}/>
                 ou
-                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+                <div style={{ flex: 1, height: 1, background: 'var(--dosy-divider)' }}/>
               </div>
-              <button onClick={signInDemo} className="btn-ghost w-full text-brand-600 dark:text-brand-400">
+              <Button
+                kind="ghost"
+                full
+                onClick={signInDemo}
+              >
                 Entrar em modo demonstração
-              </button>
+              </Button>
             </>
           )}
-        </div>
+        </Card>
 
         {!hasSupabase && (
-          <p className="text-[11px] text-slate-400 text-center mt-4 leading-snug">
-            Supabase não configurado. Dados serão salvos neste dispositivo (localStorage).<br />
-            Configure <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> em <code>.env</code>.
+          <p style={{
+            fontSize: 11, textAlign: 'center', marginTop: 16,
+            color: 'rgba(255,255,255,0.85)', lineHeight: 1.5,
+          }}>
+            Supabase não configurado. Dados serão salvos neste dispositivo (localStorage).<br/>
+            Configure <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 4 }}>VITE_SUPABASE_URL</code> e <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 4 }}>VITE_SUPABASE_ANON_KEY</code> em <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 4 }}>.env</code>.
           </p>
         )}
       </motion.div>

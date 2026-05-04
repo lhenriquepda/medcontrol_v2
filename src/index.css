@@ -12,6 +12,10 @@
    ============================================================================= */
 
 @import './styles/theme.css';
+/* Dosy v0.2.0.0 redesign tokens — coexiste com theme.css legacy.
+   Componentes Dosy (src/components/dosy/) consomem essas vars via Tailwind
+   classes (bg-dosy-*) ou diretamente (var(--dosy-*)). */
+@import './styles/dosy-tokens.css';
 
 @tailwind base;
 @tailwind components;
@@ -26,9 +30,9 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--font-family);
-  background: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--dosy-font-body);
+  background: var(--dosy-bg);
+  color: var(--dosy-fg);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
@@ -117,7 +121,7 @@ a:focus-visible,
    *   - .has-ad-banner: cor não importa (native ad overlay cobre status bar) */
   body {
     padding-top: env(safe-area-inset-top, 0px);
-    background-color: #0d1535;
+    background-color: var(--dosy-bg);
   }
   /* Fixed overlay pinta env-safe + ad-banner-height na status bar SEMPRE.
    * Sem isso, scroll move body padding pra fora e content (main bg light)
@@ -130,12 +134,12 @@ a:focus-visible,
     left: 0;
     right: 0;
     height: calc(env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px));
-    background-color: #0d1535;
+    background-color: var(--dosy-bg);
     z-index: 30;
     pointer-events: none;
   }
   body.has-update-banner::before {
-    background-color: #059669; /* emerald-600 — match UpdateBanner gradient start */
+    background: var(--dosy-gradient-sunset); /* sunset — match UpdateBanner Dosy */
   }
   body.has-ad-banner {
     /* Native AdMob banner posiciona abaixo da status bar.

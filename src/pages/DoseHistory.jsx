@@ -1,32 +1,39 @@
 import { useMemo, useState } from 'react'
-import Header from '../components/Header'
+import { Search, X as XIcon, FileText, Check, AlertTriangle, X as XCloseIcon } from 'lucide-react'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
-import Icon from '../components/Icon'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
+import { Card, Input, StatusPill } from '../components/dosy'
+import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { formatTime, pad } from '../utils/dateUtils'
-import { STATUS_CONFIG } from '../utils/statusUtils'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 
-const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+// Source: contexto/claude-design/dosy/project/src/screens/Auxiliary.jsx (HistoricoScreen)
+// Pattern: day strip horizontal (7 dias) + summary card (texto esq + % box dir) + timeline rows.
+
+const DIAS_SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 function endOfDay(d)   { const x = new Date(d); x.setHours(23, 59, 59, 999); return x }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 
-function dayLabel(date) {
+function dayChipLabel(date, today) {
+  const d = startOfDay(date)
+  const t = startOfDay(today)
+  const diff = Math.round((d - t) / 86400000)
+  if (diff === 0) return 'HOJE'
+  if (diff === -1) return 'ONTEM'
+  return DIAS_SEMANA[d.getDay()]
+}
+
+function fullDateLabel(date) {
   const d = new Date(date)
-  const today = startOfDay(new Date())
-  const diff = Math.round((startOfDay(d) - today) / 86400000)
-  const weekday = DIAS_SEMANA[d.getDay()]
-  const dateStr = `${pad(d.getDate())} ${MESES[d.getMonth()]}`
-  if (diff === 0) return { label: 'Hoje', sub: dateStr, highlight: true }
-  if (diff === -1) return { label: 'Ontem', sub: dateStr, highlight: false }
-  return { label: weekday, sub: dateStr, highlight: false }
+  const wd = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()]
+  return `${wd}, ${pad(d.getDate())} ${MESES[d.getMonth()]}`
 }
 
 export default function DoseHistory() {
@@ -34,108 +41,129 @@ export default function DoseHistory() {
   usePrivacyScreen()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState(null)
-  const [period, setPeriod] = useState(7) // days back
-  const [offset, setOffset] = useState(0)  // periods back (0 = current)
+  const [search, setSearch] = useState('')
+  const [selectedDayOffset, setSelectedDayOffset] = useState(0) // 0 = hoje, 1 = ontem, ...
   const [selected, setSelected] = useState(null)
-  const [search, setSearch] = useState('')  // FASE 15 — text search por medName/observation
 
-  // Window: [periodStart, periodEnd]
-  const { periodStart, periodEnd } = useMemo(() => {
-    const base = startOfDay(new Date())
-    // offset=0: last `period` days ending today
-    // offset=1: the period before that, etc.
-    const end = addDays(base, -(offset * period))
-    const start = addDays(end, -(period - 1))
-    return { periodStart: startOfDay(start), periodEnd: endOfDay(end) }
-  }, [period, offset])
+  // Day strip: últimos 7 dias (offset 0..6, 0=hoje)
+  const today = useMemo(() => startOfDay(new Date()), [])
+  const dayChips = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => {
+      const date = addDays(today, -i)
+      return { offset: i, date, label: dayChipLabel(date, today) }
+    })
+  }, [today])
 
-  const { data: rawDoses = [], isLoading } = useDoses({
-    from: periodStart.toISOString(),
-    to: periodEnd.toISOString(),
-    patientId: patientId || undefined
+  // Periodo: últimos 7 dias completos pra calcular % por dia (chip strip)
+  const periodFrom = useMemo(() => addDays(today, -6), [today])
+  const periodTo = useMemo(() => endOfDay(today), [today])
+
+  const { data: rangeDoses = [], isLoading } = useDoses({
+    from: periodFrom.toISOString(),
+    to: periodTo.toISOString(),
+    patientId: patientId || undefined,
   })
 
-  // FASE 15 — filtra client-side por search (medName / unit / observation case-insensitive)
-  const doses = useMemo(() => {
+  // Filtra busca search (med/unit/observation)
+  const filteredDoses = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return rawDoses
-    return rawDoses.filter((d) =>
+    if (!term) return rangeDoses
+    return rangeDoses.filter((d) =>
       (d.medName || '').toLowerCase().includes(term) ||
       (d.unit || '').toLowerCase().includes(term) ||
-      (d.observation || '').toLowerCase().includes(term)
+      (d.observation || '').toLowerCase().includes(term),
     )
-  }, [rawDoses, search])
+  }, [rangeDoses, search])
 
-  // Group doses by calendar day (descending)
-  const days = useMemo(() => {
+  // Adesão % por dia (pra day strip)
+  const adherenceByDay = useMemo(() => {
     const map = new Map()
-    for (const d of doses) {
-      const key = startOfDay(d.scheduledAt).toISOString()
-      if (!map.has(key)) map.set(key, [])
-      map.get(key).push(d)
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(today, -i)
+      const start = startOfDay(date)
+      const end = endOfDay(date)
+      const dayDoses = rangeDoses.filter((x) => {
+        const t = new Date(x.scheduledAt)
+        return t >= start && t <= end && t <= new Date()
+      })
+      const total = dayDoses.length
+      const done = dayDoses.filter((x) => x.status === 'done').length
+      const pct = total > 0 ? Math.round((done / total) * 100) : null
+      map.set(i, { total, done, pct })
     }
-    // Sort each day's doses by scheduledAt ascending
-    for (const list of map.values()) list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
-    // Days descending
-    return [...map.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([key, list]) => ({ date: new Date(key), list }))
-  }, [doses])
+    return map
+  }, [rangeDoses, today])
 
-  // Aggregate for the period header
+  // Doses do dia selecionado (filtra busca)
+  const selectedDate = useMemo(() => addDays(today, -selectedDayOffset), [today, selectedDayOffset])
+  const selectedDayDoses = useMemo(() => {
+    const start = startOfDay(selectedDate)
+    const end = endOfDay(selectedDate)
+    return filteredDoses
+      .filter((d) => {
+        const t = new Date(d.scheduledAt)
+        return t >= start && t <= end
+      })
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+  }, [filteredDoses, selectedDate])
+
+  // Summary do dia selecionado
   const summary = useMemo(() => {
-    const past = doses.filter((d) => new Date(d.scheduledAt) <= new Date())
+    const past = selectedDayDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
     const done = past.filter((d) => d.status === 'done').length
     const skipped = past.filter((d) => d.status === 'skipped').length
-    const missed = past.filter((d) => d.status === 'overdue').length
+    const overdue = past.filter((d) => d.status === 'overdue').length
     const total = past.length
-    const pct = total ? Math.round((done / total) * 100) : null
-    return { done, skipped, missed, total, pct }
-  }, [doses])
+    const pct = total > 0 ? Math.round((done / total) * 100) : null
+    return { done, skipped, overdue, total, pct }
+  }, [selectedDayDoses])
 
-  const isCurrentPeriod = offset === 0
   const selectedPatient = selected && patients.find((p) => p.id === selected.patientId)
 
-  function periodLabel() {
-    const opts = { day: '2-digit', month: 'short' }
-    return `${periodStart.toLocaleDateString('pt-BR', opts)} – ${periodEnd.toLocaleDateString('pt-BR', opts)}`
-  }
-
   return (
-    <div className="pb-28">
-      <Header back title="Histórico de doses" />
+    <div style={{ paddingBottom: 110 }}>
+      <PageHeader title="Histórico de doses" back/>
 
-      <div className="max-w-md mx-auto px-4 pt-3 space-y-3">
+      <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <AdBanner />
-        {/* Period selector */}
-        <div className="flex items-center gap-2">
-          <div className="flex p-1 rounded-full bg-slate-200/70 dark:bg-slate-800/70">
-            {[7, 14, 30].map((d) => (
-              <button key={d}
-                onClick={() => { setPeriod(d); setOffset(0) }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  period === d ? 'bg-white dark:bg-slate-900 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-slate-500'
-                }`}>
-                {d === 7 ? '7d' : d === 14 ? '14d' : '30d'}
+
+        {/* Day strip horizontal */}
+        <div className="dosy-scroll" style={{
+          display: 'flex', gap: 8, overflowX: 'auto',
+          padding: '2px 2px 4px',
+        }}>
+          {dayChips.map((c) => {
+            const ad = adherenceByDay.get(c.offset)
+            const isActive = selectedDayOffset === c.offset
+            return (
+              <button
+                key={c.offset}
+                type="button"
+                onClick={() => setSelectedDayOffset(c.offset)}
+                className="dosy-press"
+                style={{
+                  padding: '10px 12px', borderRadius: 14, border: 'none', cursor: 'pointer',
+                  background: isActive ? 'var(--dosy-gradient-sunset)' : 'var(--dosy-bg-elevated)',
+                  color: isActive ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg)',
+                  boxShadow: isActive ? '0 8px 16px -6px rgba(255,61,127,0.4)' : 'var(--dosy-shadow-xs)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  minWidth: 64, flexShrink: 0,
+                  fontFamily: 'var(--dosy-font-display)',
+                }}
+              >
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                  opacity: isActive ? 0.9 : 0.7,
+                }}>{c.label}</span>
+                <span style={{
+                  fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {ad.pct == null ? '—' : `${ad.pct}%`}
+                </span>
               </button>
-            ))}
-          </div>
-          <div className="flex-1" />
-          {/* Navigation arrows */}
-          <button
-            onClick={() => setOffset((o) => o + 1)}
-            className="w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95"
-            aria-label="Período anterior"
-          >‹</button>
-          <span className="text-xs text-slate-500 min-w-[90px] text-center">{periodLabel()}</span>
-          <button
-            onClick={() => setOffset((o) => Math.max(0, o - 1))}
-            disabled={isCurrentPeriod}
-            className={`w-11 h-11 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm active:scale-95 ${
-              isCurrentPeriod ? 'opacity-30' : ''
-            }`}
-            aria-label="Próximo período"
-          >›</button>
+            )
+          })}
         </div>
 
         {/* Patient filter */}
@@ -149,139 +177,100 @@ export default function DoseHistory() {
           />
         )}
 
-        {/* FASE 15 — Text search */}
-        <div className="relative">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por medicamento ou observação…"
-            aria-label="Buscar doses"
-            className="input pl-9"
-          />
-          <Icon
-            name="search"
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-          {search && (
+        {/* Search */}
+        <Input
+          icon={Search}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por medicamento ou observação…"
+          suffix={search ? (
             <button
+              type="button"
               onClick={() => setSearch('')}
               aria-label="Limpar busca"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400"
-            >
-              <Icon name="close" size={14} />
-            </button>
-          )}
-        </div>
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--dosy-fg-tertiary)',
+                padding: 2, display: 'inline-flex',
+              }}
+            ><XIcon size={14} strokeWidth={2}/></button>
+          ) : null}
+        />
 
-        {/* Summary bar */}
-        {summary.total > 0 && (
-          <div className="card p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-500">Adesão no período</span>
-              <span className={`text-sm font-bold ${
-                summary.pct == null ? 'text-slate-400'
-                : summary.pct >= 80 ? 'text-emerald-600 dark:text-emerald-400'
-                : summary.pct >= 50 ? 'text-amber-600 dark:text-amber-400'
-                : 'text-rose-600 dark:text-rose-400'
-              }`}>
-                {summary.pct == null ? '—' : `${summary.pct}%`}
-              </span>
+        {/* Daily summary card — esq texto, dir % box sunset-soft */}
+        <Card padding={16}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>{fullDateLabel(selectedDate)}</div>
+              <div style={{
+                fontFamily: 'var(--dosy-font-display)',
+                fontWeight: 800, fontSize: 24, letterSpacing: '-0.025em',
+                marginTop: 4, color: 'var(--dosy-fg)',
+              }}>
+                {summary.done} de {summary.total} dose{summary.total === 1 ? '' : 's'}
+              </div>
+              <div style={{
+                fontSize: 12.5, color: 'var(--dosy-fg-secondary)', marginTop: 2,
+              }}>
+                {summary.overdue} atraso{summary.overdue === 1 ? '' : 's'}, {summary.skipped} pulada{summary.skipped === 1 ? '' : 's'}
+              </div>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-2">
-              <div className="h-full bg-brand-500 rounded-full transition-all"
-                style={{ width: `${summary.pct ?? 0}%` }} />
-            </div>
-            <div className="flex gap-3 text-[11px] text-slate-500">
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ {summary.done} tomadas</span>
-              <span className="text-amber-600 dark:text-amber-400">↷ {summary.skipped} puladas</span>
-              <span className="text-rose-600 dark:text-rose-400">! {summary.missed} perdidas</span>
+            <div style={{
+              width: 64, height: 64, borderRadius: 16,
+              background: 'var(--dosy-gradient-sunset-soft)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <div style={{
+                fontFamily: 'var(--dosy-font-display)',
+                fontWeight: 800, fontSize: 22, letterSpacing: '-0.025em',
+                lineHeight: 1, color: 'var(--dosy-fg)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>{summary.pct == null ? '—' : `${summary.pct}%`}</div>
+              <div style={{
+                fontSize: 10, fontWeight: 600, opacity: 0.7, marginTop: 2,
+                color: 'var(--dosy-fg)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>adesão</div>
             </div>
           </div>
-        )}
+        </Card>
 
-        {/* Day groups */}
+        {/* Timeline */}
         {isLoading ? (
           <SkeletonList count={5} />
-        ) : days.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-slate-500">
-            <p className="text-3xl mb-2">📋</p>
-            Nenhuma dose registrada neste período.
-          </div>
+        ) : selectedDayDoses.length === 0 ? (
+          <Card padding={28} style={{
+            textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 18,
+              background: 'var(--dosy-peach-100)',
+              color: 'var(--dosy-primary)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FileText size={28} strokeWidth={1.75}/>
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--dosy-fg-secondary)', margin: 0 }}>
+              Nenhuma dose neste dia.
+            </p>
+          </Card>
         ) : (
-          <div className="space-y-4">
-            {days.map(({ date, list }) => {
-              const { label, sub, highlight } = dayLabel(date)
-              const dayDone = list.filter((d) => d.status === 'done').length
-              const dayTotal = list.filter((d) => new Date(d.scheduledAt) <= new Date()).length
-              return (
-                <section key={date.toISOString()}>
-                  {/* Day header */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-xl text-center flex-shrink-0 ${
-                      highlight
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}>
-                      <span className="text-[10px] font-medium leading-none">{label}</span>
-                      <span className="text-[11px] font-bold leading-tight">{sub}</span>
-                    </div>
-                    <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
-                    {dayTotal > 0 && (
-                      <span className={`text-[11px] font-medium ${
-                        dayDone === dayTotal ? 'text-emerald-600 dark:text-emerald-400'
-                        : dayDone > 0 ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-rose-500'
-                      }`}>
-                        {dayDone}/{dayTotal}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Doses */}
-                  <div className="space-y-1.5 ml-1">
-                    {list.map((dose) => {
-                      const s = STATUS_CONFIG[dose.status] || STATUS_CONFIG.pending
-                      const patient = patients.find((p) => p.id === dose.patientId)
-                      return (
-                        <button
-                          key={dose.id}
-                          onClick={() => setSelected(dose)}
-                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 active:scale-[0.97] active:opacity-90 transition"
-                        >
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${s.color}`}>
-                            {s.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-medium truncate">{dose.medName}</p>
-                              {dose.type === 'sos' && (
-                                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600 text-white flex-shrink-0">SOS</span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 truncate">
-                              {dose.unit}
-                              {patient && patients.length > 1 && ` · ${patient.name.split(' ')[0]}`}
-                            </p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                              {formatTime(dose.scheduledAt)}
-                            </p>
-                            {dose.status === 'done' && dose.actualTime && (
-                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
-                                → {formatTime(dose.actualTime)}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </section>
-              )
-            })}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {selectedDayDoses.map((dose) => (
+              <TimelineRow
+                key={dose.id}
+                dose={dose}
+                patient={patients.find((p) => p.id === dose.patientId)}
+                showPatient={patients.length > 1 && !patientId}
+                onClick={() => setSelected(dose)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -292,7 +281,103 @@ export default function DoseHistory() {
         onClose={() => setSelected(null)}
         patientName={selectedPatient?.name}
       />
-      <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}`}</style>
     </div>
+  )
+}
+
+// Timeline row — design.HistoricoScreen pattern
+function TimelineRow({ dose, patient, showPatient, onClick }) {
+  const status = dose.status
+  const tone = status === 'done' ? 'success'
+    : status === 'overdue' ? 'danger'
+    : status === 'skipped' ? 'skipped'
+    : 'pending'
+  const Icon = status === 'done' ? Check
+    : status === 'overdue' ? AlertTriangle
+    : status === 'skipped' ? XCloseIcon
+    : null
+  const iconBg = tone === 'success' ? '#DDF1E8'
+    : tone === 'danger' ? 'var(--dosy-danger-bg)'
+    : tone === 'skipped' ? 'var(--dosy-bg-sunken)'
+    : 'var(--dosy-peach-100)'
+  const iconColor = tone === 'success' ? '#3F9E7E'
+    : tone === 'danger' ? 'var(--dosy-danger)'
+    : tone === 'skipped' ? 'var(--dosy-fg-tertiary)'
+    : 'var(--dosy-fg-secondary)'
+
+  let delta = ''
+  if (status === 'done' && dose.actualTime) {
+    const actualMs = new Date(dose.actualTime).getTime()
+    const schedMs = new Date(dose.scheduledAt).getTime()
+    const minDiff = Math.round((actualMs - schedMs) / 60000)
+    if (Math.abs(minDiff) < 5) delta = 'no horário'
+    else if (minDiff > 0) delta = `+${minDiff} min`
+    else delta = `${minDiff} min`
+  } else if (status === 'skipped') {
+    delta = 'pulou'
+  } else if (status === 'overdue') {
+    delta = 'atrasada'
+  } else if (dose.type === 'sos') {
+    delta = 'S.O.S'
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="dosy-press"
+      style={{
+        width: '100%', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: 12,
+        background: 'var(--dosy-bg-elevated)',
+        border: 'none',
+        borderRadius: 16,
+        boxShadow: 'var(--dosy-shadow-xs)',
+        cursor: 'pointer',
+        fontFamily: 'var(--dosy-font-body)',
+        color: 'var(--dosy-fg)',
+      }}
+    >
+      <div style={{
+        width: 38, height: 38, borderRadius: 12,
+        background: iconBg,
+        color: iconColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {Icon && <Icon size={16} strokeWidth={2.25}/>}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            fontWeight: 700, fontSize: 14, letterSpacing: '-0.01em',
+            color: 'var(--dosy-fg)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{dose.medName}</span>
+          {dose.type === 'sos' && <StatusPill label="S.O.S" kind="danger"/>}
+        </div>
+        <div style={{
+          fontSize: 12.5, color: 'var(--dosy-fg-secondary)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {dose.unit}
+          {showPatient && patient && ` · ${patient.name.split(' ')[0]}`}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{
+          fontFamily: 'var(--dosy-font-display)',
+          fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--dosy-fg)',
+        }}>{formatTime(dose.scheduledAt)}</div>
+        {delta && (
+          <div style={{
+            fontSize: 11, color: 'var(--dosy-fg-secondary)', marginTop: 1,
+          }}>{delta}</div>
+        )}
+      </div>
+    </button>
   )
 }
