@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-04 — pós release v0.2.0.4 (versionCode 37 / versionName 0.2.0.4). Em desenvolvimento: `release/v0.2.0.5`.
+> **Última revisão:** 2026-05-04 — pós release v0.2.0.5 (versionCode 38 / versionName 0.2.0.5). Em desenvolvimento: `release/v0.2.0.6`.
 
 ---
 
@@ -21,7 +21,7 @@ Decisões de UX devem balancear todas essas personas — letras legíveis e flux
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-app.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 30 / versionName 0.1.7.5. Closed Testing bloqueado por #004 vídeo FGS + #006 device validation. BUG-016 fechado 100%; #085 #087 fechados v0.1.7.3; #086 hide v0.1.7.4 espera v0.1.8.0; #012 #013 #014 #011 #019 #020 #022 #024 #088 #090 #091 fechados v0.1.7.4; #084 #092 #093 #094 #095 fechados v0.1.7.5.
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 38 / versionName 0.2.0.5. Closed Testing bloqueado por #004 vídeo FGS + #006 device validation + #025 screenshots. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5.
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
 
 ---

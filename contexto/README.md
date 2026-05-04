@@ -326,6 +326,41 @@ Antes de mandar resposta longa, agente revisa:
 - Resumo em 1 linha está no topo? Se não, adicionar.
 - Pedi pro user fazer algo técnico? Se sim, oferecer alternativa fácil ou pular.
 
+### Regra 9 — Automação web admin via Claude in Chrome MCP (CRÍTICA)
+
+**User é não-dev.** Listas de 10-15 passos manuais em Play Console, Vercel, Supabase Studio, GitHub = fricção alta + risco erro humano. Agente DEVE dirigir browser via `mcp__Claude_in_Chrome__*` em vez de pedir clicks manuais.
+
+**Quando aplicar:**
+- Play Console: criar release, upload AAB metadata, salvar release notes, start rollout, ler crashes/ANRs
+- Vercel dashboard: verificar deploy status, ler logs, revalidar env vars
+- Supabase Studio: aplicar migration via UI, ler logs, conferir RLS policies, ver dashboard egress
+- GitHub: criar release, ler Actions logs, conferir webhooks
+- Sentry: criar alert rule, conferir release tag, ler issue details
+- Qualquer console web admin
+
+**Padrão de execução:**
+1. Agente abre/seleciona aba via `navigate` ou `select_browser` → `tabs_create_mcp`
+2. Agente lê estado da página com `get_page_text` ou `read_page` ou `preview_snapshot`
+3. Agente preenche forms via `form_input` ou `javascript_tool` (set value + dispatch event)
+4. Agente clica botões via `find` + `javascript_tool` (`.click()`) ou `mcp__Claude_in_Chrome__computer`
+5. Agente valida resultado via `read_console_messages` + `get_page_text` re-check
+
+**Único ponto de pausa OBRIGATÓRIO:** **upload de arquivo** (AAB drag-drop, screenshot upload, certs, JSON cred, CSV).
+- Agente para, mostra ao user: "preciso que arraste `{arquivo}` em `{seletor visual}` na página atual. Aviso quando estiver pronto."
+- User confirma upload → agente valida via `get_page_text` que arquivo apareceu → continua.
+
+**Conta Google ativa para Play Console / Google Workspace:** `dosy.med@gmail.com`. Antes de iniciar fluxo Play Console / Search Console / qualquer painel Google, agente DEVE conferir conta logada (geralmente avatar no canto superior direito). Se outra conta estiver ativa, agente pausa e pede user pra trocar pra `dosy.med@gmail.com` antes de continuar (não tem como agente trocar conta — exige interação user com o seletor de contas Google).
+
+**Não confundir com:** login Google + 2FA push + senha — manuais user-only por questão de segurança. Agente nunca digita credencial em form de login.
+
+**Fallback se Chrome MCP indisponível:** lista textual de passos manuais (formato anterior). Mas Chrome MCP é o caminho preferido sempre que possível.
+
+**Reporte ao user:**
+```
+Vou dirigir o Play Console / Vercel / etc pra você. Pause só pra upload do AAB.
+{passo a passo automatizado começa}
+```
+
 ---
 
 ## 🎯 Quando o usuário pede algo
@@ -488,7 +523,7 @@ Durante outro trabalho ou uso casual, achou bug:
 
 1. `git fetch origin && git branch --list 'release/*'` — descobrir se já existe release branch ativa
 2. **Se existe** (ex.: retornou `release/v0.1.6.10`): `git checkout release/v0.1.6.10` — continuar acumulando commits da sessão anterior. **Modelo permite só 1 ativa por vez.** Se aparecer mais de uma → erro de manutenção, reportar antes de tudo.
-3. **Se NÃO existe:** confirmar com user a próxima versão proposta (patch/minor/major a partir do master atual) → criar branch `release/v{versão}` a partir de master atualizada
+3. **Se NÃO existe:** criar branch `release/v{próximo}` (incremento último dígito do master atual; ver §"Versão da branch") direto, sem perguntar bump
 4. `git status` — working tree limpo? Branch correta?
 5. `git log -1 --format="%h %s"` — último commit conhecido
 6. **Se itens P0 ou destrutivos na fila:** confirmar com usuário antes de codar
@@ -540,7 +575,7 @@ Fecha #XXX #YYY do contexto/ROADMAP.md.
 
 **Types:** `feat` · `fix` · `security` · `chore` · `docs` · `refactor` · `test` · `perf` · `ci`
 
-**Versão:** bump conforme escopo (patch pra fix, minor pra feature, major pra breaking).
+**Versão:** sempre incremento último dígito (regra Dosy — ver §"Versão da branch").
 
 ### Branch / PR — modelo "1 sessão = 1 branch versionada = 1 release"
 
@@ -601,11 +636,13 @@ Sempre. Único formato. Ex.: `release/v0.1.6.10`, `release/v0.1.7.0`, `release/v
 
 #### Versão da branch = versão proposta da release
 
-- **Patch** (`X.Y.Z+1`): bug fixes, sem novo comportamento
-- **Minor** (`X.Y+1.0`): feature nova, comportamento visível ao user
-- **Major** (`X+1.0.0`): breaking change (raro pré-1.0)
+**Regra Dosy:** sempre incrementar **último dígito** (`X.Y.Z.W → X.Y.Z.(W+1)`), independente do escopo (bug fix, feature visível, breaking change). Numeração linear simples, NÃO semver tradicional.
 
-Agente decide bump no Passo 1 do release com base nos commits acumulados na branch e confirma com user.
+- Master em `0.2.0.5` → próxima branch `release/v0.2.0.6`
+- Master em `0.2.0.9` → próxima branch `release/v0.2.0.10`
+- Não sugerir minor (`0.2.1.0`) ou major (`0.3.0.0`) bump.
+
+Agente cria branch `release/v{próximo}` no início da sessão sem perguntar bump (só confirma master atual + próxima versão proposta como info, não como decisão).
 
 #### Múltiplas sessões antes de release
 

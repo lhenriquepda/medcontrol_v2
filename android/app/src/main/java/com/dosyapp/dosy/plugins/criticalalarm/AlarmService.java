@@ -172,7 +172,8 @@ public class AlarmService extends Service {
         String subtext = "Toque pra abrir · Ciente / Adiar / Ignorar";
 
         Notification fgNotif = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_dosy)
+            .setColor(0xFFFF6B5B)
             .setContentTitle(title)
             .setContentText(bodyBuilder.toString())
             .setSubText(subtext)
