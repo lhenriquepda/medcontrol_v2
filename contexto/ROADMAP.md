@@ -61,8 +61,10 @@
 ## 3. Onde paramos
 
 **Última release:** v0.2.0.11 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 44 + tag git `v0.2.0.11`).
-**Items v0.2.0.11 fechados:**
-- #144 Custom JWT claim tier (Auth Hook) — getMyTier lê app_metadata local, zero round-trip
+**Items v0.2.0.11 fechados (12 items — 8 planejados + 4 descobertos validação Chrome MCP):**
+
+**Planejados (8):**
+- #144 Custom JWT claim tier (Auth Hook) — backend ✅ migration + function permanente, frontend ❌ ROLLBACK (logout cascade prod)
 - #145 useRealtime watchdog scoped refetch (active-only) substitui invalidate blanket
 - #146 pg_cron extend batch INSERT verify — audit log + view health + 90d retention
 - #029 refactor Settings.jsx 692 LOC → src/pages/Settings/ (index + sections + Row + constants)
@@ -70,6 +72,22 @@
 - #034 virtualizar DoseHistory via @tanstack/react-virtual VirtualTimeline
 - #100 avatar emoji redesign — 6 categorias curadas + default 👤 → 🙂 + Saúde category nova
 - #009 PITR deferred (Pro add-on $100/mo caro) — DR drill via daily backup baseline capturado
+
+**Descobertos durante validação Chrome MCP preview Vercel (4):**
+- #148 Dashboard extend_continuous_treatments rpc 2× por mount (AnimatePresence popLayout) → debounce 60s window flag
+- #149 useDoses mutation refetch storm 12 fetches/200s (mark/skip/undo cascade) → debounce 2s timer
+- #150 useDoses refetchInterval 5min × 5 active queryKeys = idle storm → 15min interval
+- #151 useDoses refetchInterval opt-in só Dashboard (outras telas off) — Realtime cobre updates
+
+**Bug crítico revertido v0.2.0.11:**
+- #144 frontend integration causou logout cascade (refreshSession + qc.clear loop infinito)
+- Hook Dashboard DISABLED + frontend volta path simples
+- Re-tentativa parqueada v0.2.0.12 com plan conservador (read claim only, no auto-refresh)
+
+**Process improvement v0.2.0.11:**
+- README Regra 9.1 — validação preview Vercel via Chrome MCP obrigatória antes fechar release
+- Receita JS fetch interceptor `window.__dosyNetMonitorV3` — sobrevive SPA navigation
+- Bateria interações + idle longo (Bash sleep run_in_background)
 
 **Release anterior:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
 **Items v0.2.0.10 fechados:**
@@ -228,24 +246,32 @@ Pendente nesta release:
 
 ## 4. Próximo passo imediato
 
-**Próxima sessão de código (sugerida):** atacar P1/P2 backlog — #029 refactor Settings.jsx 541 LOC, #030 split notifications.js 588 LOC em 4 módulos, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
+**Estado pós-v0.2.0.11:** master sincronizado com tag `v0.2.0.11`, sem release branch ativa. Validação Chrome MCP preview Vercel confirmou login + logout + Dashboard + Settings render OK + idle 6min = 0 requests.
 
-Branch a criar quando começar: `release/v0.2.0.7`.
+**Próxima sessão (v0.2.0.12) — sugerida focar:**
 
-**P0 restantes (todos manuais user — bloqueiam Open Testing):**
-
-**P0 restantes (todos manuais user):**
-
-| # | Tarefa | Esforço | Tipo |
+| # | Tarefa | Prioridade | Tipo |
 |---|---|---|---|
-| #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min | manual user |
-| #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | manual user |
-| #004 | Gravar vídeo demo FGS YouTube unlisted | 2-3h | manual user |
-| #006 | Device validation FASE 17 em 3 devices Android | 1-2 dias | manual user |
-| #007 | Telemetria PostHog `notification_delivered` | 1-2h | depende #018 manual user |
-| #009 | PITR + DR drill | 30min config + 2h drill | depende upgrade Pro plan |
+| validar | Egress cycle real 24-48h pós-v0.2.0.11 | P0 | manual obs Supabase Dashboard |
+| #144 | Re-tentar JWT claim hook conservador (read only, no auto-refresh) | P1 | code |
+| #006 | Device validation 3 devices Android | P1 | manual user |
+| #007 | Telemetria PostHog `notification_delivered` (depende #018) | P2 | code |
+| #110 | Investigação Android native crashes (NDK symbols disponíveis #074) | P2 | code |
+| #086 | Resumo Diário fix completo (Edge cron + timezone) | P2 | code |
+| #088 | BUG-021 dose não aparece Início sem refresh | P2 | code |
+| #089 | BUG-022 layout AdSense Pixel 7 | P2 | code |
+| #147 | BUG-041 reformulação fluxo recuperação senha | P2 | code |
 
-**Próxima sessão de código (pós v0.2.0.6):** atacar P1/P2 backlog — #029 refactor Settings.jsx, #030 split notifications.js 588 LOC, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
+**Closed Testing externo (paralelo, não-bloqueado):**
+- #129 Criar Google Group `dosy-testers` (~10min user)
+- #130 Configurar Closed Testing track Console com Group como tester list (~30min)
+- #131 Recrutar 15-20 testers externos via Reddit/redes
+- #132 Gate 14 dias × 12+ testers ativos
+- #133 Solicitar produção Console
+
+Branch a criar quando começar v0.2.0.12: `release/v0.2.0.12`.
+
+**Process v0.2.0.12+ (Regra 9.1 README):** validar preview Vercel via Chrome MCP **antes** de fechar branch — fetch interceptor + bateria interações + idle 5min+. Detecta storms cascade + idle polling + double-mount que build local não captura.
 
 ---
 
