@@ -21,11 +21,14 @@ export function useSharePatient() {
 }
 
 // Item #117 (release v0.2.0.3): shares recebidos por mim (alerta header).
+// Item #141 (release v0.2.0.10 — egress-audit F10): staleTime 60s → 5min.
+// Shares mudam raramente; refetch a cada minuto era over-aggressive.
+// Trade-off UX: novo share notif pode demorar até 5min em aparecer.
 export function useReceivedShares() {
   return useQuery({
     queryKey: ['received_shares'],
     queryFn: listReceivedShares,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   })
 }
 

@@ -47,7 +47,12 @@ export function useUserPrefs() {
     queryFn: async () => {
       if (!hasSupabase) return readLocal()
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        // Item #143 (release v0.2.0.10 — egress-audit F9): getSession() em
+        // vez de getUser(). getUser() bate /auth/v1/user (HTTP round-trip);
+        // getSession() lê localStorage. JWT validation já foi feito pelo
+        // session local + RLS server-side. -1 round-trip auth/refetch.
+        const { data: { session } } = await supabase.auth.getSession()
+        const user = session?.user
         if (!user) return readLocal()
         const { data, error } = await supabase
           .schema('medcontrol')
@@ -87,7 +92,9 @@ export function useUpdateUserPrefs() {
       qc.setQueryData(['user_prefs'], merged)
 
       if (!hasSupabase) return merged
-      const { data: { user } } = await supabase.auth.getUser()
+      // #143: getSession() local-only — sem round-trip auth a cada update prefs
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) {
         const e = new Error('NOT_AUTHENTICATED: no user session')
         console.error('[useUserPrefs]', e.message)
