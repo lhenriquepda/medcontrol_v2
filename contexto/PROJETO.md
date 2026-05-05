@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-05 — pós release v0.2.0.11 (versionCode 44 / versionName 0.2.0.11). Master sincronizado, sem release branch ativa. Próxima: v0.2.0.12 (validação egress real).
+> **Última revisão:** 2026-05-05 — em desenvolvimento v0.2.0.12 (release branch ativa). Master @ tag v0.2.0.11 (versionCode 44). v0.2.0.12 inclui #152 ChangePasswordModal + #153 OTP recovery + #154 Custom SMTP Resend + #144 hook re-ativado conservador.
 
 ---
 

@@ -37,6 +37,7 @@ import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
 import UpdateBanner from './components/UpdateBanner'
 import LockScreen from './components/LockScreen'
+import ForceNewPasswordModal from './components/ForceNewPasswordModal'
 import { useAppLock } from './hooks/useAppLock'
 
 // Fallback minimalista enquanto chunk carrega
@@ -60,6 +61,19 @@ export default function App() {
   // Tour shows after permissions modal closes (granted OR skipped). Web also shows immediately
   // since web has no special permissions modal.
   const [permsDone, setPermsDone] = useState(() => !Capacitor.isNativePlatform())
+  // #153 (v0.2.0.12) — força modal nova senha pós verifyRecoveryOtp.
+  // BUG fix: useState init lazy só roda 1x no mount. App monta no BOOT antes
+  // do user logar via OTP; flag setada DEPOIS do mount não dispara reload.
+  // Solução: useEffect monitora user + checa flag a cada SIGNED_IN/sessão nova.
+  const [forcePassword, setForcePassword] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    try {
+      if (localStorage.getItem('dosy_force_password_change') === '1') {
+        setForcePassword(true)
+      }
+    } catch { /* ignore */ }
+  }, [user])
 
   // Reset scroll para topo ao navegar entre rotas. Sem isso, navegar pra
   // /pacientes mantém scroll da rota anterior — botão "+ Novo" no topo
@@ -338,6 +352,11 @@ export default function App() {
       onClose={() => setPermsDone(true)}
     />
     <OnboardingTour enabled={permsDone} />
+    {/* #153 (v0.2.0.12) — força nova senha pós recovery OTP */}
+    <ForceNewPasswordModal
+      open={forcePassword}
+      onComplete={() => setForcePassword(false)}
+    />
     </>
   )
 }

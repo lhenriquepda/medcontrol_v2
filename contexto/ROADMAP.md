@@ -4,11 +4,45 @@
 
 ---
 
+## 🛠️ Regra de manutenção (CRÍTICA — leia ANTES de atualizar)
+
+**`ROADMAP.md` (este arquivo) e `CHECKLIST.md` são complementares, não-redundantes:**
+
+| Documento | Propósito | Granularidade |
+|---|---|---|
+| **ROADMAP.md §6** | **Lista RESUMIDA** de tarefas — visão macro | 1 linha por item (descrição curta + status `[ ]/[x]` + commit/release) |
+| **CHECKLIST.md** | **Lista DETALHADA** das tarefas — visão técnica completa | Entry completo (snippet, deps, aceitação, racional, links auditoria) |
+
+**Compartilham numeração:** `#001` ROADMAP = `#001` CHECKLIST. Toda mudança de status atualiza **AMBOS**.
+
+**Workflow obrigatório por sessão:**
+
+1. **Item fechado?**
+   - ROADMAP §6 → `- [x] **#XXX** [...] **fechado v0.X.Y.Z commit `{sha}`** {descrição curta}`
+   - CHECKLIST §#XXX → `**Status:** ✅ Concluído @ commit {sha} ({YYYY-MM-DD})`
+   - Update log da release → seção "Items fechados v0.X.Y.Z"
+
+2. **Item novo descoberto?**
+   - ROADMAP §6 → `- [ ] **#XXX** [PRIORIDADE] {descrição curta}` na P0/P1/P2/P3
+   - CHECKLIST → criar entry completo (template em `README.md` Regra 1)
+   - Update log → seção "Items novos descobertos"
+
+**Próximo número livre:**
+```bash
+grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail -5
+```
+
+**Drift histórico observado:** items fechados sem update CHECKLIST → re-implementação acidental → conflito git. Última auditoria 2026-05-05 fechou ~60 discrepâncias acumuladas v0.1.7.4-v0.2.0.11. Rodar auditoria semestral cross-ref ROADMAP × CHECKLIST × `updates/*.md`.
+
+**Detalhe completo das regras:** `contexto/README.md` Regra 1.
+
+---
+
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.11` (tag `v0.2.0.11`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.11 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.12` (em desenvolvimento) · branch `release/v0.2.0.12`. Master @ tag `v0.2.0.11`.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.11 (master). Preview release/v0.2.0.12 via `https://dosy-git-release-v02012-lhenriquepdas-projects.vercel.app/`. Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -59,6 +93,15 @@
 ---
 
 ## 3. Onde paramos
+
+**Em desenvolvimento — v0.2.0.12 (release/v0.2.0.12 ativa):**
+- ✅ #152 ChangePasswordModal em Ajustes (Conta → Alterar senha, modal 3 inputs, re-auth + update)
+- ✅ #153 Recovery senha via OTP 6 dígitos email (substitui magic-link broken #147 BUG-041)
+- ✅ #154 NOVO Custom SMTP Resend pra dosymed.app (DNS Hostinger DKIM/SPF/MX/DMARC + API key + Supabase SMTP)
+- ✅ #144 Auth Hook tier claim re-ativado (qc.clear scoped fix em useAuth onAuthStateChange)
+- ✅ #147 BUG-041 magic-link recovery FECHADO via #152 + #153 (escopo movido v0.2.1.0 → v0.2.0.12)
+- ✅ traduzirErro tradução OTP/rate-limit erros (commit 9dfb0f5)
+- ⏳ Em curso: #088 BUG-021 dose Início + #089 BUG-022 AdSense Pixel 7 + Bloco A items
 
 **Última release:** v0.2.0.11 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 44 + tag git `v0.2.0.11`).
 **Items v0.2.0.11 fechados (12 items — 8 planejados + 4 descobertos validação Chrome MCP):**
@@ -334,8 +377,12 @@ ESTADO ATUAL: Internal Testing ativo
 
 ## 6. Checklist macro completo
 
-**Total:** 73 itens · **P0:** 9 · **P1:** 18 · **P2:** 22 · **P3:** 24
-**Origem:** [Plan.md] 38 · [Auditoria] 19 · [Plan.md + Auditoria] 16
+**Total:** 154 itens (numeração até #154 — auditoria 2026-05-05)
+**Status:** 101 fechados (`[x]`) · 50 abertos (`[ ]`) · ~3 com seguintes (#118-followup, #119-followup, #106-old)
+**Distribuição prioridade aproximada:** P0: ~25 · P1: ~50 · P2: ~50 · P3: ~30
+**Origem:** [Plan.md] · [Auditoria] · [Plan.md + Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD]
+
+**Counter §6 stale histórico:** valores anteriores (Total: 73, P0:9, P1:18, P2:22, P3:24) refletiam apenas itens originais Plan + Auditoria pré-v0.1.7.0. Hoje (pós-#154) os contadores reais incluem itens descobertos durante releases v0.1.7.x → v0.2.0.12 (BUGs Sentry, egress audit, validação Chrome MCP, sessões com user). Recompor counter exato exigiria varredura linha-a-linha — manter como aproximado até próxima auditoria semestral.
 
 ### 🔴 P0 — Bloqueadores
 
@@ -399,20 +446,23 @@ ESTADO ATUAL: Internal Testing ativo
 #### Fixes egress (auditoria 2026-05-05 — `egress-audit-2026-05-05/`)
 > Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 cobriu apenas ~30%. Múltiplos vetores ativos. Detalhamento: `contexto/egress-audit-2026-05-05/README.md`.
 
-- [ ] **#134** [P0 cost — -30% a -45%] `useAppResume`: remover invalidate em short idle (<5min) + scopear long idle. Realtime + refetchInterval cobrem.
-- [ ] **#135** [P0 cost — -5% a -10%] `useRealtime` resume nativo: remover invalidate ALL keys. Resubscribe + postgres_changes events tomam conta.
-- [ ] **#136** [P0 cost — -15% a -25%] `useRealtime` postgres_changes: debounce invalidate 1s. Cron extend insere 100s doses → 1 invalidate em vez de 100.
+- [x] **#134** [P0 cost, fechado v0.2.0.8] `useAppResume`: removido invalidate em short idle (<5min); long idle usa `refetchQueries({active})` sem invalidate redundante. -30% a -45% egress estimado.
+- [x] **#135** [P0 cost, fechado v0.2.0.8] `useRealtime` resume nativo: removido invalidate ALL keys em CapacitorApp.resume. Resubscribe + postgres_changes events tomam conta. -5% a -10% egress.
+- [x] **#136** [P0 cost, fechado v0.2.0.8] `useRealtime` postgres_changes: debounce 1s invalidate por queryKey via `invalidateTimers` Map. Cron extend insere 100s doses → 1 invalidate consolidado em vez de 100. -15% a -25% egress.
 - [x] **#137** [P0 cost, fechado v0.2.0.9 commit `0124608`] Dashboard: consolidar 4 useDoses paralelas em 1 query + filtros client-side. -20% a -30% egress.
 - [x] **#138** [P0 cost, fechado v0.2.0.9 commit `0813d94`] DOSE_COLS_LIST sem observation + lazy-load detail. -15% a -30% payload listDoses.
-- [ ] **#139** [P1 cost] `dose-trigger-handler` skip se scheduledAt > 6h futuro. Cron 6h cobre. Edge invocations -50-70%.
-- [ ] **#140** [P1 cost] `schedule-alarms-fcm` HORIZON 72h → 24h. Payload FCM 3× menor.
-- [ ] **#141** [P1 cost] `useReceivedShares` staleTime 60s → 5min.
-- [ ] **#142** [P0 SECURITY 🔴] Rotacionar JWT cron `schedule-alarms-fcm-6h` — CONFIRMADO 2026-05-05 que JWT iat 26 abr retorna 200 OK (rotação #084 NÃO invalidou). USER deve "Roll JWT secret" Supabase Dashboard → Settings → API + agente recria cron via vault.read_secret.
-- [ ] **#143** [P2] `useUserPrefs.queryFn` getSession() em vez de getUser() (1 round-trip a menos).
-- [x] **#144** [P2 longo prazo, PARCIAL fechado v0.2.0.11 — frontend ROLLBACK v0.2.0.11 / re-tentar v0.2.0.12] Custom JWT claim `tier` via Auth Hook. Backend permanente: migration `144_jwt_claim_tier_auth_hook` aplicada (schema `auth_hooks` + função `add_tier_to_jwt(event jsonb)` chama `medcontrol.effective_tier`). Hook Dashboard ATIVADO + DESATIVADO durante release pq frontend integration causou logout cascade em prod (refreshSession + qc.clear loop). Frontend `getMyTier()` revertido path simples. Re-tentativa v0.2.0.12 com plan conservador (read claim only, NO auto-refresh, NO rpc fallback ativo).
+- [x] **#139** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] `dose-trigger-handler` v11 skip se scheduledAt > 6h futuro (early return `skipped: 'beyond-cron-horizon'`). Doses dentro 6h continuam fluxo normal; doses > 6h pegas pelo cron `schedule-alarms-fcm`. Edge invocations -50% a -70% em batch tratamentos contínuos.
+- [x] **#140** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] `schedule-alarms-fcm` v10 HORIZON 72h → 24h. AlarmManager nativo Android re-agenda a cada cron 6h ciclo (4 ciclos × 6h = 24h coverage). Payload FCM ~3× menor por device.
+- [x] **#141** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] `useReceivedShares` staleTime 60s → 5min. Shares mudam raríssimo (user aceita 1× e fica). -80% calls listReceivedShares estimado.
+- [x] **#142** [P0 SECURITY, fechado v0.2.0.9 verificação + v0.2.0.10 cleanup `bf45f80`] Legacy JWT secret REVOKED (PostgREST 401 com JWT antigo). Edge function pública via `verify_jwt: false` autoriza via `SERVICE_ROLE_KEY` env interna. Atacante com JWT vazado NÃO consegue privilege escalation. Cleanup cosmético v0.2.0.10: drop cron job 3 + recreate sem header `Authorization` hardcoded.
+- [x] **#143** [P2, fechado v0.2.0.10 commit `bf45f80`] `useUserPrefs.queryFn` `getSession()` em vez de `getUser()` — local-only (lê localStorage cache), zero round-trip /auth/v1/user. Top vector egress eliminado (-100% calls /auth/v1/user em useUserPrefs path).
+- [x] **#144** [P2 longo prazo, fechado v0.2.0.12 commit `54e0d0a`] Custom JWT claim `tier` via Auth Hook. Backend permanente: migration `144_jwt_claim_tier_auth_hook` (schema `auth_hooks` + função `add_tier_to_jwt`). v0.2.0.11 frontend ROLLBACK pq qc.clear cascade em TOKEN_REFRESHED criou loop logout. v0.2.0.12 fix conservador: qc.clear scoped só em SIGNED_OUT ou SIGNED_IN com user diff (preserva cache em TOKEN_REFRESHED). Hook re-ativado prod v0.2.0.12. -100% rpc('my_tier') round-trip via app_metadata.tier claim local.
 - [x] **#145** [P2, fechado v0.2.0.11 commit `9a9f399`] `useRealtime` watchdog + onStatusChange reconnect: substitui `qc.invalidateQueries(...)` blanket por `qc.refetchQueries({type:'active'})` scoped. Inactive queries (montadas em outras rotas, sem observers) NÃO refetcham — só ativas. Reduz blast radius reconnect.
 - [x] **#146** [P2 audit, fechado v0.2.0.11 commit `9a9f399`] `pg_cron extend_continuous_treatments`: tabela `medcontrol.cron_audit_log` (job_name, ran_at, status, payload jsonb, error_msg, duration_ms) + wrapper `run_extend_continuous_with_audit()` + view `cron_health_recent` últimos 30 runs com flag `suspicious_zero_doses` + auto-cleanup 90d. Cron job 2 alterado pra wrapper. Test run gerou row 1 ok (users:1, treatments:0, doses:0, duration_ms:17).
-- [ ] **#147** [P1 BUG-041 — parqueado v0.2.1.0] Recuperação de senha email link redirect pra localhost / erro. Reportado user 2026-05-05. Workaround: senha Daffiny resetada via SQL. Reformulação completa fluxo recovery em v0.2.1.0 (OTP em vez de magic-link OR fix Site URL config).
+- [x] **#147** [P1 BUG-041, fechado v0.2.0.12 via #152 + #153] Recuperação senha reformulada com OTP 6 dígitos via email (substitui magic-link broken localhost). Substituição completa #153.
+- [x] **#152** [P1 UX, fechado v0.2.0.12 commit `b2f53ff`] **ChangePasswordModal em Ajustes**. Botão "Alterar senha" em Settings → Conta. Modal padrão Dosy (ícone Lock) + 3 inputs (atual + nova + repetir). Validação inline (≥8 chars, match repeat, atual ≠ nova). Re-autentica via signInWithPassword({email, password: current}) → updateUser({password: nova}). Toast success + close modal. Loading state bloqueia close.
+- [x] **#153** [P1 UX, fechado v0.2.0.12 commits `b2f53ff` + `31da691`] **Recovery senha via OTP 6 dígitos** (substitui magic-link broken #147). useAuth.sendRecoveryOtp(email) → signInWithOtp shouldCreateUser:false. useAuth.verifyRecoveryOtp(email, token) → verifyOtp type:'email' + flag localStorage `dosy_force_password_change=1`. Login.jsx 2 sub-modes 'forgot-email' + 'forgot-otp'. App.jsx ForceNewPasswordModal aberto auto via useEffect [user] (FIX: useState init lazy não re-rodava após sessão criada — useEffect monitora SIGNED_IN). Email OTP length Supabase Dashboard 8→6 dígitos. Email template Magic Link customizado pra OTP code com `{{ .Token }}` em design Dosy peach. Validado fluxo end-to-end via Chrome MCP preview: email recebido + código + modal força nova senha + define + entra app.
+- [x] **#154** [P0 INFRA, fechado v0.2.0.12] **Custom SMTP Resend pra dosymed.app**. Built-in Supabase email service rate-limited 2 emails/h (não-prod). Resend SMTP 30 emails/h Supabase (1000+ Resend free tier). DNS Hostinger: 4 records (DKIM TXT resend._domainkey, MX send → feedback-smtp.sa-east-1.amazonses.com priority 10, TXT send v=spf1 include:amazonses.com ~all, TXT _dmarc v=DMARC1; p=none;). Domain Resend VERIFIED em <5min após DNS prop. Supabase Auth → SMTP Settings: smtp.resend.com:465 user `resend` pass=API key, sender Dosy <noreply@dosymed.app>. Substitui built-in legacy. Recovery OTP funcionando real prod. Ver `contexto/decisoes/2026-05-05-resend-smtp-setup.md`.
 - [x] **#148** [P0 cost, descoberto + fechado v0.2.0.11 commit `7c8cf5b`] Dashboard `extend_continuous_treatments` rpc 2× por mount. Causa: AnimatePresence popLayout mantém old + new Dashboard durante exit anim ~600ms → ambos useEffects firam. Fix: module-scope flag `window.__dosyExtendContinuousAt` debounce 60s. Skip se chamou nos últimos 60s. Identificado via Chrome MCP fetch interceptor preview Vercel.
 - [x] **#149** [P0 cost, descoberto + fechado v0.2.0.11 commit `758035b`] useDoses mutation refetch storm — 12 fetches /doses em 200s sessão real (mark/skip/undo cascade). Causa: cada mutation onSettled invalida `['doses']` → todas active queryKeys (3-5) refetcham simultâneo. Optimistic update via `patchDoseInCache` já garante UI consistency. Fix: debounce 2s via module-scope timer. Multi-mutation rapid consolida em 1 refetch. -75% storm.
 - [x] **#150** [P0 cost, descoberto + fechado v0.2.0.11 commit `017916d`] useDoses refetchInterval idle storm — 5 fetches /doses simultâneos cada 5min em IDLE. Causa: 5 active queryKeys × 5min interval. Math: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia idle polling. Fix: 5min → 15min = -67% polling rate.
@@ -426,7 +476,7 @@ ESTADO ATUAL: Internal Testing ativo
 
 #### DX
 - [x] **#022** [Auditoria] Verificar legitimidade `typescript@^6.0.3`. → [06 BUG-007](auditoria/06-bugs.md#bug-007--typescript-declarado-como-603-no-packagejson)
-- [x] **#024** [Auditoria] Pre-commit hook (husky + lint-staged). → [05 §6.3](auditoria/05-codigo.md#63-husky--pre-commit)
+- [x] **#024** [Auditoria, fechado v0.2.0.5 — parte de #126] Pre-commit hooks (husky + lint-staged + gitleaks). Detalhe completo em §P0 abaixo (linha duplicada removida 2026-05-05).
 
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
@@ -492,6 +542,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#071** [Plan] Programa afiliados. Plan FASE 23.3
 - [ ] **#072** [Plan] A/B test paywall e onboarding. Plan FASE 23.2
 - [ ] **#073** [Plan] Programa de indicação (1 mês PRO grátis). Plan FASE 22.3
+- [ ] **#155** [P3 cosmético] Adicionar 1-2 screenshots novos Play Console pra v0.2.0.12: tela "Alterar senha" Ajustes (#152) + tela "Recuperar senha código 6 dígitos" Login (#153). Não-bloqueador release; releitura screenshots store mostra modais novos. Capturar S25 Ultra real prod pós-merge master.
 
 #### DX / Observability
 - [x] **#074** [fechado v0.2.0.2] Habilitar upload de debug symbols (`ndk.debugSymbolLevel 'FULL'` em buildTypes.release). Resolve aviso recorrente Play Console + melhora Sentry NDK stack traces (necessário pra investigar #110 native ART crashes).
@@ -658,7 +709,7 @@ analise/CHECKLIST.md §#XXX.
 
 Após cada item fechado, atualizar contadores no topo §6:
 ```
-**Total:** 73 itens · **P0:** 9 → 8 · **P1:** 18 · **P2:** 22 · **P3:** 24
+**Total:** 154 itens (auditoria 2026-05-05) · 101 `[x]` · 50 `[ ]` · ~3 followups
                                 ↑ decrementar conforme fecha
 ```
 
