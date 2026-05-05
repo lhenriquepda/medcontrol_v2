@@ -17,28 +17,47 @@ import { primePatientPhotoCache, dropPatientPhotoCache } from '../hooks/usePatie
 import { useQueryClient } from '@tanstack/react-query'
 import { deletePatient } from '../services/patientsService'
 
+// #100 (release v0.2.0.11) — Avatar emoji redesign:
+// - Default 👤 (silhueta genérica) → 🙂 (rosto amigável universal)
+// - Reorganizado em 6 categorias mais úteis (Família, Saúde, Pessoas, Animais, Atividades, Cores)
+// - Removidas duplicatas (🔴 + 🟥 redundantes — mantemos só círculos)
+// - Adicionados emojis saúde (🩺🩹💊💉🫀🧠) em categoria dedicada
+// - Família com laços comuns (👨‍👩‍👧‍👦 etc) pra cuidador identificar paciente
 const AVATAR_GROUPS = [
   {
-    label: 'Bolinhas',
-    items: ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪',
-            '🔶','🔷','🔸','🔹','🟥','🟧','🟨','🟩','🟦','🟪','🟫'],
+    label: 'Família',
+    items: ['🤱','👶','🧒','👧','👦','👩','👨','🧓','👵','👴',
+            '👨‍👩‍👧','👨‍👩‍👦','👩‍👧','👨‍👦','👪'],
+  },
+  {
+    label: 'Saúde',
+    items: ['👩‍⚕️','👨‍⚕️','🧑‍⚕️','🩺','🩹','💊','💉','🫀',
+            '🧠','🫁','🦴','🦷','👁️','👂'],
   },
   {
     label: 'Pessoas',
-    items: ['👶','🧒','👧','👦','🧑','👩','👨','🧔','👱','🧓','👵','👴',
-            '👩‍⚕️','👨‍⚕️','🧑‍⚕️','👩‍🦯','👨‍🦯','🧑‍🦽','👩‍🦽','🧑‍🦼'],
+    items: ['🙂','😊','🥰','🧑','🧔','👱','🧑‍🦰','🧑‍🦱','🧑‍🦳','🧑‍🦲',
+            '👩‍🦯','👨‍🦯','🧑‍🦽','👩‍🦽','🧑‍🦼','💪','🏃','🧘'],
   },
   {
     label: 'Animais',
     items: ['🐶','🐱','🐰','🐻','🐼','🐨','🐯','🦁','🐮','🐷',
-            '🐸','🐵','🦊','🐺','🦝','🐱‍👤','🦋','🐧','🦜'],
+            '🐸','🐵','🦊','🐺','🦝','🐹','🐭','🦋','🐧','🦜','🐢'],
   },
   {
-    label: 'Símbolos',
-    items: ['⭐','🌟','💫','✨','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍',
-            '🏠','🌸','🌺','🍀','🌈','☀️','🌙','⚡','🎯','🎀','🎗️'],
+    label: 'Atividades',
+    items: ['⭐','🌟','💫','✨','🎯','🎀','🎗️','🏆','🎨','🎵',
+            '📚','🍎','🥗','💧','🍵','☕','🌱','🌳'],
+  },
+  {
+    label: 'Cores',
+    items: ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪',
+            '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎'],
   },
 ]
+
+// Default avatar — 🙂 (amigável, gender-neutral, age-neutral). Antes 👤 silhueta cinza.
+const DEFAULT_AVATAR = '🙂'
 
 export default function PatientForm() {
   const { id } = useParams()
@@ -59,7 +78,7 @@ export default function PatientForm() {
   const [errors, setErrors] = useState({})
 
   const [form, setForm] = useState({
-    name: '', age: '', avatar: '👤', weight: '', condition: '', doctor: '', allergies: '',
+    name: '', age: '', avatar: DEFAULT_AVATAR, weight: '', condition: '', doctor: '', allergies: '',
     photo_url: '', photo_version: 0,
   })
   // Item #114: track se photo mudou nesta sessão (bump photo_version no submit).
@@ -71,7 +90,7 @@ export default function PatientForm() {
     if (existing) setForm({
       name: existing.name || '',
       age: existing.age != null ? String(existing.age) : '',
-      avatar: existing.avatar || '👤',
+      avatar: existing.avatar || DEFAULT_AVATAR,
       // Item #108 BUG-036: weight DB é numeric. Coerce String pra <input> + evita
       // .replace TypeError no submit.
       weight: existing.weight != null ? String(existing.weight) : '',

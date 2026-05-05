@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.10` (tag `v0.2.0.10`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.10 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.11` (tag `v0.2.0.11`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.11 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -60,7 +60,36 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
+**Última release:** v0.2.0.11 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 44 + tag git `v0.2.0.11`).
+**Items v0.2.0.11 fechados (12 items — 8 planejados + 4 descobertos validação Chrome MCP):**
+
+**Planejados (8):**
+- #144 Custom JWT claim tier (Auth Hook) — backend ✅ migration + function permanente, frontend ❌ ROLLBACK (logout cascade prod)
+- #145 useRealtime watchdog scoped refetch (active-only) substitui invalidate blanket
+- #146 pg_cron extend batch INSERT verify — audit log + view health + 90d retention
+- #029 refactor Settings.jsx 692 LOC → src/pages/Settings/ (index + sections + Row + constants)
+- #030 split notifications.js 613 LOC → src/services/notifications/ (5 arquivos)
+- #034 virtualizar DoseHistory via @tanstack/react-virtual VirtualTimeline
+- #100 avatar emoji redesign — 6 categorias curadas + default 👤 → 🙂 + Saúde category nova
+- #009 PITR deferred (Pro add-on $100/mo caro) — DR drill via daily backup baseline capturado
+
+**Descobertos durante validação Chrome MCP preview Vercel (4):**
+- #148 Dashboard extend_continuous_treatments rpc 2× por mount (AnimatePresence popLayout) → debounce 60s window flag
+- #149 useDoses mutation refetch storm 12 fetches/200s (mark/skip/undo cascade) → debounce 2s timer
+- #150 useDoses refetchInterval 5min × 5 active queryKeys = idle storm → 15min interval
+- #151 useDoses refetchInterval opt-in só Dashboard (outras telas off) — Realtime cobre updates
+
+**Bug crítico revertido v0.2.0.11:**
+- #144 frontend integration causou logout cascade (refreshSession + qc.clear loop infinito)
+- Hook Dashboard DISABLED + frontend volta path simples
+- Re-tentativa parqueada v0.2.0.12 com plan conservador (read claim only, no auto-refresh)
+
+**Process improvement v0.2.0.11:**
+- README Regra 9.1 — validação preview Vercel via Chrome MCP obrigatória antes fechar release
+- Receita JS fetch interceptor `window.__dosyNetMonitorV3` — sobrevive SPA navigation
+- Bateria interações + idle longo (Bash sleep run_in_background)
+
+**Release anterior:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
 **Items v0.2.0.10 fechados:**
 - #139 dose-trigger-handler skip se scheduledAt > 6h (-50% a -70% chamadas Edge fn)
 - #140 schedule-alarms-fcm HORIZON 72h → 24h (payload FCM 3× menor)
@@ -217,24 +246,32 @@ Pendente nesta release:
 
 ## 4. Próximo passo imediato
 
-**Próxima sessão de código (sugerida):** atacar P1/P2 backlog — #029 refactor Settings.jsx 541 LOC, #030 split notifications.js 588 LOC em 4 módulos, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
+**Estado pós-v0.2.0.11:** master sincronizado com tag `v0.2.0.11`, sem release branch ativa. Validação Chrome MCP preview Vercel confirmou login + logout + Dashboard + Settings render OK + idle 6min = 0 requests.
 
-Branch a criar quando começar: `release/v0.2.0.7`.
+**Próxima sessão (v0.2.0.12) — sugerida focar:**
 
-**P0 restantes (todos manuais user — bloqueiam Open Testing):**
-
-**P0 restantes (todos manuais user):**
-
-| # | Tarefa | Esforço | Tipo |
+| # | Tarefa | Prioridade | Tipo |
 |---|---|---|---|
-| #003 | Rotacionar senha postgres + revogar PAT kids-paint + INFOS.md → vault | 30 min | manual user |
-| #008 | Configurar `SENTRY_AUTH_TOKEN/ORG/PROJECT` em GitHub Secrets | 15 min | manual user |
-| #004 | Gravar vídeo demo FGS YouTube unlisted | 2-3h | manual user |
-| #006 | Device validation FASE 17 em 3 devices Android | 1-2 dias | manual user |
-| #007 | Telemetria PostHog `notification_delivered` | 1-2h | depende #018 manual user |
-| #009 | PITR + DR drill | 30min config + 2h drill | depende upgrade Pro plan |
+| validar | Egress cycle real 24-48h pós-v0.2.0.11 | P0 | manual obs Supabase Dashboard |
+| #144 | Re-tentar JWT claim hook conservador (read only, no auto-refresh) | P1 | code |
+| #006 | Device validation 3 devices Android | P1 | manual user |
+| #007 | Telemetria PostHog `notification_delivered` (depende #018) | P2 | code |
+| #110 | Investigação Android native crashes (NDK symbols disponíveis #074) | P2 | code |
+| #086 | Resumo Diário fix completo (Edge cron + timezone) | P2 | code |
+| #088 | BUG-021 dose não aparece Início sem refresh | P2 | code |
+| #089 | BUG-022 layout AdSense Pixel 7 | P2 | code |
+| #147 | BUG-041 reformulação fluxo recuperação senha | P2 | code |
 
-**Próxima sessão de código (pós v0.2.0.6):** atacar P1/P2 backlog — #029 refactor Settings.jsx, #030 split notifications.js 588 LOC, #034 virtualização DoseHistory, #100 avatar emoji redesign, #110 investigação Android native crashes (NDK symbols disponíveis pós #074).
+**Closed Testing externo (paralelo, não-bloqueado):**
+- #129 Criar Google Group `dosy-testers` (~10min user)
+- #130 Configurar Closed Testing track Console com Group como tester list (~30min)
+- #131 Recrutar 15-20 testers externos via Reddit/redes
+- #132 Gate 14 dias × 12+ testers ativos
+- #133 Solicitar produção Console
+
+Branch a criar quando começar v0.2.0.12: `release/v0.2.0.12`.
+
+**Process v0.2.0.12+ (Regra 9.1 README):** validar preview Vercel via Chrome MCP **antes** de fechar branch — fetch interceptor + bateria interações + idle 5min+. Detecta storms cascade + idle polling + double-mount que build local não captura.
 
 ---
 
@@ -321,7 +358,7 @@ ESTADO ATUAL: Internal Testing ativo
 
 #### Setup CI / DR
 - [x] **#008** [Plan, fechado 2026-05-04 — secrets criados 2026-04-28] GitHub Secrets `SENTRY_AUTH_TOKEN`/`SENTRY_ORG=lhp-tech`/`SENTRY_PROJECT=dosy`/`VITE_SENTRY_DSN` configurados em Actions. Workflows referenciam corretamente. Aceitação completa pendente #127 (CI lint fix → source maps upload roda auto). Plan FASE 10.1
-- [ ] **#009** [Auditoria] PITR Supabase + drill restore + runbook DR. → [04 §11](auditoria/04-supabase.md#11-backups-e-pitr)
+- [x] **#009** [Auditoria, fechado v0.2.0.11 — DEFERRED PITR add-on $100/mo] PITR Supabase pago Pro add-on extra (não-incluído base) — pre-revenue overkill. DR drill executado via daily backup (7-day retention): baseline production capturado 2026-05-05 (auth_users:5, doses:582, patients:6, treatments:33, subscriptions:5, push_subs:10). Procedure docs Dashboard → Backups → Restore. RTO ~5-15min, RPO max 24h. Re-avaliar PITR quando Dosy gerar revenue (Q3 2026 ou 50+ paying users).
 
 ### 🟠 P1 — Alta Prioridade
 
@@ -372,10 +409,14 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#141** [P1 cost] `useReceivedShares` staleTime 60s → 5min.
 - [ ] **#142** [P0 SECURITY 🔴] Rotacionar JWT cron `schedule-alarms-fcm-6h` — CONFIRMADO 2026-05-05 que JWT iat 26 abr retorna 200 OK (rotação #084 NÃO invalidou). USER deve "Roll JWT secret" Supabase Dashboard → Settings → API + agente recria cron via vault.read_secret.
 - [ ] **#143** [P2] `useUserPrefs.queryFn` getSession() em vez de getUser() (1 round-trip a menos).
-- [ ] **#144** [P2 longo prazo] Custom JWT claim `tier` via Auth Hook → elimina round-trip useMyTier.
-- [ ] **#145** [P2] `useRealtime` watchdog: invalidate só se data divergente.
-- [ ] **#146** [P2 audit] `pg_cron extend_continuous_treatments`: confirmar batch single multi-row INSERT.
+- [x] **#144** [P2 longo prazo, PARCIAL fechado v0.2.0.11 — frontend ROLLBACK v0.2.0.11 / re-tentar v0.2.0.12] Custom JWT claim `tier` via Auth Hook. Backend permanente: migration `144_jwt_claim_tier_auth_hook` aplicada (schema `auth_hooks` + função `add_tier_to_jwt(event jsonb)` chama `medcontrol.effective_tier`). Hook Dashboard ATIVADO + DESATIVADO durante release pq frontend integration causou logout cascade em prod (refreshSession + qc.clear loop). Frontend `getMyTier()` revertido path simples. Re-tentativa v0.2.0.12 com plan conservador (read claim only, NO auto-refresh, NO rpc fallback ativo).
+- [x] **#145** [P2, fechado v0.2.0.11 commit `9a9f399`] `useRealtime` watchdog + onStatusChange reconnect: substitui `qc.invalidateQueries(...)` blanket por `qc.refetchQueries({type:'active'})` scoped. Inactive queries (montadas em outras rotas, sem observers) NÃO refetcham — só ativas. Reduz blast radius reconnect.
+- [x] **#146** [P2 audit, fechado v0.2.0.11 commit `9a9f399`] `pg_cron extend_continuous_treatments`: tabela `medcontrol.cron_audit_log` (job_name, ran_at, status, payload jsonb, error_msg, duration_ms) + wrapper `run_extend_continuous_with_audit()` + view `cron_health_recent` últimos 30 runs com flag `suspicious_zero_doses` + auto-cleanup 90d. Cron job 2 alterado pra wrapper. Test run gerou row 1 ok (users:1, treatments:0, doses:0, duration_ms:17).
 - [ ] **#147** [P1 BUG-041 — parqueado v0.2.1.0] Recuperação de senha email link redirect pra localhost / erro. Reportado user 2026-05-05. Workaround: senha Daffiny resetada via SQL. Reformulação completa fluxo recovery em v0.2.1.0 (OTP em vez de magic-link OR fix Site URL config).
+- [x] **#148** [P0 cost, descoberto + fechado v0.2.0.11 commit `7c8cf5b`] Dashboard `extend_continuous_treatments` rpc 2× por mount. Causa: AnimatePresence popLayout mantém old + new Dashboard durante exit anim ~600ms → ambos useEffects firam. Fix: module-scope flag `window.__dosyExtendContinuousAt` debounce 60s. Skip se chamou nos últimos 60s. Identificado via Chrome MCP fetch interceptor preview Vercel.
+- [x] **#149** [P0 cost, descoberto + fechado v0.2.0.11 commit `758035b`] useDoses mutation refetch storm — 12 fetches /doses em 200s sessão real (mark/skip/undo cascade). Causa: cada mutation onSettled invalida `['doses']` → todas active queryKeys (3-5) refetcham simultâneo. Optimistic update via `patchDoseInCache` já garante UI consistency. Fix: debounce 2s via module-scope timer. Multi-mutation rapid consolida em 1 refetch. -75% storm.
+- [x] **#150** [P0 cost, descoberto + fechado v0.2.0.11 commit `017916d`] useDoses refetchInterval idle storm — 5 fetches /doses simultâneos cada 5min em IDLE. Causa: 5 active queryKeys × 5min interval. Math: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia idle polling. Fix: 5min → 15min = -67% polling rate.
+- [x] **#151** [P0 cost, descoberto + fechado v0.2.0.11 commit `78127b7`] useDoses refetchInterval opt-in only Dashboard. Antes: hardcoded 15min em TODAS queries (5 active queryKeys idle polling). Agora: default OFF, opt-in via `options.pollIntervalMs`. Dashboard explicitamente passa 15min. Outras telas (Settings, DoseHistory, Reports) sem polling — refetch só on mount + Realtime + invalidate explícito. -80% adicional idle egress.
 
 #### Web (não-bloq Android)
 - [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
@@ -390,12 +431,12 @@ ESTADO ATUAL: Internal Testing ativo
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
 - [x] **#028** [Auditoria, fechado v0.2.0.4] Rate limit `delete-account`. Edge fn v7 deployed prod. Max 1 attempt/user/60s via security_events table check. Resposta 429 + Retry-After. Insert event antes da operação. → [06 BUG-003](auditoria/06-bugs.md#bug-003--edge-function-delete-account-sem-rate-limit-auditoria-estática)
-- [ ] **#029** [Plan + Auditoria] Refatorar `Settings.jsx` (541 LOC). Plan FASE 15
-- [ ] **#030** [Plan SECURITY + Auditoria] Refatorar `services/notifications.js` (588 LOC) em 4 módulos
+- [x] **#029** [Plan + Auditoria, fechado v0.2.0.11 commit `9a9f399`] Refatorar `Settings.jsx` 692 LOC → `src/pages/Settings/` com 4 arquivos: index.jsx (276 LOC orchestrator) + sections.jsx (470 LOC, 7 components: Plan, Aparência, Notificações, Privacidade, Conta, Dados, Versão) + Row.jsx + constants.js. Imports preservados (Vite resolve auto). Plan FASE 15
+- [x] **#030** [Plan SECURITY + Auditoria, fechado v0.2.0.11 commit `9a9f399`] Refatorar `services/notifications.js` 613 LOC → `src/services/notifications/` com 5 arquivos: prefs.js (helpers + storage + constants) + channels.js (Android channels + cancelAll) + scheduler.js (rescheduleAll + path web) + fcm.js (subscribeFcm/unsubscribeFcm/bindFcmListenersOnce) + index.js (barrel + useNotifications hook). API pública 100% retro-compat.
 - [x] **#031** [Auditoria, fechado v0.2.0.4 — verificado] Confirmar `FORCE_RLS` em todas tabelas. Audit: 13/13 tabelas medcontrol com `relrowsecurity=true` AND `relforcerowsecurity=true`. ✓
 - [x] **#032** [Auditoria, fechado v0.2.0.4] Confirmar `SET search_path` em todas SECURITY DEFINER. Audit revelou 1 função sem SET (`handle_new_user_plus_promo`). Resolvido indiretamente em #119-followup: trigger + função droppadas (eram da promo beta encerrada). 0/0 funções pendentes agora.
 - [x] **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
-- [ ] **#034** [Plan] Virtualização DoseHistory + Patients (`@tanstack/react-virtual`). Plan FASE 13
+- [x] **#034** [Plan, fechado v0.2.0.11 commit `9a9f399`] Virtualização DoseHistory via `@tanstack/react-virtual`. VirtualTimeline component envelopa map TimelineRow (ROW_HEIGHT 62px + ROW_GAP 6 + overscan 5). MaxHeight 60vh + scroll quando >10 itens. Pre-built patientById Map evita O(n²) lookup. Plan FASE 13. Patients virtualização parqueada (lista curta tipicamente).
 - [ ] **#035** [Plan] Integration tests (`useDoses`, `useUserPrefs` mocks). Plan FASE 9.4
 - [ ] **#036** [Plan] Skeleton screens completos. Plan FASE 15
 - [x] **#037** [Plan, fechado v0.2.0.4] Erros inline em forms. PatientForm valida nome/idade/peso + TreatmentForm valida medName/unit/durationDays via state errors + Input.error prop (já existia no primitive). Erro limpa onChange do field. Substitui HTML5 required tooltip nativo (UX inconsistente browser/native).
@@ -477,7 +518,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#090** [BUG-023, fechado v0.1.7.4 commit pendente] **Pós-login redireciona pra Ajustes ao invés de Início.** Causa raiz: React Router preserva pathname após user mudar null→logged. Se URL era `/ajustes` (herdada session anterior pré-logout), App re-renderiza com user truthy + rota /ajustes existente → Settings renderiza direto sem redirecionar Início. Fix: navigate('/', {replace:true}) explícito em Login.submit após signin/signup success se path atual não é `/` nem `/reset-password` (preserva deep links legítimos com token).
 - [ ] **#089** [BUG-022, reportado user 2026-05-02 emulador Pixel 7] **Layout: AdSense banner empurrando header parcial.** Print confirma: banner "Test Ad 468x60" ocupa topo da viewport, header "Dosy ▸ Frederico" fica abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Tabs filtro (12h/24h/48h/7 dias/Tudo) e cards (Pendentes/Adesão/Atrasadas) renderizam OK abaixo. Visível em emulador Pixel 7 (1080×2400 @420dpi). **⚠️ NÃO repro em Samsung S25 Ultra device real** — fix DEVE preservar layout atual em devices modernos. Provável causa: posicionamento absoluto AdSense em `index.html` ou container CSS colidindo com `<header>` sem `padding-top` proporcional ao banner; viewport `<meta>` ou safe-area-inset comportamento diferente em Pixel 7. Verificar `index.html` (placement AdSense) + componentes header (`Layout.jsx`/`AppHeader.jsx`). Test cross-device obrigatório antes commit (Pixel 7 emul + S25 Ultra real + tablet baseline). P2 UX visual.
 - [x] **#099** [P1 BUG-031, fechado v0.2.0.1 commit `1fcff21`] **Avatar paciente — upload de foto não persiste + falta crop circular.** Fix: canvas client-side center-square-crop 512x512 + JPEG 0.78 (~50KB) antes de salvar. Resolve aspect 1:1 + reduz payload DB. No formulário Cadastro/Editar Paciente (PatientForm.jsx), user seleciona imagem do device pra avatar do filho. Dois problemas: (1) Sem UI de crop pra escolher pedaço da imagem que vai aparecer no círculo do avatar — qualquer foto retangular fica espremida/cortada errado. (2) Click em "Salvar Alterações" — nada acontece visualmente, avatar não muda, sem toast feedback. Provável: handler upload incompleto OR Supabase Storage sem bucket configurado OR `photo_url` field não chega no PATCH RPC. Investigar: PatientForm.jsx file input handler, `patients.photo_url` column (existe schema), service updatePatient payload, Supabase Storage policies bucket `patient-photos`. Fix: (a) integrar lib crop circular (ex `react-easy-crop` ou `react-image-crop`) com aspect 1:1 round mask, (b) confirmar Storage bucket + RLS policy auth user-scoped, (c) upload → URL → patches `photo_url`, (d) toast success + invalidate queryClient ['patients']. P1 UX broken feature healthcare-adjacent.
-- [ ] **#100** [P2 UX, levantado user 2026-05-04 pós-release v0.2.0.0] **Avatar emoji redesign — flat emojis + escolha cor emoji + cor bg.** Atual emoji avatar usa emoji nativo do device (varia entre Apple/Google/Samsung look) + bg peach fixo. Proposta: (1) curar lista emojis flat consistentes (estilo Twemoji ou Noto flat — license MIT/Apache via SVG sprite ou React component lib `emojibase` + `react-emoji-render` flat-mode), (2) UI Avatar Picker: grid emojis + 2 sliders/swatches separados pra cor do emoji + cor do bg, (3) persiste `avatar` (codepoint) + `avatarColor` + `avatarBg` em medcontrol.patients (precisa migration ALTER TABLE adicionar 2 colunas), (4) renderiza Avatar primitive com SVG flat tinted via filter ou inline-styled emoji. Compatibilidade backward: se `avatarColor`/`avatarBg` null, fallback ao emoji nativo + peach atual. P2 UX/branding consistency.
+- [x] **#100** [P2 UX, fechado PARCIAL v0.2.0.11 commit `9a9f399` — escopo reduzido] **Avatar emoji redesign — categorização curada + default amigável.** Escopo executado: (1) PatientForm AVATAR_GROUPS reorganizado em 6 categorias (Família, Saúde ⭐ NOVO, Pessoas, Animais, Atividades ⭐ NOVO, Cores), (2) Saúde inclui emojis médicos (🩺 🩹 💊 💉 🫀 🧠 🦴 🦷 👁️ 👂), (3) Família com laços comuns (👨‍👩‍👧 👨‍👩‍👦 👪), (4) Default `'👤'` (silhueta cinza) → `'🙂'` (rosto amigável universal) com const `DEFAULT_AVATAR`, (5) dedup duplicatas (🟥 🟧 etc removidas, mantém círculos coloridos). Fallbacks atualizados em PatientAvatar/FilterBar/Dashboard/PatientDetail. Escopo NÃO executado (parqueado backlog): SVG flat tinted, sliders cor emoji + cor bg, migration ALTER TABLE `avatarColor`/`avatarBg`, lib `emojibase` + `react-emoji-render`. Decisão: ganho UX já é grande sem migration DB; redesign visual avançado quando branding maturar.
 - [x] **#107** [P0 BUG-035, fechado v0.2.0.0+ commit pendente — Sentry DOSY-J/F/G] **TypeError: schema(...).rpc(...).catch is not a function** em Dashboard pull-to-refresh. 6 events combined em 3 bundle hashes (Dashboard-Cmc-tujf.js, Dashboard-BhDXgu92.js, Dashboard-BLHPy4NG.js) últimas 22min/2hr/10hr. Causa: `supabase.schema().rpc()` retorna PostgrestFilterBuilder (PromiseLike, só `.then`), NÃO Promise nativo. `.catch()` direto throws TypeError. Fix: `.then(undefined, errHandler)` form 2-arg (compatível PromiseLike). Linha Dashboard.jsx handleRefresh array Promise.all.
 - [x] **#108** [P1 BUG-036, fechado v0.2.0.1 commit `09724c1`] **PatientForm weight.replace TypeError (Sentry DOSY-K).** Coerce String() em load + submit. 1 event 1 user, ~1hr ago. Causa: campo `weight` passa pelo input já como number OR null, mas onSubmit chama `weight.replace(',','.')` esperando string. Fix: coerce String(weight) antes OR só chamar replace se typeof string. Quick Fix Sentry sugerido. Test: cadastrar paciente com peso preenchido. P1 broken submit (cadastro paciente falha).
 - [x] **#109** [P0 BUG-037, fechado v0.2.0.1 commit `09724c1`] **useRealtime concurrent subscribe race.** Lock flag `subscribing` + try/catch ch.on() defensive previne 4 paths convergent (status reconnect + watchdog + TOKEN_REFRESHED + native resume). 9 events combined em 4 issues distintas (variants vendor-data hashes BCdG1osb, CdTeGmV2). #093 (closed v0.1.7.5) aplicou fix nome único + await removeChannel + generation counter. Mas erro voltou. Investigar: (a) novo cenário race não coberto por #093 fix, (b) nova chamada `.on('postgres_changes')` em outro lugar (BellAlerts? Dashboard hook?), (c) realtime client v2.x mudança de comportamento, (d) regressão por código novo v0.2.0.0 chamando subscribe múltiplas vezes (useEffect deps incorretas). Stack trace `Vr.on(/assets/vendor-data-...js)` — vendor bundle, não nosso código diretamente. Reproduzir + isolar caller. P0 healthcare reliability.

@@ -92,9 +92,17 @@ export function useRealtime() {
           if (!user) return
           await unsubscribe()
           await subscribe()
-          // #092: invalidate APENAS keys relevantes (não ALL queries) durante reconnect
+          // #145 (release v0.2.0.11): refetch SCOPED a queries ATIVAS apenas.
+          // Antes (#092): invalidateQueries blanket → marcava stale tudo,
+          // forçava refetch em mount mesmo quando query não-mounted (ie. user
+          // foi pra Settings durante disconnect → patients query stale → refetch
+          // imediato ao voltar Dashboard, sem necessidade).
+          // Agora: só ativas (com observers ativos) refetcham. Inactive queries
+          // ficam como estão — vão refetch natural ao montar.
           for (const keys of Object.values(TABLE_TO_KEYS)) {
-            for (const key of keys) qc.invalidateQueries({ queryKey: key })
+            for (const key of keys) {
+              qc.refetchQueries({ queryKey: key, type: 'active' })
+            }
           }
         }, delay)
       }
@@ -164,8 +172,13 @@ export function useRealtime() {
           console.warn(`[useRealtime] watchdog: state=${state} → force reconnect`)
           await unsubscribe()
           await subscribe()
+          // #145 (release v0.2.0.11): scoped refetch active-only após watchdog reconnect.
+          // Mesma rationale do onStatusChange. Watchdog dispara mais raramente
+          // (intervalos de 60s), mas mesma economia aplica.
           for (const keys of Object.values(TABLE_TO_KEYS)) {
-            for (const key of keys) qc.invalidateQueries({ queryKey: key })
+            for (const key of keys) {
+              qc.refetchQueries({ queryKey: key, type: 'active' })
+            }
           }
         }
       }, WATCHDOG_INTERVAL_MS)

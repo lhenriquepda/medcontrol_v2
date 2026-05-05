@@ -113,7 +113,7 @@ export default function PatientDetail() {
               />
             </div>
           ) : (
-            <Avatar emoji={patient.avatar || '👤'} color="peach" size={92}/>
+            <Avatar emoji={patient.avatar || '🙂'} color="peach" size={92}/>
           )}
           <div style={{
             fontFamily: 'var(--dosy-font-display)', fontWeight: 800,

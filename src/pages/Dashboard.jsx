@@ -34,11 +34,18 @@ export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Item #014 (release v0.1.7.4) — RPC extend_continuous_treatments recriada.
-  // Rolling 5-day horizon for continuous treatments. RPC idempotente + cheap
-  // (no-op quando horizon já cobre próximos 5 dias). Runs once per mount;
-  // pg_cron também roda diário como backup pra users inativos.
+  // Rolling 5-day horizon for continuous treatments. RPC idempotente + cheap.
+  //
+  // #148 (release v0.2.0.11) — Debounce 60s via module-scope flag.
+  // AnimatePresence popLayout mantém old + new Dashboard durante exit anim
+  // (~600ms) → 2 mounts → 2× rpc call. Idempotente mas dobra egress.
+  // Plus mount/unmount/mount via SPA navegando rotas é fluxo normal user.
+  // Skip se fired nos últimos 60s.
   useEffect(() => {
     if (!hasSupabase) return
+    const lastCall = window.__dosyExtendContinuousAt || 0
+    if (Date.now() - lastCall < 60_000) return
+    window.__dosyExtendContinuousAt = Date.now()
     supabase
       .schema('medcontrol')
       .rpc('extend_continuous_treatments', { p_days_ahead: 5 })
@@ -103,7 +110,10 @@ export default function Dashboard() {
       patientId: filters.patientId
     }
   }, [tick, filters.patientId])
-  const { data: allDoses = [], isLoading } = useDoses(baseWindow)
+  // #151 (v0.2.0.11) — Dashboard é único caller que opta-in pra refetchInterval.
+  // Outros (Settings 48h, DoseHistory 7d, Reports 30d) refetch só on mount +
+  // Realtime + invalidate explícito. Fallback caso websocket morra: 15min.
+  const { data: allDoses = [], isLoading } = useDoses(baseWindow, { pollIntervalMs: 15 * 60_000 })
 
   // Visualização principal — aplica range/status/type sobre allDoses
   const { from: rangeFrom, to: rangeTo } = useMemo(() => rangeNow(filters.range), [filters.range])
@@ -189,7 +199,7 @@ export default function Dashboard() {
     const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
     return [...map.entries()]
       .map(([pid, list]) => ({
-        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
+        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '🙂' }, // #100 default
         list,
       }))
       .sort((a, b) => collator.compare(a.patient.name || '', b.patient.name || ''))

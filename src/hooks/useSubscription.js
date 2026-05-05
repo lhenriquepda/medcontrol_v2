@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyTier, listAllUsers, grantTier, FREE_PATIENT_LIMIT } from '../services/subscriptionService'
+import { getMyTier, listAllUsers, grantTier, refreshSelfTier, FREE_PATIENT_LIMIT } from '../services/subscriptionService'
 import { usePatients } from './usePatients'
 import { useAuth } from './useAuth'
 
@@ -11,12 +11,11 @@ export function useMyTier() {
     queryKey: ['my_tier', user?.id],
     queryFn: getMyTier,
     // BUG fix (v0.1.7.5): query só roda quando user autenticado.
-    // Antes: race com auth.getUser() retornava null cached por 30min,
-    // tratando user logado como 'free' → paywall em paciente novo
-    // mesmo pra usuários plus/pro.
     enabled: !!user,
-    // #092 (v0.1.7.5): tier raramente muda (admin grant). 60s → 30min.
-    staleTime: 30 * 60_000
+    // #144 (v0.2.0.11): tier vem de JWT claim local (Auth Hook), sem round-trip.
+    // Refresh natural quando session refresh (a cada ~1h por padrão Supabase).
+    // staleTime ampliado pra evitar refetch desnecessário do claim local.
+    staleTime: 60 * 60_000 // 1h
   })
 }
 
@@ -75,8 +74,17 @@ export function useAllUsers() {
 
 export function useGrantTier() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: grantTier,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin_users'] })
+    onSuccess: async (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin_users'] })
+      // #144 — se admin alterou o próprio tier, força refresh JWT pra
+      // reler claim do hook. Outros users precisam logout/login.
+      if (vars?.userId && user?.id && vars.userId === user.id) {
+        await refreshSelfTier()
+        qc.invalidateQueries({ queryKey: ['my_tier'] })
+      }
+    }
   })
 }

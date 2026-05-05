@@ -16,7 +16,7 @@ function roundToHour(iso) {
   return d.toISOString()
 }
 
-export function useDoses(filter = {}) {
+export function useDoses(filter = {}, options = {}) {
   // Normaliza timestamps pra queryKey estável dentro da hora.
   // Usa filter.from/to crus na queryFn (precisão real).
   const keyFilter = useMemo(() => ({
@@ -28,20 +28,18 @@ export function useDoses(filter = {}) {
   return useQuery({
     queryKey: ['doses', keyFilter],
     queryFn: () => listDoses(filter),
-    // #092: refetchInterval 60s → 5min. Realtime cobre updates instantes;
-    // este interval é fallback caso websocket morra. 5min reduz egress 5x
-    // pra users idle no app.
-    refetchInterval: 5 * 60_000,
+    // #151 (release v0.2.0.11) — refetchInterval OPT-IN.
+    // Antes: 5min hardcoded em TODAS queries → 5 active queryKeys polling juntas.
+    // Math idle: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia.
+    //
+    // Agora: default OFF. Dashboard (caller principal) passa pollIntervalMs:15*60_000.
+    // Outros (Settings, DoseHistory, Reports) ficam sem polling — refetch só em
+    // mount + Realtime postgres_changes + invalidate explícito.
+    //
+    // Estimado população 1000 users idle: 5GB/dia (antes #151) → ~1GB/dia (-80%).
+    refetchInterval: options.pollIntervalMs || false,
     refetchIntervalInBackground: false,
-    // #092: staleTime 30s → 2min. Reduz refetchOnMount/refetchOnWindowFocus
-    // hits desnecessários quando user navega entre páginas em <2min.
     staleTime: 2 * 60_000,
-    // Item #088 (release v0.1.7.4) — BUG-021: dose recém-cadastrada não aparecia
-    // em Início sem refresh manual em emulador Pixel 7 API 35.
-    // Mantém refetchOnMount='always' pra cobrir #088 cross-device, mas com
-    // staleTime 2min o cost cai (não refetch dentro da janela 2min se cache válido).
-    // Wait — refetchOnMount='always' BYPASSA staleTime. Voltando pra `true` (default)
-    // que respeita staleTime. #088 ainda mitigado pq invalidate pós-create já força.
     refetchOnMount: true
   })
 }
@@ -65,13 +63,19 @@ function rollback(qc, snapshots) {
   for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
 }
 
+// #149 (release v0.2.0.11) — debounce 2s pra evitar storm de invalidate.
+// Antes: cada mutation onSettled invalida ['doses'] → 3+ active queries
+// refetcham paralelo (Dashboard + DoseHistory + Reports cached). Multi-mutation
+// rápida (confirm → undo → skip → undo) gerava 9-12 fetches /doses.
+// Optimistic update via patchDoseInCache já garante UI consistency; refetch é
+// redundante exceto quando server rejeita silently (raro). Debounce consolida.
+let _refetchDosesTimer = null
 function refetchDoses(qc) {
-  // invalidate (lazy) ao invés de refetch (eager). Optimistic update já cobre
-  // a UI; refetch só roda quando query observador re-monta. Evita storm de
-  // fetches concorrentes em sequência rápida (confirm → undo → skip → undo)
-  // que apareciam como `net::ERR_FAILED` no console (request anterior abortado
-  // por cancelQueries do próximo onMutate).
-  qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
+  if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
+  _refetchDosesTimer = setTimeout(() => {
+    qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
+    _refetchDosesTimer = null
+  }, 2000)
 }
 
 export function useConfirmDose() {
