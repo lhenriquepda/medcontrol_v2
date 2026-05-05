@@ -28,20 +28,21 @@ export function useDoses(filter = {}) {
   return useQuery({
     queryKey: ['doses', keyFilter],
     queryFn: () => listDoses(filter),
-    // #092: refetchInterval 60s → 5min. Realtime cobre updates instantes;
-    // este interval é fallback caso websocket morra. 5min reduz egress 5x
-    // pra users idle no app.
-    refetchInterval: 5 * 60_000,
+    // #150 (release v0.2.0.11) — refetchInterval 5min → 15min.
+    // Investigação egress preview Vercel detectou storm 5 fetches /doses
+    // simultâneos a cada 5min em IDLE (5 active queryKeys × 5min interval).
+    // Math: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia idle polling.
+    // 15min = -67% polling rate. Realtime postgres_changes cobre updates real-time;
+    // este interval é apenas safety net caso websocket morra (#079 watchdog cobre).
+    refetchInterval: 15 * 60_000,
     refetchIntervalInBackground: false,
     // #092: staleTime 30s → 2min. Reduz refetchOnMount/refetchOnWindowFocus
     // hits desnecessários quando user navega entre páginas em <2min.
     staleTime: 2 * 60_000,
     // Item #088 (release v0.1.7.4) — BUG-021: dose recém-cadastrada não aparecia
     // em Início sem refresh manual em emulador Pixel 7 API 35.
-    // Mantém refetchOnMount='always' pra cobrir #088 cross-device, mas com
-    // staleTime 2min o cost cai (não refetch dentro da janela 2min se cache válido).
-    // Wait — refetchOnMount='always' BYPASSA staleTime. Voltando pra `true` (default)
-    // que respeita staleTime. #088 ainda mitigado pq invalidate pós-create já força.
+    // Mantém refetchOnMount=true (respeita staleTime) — #088 mitigado por
+    // invalidate pós-create já força refetch.
     refetchOnMount: true
   })
 }
