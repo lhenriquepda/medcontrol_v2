@@ -542,6 +542,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#071** [Plan] Programa afiliados. Plan FASE 23.3
 - [ ] **#072** [Plan] A/B test paywall e onboarding. Plan FASE 23.2
 - [ ] **#073** [Plan] Programa de indicação (1 mês PRO grátis). Plan FASE 22.3
+- [ ] **#155** [P3 cosmético] Adicionar 1-2 screenshots novos Play Console pra v0.2.0.12: tela "Alterar senha" Ajustes (#152) + tela "Recuperar senha código 6 dígitos" Login (#153). Não-bloqueador release; releitura screenshots store mostra modais novos. Capturar S25 Ultra real prod pós-merge master.
 
 #### DX / Observability
 - [x] **#074** [fechado v0.2.0.2] Habilitar upload de debug symbols (`ndk.debugSymbolLevel 'FULL'` em buildTypes.release). Resolve aviso recorrente Play Console + melhora Sentry NDK stack traces (necessário pra investigar #110 native ART crashes).

@@ -965,6 +965,24 @@
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 22.3
 
+### #155 — Screenshots novos Play Console v0.2.0.12 (Alterar senha + Recuperar senha)
+- **Status:** ⏳ Aberto
+- **Origem:** Sessão 2026-05-05 release v0.2.0.12 — features senha (#152 + #153) sem cobertura nos screenshots atuais
+- **Prioridade:** P3 (cosmético, não-bloqueador release)
+- **Esforço:** 30-60min (capturar + curar + upload Console via Chrome MCP)
+- **Dependências:** Master merge v0.2.0.12 + AAB publicado Play Store + acesso S25 Ultra real
+- **Descrição técnica:**
+  Capturar 2 screenshots S25 Ultra device real em build prod pós-merge master:
+  1. Tela "Alterar senha" — Ajustes → Conta → click "Alterar senha" → modal Dosy padrão com ícone Lock + 3 inputs preenchidos (atual + nova + repetir) + footer Cancelar/Confirmar
+  2. Tela "Recuperar senha — código 6 dígitos" — Login → "Esqueci minha senha" → email digitado → "Enviar código" → step 2 mostra "Código enviado para X. Digite os 6 dígitos abaixo." + input 000000 placeholder + Confirmar código + Reenviar código
+  Resolução S25 Ultra: 1080×2340 OR 1440×3088. Crop pra remover status bar/nav bar via Android Studio device frame OU keep full conforme padrão atual.
+- **Aceitação:**
+  - 2 screenshots novos curados em `resources/prints/processado/v0.2.0.12-XX-{senha-ajustes,senha-recuperar}.png`
+  - Upload Play Console → Listagem da loja → Smartphones → adicionar (sem remover existentes)
+  - Pendente revisão Google (junto com próximas mudanças marketing)
+- **Detalhe:** Não-bloqueador. Pode ser feito em batch com outras atualizações store quando houver mudança visual significativa.
+- **Plus opcional:** atualizar feature graphic 1024×500 OU vídeo demo se disponível ROI.
+
 ### #122 — AppHeader greeting trunca nome
 - **Status:** ✅ Concluído (release v0.2.0.3)
 - **Origem:** ROADMAP §6 P3 cosmético
