@@ -62,11 +62,18 @@ export default function App() {
   // since web has no special permissions modal.
   const [permsDone, setPermsDone] = useState(() => !Capacitor.isNativePlatform())
   // #153 (v0.2.0.12) — força modal nova senha pós verifyRecoveryOtp.
-  // Flag setada em useAuth.verifyRecoveryOtp; AppShell consome após user logado.
-  // Declared before any early-return pra evitar React Hook conditional call.
-  const [forcePassword, setForcePassword] = useState(() => {
-    try { return localStorage.getItem('dosy_force_password_change') === '1' } catch { return false }
-  })
+  // BUG fix: useState init lazy só roda 1x no mount. App monta no BOOT antes
+  // do user logar via OTP; flag setada DEPOIS do mount não dispara reload.
+  // Solução: useEffect monitora user + checa flag a cada SIGNED_IN/sessão nova.
+  const [forcePassword, setForcePassword] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    try {
+      if (localStorage.getItem('dosy_force_password_change') === '1') {
+        setForcePassword(true)
+      }
+    } catch { /* ignore */ }
+  }, [user])
 
   // Reset scroll para topo ao navegar entre rotas. Sem isso, navegar pra
   // /pacientes mantém scroll da rota anterior — botão "+ Novo" no topo
