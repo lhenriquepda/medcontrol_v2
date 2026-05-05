@@ -325,6 +325,23 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#132** [P0 gate] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados em mini-releases.
 - [ ] **#133** [P0] Solicitar acesso de produção Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
 
+#### Fixes egress (auditoria 2026-05-05 — `egress-audit-2026-05-05/`)
+> Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 cobriu apenas ~30%. Múltiplos vetores ativos. Detalhamento: `contexto/egress-audit-2026-05-05/README.md`.
+
+- [ ] **#134** [P0 cost — -30% a -45%] `useAppResume`: remover invalidate em short idle (<5min) + scopear long idle. Realtime + refetchInterval cobrem.
+- [ ] **#135** [P0 cost — -5% a -10%] `useRealtime` resume nativo: remover invalidate ALL keys. Resubscribe + postgres_changes events tomam conta.
+- [ ] **#136** [P0 cost — -15% a -25%] `useRealtime` postgres_changes: debounce invalidate 1s. Cron extend insere 100s doses → 1 invalidate em vez de 100.
+- [ ] **#137** [P0 cost — -20% a -30%] Dashboard: consolidar 4 useDoses paralelas em 1 query + filtros client-side. Mais rápido + menos round-trips.
+- [ ] **#138** [P0 cost — -15% a -30%] DOSE_COLS_LIST sem observation. Análoga #115 (PATIENT_COLS_LIST/FULL). Lazy-load detail.
+- [ ] **#139** [P1 cost] `dose-trigger-handler` skip se scheduledAt > 6h futuro. Cron 6h cobre. Edge invocations -50-70%.
+- [ ] **#140** [P1 cost] `schedule-alarms-fcm` HORIZON 72h → 24h. Payload FCM 3× menor.
+- [ ] **#141** [P1 cost] `useReceivedShares` staleTime 60s → 5min.
+- [ ] **#142** [P0 SECURITY] Rotacionar JWT cron `schedule-alarms-fcm-6h` (hardcoded iat 26 abr, anterior #084) + refatorar pra usar `vault.read_secret` ou `supabase_functions.http_request`.
+- [ ] **#143** [P2] `useUserPrefs.queryFn` getSession() em vez de getUser() (1 round-trip a menos).
+- [ ] **#144** [P2 longo prazo] Custom JWT claim `tier` via Auth Hook → elimina round-trip useMyTier.
+- [ ] **#145** [P2] `useRealtime` watchdog: invalidate só se data divergente.
+- [ ] **#146** [P2 audit] `pg_cron extend_continuous_treatments`: confirmar batch single multi-row INSERT.
+
 #### Web (não-bloq Android)
 - [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
 
@@ -607,4 +624,6 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ---
 
-🚀 **Próximo passo concreto:** Bloqueadores formais Console TODOS fechados (2026-05-04/05). Próximo gate é **Closed Testing externo via Google Group + Reddit** (estratégia 2026-05-05 — user pulou recrutamento conhecidos). Sequência: #129 Group → #130 track Console → #131 recrutamento → #132 gate 14d/12 ativos → #133 produção. Em paralelo: #127 CI lint fix (~30min código) + #128 investigação multi-dose alarm + #006 device validation opcional.
+🚀 **Próximo passo concreto:** **CRÍTICO 06 May** — egress 715% Free Tier, grace expira amanhã. Aplicar #134-#138 (P0 fixes egress, ~4h código) em release v0.2.0.8 antes do grace expirar. Em paralelo: avaliar upgrade Pro $25/mês temporário pra destravar enquanto fixes não validados. Detalhe completo em `contexto/egress-audit-2026-05-05/README.md`.
+
+Pós-egress estabilizado: Closed Testing externo (#129-#133) destrava caminho Open Testing.

@@ -1377,6 +1377,135 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 
 ---
 
+## Plano fixes egress (auditoria 2026-05-05)
+
+> **Detalhes em** `contexto/egress-audit-2026-05-05/README.md`. Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 v0.1.7.5 cobriu apenas ~30%. Causa raiz: `invalidateQueries()` em massa em events não-data-related (visibility/focus/resume) + Realtime sem debounce.
+
+### #134 — `useAppResume` remover invalidate em short idle, scopear long idle
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F1
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -30% a -45%
+- **Aceitação:**
+  - `src/hooks/useAppResume.js:58` (`qc.invalidateQueries()` em short idle <5min) — REMOVER. Realtime + refetchInterval cobrem.
+  - Long idle (>=5min) já faz `refetchQueries({ type: 'active' })` — não precisa também `invalidateQueries()` antes (line 49).
+  - Manter `refreshSession` + `removeAllChannels` em long idle.
+- **Risco UX:** dados podem aparecer 30-120s mais "antigos" se Realtime não trouxer update; aceitável vs economia.
+
+### #135 — `useRealtime` resume nativo: remover invalidate ALL keys
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F6
+- **Esforço:** 10 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -5% a -10%
+- **Aceitação:**
+  - `src/hooks/useRealtime.js:180-182` — remover loop `qc.invalidateQueries`. Resubscribe + Realtime postgres_changes events tomam conta updates pós-resume.
+- **Risco UX:** zero.
+
+### #136 — `useRealtime` postgres_changes: debounce invalidate 1s
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F2
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -15% a -25% (especialmente dias de cron extend)
+- **Aceitação:**
+  - `src/hooks/useRealtime.js:113-119` — wrap `qc.invalidateQueries` em debounce 1000ms por table.
+  - Implementação: timeout + flag por queryKey, ou `lodash.debounce`.
+- **Risco UX:** atualização cross-device até 1s extra. Healthcare app — não-crítico.
+
+### #137 — Dashboard: consolidar 4 useDoses em 1
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F3
+- **Esforço:** 2h
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -20% a -30%
+- **Aceitação:**
+  - `src/pages/Dashboard.jsx:85, 116, 118, 123` — substituir 4 hooks por 1 `useDoses({from: -30d, to: +14d})`. Filtros visuais via `useMemo` client-side.
+  - Calcular `pendingToday`, `overdueNow`, `weekAdherence` em memória sobre array único.
+- **Risco UX:** Dashboard 1 round-trip em vez de 4. Mais rápido.
+
+### #138 — `DOSE_COLS_LIST` sem `observation`
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F4
+- **Esforço:** 1h (incluindo verificação Reports/Analytics)
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -15% a -30% no payload listDoses
+- **Aceitação:**
+  - `src/services/dosesService.js` — criar `DOSE_COLS_LIST` (10 cols sem observation) pra `listDoses`. Manter `DOSE_COLS_FULL` pra `getDose` detail.
+  - Verificar Reports.jsx, Analytics.jsx, DoseHistory.jsx — se exibem observation em lista, adaptar (lazy-load via getDose ao expandir).
+  - Análoga à mudança #115 (PATIENT_COLS_LIST/FULL).
+- **Risco UX:** zero — UI lista não exibe observation.
+
+### #139 — `dose-trigger-handler` skip se scheduledAt > 6h futuro
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F7
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** Edge invocations -50-70%
+- **Aceitação:**
+  - `supabase/functions/dose-trigger-handler/index.ts:103-106` — adicionar early return se `scheduledAt > now + 6h`. Cron 6h `schedule-alarms-fcm` cobre.
+- **Risco UX:** zero. Alarme nativo agendado pelo cron 6h antes da dose.
+
+### #140 — `schedule-alarms-fcm` HORIZON 72h → 24h
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F8
+- **Esforço:** 15 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** payload FCM 3× menor
+- **Aceitação:**
+  - `supabase/functions/schedule-alarms-fcm/index.ts` — `HORIZON_HOURS = 24` (era 72). Cron 6h × 4 ciclos cobre 24h com folga.
+- **Risco UX:** zero.
+
+### #141 — `useReceivedShares` staleTime 60s → 5min
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F10
+- **Esforço:** 5 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** pequeno mas free win
+- **Aceitação:**
+  - `src/hooks/useShares.js` `useReceivedShares` — `staleTime: 5 * 60_000`.
+- **Risco UX:** novo share notif pode demorar até 5min em aparecer. Aceitável (shares raros).
+
+### #142 — Rotacionar JWT cron `schedule-alarms-fcm-6h` + refatorar pra usar vault/env
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F11 (security)
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Impacto egress:** zero (security-only)
+- **Aceitação:**
+  - Drop cron job `schedule-alarms-fcm-6h` atual.
+  - Recriar usando `vault.read_secret('SUPABASE_SERVICE_ROLE_KEY')` ou `supabase_functions.http_request` (passa service key automaticamente).
+  - Rotate JWT secret se ainda válido (verificar via test request com JWT antigo).
+- **Risco:** zero funcional. Critical security fix.
+
+### #143 — `useUserPrefs.queryFn`: `getSession()` em vez de `getUser()`
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F9
+- **Esforço:** 15 min
+- **Impacto egress estimado:** -1 round-trip auth por refetch useUserPrefs
+- **Aceitação:** trocar `supabase.auth.getUser()` por `supabase.auth.getSession()` em `src/hooks/useUserPrefs.js:50`.
+
+### #144 — Custom JWT claim `tier` via Auth Hook (longo prazo)
+- **Status:** ⏳ Aberto P2
+- **Origem:** egress-audit-2026-05-05
+- **Esforço:** 4-6h (Auth Hook setup + client refactor)
+- **Impacto egress estimado:** elimina round-trip useMyTier
+- **Aceitação:** Auth Hook custom claim → JWT carrega `tier` → client lê localmente.
+
+### #145 — `useRealtime` watchdog: invalidate só se data divergente
+- **Status:** ⏳ Aberto P2
+- **Esforço:** 1h
+- **Impacto egress estimado:** -5% mobile flaky
+- **Aceitação:** watchdog compara timestamp último change broadcast vs `qc.getQueryState('doses').dataUpdatedAt`. Só invalidate se diff significativo.
+
+### #146 — `pg_cron extend_continuous_treatments`: confirmar batch INSERT
+- **Status:** ⏳ Aberto P2
+- **Esforço:** 30 min audit
+- **Aceitação:** verificar se INSERTs são single multi-row (1 webhook total) ou N inserts (N webhooks). Otimizar pra 1.
+
+---
+
 ## Resumo
 
 - **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
