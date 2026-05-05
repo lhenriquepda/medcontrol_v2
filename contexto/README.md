@@ -377,6 +377,103 @@ Vou dirigir o Play Console / Vercel / etc pra você. Pause só pra upload do AAB
 {passo a passo automatizado começa}
 ```
 
+### Regra 9.1 — Validação preview Vercel via Chrome MCP (DISCOVERY 2026-05-05 v0.2.0.11)
+
+**Antes de fechar release branch:** agente DEVE validar preview Vercel `dosy-git-{branch}-lhenriquepdas-projects.vercel.app` via Chrome MCP. Não confiar só em build verde local.
+
+**Achados v0.2.0.11 que JUSTIFICAM essa regra:**
+- #144 hook integration causou logout cascade em prod (não detectado no build/lint local)
+- #148 extend_continuous_treatments rpc 2× por mount (AnimatePresence popLayout)
+- #149 mutation refetch storm 12 fetches /doses (mark/skip/undo cascade)
+- #150 refetchInterval 5min × 5 queryKeys = idle storm 5 fetches/cycle
+- #151 refetchInterval só Dashboard (outras telas off)
+
+Todos esses bugs identificados POR Chrome MCP + JS fetch interceptor (`window.__dosyNetMonitor`) no preview Vercel real, não em local.
+
+**Receita validação preview obrigatória:**
+
+1. **Branch pushed → Vercel preview rebuild ~2min**
+2. **Login real** (teste-plus@teste.com / 123456 OR admin) via `form_input` + click
+3. **Arm fetch interceptor** via `mcp__Claude_in_Chrome__javascript_tool`:
+   ```js
+   if (!window.__dosyNetMonitorV3) {
+     window.__dosyRequests = []
+     window.__dosyNetMonitorV3 = true
+     const origFetch = window.fetch
+     window.fetch = async function(url, opts) {
+       const u = typeof url === 'string' ? url : (url?.url || '')
+       const isSupa = u.includes('supabase.co')
+       const start = Date.now()
+       const path = isSupa ? u.split('?')[0].replace('https://guefraaqbkcehofchnrc.supabase.co', '') : ''
+       const resp = await origFetch.apply(this, arguments)
+       if (isSupa) {
+         const cloned = resp.clone()
+         let bodySize = 0
+         try { bodySize = (await cloned.text()).length } catch {}
+         window.__dosyRequests.push({ ts: start, path, method: opts?.method || 'GET', size_bytes: bodySize, status: resp.status })
+       }
+       return resp
+     }
+   }
+   window.__dosyRequests.length = 0
+   window.__dosyMonitorStart = Date.now()
+   ```
+
+4. **Bateria interações reais:**
+   - Click dose → DoseModal → Tomada
+   - Click dose → DoseModal → Pular
+   - Click Desfazer toast
+   - Pull-to-refresh
+   - Navegar `/historico` → click chips dia
+   - Navegar `/pacientes` → click paciente
+   - Navegar `/relatorios`
+   - Navegar `/sos`, `/mais`, `/ajustes`
+   - Voltar `/`
+
+5. **IDLE longo 5min+** (Bash `sleep 300` + run_in_background) — detectar polling/refetch background.
+
+6. **Read window.__dosyRequests** + agrupar por endpoint + count + bytes:
+   ```js
+   const groups = {}
+   let totalBytes = 0
+   for (const r of window.__dosyRequests) {
+     const k = `${r.method} ${r.path}`
+     if (!groups[k]) groups[k] = { count: 0, total_bytes: 0 }
+     groups[k].count++
+     groups[k].total_bytes += r.size_bytes || 0
+     totalBytes += r.size_bytes || 0
+   }
+   ```
+
+7. **Triggers ALERT:**
+   - Idle >2min com requests = polling não-justificado
+   - Mutation única gera >3 fetches downstream = storm cascade
+   - 5+ active queryKeys simultâneas = candidatas opt-in interval
+   - Endpoints duplicados `+0ms` = double-mount (AnimatePresence/StrictMode/etc)
+
+**Pegada:** Chrome MCP `read_network_requests` é flaky — limpa em SPA navigation. Usa fetch interceptor JS (`window.__dosyNetMonitorV3`) — sobrevive navegações client-side.
+
+**Pegada 2:** SPA navigate via `mcp__Claude_in_Chrome__navigate` faz full page reload (limpa monitor). Pra preservar monitor entre rotas, use History API:
+```js
+history.pushState({}, '', '/ajustes')
+window.dispatchEvent(new PopStateEvent('popstate'))
+```
+
+**Sequência idle longa via background sleep:**
+```bash
+# Tool: Bash com run_in_background:true
+sleep 300
+# Aguarde TaskOutput ou notificação completion
+# Depois ler window.__dosyRequests via JS
+```
+
+**Sempre que possível** — não só releases que mexem em egress/auth/realtime — agente valida preview Vercel via Chrome MCP. Especialmente:
+- Mudanças hooks React Query (queryKey, staleTime, refetchInterval)
+- Mudanças useEffect com deps complexas
+- Refactors splittando arquivos (verifica imports/lazy chunks)
+- Mudanças schema DB (RLS, RPCs, triggers)
+- Auth flow changes (login, logout, refreshSession)
+
 ---
 
 ## 🎯 Quando o usuário pede algo
