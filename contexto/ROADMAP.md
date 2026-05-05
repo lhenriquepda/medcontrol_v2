@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.8` (tag `v0.2.0.8`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.8 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.9` (tag `v0.2.0.9`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.9 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -60,7 +60,16 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.8 publicada 2026-05-05 11:23 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 41 + tag git `v0.2.0.8`).
+**Última release:** v0.2.0.9 publicada 2026-05-05 12:37 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 42 + tag git `v0.2.0.9`).
+**Items v0.2.0.9 fechados:**
+- #137 Dashboard 4 useDoses paralelas → 1 query base + filtros memo client-side (-20% a -30% egress)
+- #138 DOSE_COLS_LIST sem observation + lazy-load DoseModal (withObservation:true em DoseHistory/Reports)
+- #128 BUG-040 patientName payload Edge functions (dose-trigger v10 + schedule-alarms v9 deployed)
+- #142 verificado fechado (Legacy JWT secret revoked, PostgREST 401 com JWT antigo)
+- Filter "Tudo" → "10 dias" (rangeNow('all') retornava null, quebrava client filter)
+- useDoses queryKey fix withObservation deps
+
+**Última release v0.2.0.8:** publicada 2026-05-05 11:23 UTC. Items: auditoria egress (`egress-audit-2026-05-05/`) + 13 items #134-#146 plano + #134-#136 P0 egress fixes (invalidate cascade) + #127 CI lint + #025 + #004 + Closed Testing externo plan + Pro plan upgrade.
 **Items v0.2.0.8 fechados:**
 - Auditoria egress robusta linha-a-linha (`contexto/egress-audit-2026-05-05/`)
 - 13 items #134-#146 plano fixes egress catalogados
@@ -639,8 +648,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ---
 
-🚀 **Próximo passo concreto:** v0.2.0.8 publicada 2026-05-05 com #134-#136 P0 egress fixes + Pro plan ativo. **Validar redução egress 24-48h** via Supabase Dashboard Reports (esperado: pico diário 9.6GB → <2GB). Pós-validação:
-- Se redução confirmada → considerar downgrade Free no fim do ciclo (26 mai)
-- Se ainda alto → release v0.2.0.9 com #137 Dashboard consolidação + #138 DOSE_COLS_LIST + #142 JWT cron security
+🚀 **Próximo passo concreto:** v0.2.0.8 + v0.2.0.9 publicadas com bateria completa fixes egress (#127 + #134-#138 + #142 verify + #128 alarme bug). Validar redução agregada egress 24-72h via Supabase Reports. Esperado: pico diário 9.6GB → <1GB; cycle 26 mai - 26 jun = primeiro inteiro pós-fix. Pós-validação:
+- Se confirmado <5GB/mês → considerar downgrade Free no fim do ciclo
+- Se ainda alto → release v0.2.0.10 com P1 #139 (dose-trigger 6h horizon) + #140 (schedule-alarms 24h) + cleanup JWT cron hardcoded
 
 Em paralelo: Closed Testing externo #129-#133 (Google Group + Reddit) destrava caminho Open Testing.
