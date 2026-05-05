@@ -62,6 +62,8 @@ export default function Reports() {
     patientId: patientId || undefined,
     from: dateInputToIsoStart(from),
     to: dateInputToIsoEnd(to),
+    // #138: export PDF/CSV inclui observation
+    withObservation: true,
   })
 
   const patient = patients.find((p) => p.id === patientId)

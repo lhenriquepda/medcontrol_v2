@@ -62,6 +62,8 @@ export default function DoseHistory() {
     from: periodFrom.toISOString(),
     to: periodTo.toISOString(),
     patientId: patientId || undefined,
+    // #138: search inclui observation, precisa col full
+    withObservation: !!search.trim(),
   })
 
   // Filtra busca search (med/unit/observation)
