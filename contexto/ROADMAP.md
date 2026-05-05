@@ -365,6 +365,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#144** [P2 longo prazo] Custom JWT claim `tier` via Auth Hook → elimina round-trip useMyTier.
 - [ ] **#145** [P2] `useRealtime` watchdog: invalidate só se data divergente.
 - [ ] **#146** [P2 audit] `pg_cron extend_continuous_treatments`: confirmar batch single multi-row INSERT.
+- [ ] **#147** [P1 BUG-041 — parqueado v0.2.1.0] Recuperação de senha email link redirect pra localhost / erro. Reportado user 2026-05-05. Workaround: senha Daffiny resetada via SQL. Reformulação completa fluxo recovery em v0.2.1.0 (OTP em vez de magic-link OR fix Site URL config).
 
 #### Web (não-bloq Android)
 - [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
