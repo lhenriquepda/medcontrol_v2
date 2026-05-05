@@ -60,6 +60,10 @@ export function rangeNow(rangeKey) {
   } else if (rangeKey === '7d') {
     start.setHours(start.getHours() - 84)
     end.setDate(end.getDate() + 7)
+  } else if (rangeKey === '10d') {
+    // #137 (v0.2.0.9): substituiu 'all'. -5d / +10d (proporção -N/2 / +N).
+    start.setDate(start.getDate() - 5)
+    end.setDate(end.getDate() + 10)
   } else {
     return { from: null, to: null }
   }

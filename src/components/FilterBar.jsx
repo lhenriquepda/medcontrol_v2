@@ -5,13 +5,14 @@ import PatientPicker from './PatientPicker'
 
 // #137 (release v0.2.0.9 — egress-audit) — removido 'Tudo' (rangeNow('all')
 // retornava {null,null} forçando filter consumir TODO histórico via PostgREST
-// = egress massivo. Janela máxima visível agora 7 dias; histórico completo via
-// /historico (DoseHistory) que tem range customizado por usuário.
+// = egress massivo. Substituído por '10d' fechado. Histórico completo
+// continua via /historico (DoseHistory) com range customizado por usuário.
 const RANGES = [
   { key: '12h', label: '12h' },
   { key: '24h', label: '24h' },
   { key: '48h', label: '48h' },
   { key: '7d',  label: '7 dias' },
+  { key: '10d', label: '10 dias' },
 ]
 
 const STATUS = [
