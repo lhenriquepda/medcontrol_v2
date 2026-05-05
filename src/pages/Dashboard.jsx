@@ -77,56 +77,90 @@ export default function Dashboard() {
     }
   }, [searchParams, setSearchParams])
 
-  const { from, to } = useMemo(() => rangeNow(filters.range), [filters.range])
-  const query = useMemo(
-    () => ({ from, to, patientId: filters.patientId, status: filters.status, type: filters.type }),
-    [from, to, filters.patientId, filters.status, filters.type]
-  )
-  const { data: doses = [], isLoading } = useDoses(query)
-
-  const [selected, setSelected] = useState(null)
-
-  // MultiDoseModal — derived from multiDoseIds + loaded doses
-  const multiDoseList = useMemo(
-    () => multiDoseIds.map(id => doses.find(d => d.id === id)).filter(Boolean),
-    [multiDoseIds, doses]
-  )
-
-  // Janelas de tempo memoizadas (tick por minuto evita novas chaves a cada render)
+  // Item #137 (egress-audit-2026-05-05 F3) — consolidação 4 useDoses → 1.
+  // Antes: query + today + overdue + week = 4 queries paralelas, cada uma
+  // round-trip Supabase. Cada invalidate cascade × 4 = 4 refetches. Multiplicado
+  // por refetchInterval 5min × refetchOnWindowFocus + Realtime invalidate +
+  // useAppResume = ~4× cargo desnecessário.
+  // Agora: 1 query base com janela ampla (-30d/+60d) + filtros visuais via
+  // useMemo client-side. Trade-off: range='all' que pretendia mostrar histórico
+  // > 30d agora cobre só -30d/+60d (suficiente pra 99% uso; histórico full
+  // continua via /historico). Estimado -20% a -30% egress nesta release.
   const [tick, setTick] = useState(() => Math.floor(Date.now() / 60000))
   useEffect(() => {
     const t = setInterval(() => setTick(Math.floor(Date.now() / 60000)), 60000)
     return () => clearInterval(t)
   }, [])
-  const windows = useMemo(() => {
+
+  const baseWindow = useMemo(() => {
     const now = new Date(tick * 60000)
-    const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
-    const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
-    const overdueFrom = new Date(now); overdueFrom.setDate(overdueFrom.getDate() - 30)
-    const weekFrom = new Date(now); weekFrom.setDate(weekFrom.getDate() - 7)
-    // Stats respect current patient filter — show focused data when 1 patient selected
-    const pid = filters.patientId
+    const past = new Date(now); past.setDate(past.getDate() - 30)
+    const future = new Date(now); future.setDate(future.getDate() + 60)
     return {
-      today: { from: startOfToday.toISOString(), to: endOfToday.toISOString(), patientId: pid },
-      overdue: { from: overdueFrom.toISOString(), to: now.toISOString(), status: 'overdue', patientId: pid },
-      week: { from: weekFrom.toISOString(), to: now.toISOString(), patientId: pid }
+      from: past.toISOString(),
+      to: future.toISOString(),
+      patientId: filters.patientId
     }
   }, [tick, filters.patientId])
+  const { data: allDoses = [], isLoading } = useDoses(baseWindow)
 
-  const { data: todayDoses = [] } = useDoses(windows.today)
+  // Visualização principal — aplica range/status/type sobre allDoses
+  const { from: rangeFrom, to: rangeTo } = useMemo(() => rangeNow(filters.range), [filters.range])
+  const doses = useMemo(() => {
+    const fromMs = new Date(rangeFrom).getTime()
+    const toMs = new Date(rangeTo).getTime()
+    let r = allDoses.filter(d => {
+      const t = new Date(d.scheduledAt).getTime()
+      return t >= fromMs && t <= toMs
+    })
+    if (filters.status) r = r.filter(d => d.status === filters.status)
+    if (filters.type) r = r.filter(d => d.type === filters.type)
+    return r
+  }, [allDoses, rangeFrom, rangeTo, filters.status, filters.type])
+
+  const [selected, setSelected] = useState(null)
+
+  // MultiDoseModal — derived from multiDoseIds + loaded doses
+  const multiDoseList = useMemo(
+    () => multiDoseIds.map(id => allDoses.find(d => d.id === id)).filter(Boolean),
+    [multiDoseIds, allDoses]
+  )
+
+  // Stats client-side (filtra allDoses por janela específica)
+  const todayDoses = useMemo(() => {
+    const now = new Date(tick * 60000)
+    const sToday = new Date(now); sToday.setHours(0, 0, 0, 0)
+    const eToday = new Date(now); eToday.setHours(23, 59, 59, 999)
+    const sMs = sToday.getTime(); const eMs = eToday.getTime()
+    return allDoses.filter(d => {
+      const t = new Date(d.scheduledAt).getTime()
+      return t >= sMs && t <= eMs
+    })
+  }, [allDoses, tick])
   const pendingToday = todayDoses.filter((d) => d.status === 'pending' || d.status === 'overdue').length
-  const { data: overdueAll = [] } = useDoses(windows.overdue)
-  // overdueAll cache pode conter doses com status atualizado post-patch
-  // (status='done' ou 'skipped' após user marcar). Filtra por status atual
-  // pra count refletir tempo-real sem precisar refetch + revisitar tela.
-  const overdueNow = overdueAll.filter((d) => d.status === 'overdue').length
-  const { data: weekDoses = [] } = useDoses(windows.week)
-  const adherence = (() => {
-    const past = weekDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
+
+  // overdueAll: status='overdue' computed dynamically by listDoses (recomputeOverdue)
+  // — filter por status atual cobre patches in-cache (post-confirmação)
+  const overdueAll = useMemo(() => {
+    const now = new Date(tick * 60000).getTime()
+    return allDoses.filter(d => {
+      const t = new Date(d.scheduledAt).getTime()
+      return d.status === 'overdue' && t <= now
+    })
+  }, [allDoses, tick])
+  const overdueNow = overdueAll.length
+
+  const adherence = useMemo(() => {
+    const now = new Date(tick * 60000).getTime()
+    const weekAgo = now - 7 * 86_400_000
+    const past = allDoses.filter(d => {
+      const t = new Date(d.scheduledAt).getTime()
+      return t >= weekAgo && t <= now
+    })
     if (past.length === 0) return null
-    const taken = past.filter((d) => d.status === 'done').length
+    const taken = past.filter(d => d.status === 'done').length
     return Math.round((taken / past.length) * 100)
-  })()
+  }, [allDoses, tick])
 
   // Merge: forward-window doses + sempre-overdue. Atrasadas semana passada
   // aparecem mesmo no filtro '12h'. Quando user escolhe status explícito ou
