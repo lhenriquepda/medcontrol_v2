@@ -186,8 +186,9 @@ export function AuthProvider({ children }) {
   async function signInFacebook() { return signInOAuth('facebook') }
 
   /**
-   * Send password reset email. Email contains link to /reset-password where
-   * user types new password (page calls updatePassword).
+   * #147 BUG-041 LEGACY (parqueado) — Send password reset email via magic link.
+   * Quebrado em prod (link aponta localhost). Mantido pra retrocompat até v0.2.1.0.
+   * Use `sendRecoveryOtp` + `verifyRecoveryOtp` (#153 v0.2.0.12) em vez disso.
    */
   async function resetPassword(email) {
     if (!hasSupabase) {
@@ -201,6 +202,39 @@ export function AuthProvider({ children }) {
       : `${window.location.origin}/reset-password`
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     if (error) throw new Error(traduzirErro(error))
+  }
+
+  /**
+   * #153 (release v0.2.0.12) — Recovery via OTP code 6 dígitos por email.
+   * Substitui magic-link broken (#147 BUG-041). Supabase envia código no email
+   * (configurado via Auth → Email Templates → "Magic Link" custom usando {{ .Token }}).
+   */
+  async function sendRecoveryOtp(email) {
+    if (!hasSupabase) throw new Error('Recuperação requer Supabase configurado.')
+    if (!email || !email.includes('@')) throw new Error('Informe um email válido.')
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    })
+    if (error) throw new Error(traduzirErro(error))
+  }
+
+  /**
+   * #153 — Verifica OTP enviado por email. Cria sessão. Marca flag localStorage
+   * pra AppShell abrir ForceNewPasswordModal automático após redirect Dashboard.
+   */
+  async function verifyRecoveryOtp(email, token) {
+    if (!hasSupabase) throw new Error('Recuperação requer Supabase configurado.')
+    if (!email || !token) throw new Error('Email e código obrigatórios.')
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    })
+    if (error) throw new Error(traduzirErro(error))
+    // Flag pra forçar troca senha pós-recovery (consumido por AppShell)
+    try { localStorage.setItem('dosy_force_password_change', '1') } catch { /* ignore */ }
+    return data
   }
 
   /**
@@ -236,6 +270,7 @@ export function AuthProvider({ children }) {
       signInGoogle, signInFacebook,   // disponíveis (UI desabilitada por ora)
       signInDemo,
       resetPassword, updatePassword,
+      sendRecoveryOtp, verifyRecoveryOtp, // #153 v0.2.0.12
       signOut, updateProfile,
       hasSupabase
     }}>

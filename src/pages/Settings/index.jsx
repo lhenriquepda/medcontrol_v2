@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import { Capacitor } from '@capacitor/core'
 import { TIMING } from '../../animations'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import ChangePasswordModal from '../../components/ChangePasswordModal'
 import AdBanner from '../../components/AdBanner'
 import PageHeader from '../../components/dosy/PageHeader'
 import { useTheme } from '../../hooks/useTheme'
@@ -51,6 +52,7 @@ export default function Settings() {
 
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [name, setName] = useState(displayName(user))
   const [savingName, setSavingName] = useState(false)
   const [exportingData, setExportingData] = useState(false)
@@ -241,6 +243,7 @@ export default function Settings() {
           saveName={saveName}
           user={user}
           onLogoutClick={() => setConfirmLogout(true)}
+          onChangePasswordClick={hasSupabase && user ? () => setChangePasswordOpen(true) : null}
         />
 
         {hasSupabase && user && (
@@ -270,6 +273,11 @@ export default function Settings() {
         confirmLabel="Excluir tudo"
         onConfirm={handleDeleteAccount}
         danger
+      />
+      {/* #152 (v0.2.0.12) — Modal alterar senha */}
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
       />
     </div>
   )

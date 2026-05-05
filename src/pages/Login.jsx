@@ -16,14 +16,17 @@ function validatePassword(pwd) {
 }
 
 export default function Login() {
-  const { signInEmail, signUpEmail, resetPassword, signInDemo, hasSupabase } = useAuth()
+  const { signInEmail, signUpEmail, sendRecoveryOtp, verifyRecoveryOtp, signInDemo, hasSupabase } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mode, setMode] = useState('signin')   // 'signin' | 'signup' | 'forgot'
+  // #153 (v0.2.0.12) — modes:
+  //  'signin' | 'signup' | 'forgot-email' (digita email) | 'forgot-otp' (digita código)
+  const [mode, setMode] = useState('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState('')
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -42,10 +45,27 @@ export default function Login() {
     try {
       if (mode === 'signin') await signInEmail(email, password)
       else if (mode === 'signup') await signUpEmail(email, password, name)
-      else if (mode === 'forgot') {
-        await resetPassword(email)
-        toast.show({ message: 'Email enviado. Verifique sua caixa de entrada (e spam).', kind: 'success' })
-        setMode('signin')
+      else if (mode === 'forgot-email') {
+        // #153: envia OTP code 6 dígitos por email
+        await sendRecoveryOtp(email)
+        toast.show({ message: 'Código enviado. Confira email (e spam).', kind: 'success' })
+        setMode('forgot-otp')
+        setBusy(false)
+        return
+      }
+      else if (mode === 'forgot-otp') {
+        // #153: verifica OTP → cria sessão + flag dosy_force_password_change
+        if (!otp || otp.length < 6) {
+          toast.show({ message: 'Informe os 6 dígitos do código.', kind: 'error' })
+          setBusy(false)
+          return
+        }
+        await verifyRecoveryOtp(email, otp)
+        toast.show({ message: 'Recuperação confirmada. Defina uma nova senha.', kind: 'success' })
+        // useAuth listener detecta SIGNED_IN → AppShell renderiza dashboard
+        // + ForceNewPasswordModal abre auto via flag localStorage
+        navigate('/', { replace: true })
+        return
       }
       // Item #090 (release v0.1.7.4) — BUG-023: pós-login não redirecionava
       // pra Início se URL atual era rota authenticated-only.
@@ -63,7 +83,9 @@ export default function Login() {
 
   const submitLabel = mode === 'signin' ? 'Entrar'
     : mode === 'signup' ? 'Criar conta'
-    : 'Enviar link de recuperação'
+    : mode === 'forgot-email' ? 'Enviar código'
+    : mode === 'forgot-otp' ? 'Confirmar código'
+    : 'Enviar'
 
   return (
     <div style={{
@@ -102,7 +124,7 @@ export default function Login() {
 
         <Card padding={20} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Mode toggle / forgot header */}
-          {mode !== 'forgot' ? (
+          {mode !== 'forgot-email' && mode !== 'forgot-otp' ? (
             <div style={{
               display: 'flex',
               background: 'var(--dosy-bg-sunken)',
@@ -143,7 +165,7 @@ export default function Login() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 type="button"
-                onClick={() => setMode('signin')}
+                onClick={() => { setOtp(''); setMode('signin') }}
                 aria-label="Voltar"
                 className="dosy-press"
                 style={{
@@ -162,12 +184,20 @@ export default function Login() {
             </div>
           )}
 
-          {mode === 'forgot' && (
+          {mode === 'forgot-email' && (
             <p style={{
               fontSize: 12, color: 'var(--dosy-fg-secondary)',
               lineHeight: 1.5, margin: 0,
             }}>
-              Informe seu email cadastrado. Enviaremos um link para você redefinir a senha.
+              Informe seu email cadastrado. Enviaremos um código de 6 dígitos para você confirmar.
+            </p>
+          )}
+          {mode === 'forgot-otp' && (
+            <p style={{
+              fontSize: 12, color: 'var(--dosy-fg-secondary)',
+              lineHeight: 1.5, margin: 0,
+            }}>
+              Código enviado para <strong>{email}</strong>. Digite os 6 dígitos abaixo. Pode levar 1-2min.
             </p>
           )}
 
@@ -194,7 +224,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
             />
-            {mode !== 'forgot' && (
+            {(mode === 'signin' || mode === 'signup') && (
               <Input
                 id="login-password"
                 label="Senha"
@@ -207,11 +237,25 @@ export default function Login() {
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               />
             )}
+            {mode === 'forgot-otp' && (
+              <Input
+                id="login-otp"
+                label="Código de 6 dígitos"
+                type="text"
+                required
+                placeholder="000000"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+              />
+            )}
             {mode === 'signin' && (
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  onClick={() => setMode('forgot')}
+                  onClick={() => setMode('forgot-email')}
                   style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     fontSize: 12, fontWeight: 600,
@@ -220,6 +264,21 @@ export default function Login() {
                     padding: 2,
                   }}
                 >Esqueci minha senha</button>
+              </div>
+            )}
+            {mode === 'forgot-otp' && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => { setOtp(''); setMode('forgot-email') }}
+                  style={{
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600,
+                    color: 'var(--dosy-primary)',
+                    fontFamily: 'var(--dosy-font-display)',
+                    padding: 2,
+                  }}
+                >Reenviar código</button>
               </div>
             )}
             {mode === 'signup' && (

@@ -330,8 +330,8 @@ export function SecuritySection({ appLock, toast }) {
   )
 }
 
-// ─── Conta (nome + logout) ───
-export function AccountSection({ name, setName, savingName, saveName, user, onLogoutClick }) {
+// ─── Conta (nome + senha + logout) ───
+export function AccountSection({ name, setName, savingName, saveName, user, onLogoutClick, onChangePasswordClick }) {
   return (
     <motion.section variants={sectionVariant}>
       <Card padding={16}>
@@ -354,6 +354,12 @@ export function AccountSection({ name, setName, savingName, saveName, user, onLo
           <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: '4px 0 0 4px' }}>
             {user?.email || 'Demo'}
           </p>
+          {/* #152 (v0.2.0.12) — Trocar senha via modal */}
+          {onChangePasswordClick && (
+            <Button kind="secondary" full onClick={onChangePasswordClick}>
+              Alterar senha
+            </Button>
+          )}
           <Button kind="secondary" full onClick={onLogoutClick}>
             Sair
           </Button>
