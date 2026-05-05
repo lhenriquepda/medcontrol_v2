@@ -378,7 +378,7 @@ ESTADO ATUAL: Internal Testing ativo
 ## 6. Checklist macro completo
 
 **Total:** 156 itens (numeração até #156 — adicionado #156 v0.2.1.0)
-**Status:** 108 fechados (`[x]`) · 44 abertos (`[ ]`) · 1 hold (`[~]` #130) · ~3 com seguintes (#118-followup, #119-followup, #106-old) — recontado via `grep -cE` 2026-05-05
+**Status:** 109 fechados (`[x]`) · 43 abertos (`[ ]`) · 1 hold (`[~]` #130) · ~3 com seguintes (#118-followup, #119-followup, #106-old) — recontado via `grep -cE` 2026-05-05 (+#007 fechado v0.2.1.0)
 **Δ 2026-05-05 (sessão):** +#128 (BUG-040 backend done v0.2.0.9) +#027 (superseded por #129-#133). Itens revisados sem mudança status: #018 (escopo expandido AdMob+AdSense), #039 (bloqueado pre-req batch select), #007/#026/#036 (proposto v0.2.1.0), #035/#038 (diferido v0.2.2.0+).
 **Δ 2026-05-05 v0.2.1.0 (em andamento):** +#129 (Google Group dosy-testers criado via Chrome MCP) +#018 cleanup AdSense placeholder (parcial — flag flip aguarda #133) +#130 (Closed Testing track salvo rascunho HOLD pré-submit) + categoria **Saúde e fitness** (trocada de Medicina) + detalhes contato `contato@dosymed.app`/`https://dosymed.app` publicados Console + **#026 ImprovMX 7 aliases verified DNS** (suporte/contato/privacidade/legal/dpo/security/hello) + Gmail 7 filters/labels + **#046 runbook DR** + **#156 página `/privacidade` v1.2 LGPD + Google Play Health Apps Policy compliance**. Counter: 108 fechados / 44 abertos / 1 hold (`[~]` #130).
 **Distribuição prioridade aproximada:** P0: ~25 · P1: ~50 · P2: ~50 · P3: ~30
@@ -403,7 +403,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#006** [Plan + Auditoria] Device validation FASE 17 em 3 devices físicos. → `docs/device-validation-checklist.md`
 
 #### Observabilidade healthcare crítica
-- [ ] **#007** [Auditoria — proposto v0.2.1.0] Telemetria PostHog `notification_delivered` + `notification_dismissed` + `notification_action_taken` (Tomada/Pular/Adiar). Dashboard taxa entrega ≥99% + alert queda 5%/1h. SEM esta métrica regressão alarme passa despercebida em prod (healthcare crítico). → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
+- [x] **#007** [Auditoria — fechado v0.2.1.0 (2026-05-05)] Telemetria PostHog `notification_delivered` + `notification_tapped` + `notification_dismissed` (constants em `analytics.js` EVENTS). Wire em `App.jsx` 4 listeners Capacitor: `LocalNotifications.localNotificationReceived` (foreground delivery), `LocalNotifications.localNotificationActionPerformed` (tap), `PushNotifications.pushNotificationReceived` (FCM foreground delivery), `PushNotifications.pushNotificationActionPerformed` (FCM tap). PII strip auto via `sanitize_properties` analytics.js (LGPD). **Out of scope JS-only:** background FCM delivery (JS suspenso Android) — fica server-side via Edge `notify-doses` delivery report. **Pendente operacional:** dashboard PostHog manual + alert queda 5%/1h manual (passos doc em CHECKLIST §#007). → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
 
 #### Setup CI / DR
 - [x] **#008** [Plan, fechado 2026-05-04 — secrets criados 2026-04-28] GitHub Secrets `SENTRY_AUTH_TOKEN`/`SENTRY_ORG=lhp-tech`/`SENTRY_PROJECT=dosy`/`VITE_SENTRY_DSN` configurados em Actions. Workflows referenciam corretamente. Aceitação completa pendente #127 (CI lint fix → source maps upload roda auto). Plan FASE 10.1

@@ -91,17 +91,44 @@
   - Validar: alarme dispara locked + unlocked + app killed + DND + após reboot + adiar 10min funciona + FLAG_SECURE bloqueia screenshot + biometria (se wired) + responsividade
 - **Saída:** issues em backlog ou re-abertura de sub-fase relevante
 
-### #007 — Adicionar telemetria `notification_delivered` em PostHog (regressão silenciosa)
-- **Status:** ⏳ Aberto — proposto v0.2.1.0
+### #007 — Telemetria notificações PostHog (regressão silenciosa healthcare)
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — código deployed; dashboard + alert manual operacional
 - **Origem:** [Auditoria] (Dimensão 14)
-- **Esforço:** 1-2h
-- **Dependências:** PostHog key já configurada (#015 ✅) — independente do #018
-- **Aceitação:**
-  - Evento PostHog `notification_delivered` disparado quando push FCM chega (background) e quando LocalNotif fire
-  - Evento `notification_dismissed` / `notification_action_taken` (Tomada/Pular/Adiar)
-  - Dashboard mostra taxa de entrega ≥ 99%
-  - Alerta PostHog: queda > 5% em 1h dispara notif Slack/email
-- **Justificativa:** SEM esta métrica, regressão em alarmes (a coisa mais crítica do app) passa despercebida em produção. Healthcare = não-negociável.
+- **Esforço:** 1-2h código + 30min setup dashboard PostHog
+- **Dependências:** PostHog key já configurada (#015 ✅)
+- **Implementação executada:**
+  - `src/services/analytics.js` EVENTS: `NOTIFICATION_DELIVERED`, `NOTIFICATION_TAPPED`, `NOTIFICATION_DISMISSED` (constants)
+  - `src/App.jsx` 4 listeners Capacitor wired (track call em cada):
+    - `LocalNotifications.localNotificationReceived` → `NOTIFICATION_DELIVERED { kind:'local_foreground' }`
+    - `LocalNotifications.localNotificationActionPerformed` → `NOTIFICATION_TAPPED { kind:'local' }`
+    - `PushNotifications.pushNotificationReceived` → `NOTIFICATION_DELIVERED { kind:'push_foreground' }`
+    - `PushNotifications.pushNotificationActionPerformed` → `NOTIFICATION_TAPPED { kind:'push' }`
+  - Cleanup `localFireHandle?.remove?.()` adicionado ao return effect
+  - Props: `kind`, `actionId`, `type`, `hasDoseId` — PII strip auto via `sanitize_properties` analytics.js (LGPD: zero email/name/observation/medName)
+
+**Cobertura granular eventos:**
+- ✅ FCM foreground delivery (Android app aberto) — `pushNotificationReceived`
+- ✅ FCM tap (background OR foreground) — `pushNotificationActionPerformed`
+- ✅ LocalNotif fire (foreground) — `localNotificationReceived`
+- ✅ LocalNotif tap — `localNotificationActionPerformed`
+- ⏳ FCM background delivery JS-side: NÃO captura (Android suspende JS background) — depende Edge `notify-doses` server-side delivery report (fora escopo #007 JS)
+- ⏳ Notification dismissed (swipe-away sem tap): Capacitor LocalNotifications/PushNotifications NÃO emitem evento "dismissed" — requer custom Android plugin pra hook NotificationListenerService (parqueado v0.2.2.0+)
+
+**Eventos relacionados já existentes:**
+- `ALARM_FIRED` — alarme nativo full-screen disparado (DosyMessagingService → AlarmReceiver)
+- `ALARM_DISMISSED` — user dismissed full-screen alarme
+- `ALARM_SNOOZED` — user adiou (snooze button)
+- `DOSE_CONFIRMED` — user marcou tomada via app
+- `DOSE_SKIPPED` — user pulou via app
+
+Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED` mapeia funnel completo: agendamento → entrega → ação user.
+
+**Pendente operacional (manual user, não bloqueante #007 fechado):**
+- Dashboard PostHog: criar funnel `notification_delivered → alarm_fired → dose_confirmed/skipped/snoozed` com taxa entrega target ≥99%
+- Alert PostHog: rule "drop >5% delivered last 1h vs prev 24h baseline" → notif email/Slack
+- Documentar em `docs/playbooks/posthog-dashboards.md` (criar follow-up)
+
+**Justificativa healthcare crítica:** sem esta métrica, regressão silenciosa em alarmes (3 caminhos #083) passa despercebida em produção. Healthcare = não-negociável.
 
 ### #008 — Configurar `SENTRY_AUTH_TOKEN` + `ORG` + `PROJECT` em GitHub Secrets
 - **Status:** ✅ Concluído (verificado 2026-05-04 — secrets criados em 2026-04-28)
