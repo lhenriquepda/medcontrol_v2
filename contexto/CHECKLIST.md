@@ -513,11 +513,11 @@
 - DMARC `_dmarc` policy `p=none` mantida — bom pra debug inicial
 - Free tier limit: 25 aliases (espaço ainda pra +18) e 10 mensagens/dia. Upgrade $9/mo se exceder
 
-**Pendente user manual (~5min):**
-- ⏳ Gmail filters/labels: criar 7 labels (Contato, Privacidade, Suporte, Legal, DPO, Security, Hello) + 7 filters `to:<alias>@dosymed.app` → apply label correspondente. Setup automation Chrome MCP travou Gmail UI; melhor fazer manual:
-  - Gmail Settings → Filters and Blocked Addresses → Create new filter
-  - To: `suporte@dosymed.app` → Create filter → check "Apply the label" → New label "Suporte" → Create filter
-  - Repetir pra cada alias
+**Gmail filters + labels (concluído v0.2.1.0 via Chrome MCP):**
+- ✅ 7 labels criadas: Contato, Privacidade, Suporte, Legal, DPO, Security, Hello (sidebar Gmail)
+- ✅ 7 filters criados, cada um `Matches: to:(<alias>@dosymed.app) Do this: Apply label "<Label>"`
+- ✅ Filters aplicam label automaticamente em emails recebidos (mantém inbox + label, não archive)
+- Test envio futuro pra qualquer `<alias>@dosymed.app` → ImprovMX forward → dosy.med@gmail.com → filter aplica label correspondente
 
 **Pendente código v0.2.1.0:**
 - ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
@@ -2109,19 +2109,49 @@ Sem 7+: Produção rollout 5%→100% + P2 + P3 backlog
   - Linkado: Settings → Privacidade + Termos.jsx (referência cruzada) + footer Login + ToS página
 - **Implementação executada:** Privacidade.jsx (React route já existia v0.2.0.0, atualizado conteúdo v0.2.1.0). Rota `/privacidade` confirmada em App.jsx linha 298. SPA fallback Vercel resolve via index.html → React Router → Privacidade lazy-loaded.
 
-**Mudanças v0.2.1.0:**
-- Email DPO: `dosy.privacidade@gmail.com` → `privacidade@dosymed.app` + adicionado `dpo@dosymed.app`, `suporte@dosymed.app`, `legal@dosymed.app`, `security@dosymed.app`
-- Entidade: "pessoa física desenvolvedor" → "Dosy Med LTDA, sediada no Brasil"
-- Site oficial linkado: https://dosymed.app
-- Contato geral linkado: contato@dosymed.app
-- Terceiros expandidos seção 6: Supabase São Paulo BR + Resend (transactional email) + Firebase FCM (push) + PostHog (telemetria anônima) + Sentry (crash) + Google AdMob (banner Free)
-- Seção 2 "Dados coletados": adicionou foto paciente, FCM token, dados técnicos, telemetria anônima, Sentry stack traces, auditoria security_events
-- Seção 3 "Como usamos": adicionou alarme nativo Foreground Service medicação, recovery OTP (#153), telemetria entrega push (#007), rate-limit defesa
-- Seção sobre AdMob: anúncios não-personalizados Free, sem dados de saúde
-- Versão bumped: v1.0 → v1.1
-- Data: Abril → Maio 2026
-- Termos.jsx idem: emails atualizados + entidade
-- FAQ.jsx: `SUPPORT_EMAIL = 'suporte@dosymed.app'` (era dosyapp.com)
+**Mudanças v0.2.1.0 (2 passes):**
+
+**Pass 1 v1.1 (initial):**
+- Email DPO: `dosy.privacidade@gmail.com` → `privacidade@dosymed.app` + outros 4 aliases
+- Entidade: "pessoa física" → "Dosy Med LTDA"
+- Terceiros expandidos: Resend, PostHog, Sentry, AdMob, FCM
+- Versão v1.0 → v1.1
+- Termos.jsx + FAQ.jsx idem
+
+**Pass 2 v1.2 (deep audit Play Store Health Apps Policy):**
+- **Estrutura expandida 11 → 15 seções** com cobertura completa
+- **§1 Controlador**: contato granular (DPO + suporte + legal + security + contato geral)
+- **§2 Dados coletados** reorganizado em 4 sub-categorias: identificação, sensíveis saúde, técnicos, telemetria anônima
+  - Adicionou: foto paciente, peso, alergias, condição médica, médico, anotações cuidador
+  - Adicionou: SOS rules (intervalos, max 24h)
+  - Adicionou: `patient_shares` table (compartilhamento entre usuários #117)
+  - Adicionou: tier subscription history
+  - Adicionou: rate-limit triggers em security_events
+- **§3 Finalidades + bases legais por finalidade**: 7 finalidades mapeadas (lembrete medicação Art.7-V+11-II-f, sharing Art.7-I, recovery Art.7-V, histórico Art.7-V+11-II-f, auditoria Art.7-IX, telemetria Art.7-IX, ads Art.7-IX)
+  - "Não fazemos" list explícita: venda, perfilamento publicitário, scoring saúde, share seguradoras
+- **§4 Sub-processadores**: tabela 10 providers (Supabase, FCM, AdMob, Play Billing, Resend, PostHog, Sentry, Vercel, Hostinger, ImprovMX) com finalidade + região + base de adequação (sa-east-1 BR para Supabase, Cláusulas-padrão LGPD para US/EU)
+  - Cobre transferência internacional Art. 33-V LGPD
+- **§5 Direitos LGPD**: lista completa Art.18 (10 direitos) + reclamação ANPD link gov.br/anpd
+- **§6 Segurança**: criptografia em repouso AES-256 (era ausente), App Lock biométrico (#017), Android Keystore hardware-backed, JWT secret rotation procedure (#084), backup diário 7-day rolling RPO 24h RTO 5-15min ref runbook DR (#046)
+- **§7 Retenção**: granular por tipo (FCM tokens revogados limpeza semanal, compartilhamentos pendentes 30d, observações > 3y anonimização, conta deletada < 30d + backups 7d adicional)
+- **§8 Cookies/storage**: enumera localStorage + Android Keystore + sessionStorage + IndexedDB PWA + zero cookies tracking
+- **§9 Menores**: idade mínima 13 anos com consentimento responsável legal (Art.14 LGPD), 16 anos GDPR EU
+- **§10 Decisões automatizadas (NOVO)**: explicit "não realiza" — sem AI diagnóstica, sem scoring saúde, sem recomendação automática (Art.20 LGPD)
+- **§11 Compliance Google Play Health Apps Policy (NOVO)**: 9 checkpoints com link policy oficial Google (support.google.com/googleplay/android-developer/answer/13316080)
+  - Política privacidade explícita
+  - Coleta limitada finalidade declarada
+  - Criptografia trânsito + repouso
+  - Não compartilha seguradoras/empregadores/anunciantes saúde
+  - Ads apenas não-personalizados sem dados saúde
+  - Mecanismo exclusão acessível user
+  - FGS Special Use declarado Console (#004)
+  - Disclaimer médico
+- **§12 Notificação incidentes ANPD (NOVO)**: comunicação Art. 48 LGPD operacional 72h, conteúdo da notificação detalhado, ref runbook DR
+- **§13 Canais contato**: 5 emails granulares com confirmação 72h pra security disclosure
+- **§14 Alterações**: 15 dias antecedência via noreply@
+- **§15 Histórico versões (NOVO)**: log v1.0 → v1.1 → v1.2
+
+**Termos.jsx + FAQ.jsx**: mantido pass 1 (emails canônicos + entidade Dosy Med LTDA).
 
 **Pré-checks pré-submit Google review (#130):**
 - ✅ URL `/privacidade` route existe (App.jsx:298)
