@@ -4,6 +4,40 @@
 
 ---
 
+## 🛠️ Regra de manutenção (CRÍTICA — leia ANTES de atualizar)
+
+**`ROADMAP.md` (este arquivo) e `CHECKLIST.md` são complementares, não-redundantes:**
+
+| Documento | Propósito | Granularidade |
+|---|---|---|
+| **ROADMAP.md §6** | **Lista RESUMIDA** de tarefas — visão macro | 1 linha por item (descrição curta + status `[ ]/[x]` + commit/release) |
+| **CHECKLIST.md** | **Lista DETALHADA** das tarefas — visão técnica completa | Entry completo (snippet, deps, aceitação, racional, links auditoria) |
+
+**Compartilham numeração:** `#001` ROADMAP = `#001` CHECKLIST. Toda mudança de status atualiza **AMBOS**.
+
+**Workflow obrigatório por sessão:**
+
+1. **Item fechado?**
+   - ROADMAP §6 → `- [x] **#XXX** [...] **fechado v0.X.Y.Z commit `{sha}`** {descrição curta}`
+   - CHECKLIST §#XXX → `**Status:** ✅ Concluído @ commit {sha} ({YYYY-MM-DD})`
+   - Update log da release → seção "Items fechados v0.X.Y.Z"
+
+2. **Item novo descoberto?**
+   - ROADMAP §6 → `- [ ] **#XXX** [PRIORIDADE] {descrição curta}` na P0/P1/P2/P3
+   - CHECKLIST → criar entry completo (template em `README.md` Regra 1)
+   - Update log → seção "Items novos descobertos"
+
+**Próximo número livre:**
+```bash
+grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail -5
+```
+
+**Drift histórico observado:** items fechados sem update CHECKLIST → re-implementação acidental → conflito git. Última auditoria 2026-05-05 fechou ~60 discrepâncias acumuladas v0.1.7.4-v0.2.0.11. Rodar auditoria semestral cross-ref ROADMAP × CHECKLIST × `updates/*.md`.
+
+**Detalhe completo das regras:** `contexto/README.md` Regra 1.
+
+---
+
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
@@ -343,8 +377,12 @@ ESTADO ATUAL: Internal Testing ativo
 
 ## 6. Checklist macro completo
 
-**Total:** 73 itens · **P0:** 9 · **P1:** 18 · **P2:** 22 · **P3:** 24
-**Origem:** [Plan.md] 38 · [Auditoria] 19 · [Plan.md + Auditoria] 16
+**Total:** 154 itens (numeração até #154 — auditoria 2026-05-05)
+**Status:** 101 fechados (`[x]`) · 50 abertos (`[ ]`) · ~3 com seguintes (#118-followup, #119-followup, #106-old)
+**Distribuição prioridade aproximada:** P0: ~25 · P1: ~50 · P2: ~50 · P3: ~30
+**Origem:** [Plan.md] · [Auditoria] · [Plan.md + Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD]
+
+**Counter §6 stale histórico:** valores anteriores (Total: 73, P0:9, P1:18, P2:22, P3:24) refletiam apenas itens originais Plan + Auditoria pré-v0.1.7.0. Hoje (pós-#154) os contadores reais incluem itens descobertos durante releases v0.1.7.x → v0.2.0.12 (BUGs Sentry, egress audit, validação Chrome MCP, sessões com user). Recompor counter exato exigiria varredura linha-a-linha — manter como aproximado até próxima auditoria semestral.
 
 ### 🔴 P0 — Bloqueadores
 
@@ -438,7 +476,7 @@ ESTADO ATUAL: Internal Testing ativo
 
 #### DX
 - [x] **#022** [Auditoria] Verificar legitimidade `typescript@^6.0.3`. → [06 BUG-007](auditoria/06-bugs.md#bug-007--typescript-declarado-como-603-no-packagejson)
-- [x] **#024** [Auditoria] Pre-commit hook (husky + lint-staged). → [05 §6.3](auditoria/05-codigo.md#63-husky--pre-commit)
+- [x] **#024** [Auditoria, fechado v0.2.0.5 — parte de #126] Pre-commit hooks (husky + lint-staged + gitleaks). Detalhe completo em §P0 abaixo (linha duplicada removida 2026-05-05).
 
 ### 🟡 P2 — Média Prioridade (30 dias pós-launch)
 
@@ -670,7 +708,7 @@ analise/CHECKLIST.md §#XXX.
 
 Após cada item fechado, atualizar contadores no topo §6:
 ```
-**Total:** 73 itens · **P0:** 9 → 8 · **P1:** 18 · **P2:** 22 · **P3:** 24
+**Total:** 154 itens (auditoria 2026-05-05) · 101 `[x]` · 50 `[ ]` · ~3 followups
                                 ↑ decrementar conforme fecha
 ```
 

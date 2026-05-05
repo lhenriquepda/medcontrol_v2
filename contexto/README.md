@@ -63,31 +63,68 @@ contexto/
 
 ### Regra 1 — Sempre atualize `ROADMAP.md` E `CHECKLIST.md` no fim da sessão
 
-ROADMAP e CHECKLIST **compartilham numeração** (`#001` aqui = `#001` lá). Atualize **ambos** em qualquer mudança de status — manter consistente é obrigatório.
+#### Princípio canônico
 
-**Em `ROADMAP.md`:**
-- Item fechado? Marque `[x]` em §6
-- Atualize contadores §12 (P0 9→8 etc)
-- Bug novo descoberto? Adicione na prioridade certa (P0/P1/P2/P3) com numeração sequencial (#074 e diante)
-- Próximo passo mudou? Reescreva §4
+**`ROADMAP.md` e `CHECKLIST.md` são complementares, não-redundantes**:
 
-**Em `CHECKLIST.md`:**
-- Atualize campo `**Status:**` do item:
-  - `⏳ Aberto` → `🟡 Em progresso` ao começar
-  - `🟡 Em progresso` → `✅ Concluído @ commit {sha} ({YYYY-MM-DD})` ao fechar
-  - Estados especiais:
-    - `🚫 Cancelado — superado por #YYY` (com link)
-    - `⏸️ Bloqueado — aguardando {dependência externa}`
-- Item novo? Adicione entry completo (snippet, deps, aceitação) com `Status: ⏳ Aberto`
+| Documento | Propósito | Granularidade | Quando consultar |
+|---|---|---|---|
+| `ROADMAP.md` §6 | **Lista RESUMIDA** de todas as tarefas — visão macro | 1 linha por item (descrição curta + status `[ ]/[x]` + commit/release) | "O que falta? O que foi feito?" — overview |
+| `CHECKLIST.md` | **Lista DETALHADA** das tarefas — visão técnica completa | Entry completo por item (snippet de código, dependências, critério de aceitação, racional, links auditoria) | "Como implemento o #042? Qual é o snippet? Que critério aceitar?" — execução |
 
-**Validação de consistência:**
+**Ambos compartilham numeração** (`#001` ROADMAP = `#001` CHECKLIST). Toda mudança de status atualiza **AMBOS** — inconsistência = bug de manutenção que propaga para sessões futuras.
 
+#### Workflow obrigatório por item
+
+**Ao FECHAR um item:**
+1. ✅ ROADMAP §6 → marcar `- [x] **#XXX** [...] **fechado v0.X.Y.Z commit `{sha}`** {descrição curta 1-2 linhas}`
+2. ✅ CHECKLIST §#XXX → atualizar campo `**Status:**` para `✅ Concluído @ commit {sha} ({YYYY-MM-DD})`
+3. ✅ Update log da release (`updates/YYYY-MM-DD-release-vX.Y.Z-*.md`) → adicionar item à seção "Items fechados v0.X.Y.Z"
+
+**Ao DESCOBRIR um item novo (durante sessão):**
+1. ✅ ROADMAP §6 → adicionar entry `- [ ] **#XXX** [PRIORIDADE] {descrição curta}` na seção certa (P0/P1/P2/P3)
+2. ✅ CHECKLIST → criar entry completo com template:
+   - `## #XXX — {título}`
+   - `**Status:** ⏳ Aberto`
+   - `**Prioridade:** P0/P1/P2/P3`
+   - `**Origem:** {sessão YYYY-MM-DD / Sentry / user-reported / auditoria}`
+   - `**Problema:** {descrição detalhada}`
+   - `**Abordagem:** {snippet/plano técnico}`
+   - `**Dependências:** {outros itens / libs / config}`
+   - `**Critério de aceitação:** {como validar}`
+3. ✅ Update log atual → adicionar à seção "Items novos descobertos"
+
+**Numeração sequencial GLOBAL:** próximo número livre é o maior `#XXX` em uso + 1. Verificar:
 ```bash
-# Itens abertos no CHECKLIST devem bater com contadores do ROADMAP §12
-grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*⏸️ Bloqueado" contexto/CHECKLIST.md
+grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail -5
 ```
 
-Inconsistência entre ROADMAP e CHECKLIST = bug de manutenção. Corrigir antes de commit final.
+#### Estados especiais CHECKLIST
+
+- `🟡 Em progresso` — começou implementação mas não fechou
+- `⏸️ Bloqueado — aguardando {dependência externa}` — ex: aguarda user device, aguarda config Supabase, aguarda merge externo
+- `🚫 Cancelado — superado por #YYY` — item virou obsoleto, link pro substituto
+- `⏭️ Parqueado vX.Y.Z` — postponed pra release futura específica
+- `✅ Concluído @ commit {sha} ({YYYY-MM-DD})` — fechado, sempre cita commit
+
+#### Validação de consistência (sanity check pré-merge)
+
+```bash
+# Items abertos CHECKLIST = items [ ] ROADMAP §6 (deve bater)
+grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*⏸️ Bloqueado" contexto/CHECKLIST.md
+grep -c "^- \[ \]" contexto/ROADMAP.md
+
+# Items órfãos CHECKLIST (em CHECKLIST mas sem entry ROADMAP)
+diff <(grep -oE "^## #[0-9]+" contexto/CHECKLIST.md | sort -u) <(grep -oE "^- \[.\] \*\*#[0-9]+" contexto/ROADMAP.md | grep -oE "#[0-9]+" | sort -u)
+```
+
+Inconsistência entre ROADMAP e CHECKLIST = **bug de manutenção bloqueante**. Corrigir antes de commit final + master merge.
+
+#### Penalty de drift
+
+Drift histórico observado: items fechados sem update CHECKLIST → próxima sessão acha item ainda aberto → re-implementação acidental → conflito git → tempo perdido.
+
+**Auditoria semestral recomendada:** rodar agente cross-ref ROADMAP × CHECKLIST × `updates/*.md` (~2-3h cada vez), bulk-fix discrepâncias. Última auditoria: 2026-05-05 (ver bulk update v0.2.0.12 fechando ~60 discrepâncias acumuladas v0.1.7.4-v0.2.0.11).
 
 ### Regra 2 — Sempre crie um log em `updates/` no fim da sessão
 
