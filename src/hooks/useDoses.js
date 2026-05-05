@@ -65,13 +65,19 @@ function rollback(qc, snapshots) {
   for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
 }
 
+// #149 (release v0.2.0.11) — debounce 2s pra evitar storm de invalidate.
+// Antes: cada mutation onSettled invalida ['doses'] → 3+ active queries
+// refetcham paralelo (Dashboard + DoseHistory + Reports cached). Multi-mutation
+// rápida (confirm → undo → skip → undo) gerava 9-12 fetches /doses.
+// Optimistic update via patchDoseInCache já garante UI consistency; refetch é
+// redundante exceto quando server rejeita silently (raro). Debounce consolida.
+let _refetchDosesTimer = null
 function refetchDoses(qc) {
-  // invalidate (lazy) ao invés de refetch (eager). Optimistic update já cobre
-  // a UI; refetch só roda quando query observador re-monta. Evita storm de
-  // fetches concorrentes em sequência rápida (confirm → undo → skip → undo)
-  // que apareciam como `net::ERR_FAILED` no console (request anterior abortado
-  // por cancelQueries do próximo onMutate).
-  qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
+  if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
+  _refetchDosesTimer = setTimeout(() => {
+    qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
+    _refetchDosesTimer = null
+  }, 2000)
 }
 
 export function useConfirmDose() {
