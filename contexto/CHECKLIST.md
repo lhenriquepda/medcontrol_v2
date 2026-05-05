@@ -1468,14 +1468,16 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Risco UX:** novo share notif pode demorar até 5min em aparecer. Aceitável (shares raros).
 
 ### #142 — Rotacionar JWT cron `schedule-alarms-fcm-6h` + refatorar pra usar vault/env
-- **Status:** 🔴 Aberto — CRÍTICO (verificado 2026-05-05: JWT antigo iat 26 abr 2026 retorna 200 OK no Edge function = rotação #084 NÃO invalidou esse JWT, vault sem secrets)
-- **Plano:**
-  1. USER: Supabase Dashboard → Settings → API → "Roll JWT secret" (invalida TODOS JWTs antigos including service_role anterior)
-  2. USER: copia nova service_role_key
-  3. AGENTE: `vault.create_secret('SUPABASE_SERVICE_ROLE_KEY', '<new_key>')`
-  4. AGENTE: drop cron job 3 atual + recriar usando `(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='SUPABASE_SERVICE_ROLE_KEY')` no Authorization
-  5. Verificar Edge function continua respondendo 200 OK pós-rotação
-  6. Atualizar Vercel envs + .env.local + Edge Function secrets se algum usa service_role JWT antigo
+- **Status:** ✅ Segurança fechada (2026-05-05) — cleanup cosmético deferido
+- **Confirmação:**
+  - Supabase Dashboard → Settings → JWT Keys → Legacy JWT Secret = **REVOKED** ("No new JSON Web Tokens are issued nor verified with it by Supabase products")
+  - PostgREST com JWT antigo: **HTTP 401** (verificado via curl `/rest/v1/doses?...`)
+  - Edge function continua 200 OK pq é pública (`verify_jwt: false`), executa com `SERVICE_ROLE_KEY` env separada do JWT do header
+  - Atacante com JWT vazado NÃO consegue privilege escalation (DB queries via PostgREST barram)
+- **Cleanup deferido pra v0.2.0.10 (cosmético, não-security):**
+  - JWT hardcoded no cron job 3 ainda existe mas não é validado por nada
+  - Substituir por `vault.read_secret('SUPABASE_SERVICE_ROLE_KEY')` ou remover header (Edge function ignora)
+  - Refactor pra usar `supabase_functions.http_request()` (passa apikey automaticamente)
 - **Origem:** egress-audit-2026-05-05 F11 (security)
 - **Esforço:** 1h
 - **Dependências:** nenhuma

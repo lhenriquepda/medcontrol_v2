@@ -148,10 +148,12 @@ Deno.serve(async (req) => {
       }
 
       // 2. Doses pendentes próximas 72h pra este user
+      // Item #128 BUG-040 fix: select id + name pra mapear patientName no payload
       const { data: ownPatients } = await supabase
-        .from('patients').select('id').eq('userId', userId)
+        .from('patients').select('id, name').eq('userId', userId)
       const patientIds = ownPatients?.map(p => p.id) ?? []
       if (patientIds.length === 0) continue
+      const patientNameById = new Map((ownPatients ?? []).map(p => [p.id, p.name]))
 
       const { data: doses } = await supabase
         .from('doses')
@@ -172,11 +174,14 @@ Deno.serve(async (req) => {
       if (!dosesOutsideDnd.length) continue
 
       // 3. Payload data — JSON stringify pra fits no FCM data limit (~4KB)
+      // Item #128 BUG-040: incluir patientName pra AlarmActivity agrupar correto
+      // (era "Sem paciente" pra todas doses).
       const dosesPayload = dosesOutsideDnd.map(d => ({
         doseId: d.id,
         medName: d.medName,
         unit: d.unit,
-        scheduledAt: d.scheduledAt
+        scheduledAt: d.scheduledAt,
+        patientName: patientNameById.get(d.patientId) || ''
       }))
 
       const data = {
