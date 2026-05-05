@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.10` (tag `v0.2.0.10`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.10 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.11` (tag `v0.2.0.11`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.11 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -60,7 +60,18 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
+**Última release:** v0.2.0.11 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 44 + tag git `v0.2.0.11`).
+**Items v0.2.0.11 fechados:**
+- #144 Custom JWT claim tier (Auth Hook) — getMyTier lê app_metadata local, zero round-trip
+- #145 useRealtime watchdog scoped refetch (active-only) substitui invalidate blanket
+- #146 pg_cron extend batch INSERT verify — audit log + view health + 90d retention
+- #029 refactor Settings.jsx 692 LOC → src/pages/Settings/ (index + sections + Row + constants)
+- #030 split notifications.js 613 LOC → src/services/notifications/ (5 arquivos)
+- #034 virtualizar DoseHistory via @tanstack/react-virtual VirtualTimeline
+- #100 avatar emoji redesign — 6 categorias curadas + default 👤 → 🙂 + Saúde category nova
+- #009 PITR deferred (Pro add-on $100/mo caro) — DR drill via daily backup baseline capturado
+
+**Release anterior:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
 **Items v0.2.0.10 fechados:**
 - #139 dose-trigger-handler skip se scheduledAt > 6h (-50% a -70% chamadas Edge fn)
 - #140 schedule-alarms-fcm HORIZON 72h → 24h (payload FCM 3× menor)

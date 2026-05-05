@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-05 — pós release v0.2.0.10 (versionCode 43 / versionName 0.2.0.10). Master sincronizado, sem release branch ativa. Próxima: v0.2.0.11 (P2 estrutural).
+> **Última revisão:** 2026-05-05 — pós release v0.2.0.11 (versionCode 44 / versionName 0.2.0.11). Master sincronizado, sem release branch ativa. Próxima: v0.2.0.12 (validação egress real).
 
 ---
 
@@ -21,7 +21,7 @@ Decisões de UX devem balancear todas essas personas — letras legíveis e flux
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-app.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 43 / versionName 0.2.0.10. Closed Testing externo via Google Group #129-#133 pendente. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; v0.2.0.7 FLAG_SECURE off Dev + StatusBar tema; v0.2.0.8 P0 egress fixes #127 + #134-#136 + assets store + vídeo FGS + auditoria egress; v0.2.0.9 P1 egress fixes #137 (Dashboard 4→1) + #138 (DOSE_COLS_LIST) + #128 (patientName Edge) + filter '10 dias'; v0.2.0.10 P2 egress #139 (trigger 6h) + #140 (cron 24h) + #141 (shares 5min) + #143 (getSession) + #142 cleanup JWT cron + #147 BUG-041 catalogado.
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 43 / versionName 0.2.0.10. Closed Testing externo via Google Group #129-#133 pendente. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; v0.2.0.7 FLAG_SECURE off Dev + StatusBar tema; v0.2.0.8 P0 egress fixes #127 + #134-#136 + assets store + vídeo FGS + auditoria egress; v0.2.0.9 P1 egress fixes #137 (Dashboard 4→1) + #138 (DOSE_COLS_LIST) + #128 (patientName Edge) + filter '10 dias'; v0.2.0.10 P2 egress #139 (trigger 6h) + #140 (cron 24h) + #141 (shares 5min) + #143 (getSession) + #142 cleanup JWT cron + #147 BUG-041 catalogado; v0.2.0.11 P2 estrutural #144 (JWT claim tier Auth Hook) + #145 (realtime scoped refetch) + #146 (cron audit log) + #029 refactor Settings split + #030 split notifications + #034 virtualizar DoseHistory + #100 avatar emoji redesign + #009 PITR deferred (DR drill via daily backup).
 
 **Supabase plano:** Pro (upgrade 2026-05-05). Considerar downgrade Free pós validação 26 mai cycle.
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
