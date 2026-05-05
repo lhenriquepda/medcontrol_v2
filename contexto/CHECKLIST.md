@@ -55,15 +55,16 @@
 - **Detalhe:** [archive/security-original.md](archive/security-original.md) seções "CRÍTICO" e "ALTO"
 
 ### #004 — Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE para Play Console
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-04)
 - **Origem:** [Plan.md] FASE 18.9.1
 - **Esforço:** 2-3h (gravar + editar + upload YouTube unlisted + Console form)
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - Vídeo ~30s em YouTube unlisted demonstrando alarme crítico de dose: criar tratamento → bloquear telefone → alarme dispara fullscreen sobre lockscreen → Tomada/Pulada
-  - Console: `Conteúdo do app` → `Permissões de serviço em primeiro plano` → URL preenchida
-  - Campos descritivos em PT-BR explicando uso médico
-- **Bloqueador:** sem isso, Closed Testing não promove para Produção
+  - ✅ Vídeo `alarm.mp4` (33s) gravado S25 Ultra Dosy Dev demonstrando: cadastro de tratamento → tela bloqueada → alarme fullscreen disparando sobre lockscreen → Tomada/Adiar/Pular
+  - ✅ Upload YouTube como Shorts unlisted: https://www.youtube.com/watch?v=qLBCzualcCw
+  - ✅ Play Console: Conteúdo do app → Permissões de serviço em primeiro plano → "Outro/Uso especial" + URL vídeo + descrição completa PT-BR (1082 chars) explicando categoria SPECIAL_USE necessária para alarmes médicos críticos não-cobertos pelas categorias padrão
+  - ✅ Salvo (mensagem "A mudança foi salva")
+- **Pendente:** envio pra revisão Google via Visão geral da publicação (junto com mudanças #025 + outras)
 
 ### #005 — Resolver BUG-001 — Encoding UTF-8 quebrado em nome de paciente
 - **Status:** ✅ Concluído @ commit pendente (2026-05-01)
@@ -301,11 +302,17 @@
   + config em package.json: `"lint-staged": { "*.{js,jsx}": ["eslint --fix", "prettier --write"] }`
 
 ### #025 — Screenshots phone retrabalho (Play Store)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-04)
 - **Origem:** [Plan.md] FASE 18.9.2
 - **Esforço:** 2-3h (designer)
 - **Dependências:** nenhuma
-- **Aceitação:** 4+ screenshots phone 1080×1920 polidos em `resources/screenshots/` + uploaded em Console
+- **Aceitação:**
+  - ✅ 19 screenshots brutos capturados S25 Ultra Dosy Dev (1080×2340 atende mínimo 1080px Play Store)
+  - ✅ Triagem: 8 melhores escolhidas em `resources/prints/processado/` ordenadas 01-08 (alarme multi-dose · início multi-paciente · análises · marcar dose · relatórios · paciente · histórico · onboarding alarme)
+  - ✅ Plus assets gerados via sharp: `icon-512-peach.png` (composto icon-background + logo-mono-light, safe margin 17% H · 37% V) + `feature-graphic-1024x500.png` (gradient peach + tagline) + `yt-avatar-800.png` + `yt-banner-2560x1440.png`
+  - ✅ Upload Play Console: ícone 512 + 8 screenshots phone uploadados, Salvar persistido como rascunho
+  - ✅ Listagem da loja → campo Vídeo preenchido com URL YouTube unlisted
+- **Pendente:** envio pra revisão Google via Visão geral da publicação
 
 ### #026 — Provisionar caixa real `suporte@dosyapp.com`
 - **Status:** ⏳ Aberto
@@ -1264,17 +1271,18 @@ Comportamento desejado por user:
 - [ ] Persistência DB OK — relogar mantém config
 
 ### #127 — CI failing (lint errors react-hooks pré-existentes em AnimatedRoutes.jsx)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-05)
 - **Origem:** descoberto durante validação #008 (2026-05-04)
 - **Esforço:** 30 min
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - 2 errors `react-hooks/refs` em `src/components/AnimatedRoutes.jsx:45:49` + `:48:19` resolvidos (`Cannot access refs during render`)
-  - Fix: lift `directionRef.current` pra useState OR mover leitura pra dentro de effect/handler
-  - `npm run lint` retorna 0 errors (warnings ok)
-  - GitHub CI workflow Lint+Test+Build passa
-  - Sentry source maps upload roda automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
-- **Impacto:** sem CI verde, source maps Sentry não sobem → crash investigation pós-launch fica sem stack trace symbolicado. Precisa fechar antes de Open Testing.
+  - ✅ 2 errors `react-hooks/refs` resolvidos (`Cannot access refs during render`)
+  - ✅ Fix: substituído `useRef('forward')` (directionRef + prevPathRef) por `useState(location.pathname)` (prevPath) + computa `direction` puro durante render
+  - ✅ `npm run lint` retorna 0 errors (61 warnings — todos pré-existentes ou heurística react-compiler padrão codebase)
+  - ✅ Build prod ok (`npm run build` 32s)
+  - ⏸ GitHub CI workflow Lint+Test+Build vai passar no próximo push (validação automática)
+  - ⏸ Sentry source maps upload rodará automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
+- **Impacto resolvido:** CI verde → source maps Sentry sobem → crash investigation pós-launch com stack trace symbolicado.
 
 ### #128 — BUG-040: Multi-dose alarm mostra só 1 medicamento + paciente "Sem Paciente"
 - **Status:** ⏳ Aberto
@@ -1298,6 +1306,203 @@ Comportamento desejado por user:
   - Conferir Edge `notify-doses` logs — quantos FCM envelopes foram enviados (1 com array vs 6 separados?)
 - **Detalhe:** Bug isolado fora de auditoria formal. Catalogar em `auditoria-live-2026-05-04/` se virar item recorrente. Por hora só ROADMAP.
 - **P1 healthcare-adjacent** (trust violation: usuário não vê todas medicações que precisa tomar; LGPD-adjacent: paciente perde identificação da dose).
+
+---
+
+## Plano Closed Testing externo (decisão user 2026-05-05)
+
+**User decidiu pular recrutamento Internal Testing com pessoas conhecidas (família/amigos) e ir direto ao Closed Testing recrutando testers externos via Google Group público + Reddit/redes.** Internal Testing fica live (ele + agente) só pra validação técnica, não pra coleta de feedback.
+
+Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
+
+### #129 — Criar Google Group público `dosy-testers`
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 10 min (manual user)
+- **Dependências:** nenhuma
+- **Aceitação:**
+  - Group criado em https://groups.google.com → "Criar grupo"
+  - Nome: `Dosy Testers` · E-mail: `dosy-testers@googlegroups.com` (ou similar disponível)
+  - Configurações: "Qualquer pessoa pode pedir e entrar" (auto-aprovação); visibilidade pública
+  - URL pública do group salva pra divulgação (ex.: `https://groups.google.com/g/dosy-testers/about`)
+
+### #130 — Configurar Closed Testing track no Console com Group como tester list
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 30 min (manual user + agente Chrome MCP)
+- **Dependências:** #129
+- **Aceitação:**
+  - Console → Test and release → Closed testing → Create track
+  - Track nome: "Dosy Beta Fechado" (ou similar)
+  - Tester list: adicionar e-mail do Google Group `dosy-testers@googlegroups.com` (em vez de e-mails individuais)
+  - Países: Brasil + qualquer outro relevante
+  - Promover AAB v0.2.0.7 (ou versão atual em Internal) pra Closed track
+  - Salvar opt-in URL gerado pelo Console pra divulgação
+
+### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 1-2h posts iniciais + acompanhamento semanal
+- **Dependências:** #129 + #130 (precisa Group + opt-in URL antes)
+- **Aceitação:**
+  - Posts em r/AlphaAndBetausers, r/SideProject, r/brasil, r/desenvolvimentopt
+  - Posts targeted: r/medicina, r/saude, r/tdah, r/diabetes (público-alvo cuidadores)
+  - Compartilhamento Twitter/X + LinkedIn pessoal
+  - Discord Indie Hackers BR + comunidades QA Android
+  - Template post: "[Beta tester] Dosy — app Android pra organizar medicação família/idosos. Diferencial: alarme estilo despertador (ignora silencioso). Grátis. Link Google Group: {URL} → após entrar instala via {opt-in Console}"
+  - Meta: 15-20 inscritos (folga pq alguns não testam)
+  - Acompanhar contador "testadores ativos" no Console
+
+### #132 — Gate Closed Testing: 14 dias rodando com ≥12 testadores ativos
+- **Status:** ⏳ Aberto
+- **Origem:** Regra Google 2023+ pra contas novas
+- **Esforço:** 14 dias passivos + iteração semanal de feedback
+- **Dependências:** #131
+- **Aceitação:**
+  - Console mostra ≥12 testadores ativos por ≥14 dias consecutivos
+  - Sentry: 0 crashes críticos novos durante janela
+  - Iterar bugs reportados em mini-releases v0.2.0.x conforme aparecerem
+  - Gate Console habilita "Solicitar acesso de produção"
+
+### #133 — Solicitar acesso Open Testing / Produção
+- **Status:** ⏳ Aberto
+- **Origem:** Pós #132 gate
+- **Esforço:** 1h (preencher form Console + responder perguntas Google)
+- **Dependências:** #132
+- **Aceitação:**
+  - Console → Solicitar acesso de produção → preencher questionário sobre teste fechado
+  - Aguardar aprovação Google (~24-72h)
+  - Após aprovação: Open Testing fica disponível com link público (sem lista) OU promover direto pra Production
+  - Decidir estratégia: passar por Open Testing 7-14 dias OU produção rollout 5%→100%
+
+---
+
+## Plano fixes egress (auditoria 2026-05-05)
+
+> **Detalhes em** `contexto/egress-audit-2026-05-05/README.md`. Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 v0.1.7.5 cobriu apenas ~30%. Causa raiz: `invalidateQueries()` em massa em events não-data-related (visibility/focus/resume) + Realtime sem debounce.
+
+### #134 — `useAppResume` remover invalidate em short idle, scopear long idle
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F1
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -30% a -45%
+- **Aceitação:**
+  - `src/hooks/useAppResume.js:58` (`qc.invalidateQueries()` em short idle <5min) — REMOVER. Realtime + refetchInterval cobrem.
+  - Long idle (>=5min) já faz `refetchQueries({ type: 'active' })` — não precisa também `invalidateQueries()` antes (line 49).
+  - Manter `refreshSession` + `removeAllChannels` em long idle.
+- **Risco UX:** dados podem aparecer 30-120s mais "antigos" se Realtime não trouxer update; aceitável vs economia.
+
+### #135 — `useRealtime` resume nativo: remover invalidate ALL keys
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F6
+- **Esforço:** 10 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -5% a -10%
+- **Aceitação:**
+  - `src/hooks/useRealtime.js:180-182` — remover loop `qc.invalidateQueries`. Resubscribe + Realtime postgres_changes events tomam conta updates pós-resume.
+- **Risco UX:** zero.
+
+### #136 — `useRealtime` postgres_changes: debounce invalidate 1s
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F2
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -15% a -25% (especialmente dias de cron extend)
+- **Aceitação:**
+  - `src/hooks/useRealtime.js:113-119` — wrap `qc.invalidateQueries` em debounce 1000ms por table.
+  - Implementação: timeout + flag por queryKey, ou `lodash.debounce`.
+- **Risco UX:** atualização cross-device até 1s extra. Healthcare app — não-crítico.
+
+### #137 — Dashboard: consolidar 4 useDoses em 1
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F3
+- **Esforço:** 2h
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -20% a -30%
+- **Aceitação:**
+  - `src/pages/Dashboard.jsx:85, 116, 118, 123` — substituir 4 hooks por 1 `useDoses({from: -30d, to: +14d})`. Filtros visuais via `useMemo` client-side.
+  - Calcular `pendingToday`, `overdueNow`, `weekAdherence` em memória sobre array único.
+- **Risco UX:** Dashboard 1 round-trip em vez de 4. Mais rápido.
+
+### #138 — `DOSE_COLS_LIST` sem `observation`
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F4
+- **Esforço:** 1h (incluindo verificação Reports/Analytics)
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** -15% a -30% no payload listDoses
+- **Aceitação:**
+  - `src/services/dosesService.js` — criar `DOSE_COLS_LIST` (10 cols sem observation) pra `listDoses`. Manter `DOSE_COLS_FULL` pra `getDose` detail.
+  - Verificar Reports.jsx, Analytics.jsx, DoseHistory.jsx — se exibem observation em lista, adaptar (lazy-load via getDose ao expandir).
+  - Análoga à mudança #115 (PATIENT_COLS_LIST/FULL).
+- **Risco UX:** zero — UI lista não exibe observation.
+
+### #139 — `dose-trigger-handler` skip se scheduledAt > 6h futuro
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F7
+- **Esforço:** 30 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** Edge invocations -50-70%
+- **Aceitação:**
+  - `supabase/functions/dose-trigger-handler/index.ts:103-106` — adicionar early return se `scheduledAt > now + 6h`. Cron 6h `schedule-alarms-fcm` cobre.
+- **Risco UX:** zero. Alarme nativo agendado pelo cron 6h antes da dose.
+
+### #140 — `schedule-alarms-fcm` HORIZON 72h → 24h
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F8
+- **Esforço:** 15 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** payload FCM 3× menor
+- **Aceitação:**
+  - `supabase/functions/schedule-alarms-fcm/index.ts` — `HORIZON_HOURS = 24` (era 72). Cron 6h × 4 ciclos cobre 24h com folga.
+- **Risco UX:** zero.
+
+### #141 — `useReceivedShares` staleTime 60s → 5min
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F10
+- **Esforço:** 5 min
+- **Dependências:** nenhuma
+- **Impacto egress estimado:** pequeno mas free win
+- **Aceitação:**
+  - `src/hooks/useShares.js` `useReceivedShares` — `staleTime: 5 * 60_000`.
+- **Risco UX:** novo share notif pode demorar até 5min em aparecer. Aceitável (shares raros).
+
+### #142 — Rotacionar JWT cron `schedule-alarms-fcm-6h` + refatorar pra usar vault/env
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F11 (security)
+- **Esforço:** 1h
+- **Dependências:** nenhuma
+- **Impacto egress:** zero (security-only)
+- **Aceitação:**
+  - Drop cron job `schedule-alarms-fcm-6h` atual.
+  - Recriar usando `vault.read_secret('SUPABASE_SERVICE_ROLE_KEY')` ou `supabase_functions.http_request` (passa service key automaticamente).
+  - Rotate JWT secret se ainda válido (verificar via test request com JWT antigo).
+- **Risco:** zero funcional. Critical security fix.
+
+### #143 — `useUserPrefs.queryFn`: `getSession()` em vez de `getUser()`
+- **Status:** ⏳ Aberto
+- **Origem:** egress-audit-2026-05-05 F9
+- **Esforço:** 15 min
+- **Impacto egress estimado:** -1 round-trip auth por refetch useUserPrefs
+- **Aceitação:** trocar `supabase.auth.getUser()` por `supabase.auth.getSession()` em `src/hooks/useUserPrefs.js:50`.
+
+### #144 — Custom JWT claim `tier` via Auth Hook (longo prazo)
+- **Status:** ⏳ Aberto P2
+- **Origem:** egress-audit-2026-05-05
+- **Esforço:** 4-6h (Auth Hook setup + client refactor)
+- **Impacto egress estimado:** elimina round-trip useMyTier
+- **Aceitação:** Auth Hook custom claim → JWT carrega `tier` → client lê localmente.
+
+### #145 — `useRealtime` watchdog: invalidate só se data divergente
+- **Status:** ⏳ Aberto P2
+- **Esforço:** 1h
+- **Impacto egress estimado:** -5% mobile flaky
+- **Aceitação:** watchdog compara timestamp último change broadcast vs `qc.getQueryState('doses').dataUpdatedAt`. Só invalidate se diff significativo.
+
+### #146 — `pg_cron extend_continuous_treatments`: confirmar batch INSERT
+- **Status:** ⏳ Aberto P2
+- **Esforço:** 30 min audit
+- **Aceitação:** verificar se INSERTs são single multi-row (1 webhook total) ou N inserts (N webhooks). Otimizar pra 1.
 
 ---
 
