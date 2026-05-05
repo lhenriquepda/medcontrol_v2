@@ -1513,6 +1513,32 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Esforço:** 30 min audit
 - **Aceitação:** verificar se INSERTs são single multi-row (1 webhook total) ou N inserts (N webhooks). Otimizar pra 1.
 
+### #147 — BUG-041: Recuperação de senha email link aponta pra localhost / erro
+- **Status:** ⏳ Aberto P1 (parqueado v0.2.1.0 — reformulação completa fluxo recuperação)
+- **Origem:** Reportado user 2026-05-05 ao tentar recuperar senha esposa Daffiny.
+- **Esforço:** 1-3h investigação + fix Site URL config + test mobile/web
+- **Workaround temp 2026-05-05:** Daffiny senha resetada via SQL direto (`UPDATE auth.users SET encrypted_password = crypt('123456', gen_salt('bf'))` + DELETE auth.sessions). Login fresh com nova senha.
+- **Bug:** email recovery do Supabase contém link redirect — clicado leva pra "localhost" ou tela de erro. Não consegue concluir reset password.
+- **Hipóteses:**
+  - (a) Supabase Auth Settings → URL Configuration → Site URL apontando pra `localhost:5173` ou stale (deveria ser `https://dosymed.app`)
+  - (b) Redirect Allow List não inclui `https://dosymed.app/reset-password` ou `dosy://reset-password`
+  - (c) Code em `useAuth.jsx:resetPassword` passa `redirectTo` mas Supabase ignora se não estiver no allow list → fallback pra Site URL (localhost)
+  - (d) Email template Supabase tem URL placeholder hardcoded errado
+- **Investigar:**
+  - https://supabase.com/dashboard/project/guefraaqbkcehofchnrc/auth/url-configuration
+  - Site URL atual + Redirect URLs allow list
+  - Email Templates (Recovery template HTML)
+  - useAuth.jsx:199-202 redirectTo logic web vs mobile
+  - App.jsx:234-260 deep link handler `dosy://reset-password` Capacitor
+- **Reformulação v0.2.1.0:**
+  - Decisão: trocar fluxo magic-link por OTP code (6 dígitos enviado por email/SMS) — mais simples + funciona offline + sem dependência de redirect URL config
+  - Página `/reset-password` recebe input OTP + nova senha
+  - OR: SSO Google obrigatório (já implementado via OAuth) reduz necessidade reset password manual
+- **Aceitação fix temporária (se v0.2.1.0 demorar):**
+  - Fix Site URL config Supabase Dashboard
+  - Add `https://dosymed.app/*` + `dosy://*` em Redirect Allow List
+  - Test fluxo end-to-end: solicitar email → clicar link → cair em /reset-password → preencher nova senha → login
+
 ---
 
 ## Resumo

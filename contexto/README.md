@@ -345,9 +345,25 @@ Antes de mandar resposta longa, agente revisa:
 4. Agente clica botões via `find` + `javascript_tool` (`.click()`) ou `mcp__Claude_in_Chrome__computer`
 5. Agente valida resultado via `read_console_messages` + `get_page_text` re-check
 
-**Único ponto de pausa OBRIGATÓRIO:** **upload de arquivo** (AAB drag-drop, screenshot upload, certs, JSON cred, CSV).
-- Agente para, mostra ao user: "preciso que arraste `{arquivo}` em `{seletor visual}` na página atual. Aviso quando estiver pronto."
-- User confirma upload → agente valida via `get_page_text` que arquivo apareceu → continua.
+**Upload de arquivo — agente faz via `mcp__Claude_in_Chrome__file_upload` (DISCOVERY 2026-05-05 release v0.2.0.10):**
+
+Antes parecia que upload exigia user manual (drag-drop). Na verdade MCP tem tool `file_upload` que entrega arquivo direto pro `<input type="file">` element — sem precisar clicar botão "Enviar"/"Procurar"/"Choose file".
+
+**Pegada:** clicar no botão visível ABRE native file picker dialog que é invisível ao agente (impossível navegar). Solução: ignorar botão, achar input file element direto.
+
+**Receita validada (Play Console upload AAB):**
+```
+1. find tabId, query: "file input upload AAB pacote app"
+   → retorna ref tipo button "(file input)" (file)
+2. file_upload({ paths: ["G:\\...\\app-release.aab"], ref: "ref_XXX", tabId })
+   → upload inicia + Console mostra "está sendo otimizado pra distribuição"
+3. wait 8-15s + screenshot pra confirmar "1 pacote de apps enviado" + nome arquivo listado
+```
+
+Sites com drop zone visual mas SEM input file exposto no DOM: aí sim pause + peça user manual. Mas Play Console / Vercel / GitHub Actions todos têm input acessível (HTML padrão `<input type="file">` escondido por CSS atrás do botão).
+
+**NÃO use:** `computer.left_click` no botão "Enviar" — abre native dialog invisível.
+**Use:** `find` + `file_upload` com ref direto.
 
 **Conta Google ativa para Play Console / Google Workspace:** `dosy.med@gmail.com`. Antes de iniciar fluxo Play Console / Search Console / qualquer painel Google, agente DEVE conferir conta logada (geralmente avatar no canto superior direito). Se outra conta estiver ativa, agente pausa e pede user pra trocar pra `dosy.med@gmail.com` antes de continuar (não tem como agente trocar conta — exige interação user com o seletor de contas Google).
 

@@ -29,7 +29,10 @@ const FCM_KEY_PEM = Deno.env.get('FIREBASE_PRIVATE_KEY')!
 
 const supabase = createClient(supabaseUrl, serviceKey, { db: { schema: 'medcontrol' } })
 
-const HORIZON_HOURS = 72
+// Item #140 (release v0.2.0.10 — egress-audit F8): HORIZON 72h → 24h.
+// Cron roda 6h × 4 ciclos = 24h coverage com folga 4×. AlarmManager nativo
+// re-agenda a cada call cron. Payload FCM 3× menor por device.
+const HORIZON_HOURS = 24
 
 // ─── FCM OAuth (cached) ────────────────────────────────────────────
 let cachedToken: { token: string; exp: number } | null = null

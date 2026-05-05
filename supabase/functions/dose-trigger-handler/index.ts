@@ -106,6 +106,17 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, skipped: 'past-dose' }))
   }
 
+  // Item #139 (release v0.2.0.10 — egress-audit F7): skip se scheduledAt > 6h
+  // futuro. Cron schedule-alarms-fcm-6h cobre janela 6h adiante. Antes:
+  // CADA INSERT em doses (cron extend insere 100s doses futuras 30d adiante)
+  // disparava FCM imediato sem necessidade — payload egress + DB queries +
+  // FCM API calls multiplicados desnecessariamente.
+  // Estimado: Edge invocations -50 a -70%.
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000
+  if (scheduledAt.getTime() > Date.now() + SIX_HOURS_MS) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'beyond-cron-horizon' }))
+  }
+
   try {
     // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
     // Se OFF, skip FCM data (não agenda alarme nativo). notify-doses cron
