@@ -50,10 +50,19 @@ export function AuthProvider({ children }) {
         }
         const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
           const u = s?.user || null
+          const prevUserId = user?.id
           setUser(u)
           if (u?.id) identifyUser(u.id)
           else resetUser()
-          qc.clear() // limpa cache (tier, patients, doses...) ao trocar de usuário
+          // #144 (release v0.2.0.12) — qc.clear SCOPED:
+          // Antes: clear em todo onAuthStateChange (incluindo TOKEN_REFRESHED).
+          // Cascade quebrava: hook tier → JWT refresh → TOKEN_REFRESHED → qc.clear
+          // → useMyTier remount → reload tier → infinite loop.
+          // Agora: clear só em troca real de user (SIGNED_IN com user diff)
+          // ou SIGNED_OUT. TOKEN_REFRESHED preserva cache (mesmo user, mesmo dado).
+          if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && prevUserId && prevUserId !== u?.id)) {
+            qc.clear()
+          }
 
           // Item #081 (release v0.1.7.1) — propaga credentials pro DoseSyncWorker
           // (Android background) sempre que session muda. Worker precisa do
