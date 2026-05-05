@@ -3,12 +3,16 @@ import { Filter, X as XIcon, Clock, AlertTriangle, Check, SkipForward, Calendar,
 import { Sheet, Button, Chip } from './dosy'
 import PatientPicker from './PatientPicker'
 
+// #137 (release v0.2.0.9 — egress-audit) — removido 'Tudo' (rangeNow('all')
+// retornava {null,null} forçando filter consumir TODO histórico via PostgREST
+// = egress massivo. Substituído por '10d' fechado. Histórico completo
+// continua via /historico (DoseHistory) com range customizado por usuário.
 const RANGES = [
   { key: '12h', label: '12h' },
   { key: '24h', label: '24h' },
   { key: '48h', label: '48h' },
   { key: '7d',  label: '7 dias' },
-  { key: 'all', label: 'Tudo' },
+  { key: '10d', label: '10 dias' },
 ]
 
 const STATUS = [
@@ -203,7 +207,8 @@ export default function FilterBar({ filters, setFilters, patients }) {
                     type="button"
                     onClick={() => setFilters((f) => {
                       const nextStatus = f.status === s.key ? null : s.key
-                      return { ...f, status: nextStatus, range: nextStatus ? 'all' : f.range }
+                      // #137: 'all' removido — usar '7d' (máximo visível) ao escolher status
+                      return { ...f, status: nextStatus, range: nextStatus ? '7d' : f.range }
                     })}
                     className="dosy-press"
                     style={{

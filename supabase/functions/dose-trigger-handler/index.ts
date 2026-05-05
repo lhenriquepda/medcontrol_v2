@@ -72,6 +72,7 @@ interface WebhookPayload {
   record: {
     id: string
     userId: string
+    patientId: string
     medName: string
     unit: string
     scheduledAt: string
@@ -136,13 +137,22 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, skipped: 'no-fcm-subs' }))
     }
 
+    // Item #128 BUG-040: busca patient name pra incluir no payload — antes
+    // alarm activity mostrava "Sem paciente" pra todas doses.
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('name')
+      .eq('id', record.patientId)
+      .maybeSingle()
+
     const data = {
       action: 'schedule_alarms',
       doses: JSON.stringify([{
         doseId: record.id,
         medName: record.medName,
         unit: record.unit,
-        scheduledAt: record.scheduledAt
+        scheduledAt: record.scheduledAt,
+        patientName: patient?.name || ''
       }])
     }
 

@@ -12,7 +12,13 @@ function recomputeOverdue(rows) {
   })
 }
 
-const DOSE_COLS = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, observation'
+// Item #138 (egress-audit-2026-05-05 F4) — split COLS pra reduzir payload listDoses.
+// observation pode ter até 500 chars/dose. Em listas com 1000s rows = MB extras
+// sem necessidade (UI lista exibe só medName + horário + paciente + status).
+// observation só é mostrada em DoseModal detail / Reports export / DoseHistory
+// search — esses callers explicitam DOSE_COLS_FULL no listDoses({withObservation:true}).
+const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type'
+const DOSE_COLS_FULL = DOSE_COLS_LIST + ', observation'
 
 // #092 (release v0.1.7.5) — egress reduction.
 // Default range fail-safe: se caller não passar from/to, aplica janela
@@ -37,14 +43,17 @@ function applyDefaultRange(from, to) {
   return { from, to }
 }
 
-export async function listDoses({ from, to, patientId, status, type } = {}) {
+export async function listDoses({ from, to, patientId, status, type, withObservation = false } = {}) {
   if (hasSupabase) {
     // #092: aplica default range se ausente
     const range = applyDefaultRange(from, to)
+    // #138: lista por padrão exclui observation. Callers que precisam (DoseHistory
+    // search, Reports export, Settings export LGPD) passam withObservation:true.
+    const cols = withObservation ? DOSE_COLS_FULL : DOSE_COLS_LIST
     // Order desc by scheduledAt + paginate to bypass 1000-row default limit.
     let q = supabase
       .from('doses')
-      .select(DOSE_COLS)
+      .select(cols)
       .order('scheduledAt', { ascending: false })
       .gte('scheduledAt', range.from)
       .lte('scheduledAt', range.to)

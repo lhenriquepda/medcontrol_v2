@@ -5,6 +5,7 @@ import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '..
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
+import { hasSupabase, supabase } from '../services/supabase'
 
 const STATUS_INFO = {
   done:    { label: 'Tomada', kind: 'success' },
@@ -24,14 +25,32 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
   const [timingMode, setTimingMode] = useState('agora') // agora | prevista | outro
   const [actualTime, setActualTime] = useState('')
   const [observation, setObservation] = useState('')
+  // Item #138 (egress-audit-2026-05-05 F4) — listDoses agora exclui observation
+  // por padrão (DOSE_COLS_LIST). DoseModal lazy-load observation quando abre,
+  // se não veio na prop (1 query individual << 1000 rows × observation/lista).
+  const [loadedObs, setLoadedObs] = useState(null)
 
   useEffect(() => {
     if (dose) {
       setTimingMode('agora')
       setActualTime(toDatetimeLocalInput(new Date().toISOString()))
       setObservation(dose.observation || '')
+      setLoadedObs(null)
+      // Lazy-load observation se não veio na lista (DOSE_COLS_LIST exclui)
+      if (open && hasSupabase && dose.observation === undefined && dose.id) {
+        supabase.from('doses').select('observation').eq('id', dose.id).maybeSingle()
+          .then(({ data, error }) => {
+            if (error || !data) return
+            const obs = data.observation || ''
+            setLoadedObs(obs)
+            setObservation(obs)
+          })
+      }
     }
-  }, [dose])
+  }, [dose, open])
+
+  // Use loadedObs se carregada, senão dose.observation original (cache cheio).
+  const displayObs = loadedObs !== null ? loadedObs : (dose?.observation || '')
 
   if (!dose) return null
 
@@ -260,9 +279,9 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
                 Horário real: {formatDateTime(dose.actualTime)}
               </p>
             )}
-            {dose.observation && (
+            {displayObs && (
               <p style={{ margin: 0, color: 'var(--dosy-fg-secondary)' }}>
-                Obs.: {dose.observation}
+                Obs.: {displayObs}
               </p>
             )}
           </div>

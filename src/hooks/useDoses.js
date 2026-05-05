@@ -23,7 +23,7 @@ export function useDoses(filter = {}) {
     ...filter,
     from: roundToHour(filter.from),
     to: roundToHour(filter.to)
-  }), [filter.from, filter.to, filter.patientId, filter.status, filter.type])
+  }), [filter.from, filter.to, filter.patientId, filter.status, filter.type, filter.withObservation])
 
   return useQuery({
     queryKey: ['doses', keyFilter],

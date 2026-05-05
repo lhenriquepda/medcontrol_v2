@@ -346,12 +346,12 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#134** [P0 cost — -30% a -45%] `useAppResume`: remover invalidate em short idle (<5min) + scopear long idle. Realtime + refetchInterval cobrem.
 - [ ] **#135** [P0 cost — -5% a -10%] `useRealtime` resume nativo: remover invalidate ALL keys. Resubscribe + postgres_changes events tomam conta.
 - [ ] **#136** [P0 cost — -15% a -25%] `useRealtime` postgres_changes: debounce invalidate 1s. Cron extend insere 100s doses → 1 invalidate em vez de 100.
-- [ ] **#137** [P0 cost — -20% a -30%] Dashboard: consolidar 4 useDoses paralelas em 1 query + filtros client-side. Mais rápido + menos round-trips.
-- [ ] **#138** [P0 cost — -15% a -30%] DOSE_COLS_LIST sem observation. Análoga #115 (PATIENT_COLS_LIST/FULL). Lazy-load detail.
+- [x] **#137** [P0 cost, fechado v0.2.0.9 commit `0124608`] Dashboard: consolidar 4 useDoses paralelas em 1 query + filtros client-side. -20% a -30% egress.
+- [x] **#138** [P0 cost, fechado v0.2.0.9 commit `0813d94`] DOSE_COLS_LIST sem observation + lazy-load detail. -15% a -30% payload listDoses.
 - [ ] **#139** [P1 cost] `dose-trigger-handler` skip se scheduledAt > 6h futuro. Cron 6h cobre. Edge invocations -50-70%.
 - [ ] **#140** [P1 cost] `schedule-alarms-fcm` HORIZON 72h → 24h. Payload FCM 3× menor.
 - [ ] **#141** [P1 cost] `useReceivedShares` staleTime 60s → 5min.
-- [ ] **#142** [P0 SECURITY] Rotacionar JWT cron `schedule-alarms-fcm-6h` (hardcoded iat 26 abr, anterior #084) + refatorar pra usar `vault.read_secret` ou `supabase_functions.http_request`.
+- [ ] **#142** [P0 SECURITY 🔴] Rotacionar JWT cron `schedule-alarms-fcm-6h` — CONFIRMADO 2026-05-05 que JWT iat 26 abr retorna 200 OK (rotação #084 NÃO invalidou). USER deve "Roll JWT secret" Supabase Dashboard → Settings → API + agente recria cron via vault.read_secret.
 - [ ] **#143** [P2] `useUserPrefs.queryFn` getSession() em vez de getUser() (1 round-trip a menos).
 - [ ] **#144** [P2 longo prazo] Custom JWT claim `tier` via Auth Hook → elimina round-trip useMyTier.
 - [ ] **#145** [P2] `useRealtime` watchdog: invalidate só se data divergente.
