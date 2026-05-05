@@ -189,7 +189,7 @@ export default function Dashboard() {
     const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
     return [...map.entries()]
       .map(([pid, list]) => ({
-        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '👤' },
+        patient: patients.find((p) => p.id === pid) || { id: pid, name: 'Paciente', avatar: '🙂' }, // #100 default
         list,
       }))
       .sort((a, b) => collator.compare(a.patient.name || '', b.patient.name || ''))

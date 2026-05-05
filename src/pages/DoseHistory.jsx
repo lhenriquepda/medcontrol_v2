@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Search, X as XIcon, FileText, Check, AlertTriangle, X as XCloseIcon } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
 import DoseModal from '../components/DoseModal'
@@ -263,17 +264,12 @@ export default function DoseHistory() {
             </p>
           </Card>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {selectedDayDoses.map((dose) => (
-              <TimelineRow
-                key={dose.id}
-                dose={dose}
-                patient={patients.find((p) => p.id === dose.patientId)}
-                showPatient={patients.length > 1 && !patientId}
-                onClick={() => setSelected(dose)}
-              />
-            ))}
-          </div>
+          <VirtualTimeline
+            doses={selectedDayDoses}
+            patients={patients}
+            showPatient={patients.length > 1 && !patientId}
+            onSelect={setSelected}
+          />
         )}
       </div>
 
@@ -283,6 +279,75 @@ export default function DoseHistory() {
         onClose={() => setSelected(null)}
         patientName={selectedPatient?.name}
       />
+    </div>
+  )
+}
+
+// #034 (release v0.2.0.11) — VirtualTimeline com @tanstack/react-virtual.
+// Renderiza apenas rows visíveis no viewport. Útil quando search aberta
+// + sem patient filter + multi-paciente (potencial 100+ rows).
+// Threshold: virtualiza sempre (overhead pequeno mesmo p/ listas curtas).
+function VirtualTimeline({ doses, patients, showPatient, onSelect }) {
+  const parentRef = useRef(null)
+  const ROW_HEIGHT = 62 // 12 padding + 38 icon + 12 padding (aprox)
+  const ROW_GAP = 6
+
+  const rowVirtualizer = useVirtualizer({
+    count: doses.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT + ROW_GAP,
+    overscan: 5,
+  })
+
+  // Pre-build patient map pra evitar O(n²) lookup dentro do map
+  const patientById = useMemo(
+    () => new Map(patients.map((p) => [p.id, p])),
+    [patients]
+  )
+
+  return (
+    <div
+      ref={parentRef}
+      style={{
+        // height auto até max 60vh — após disso scroll interno + virtualiza.
+        // Listas curtas (<10 itens) ainda renderizam expanded sem barra scroll.
+        maxHeight: '60vh',
+        overflowY: doses.length > 10 ? 'auto' : 'visible',
+      }}
+    >
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const dose = doses[virtualRow.index]
+          return (
+            <div
+              key={dose.id}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+                paddingBottom: ROW_GAP,
+              }}
+            >
+              <TimelineRow
+                dose={dose}
+                patient={patientById.get(dose.patientId)}
+                showPatient={showPatient}
+                onClick={() => onSelect(dose)}
+              />
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

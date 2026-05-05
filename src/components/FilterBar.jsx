@@ -40,7 +40,7 @@ export default function FilterBar({ filters, setFilters, patients }) {
     const p = patients?.find((x) => x.id === filters.patientId)
     if (p) activeChips.push({
       key: 'p',
-      label: `${p.avatar || '👤'} ${p.name.split(' ')[0]}`,
+      label: `${p.avatar || '🙂'} ${p.name.split(' ')[0]}`, // #100 default avatar
       clear: () => setFilters((f) => ({ ...f, patientId: null })),
     })
   }

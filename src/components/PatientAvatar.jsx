@@ -32,5 +32,7 @@ export default function PatientAvatar({ patient, size = 44, color = 'peach', sty
       </div>
     )
   }
-  return <Avatar emoji={patient?.avatar || '👤'} color={color} size={size} style={style}/>
+  // #100 (v0.2.0.11): default '👤' silhueta → '🙂' rosto amigável.
+  // Mantém retro-compat com pacientes legacy que ainda têm '👤' salvo.
+  return <Avatar emoji={patient?.avatar || '🙂'} color={color} size={size} style={style}/>
 }
