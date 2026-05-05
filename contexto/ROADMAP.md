@@ -7,8 +7,8 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.9` (tag `v0.2.0.9`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.9 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.10` (tag `v0.2.0.10`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.10 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -60,7 +60,17 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.9 publicada 2026-05-05 12:37 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 42 + tag git `v0.2.0.9`).
+**Última release:** v0.2.0.10 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 43 + tag git `v0.2.0.10`).
+**Items v0.2.0.10 fechados:**
+- #139 dose-trigger-handler skip se scheduledAt > 6h (-50% a -70% chamadas Edge fn)
+- #140 schedule-alarms-fcm HORIZON 72h → 24h (payload FCM 3× menor)
+- #141 useReceivedShares staleTime 60s → 5min (-80% calls listReceivedShares)
+- #143 useUserPrefs getSession() vs getUser() (-100% calls /auth/v1/user)
+- #142 cleanup cosmético JWT cron (drop+recreate sem hardcoded JWT)
+- #147 BUG-041 catalogado parqueado v0.2.1.0 (recovery flow link aponta localhost)
+- Workaround: SQL reset senha Daffiny pra 123456 (link recovery quebrado em prod)
+
+**Release anterior:** v0.2.0.9 publicada 2026-05-05 12:37 UTC.
 **Items v0.2.0.9 fechados:**
 - #137 Dashboard 4 useDoses paralelas → 1 query base + filtros memo client-side (-20% a -30% egress)
 - #138 DOSE_COLS_LIST sem observation + lazy-load DoseModal (withObservation:true em DoseHistory/Reports)
