@@ -62,7 +62,15 @@ export function traduzirErro(err) {
     [/password should be at least/i, 'Senha muito curta. Use pelo menos 6 caracteres.'],
     [/network/i, 'Sem conexão com a internet.'],
     [/not authenticated/i, 'Você precisa estar logado para continuar.'],
-    [/row-level security/i, 'Permissão negada para acessar estes dados.']
+    [/row-level security/i, 'Permissão negada para acessar estes dados.'],
+    // #153 (release v0.2.0.12) — tradução erros OTP recovery
+    [/(invalid|expired|incorrect).*(otp|token|code)/i, 'Código inválido ou expirado. Confira o código no email ou peça um novo.'],
+    [/token has expired/i, 'Código expirado. Peça um novo código.'],
+    [/(otp|token).*not.*found/i, 'Código não encontrado. Peça um novo.'],
+    [/email rate limit/i, 'Muitas solicitações. Aguarde 1 minuto e tente novamente.'],
+    [/over.*request.*rate.*limit/i, 'Muitas tentativas. Aguarde alguns minutos.'],
+    [/user not found/i, 'Email não cadastrado.'],
+    [/signup.*disabled|disabled signup/i, 'Cadastros desativados. Contato suporte.']
   ]
   for (const [re, pt] of map) if (re.test(msg)) return pt
   return 'Ocorreu um erro. Tente novamente.'
