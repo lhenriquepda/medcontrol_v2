@@ -33,7 +33,7 @@ export default function Privacidade() {
       </header>
 
       <div className="max-w-2xl mx-auto px-5 pt-6 space-y-6 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-        <p className="text-xs text-slate-400">Última atualização: Maio de 2026 · Versão 1.2</p>
+        <p className="text-xs text-slate-400">Última atualização: Maio de 2026 · Versão 1.3</p>
 
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">1. Identificação do controlador</h2>
@@ -206,19 +206,23 @@ export default function Privacidade() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="font-semibold text-base text-slate-900 dark:text-white">9. Menores de idade</h2>
+          <h2 className="font-semibold text-base text-slate-900 dark:text-white">9. Idade mínima e uso por adultos</h2>
           <p>
-            Idade mínima para criar conta: <strong>13 anos</strong> com consentimento de responsável legal (Art. 14 LGPD).
-            Em jurisdições onde a idade mínima é maior (ex: 16 anos UE/GDPR), aplica-se a regra local mais protetiva.
+            Idade mínima para criar conta no Dosy: <strong>18 anos</strong>. O app é projetado para uso por
+            <strong> adultos responsáveis</strong> (autocuidado de medicação) e por <strong>cuidadores</strong> adultos
+            (filhos de idosos, pais responsáveis pela medicação de menores, profissionais de cuidado).
           </p>
           <p>
-            O Dosy é frequentemente usado por <strong>responsáveis adultos</strong> (cuidadores, pais, filhos de idosos)
-            para gerenciar medicação de menores ou idosos sob sua responsabilidade. A conta deve ser criada pelo responsável.
-            Não coletamos intencionalmente dados de crianças sem supervisão parental.
+            <strong>Pacientes menores</strong> podem ser cadastrados como dependentes pelo responsável legal adulto que
+            criou a conta — nesse caso, o adulto é o titular dos dados perante a LGPD e responde pelo consentimento
+            (Art. 14 LGPD aplicável aos dados do menor sob sua tutela).
+          </p>
+          <p>
+            <strong>Não coletamos intencionalmente</strong> dados de menores criando contas próprias. Caso identifiquemos
+            cadastro feito por menor de 18 anos sem responsável, a conta é desabilitada e os dados eliminados.
           </p>
           <p className="text-xs text-slate-500">
-            Caso identifiquemos cadastro feito por menor sem consentimento, a conta é desabilitada e dados eliminados.
-            Reportes podem ser feitos a <a href="mailto:privacidade@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">privacidade@dosymed.app</a>.
+            Reportes de cadastro indevido por menor: <a href="mailto:privacidade@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">privacidade@dosymed.app</a>.
           </p>
         </section>
 
@@ -290,6 +294,7 @@ export default function Privacidade() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">15. Histórico de versões</h2>
           <ul className="list-disc list-inside space-y-1 ml-2 text-xs">
+            <li><strong>v1.3</strong> (2026-05-05) — Idade mínima 13+ → 18+ (alinhamento Play Console público-alvo). Reescrita §9 cobre uso por adultos/cuidadores + responsável legal pra pacientes menores como dependentes</li>
             <li><strong>v1.2</strong> (2026-05-05) — Sub-processadores explícitos, compliance Google Play Health Apps Policy (categoria Saúde e fitness), notificação ANPD, decisões automatizadas, recovery OTP, biometria, sharing pacientes, tier system</li>
             <li><strong>v1.1</strong> (2026-05-05) — Atualização Resend SMTP + AdMob + Sentry + PostHog + entidade Dosy Med LTDA + emails canônicos @dosymed.app</li>
             <li><strong>v1.0</strong> (2026-04) — Versão inicial</li>
@@ -297,7 +302,7 @@ export default function Privacidade() {
         </section>
 
         <p className="text-xs text-slate-400 pt-4 border-t border-slate-200 dark:border-slate-800">
-          Dosy Med LTDA · Política de Privacidade v1.2 · Brasil · Atualizada em maio de 2026 · DPO <a href="mailto:privacidade@dosymed.app" className="underline">privacidade@dosymed.app</a>
+          Dosy Med LTDA · Política de Privacidade v1.3 · Brasil · Atualizada em maio de 2026 · DPO <a href="mailto:privacidade@dosymed.app" className="underline">privacidade@dosymed.app</a>
         </p>
       </div>
     </motion.div>
