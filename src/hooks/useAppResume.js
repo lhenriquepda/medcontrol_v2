@@ -45,18 +45,24 @@ export function useAppResume() {
           // 2. Drop dead websocket channels — useRealtime resubscribe via
           //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
           await supabase.removeAllChannels()
-          // 3. Invalida tudo + refetch queries ativas.
-          await qc.invalidateQueries()
+          // 3. Item #134 (egress-audit-2026-05-05 F1): refetchQueries sem
+          //    invalidateQueries antes. invalidate marca TODAS queries stale
+          //    e dispara refetch separado em cada useQuery active — duplica
+          //    round-trips com refetchOnWindowFocus. refetchQueries({active})
+          //    sozinho re-executa só queries observadas.
           await qc.refetchQueries({ type: 'active' })
         } catch (err) {
           console.warn('[useAppResume] soft recover failed', err)
           // Fallback de último caso: reload preservando URL atual.
           if (typeof window !== 'undefined') window.location.reload()
         }
-      } else {
-        console.log('[useAppResume] short idle', Math.round(inactiveMs / 1000), 's → invalidate')
-        qc.invalidateQueries()
       }
+      // Item #134 (egress-audit-2026-05-05 F1): short idle (<5min) NÃO invalida
+      // mais. Realtime postgres_changes + refetchInterval 5min cobrem updates
+      // necessários. user típico mobile/web muda tabs/apps centenas de vezes/dia
+      // → invalidate em cada mudança era a fonte #1 de egress (estimado -30 a
+      // -45% após este fix). Trade-off: dados podem aparecer 30-120s "antigos"
+      // se Realtime não trouxer update; aceitável vs custo.
     }
 
     const onPause = () => {

@@ -62,6 +62,21 @@ export function useRealtime() {
     // "cannot add postgres_changes callbacks for realtime:..." (Sentry DOSY-9).
     let subscribing = false
 
+    // Item #136 (egress-audit-2026-05-05 F2): debounce invalidateQueries 1s
+    // por queryKey. Cron extend_continuous_treatments insere 100s doses
+    // futuras em batch — sem debounce, 100 invalidates → 100 × 4 useDoses
+    // Dashboard refetches em rajada. Com debounce: 1 invalidate = 4 refetches.
+    // Estimado -15% a -25% egress (especialmente dias de cron).
+    const invalidateTimers = new Map()
+    const debouncedInvalidate = (queryKey) => {
+      const k = JSON.stringify(queryKey)
+      if (invalidateTimers.has(k)) clearTimeout(invalidateTimers.get(k))
+      invalidateTimers.set(k, setTimeout(() => {
+        qc.invalidateQueries({ queryKey })
+        invalidateTimers.delete(k)
+      }, 1000))
+    }
+
     const onStatusChange = (myGen) => (status) => {
       if (myGen !== generation) return // canal antigo — ignore
       // status: 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT'
@@ -113,8 +128,9 @@ export function useRealtime() {
             ch.on('postgres_changes', opts, () => {
               if (myGen !== generation) return // callback de canal antigo
               // #092: invalidate APENAS keys da tabela mudada
+              // #136: debounced 1s — múltiplos changes em <1s consolidam
               for (const key of TABLE_TO_KEYS[table]) {
-                qc.invalidateQueries({ queryKey: key })
+                debouncedInvalidate(key)
               }
             })
           } catch (e) {
@@ -177,9 +193,10 @@ export function useRealtime() {
         resumeHandle = await CapacitorApp.addListener('resume', async () => {
           await subscribe()
           if (!watchdogTimer) startWatchdog()
-          for (const keys of Object.values(TABLE_TO_KEYS)) {
-            for (const key of keys) qc.invalidateQueries({ queryKey: key })
-          }
+          // Item #135 (egress-audit-2026-05-05 F6): invalidate ALL keys removido.
+          // Resubscribe + Realtime postgres_changes events trazem updates pós-
+          // resume automaticamente. useAppResume long-idle (>=5min) já cobre
+          // refetch active queries. Estimado -5% a -10% egress.
         })
       }
       setupListeners()
@@ -187,6 +204,9 @@ export function useRealtime() {
 
     return () => {
       if (watchdogTimer) clearInterval(watchdogTimer)
+      // #136: limpa pending debounce timers
+      for (const t of invalidateTimers.values()) clearTimeout(t)
+      invalidateTimers.clear()
       unsubscribe() // fire-and-forget no unmount (sync cleanup boundary)
       authSub?.subscription?.unsubscribe?.()
       pauseHandle?.remove()
