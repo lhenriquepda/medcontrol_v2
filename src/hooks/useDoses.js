@@ -16,7 +16,7 @@ function roundToHour(iso) {
   return d.toISOString()
 }
 
-export function useDoses(filter = {}) {
+export function useDoses(filter = {}, options = {}) {
   // Normaliza timestamps pra queryKey estável dentro da hora.
   // Usa filter.from/to crus na queryFn (precisão real).
   const keyFilter = useMemo(() => ({
@@ -28,21 +28,18 @@ export function useDoses(filter = {}) {
   return useQuery({
     queryKey: ['doses', keyFilter],
     queryFn: () => listDoses(filter),
-    // #150 (release v0.2.0.11) — refetchInterval 5min → 15min.
-    // Investigação egress preview Vercel detectou storm 5 fetches /doses
-    // simultâneos a cada 5min em IDLE (5 active queryKeys × 5min interval).
-    // Math: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia idle polling.
-    // 15min = -67% polling rate. Realtime postgres_changes cobre updates real-time;
-    // este interval é apenas safety net caso websocket morra (#079 watchdog cobre).
-    refetchInterval: 15 * 60_000,
+    // #151 (release v0.2.0.11) — refetchInterval OPT-IN.
+    // Antes: 5min hardcoded em TODAS queries → 5 active queryKeys polling juntas.
+    // Math idle: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia.
+    //
+    // Agora: default OFF. Dashboard (caller principal) passa pollIntervalMs:15*60_000.
+    // Outros (Settings, DoseHistory, Reports) ficam sem polling — refetch só em
+    // mount + Realtime postgres_changes + invalidate explícito.
+    //
+    // Estimado população 1000 users idle: 5GB/dia (antes #151) → ~1GB/dia (-80%).
+    refetchInterval: options.pollIntervalMs || false,
     refetchIntervalInBackground: false,
-    // #092: staleTime 30s → 2min. Reduz refetchOnMount/refetchOnWindowFocus
-    // hits desnecessários quando user navega entre páginas em <2min.
     staleTime: 2 * 60_000,
-    // Item #088 (release v0.1.7.4) — BUG-021: dose recém-cadastrada não aparecia
-    // em Início sem refresh manual em emulador Pixel 7 API 35.
-    // Mantém refetchOnMount=true (respeita staleTime) — #088 mitigado por
-    // invalidate pós-create já força refetch.
     refetchOnMount: true
   })
 }

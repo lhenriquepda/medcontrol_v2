@@ -110,7 +110,10 @@ export default function Dashboard() {
       patientId: filters.patientId
     }
   }, [tick, filters.patientId])
-  const { data: allDoses = [], isLoading } = useDoses(baseWindow)
+  // #151 (v0.2.0.11) — Dashboard é único caller que opta-in pra refetchInterval.
+  // Outros (Settings 48h, DoseHistory 7d, Reports 30d) refetch só on mount +
+  // Realtime + invalidate explícito. Fallback caso websocket morra: 15min.
+  const { data: allDoses = [], isLoading } = useDoses(baseWindow, { pollIntervalMs: 15 * 60_000 })
 
   // Visualização principal — aplica range/status/type sobre allDoses
   const { from: rangeFrom, to: rangeTo } = useMemo(() => rangeNow(filters.range), [filters.range])
