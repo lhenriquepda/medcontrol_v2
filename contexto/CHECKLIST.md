@@ -807,12 +807,22 @@ Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED`
 - **Aceitação:** 10+ tests cobrindo fluxos confirm/skip/undo + sync localStorage cache.
 - **Justificativa diferimento:** Sem testers Closed ativos hoje. Teste integração defende contra regressão durante iteração rápida em resposta a bug reports — útil quando volume de mudança crescer. Implementar antes de Open Testing/Production.
 
-### #036 — Skeleton screens completos (TreatmentList, Reports, Analytics, SOS, forms)
-- **Status:** ⏳ Aberto — proposto v0.2.1.0
+### #036 — Skeleton screens em páginas com lista
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05)
 - **Origem:** [Plan.md] FASE 15 backlog
-- **Esforço:** 1 dia
-- **Aceitação:** todas as pages com loading state visual durante data fetch (não blank screen). Componente `<Skeleton>` reusável já existe (verificar `src/components/ui/Skeleton.jsx`); aplicar em TreatmentList, Reports, Analytics, SOS, formulários enquanto query loading.
-- **Páginas afetadas:** confirmar lista exata via grep `useQuery.*loading|isLoading` em pages/.
+- **Esforço:** 1h (refinamento — componente Skeleton já existia #104 v0.2.0.0)
+- **Páginas afetadas v0.2.1.0:**
+  - ✅ TreatmentList: `loadingTreatments` from `useTreatments()` → SkeletonList count=3 antes empty state
+  - ✅ Analytics: `loadingDoses` from `useDoses()` → SkeletonList count=3 entre filter chips e Adesão card
+- **Páginas pré-existentes com skeleton (#104 + outros):**
+  - Dashboard, Patients, DoseHistory, Admin
+- **Não-aplicável (form-based, render imediato sem depender de fetch):**
+  - Reports — form date pickers + patient picker + export buttons
+  - SOS — form med + paciente + datetime + button
+  - PatientForm — form único
+  - TreatmentForm — form único
+- **Implementação:** import `SkeletonList` de `src/components/Skeleton.jsx`. Render condicional `if (loading) <SkeletonList /> else if (empty) <empty> else <list>`.
+- **Resultado UX:** elimina flash "Nenhum tratamento" / "Sem dados no período" durante 100-500ms initial fetch.
 
 ### #037 — Erros inline em forms
 - **Status:** ✅ Concluído (release v0.2.0.4)

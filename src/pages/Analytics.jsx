@@ -6,6 +6,7 @@ import LockedOverlay from '../components/LockedOverlay'
 import AdBanner from '../components/AdBanner'
 import { Card, Chip } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
+import { SkeletonList } from '../components/Skeleton'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
@@ -22,7 +23,7 @@ export default function Analytics() {
   }, [days])
   const to = useMemo(() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d }, [])
 
-  const { data: doses = [] } = useDoses({
+  const { data: doses = [], isLoading: loadingDoses } = useDoses({
     from: from.toISOString(), to: to.toISOString(), patientId: patientId || undefined,
   })
 
@@ -148,6 +149,11 @@ export default function Analytics() {
                 </Chip>
               ))}
             </div>
+
+            {/* #036 skeleton durante fetch initial — evita flash empty "Sem dados" */}
+            {loadingDoses && doses.length === 0 ? (
+              <SkeletonList count={3} />
+            ) : null}
 
             {/* Adesão por paciente */}
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
