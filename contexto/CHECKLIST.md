@@ -484,6 +484,23 @@
 - **Aceitação:** Validado em release v0.1.7.4 (sem regressões reportadas)
 - **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.4.
 
+### #089 — Layout AdSense banner empurrando header parcial (Pixel 7)
+- **Status:** ✅ Concluído organicamente entre v0.1.7.4-v0.2.0.12 (validado user print Pixel 7 emulador 2026-05-05)
+- **Origem:** BUG-022 reportado user 2026-05-02
+- **Prioridade:** P2 UX visual
+- **Esforço:** Investigação não-iniciada (fix orgânico durante refactors AppHeader / CSS vars)
+- **Dependências:** nenhuma
+- **Problema original:**
+  Banner "Test Ad 468x60" ocupava topo viewport. Header "Dosy ▸ Frederico" ficava abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Visível emulador Pixel 7 (1080×2400 @420dpi). NÃO repro Samsung S25 Ultra real.
+- **Validação fechamento (2026-05-05):**
+  Print user emulador Pixel 7 v0.2.0.12 mostra layout limpo: banner "Test Ad - This is a 320x50 test ad" topo + header Dosy abaixo + "Boa noite, Teste Free" + ⚙️ ícone. Wordmark "Dosy" inteiro visível, sem sobreposição. Tabs filtro 12h/24h/48h/7 dias/10 dias renderizam OK.
+- **Provável fix orgânico:**
+  - #113 (v0.2.0.x) buffer +4 px em `--ad-banner-height` CSS var (era exagerado +16, ajustado pra +4 sem perder safety margin)
+  - AppHeader top calc com `env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px) + var(--update-banner-height, 0px)` cobre todos viewports
+  - Cross-device validation natural durante refactors v0.2.0.x
+- **Aceitação:** ✅ User print Pixel 7 v0.2.0.12 confirma layout OK
+- **Detalhe:** Bug fechado sem fix dedicado — sintoma desapareceu durante refactors progressivos AppHeader / CSS vars.
+
 ### #090 — Pós-login redireciona pra Início
 - **Status:** ✅ Concluído @ commit 63f444c (2026-05-02)
 - **Origem:** BUG-023
