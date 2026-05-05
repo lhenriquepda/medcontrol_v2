@@ -234,7 +234,7 @@ export default function Privacidade() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">11. Compliance Google Play Health Apps Policy</h2>
           <p>
-            O Dosy está classificado como aplicativo de <strong>Medicina</strong> no Google Play e segue a
+            O Dosy está classificado como aplicativo de <strong>Saúde e fitness</strong> no Google Play e segue a
             <a href="https://support.google.com/googleplay/android-developer/answer/13316080" className="text-orange-600 dark:text-orange-400 underline"> Health Apps policy</a>:
           </p>
           <ul className="list-disc list-inside space-y-1 ml-2">
@@ -290,7 +290,7 @@ export default function Privacidade() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">15. Histórico de versões</h2>
           <ul className="list-disc list-inside space-y-1 ml-2 text-xs">
-            <li><strong>v1.2</strong> (2026-05-05) — Sub-processadores explícitos, compliance Google Play Health Apps Policy, notificação ANPD, decisões automatizadas, recovery OTP, biometria, sharing pacientes, tier system</li>
+            <li><strong>v1.2</strong> (2026-05-05) — Sub-processadores explícitos, compliance Google Play Health Apps Policy (categoria Saúde e fitness), notificação ANPD, decisões automatizadas, recovery OTP, biometria, sharing pacientes, tier system</li>
             <li><strong>v1.1</strong> (2026-05-05) — Atualização Resend SMTP + AdMob + Sentry + PostHog + entidade Dosy Med LTDA + emails canônicos @dosymed.app</li>
             <li><strong>v1.0</strong> (2026-04) — Versão inicial</li>
           </ul>

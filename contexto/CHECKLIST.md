@@ -1844,14 +1844,14 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
   - ✅ Release notes pt-BR: "v0.2.0.12 — Recuperação de senha por código de 6 dígitos via email + Trocar senha em Ajustes + melhorias internas (egress -50%, alarme multi-paciente fixed). Beta fechado: ajude a testar o controle de medicação e reporte bugs em https://groups.google.com/g/dosy-testers"
   - ✅ Rascunho salvo (Step 2 "Visualizar e confirmar" — 0 erros, 1 aviso)
   - ✅ **Side-effects pré-publicação resolvidos in-line:**
-    - Categoria do app: **Medicina** (Console → Configurações da loja, publicado)
+    - Categoria do app: **Saúde e fitness** (Console → Configurações da loja, publicado). Trocada de Medicina v0.2.1.0 (2026-05-05) — audiência Dosy é consumer self-care/cuidador, não profissional clínico; "Saúde e fitness" alinhado com peers (Medisafe, MyTherapy) + escrutinio Google razoável + discoverability maior.
     - Detalhes contato: email `contato@dosymed.app` + site `https://dosymed.app` (publicado direto Google Play)
 - **Pendente pré-submit Google review:**
   - ⏳ #156: criar/atualizar página `https://dosymed.app/privacidade` (URL referenciada nas 14 mudanças pendentes)
   - ⏳ Verificar HTTP 200 dos URLs `/privacidade` antes click "Enviar 14 mudanças para revisão"
   - ⏳ Conferir status questionários Conteúdo (Classificação, Público-alvo, Segurança dados, Intent tela cheia) — possivelmente já preenchidos releases passadas
   - ⏳ Confirmação user explícita pra submeter (irreversível, dispara review Google 1-7 dias)
-- **Submit final:** Console → Visão geral da publicação → "Enviar 14 mudanças para revisão" → Google review (~24-72h pra Closed Testing categoria Medicina). URL opt-in liberada pós-aprovação.
+- **Submit final:** Console → Visão geral da publicação → "Enviar mudanças para revisão" → Google review (~24-72h pra Closed Testing categoria Saúde e fitness — review padrão). URL opt-in liberada pós-aprovação.
 
 ### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
 - **Status:** ⏳ Aberto
