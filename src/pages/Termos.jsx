@@ -142,11 +142,15 @@ export default function Termos() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">11. Contato</h2>
           <p>Dúvidas sobre estes termos:</p>
-          <p className="font-medium">dosy.privacidade@gmail.com</p>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li>Geral: <a href="mailto:contato@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">contato@dosymed.app</a></li>
+            <li>Jurídico: <a href="mailto:legal@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">legal@dosymed.app</a></li>
+            <li>Privacidade / DPO: <a href="mailto:privacidade@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">privacidade@dosymed.app</a></li>
+          </ul>
         </section>
 
         <p className="text-xs text-slate-400 pt-4 border-t border-slate-200 dark:border-slate-800">
-          Dosy · Termos de Uso v1.0 · Brasil
+          Dosy Med LTDA · Termos de Uso v1.1 · Brasil · Atualizado em maio de 2026
         </p>
       </div>
     </motion.div>

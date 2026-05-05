@@ -377,8 +377,10 @@ ESTADO ATUAL: Internal Testing ativo
 
 ## 6. Checklist macro completo
 
-**Total:** 154 itens (numeração até #154 — auditoria 2026-05-05)
-**Status:** 101 fechados (`[x]`) · 50 abertos (`[ ]`) · ~3 com seguintes (#118-followup, #119-followup, #106-old)
+**Total:** 156 itens (numeração até #156 — adicionado #156 v0.2.1.0)
+**Status:** 108 fechados (`[x]`) · 47 abertos (`[ ]`) · 1 hold (`[~]` #130) · ~3 com seguintes (#118-followup, #119-followup, #106-old)
+**Δ 2026-05-05 (sessão):** +#128 (BUG-040 backend done v0.2.0.9) +#027 (superseded por #129-#133). Itens revisados sem mudança status: #018 (escopo expandido AdMob+AdSense), #039 (bloqueado pre-req batch select), #007/#026/#036 (proposto v0.2.1.0), #035/#038 (diferido v0.2.2.0+).
+**Δ 2026-05-05 v0.2.1.0 (em andamento):** +#129 (Google Group dosy-testers criado via Chrome MCP) +#018 cleanup AdSense placeholder (parcial — flag flip aguarda #133) +#130 (Closed Testing track salvo rascunho HOLD pré-submit) + categoria Medicina + detalhes contato `contato@dosymed.app`/`https://dosymed.app` publicados Console + **#026 ImprovMX 7 aliases verified DNS** (suporte/contato/privacidade/legal/dpo/security/hello). **NOVO**: +#156 atualizar página `/privacidade` (BLOQUEADOR #130 submit).
 **Distribuição prioridade aproximada:** P0: ~25 · P1: ~50 · P2: ~50 · P3: ~30
 **Origem:** [Plan.md] · [Auditoria] · [Plan.md + Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD]
 
@@ -401,7 +403,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#006** [Plan + Auditoria] Device validation FASE 17 em 3 devices físicos. → `docs/device-validation-checklist.md`
 
 #### Observabilidade healthcare crítica
-- [ ] **#007** [Auditoria] Telemetria PostHog `notification_delivered` + alert queda. → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
+- [ ] **#007** [Auditoria — proposto v0.2.1.0] Telemetria PostHog `notification_delivered` + `notification_dismissed` + `notification_action_taken` (Tomada/Pular/Adiar). Dashboard taxa entrega ≥99% + alert queda 5%/1h. SEM esta métrica regressão alarme passa despercebida em prod (healthcare crítico). → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
 
 #### Setup CI / DR
 - [x] **#008** [Plan, fechado 2026-05-04 — secrets criados 2026-04-28] GitHub Secrets `SENTRY_AUTH_TOKEN`/`SENTRY_ORG=lhp-tech`/`SENTRY_PROJECT=dosy`/`VITE_SENTRY_DSN` configurados em Actions. Workflows referenciam corretamente. Aceitação completa pendente #127 (CI lint fix → source maps upload roda auto). Plan FASE 10.1
@@ -412,7 +414,7 @@ ESTADO ATUAL: Internal Testing ativo
 #### Mobile / Android
 - [x] **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813` — validado S25 Ultra] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados + setColor accent peach. → [06 BUG-005](auditoria/06-bugs.md#bug-005--ic_stat_dosy-referenciado-mas-ausente-nos-drawables)
 - [x] **#017** [Plan, fechado v0.2.0.6 commit `869ab34` — validado S25 Ultra] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings "Privacidade e segurança" + timeout configurável + biometric-auth allowDeviceCredential fallback. Plan FASE 11.3
-- [ ] **#128** [BUG-040, P1 healthcare-adjacent] Multi-dose alarm mostra só 1 medicamento + paciente "Sem Paciente" quando 6+ doses simultâneas (2 pacientes). Reproduzido S25 Ultra Dosy Dev v0.2.0.7 2026-05-04. AlarmActivity falha ao agrupar doses cross-patient OU FCM payload só carrega 1 ID OU lookup paciente falha. Investigar logcat + Edge notify-doses + Realtime delivery. Detalhe CHECKLIST §#128.
+- [x] **#128** [BUG-040, P1 healthcare-adjacent — fechado v0.2.0.9 commit `559004b`, validação device pendente em #006] Backend: `schedule-alarms-fcm` + `dose-trigger-handler` Edge functions agora populam `patientName` no FCM payload data (antes faltava → AlarmActivity caía "Sem paciente"). `patients` query expandida `SELECT id, name`, `patientNameById` Map preenche `dosesPayload`. Falta apenas reproduzir 6 doses cross-patient device real S25 Ultra pra confirmar resolução visual.
 - [ ] **#021** [Plan] Backup keystore 3 locais seguros. Plan FASE 18.3
 
 #### A11y
@@ -431,14 +433,14 @@ ESTADO ATUAL: Internal Testing ativo
 #### Compliance / SAC
 - [x] **#020** [Plan] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
 - [x] **#025** [Plan, fechado 2026-05-04] Screenshots phone — 19 capturadas S25 Ultra (1080×2340), 8 melhores curadas em `resources/prints/processado/01-08-*.png` + ícone 512 peach (composto icon-bg + logo-mono-light) + feature graphic 1024×500 + assets YT (avatar 800 + banner 2560×1440). Tudo uploadado Console Listagem da loja como rascunho. Pendente envio revisão Google. Plan FASE 18.9.2
-- [ ] **#026** [Plan] Provisionar caixa real `suporte@dosyapp.com`. Plan FASE 18.5
-- [ ] **#027** [Plan, expandido em #129-#133 conforme estratégia 2026-05-05] Closed Testing track + 12 testers (14 dias). Plan FASE 18.9.3
+- [x] **#026** [Plan — fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Emails oficiais `@dosymed.app` provisionados via **ImprovMX free**. DNS Hostinger: 2 MX (`mx1/mx2.improvmx.com`) + 1 TXT SPF (`v=spf1 include:spf.improvmx.com ~all`). Domain ImprovMX **VERIFIED**. 7 aliases ativos forward → `dosy.med@gmail.com`: catch-all `*` + `contato` + `privacidade` + `suporte` + `legal` + `dpo` + `security` + `hello`. Não conflita Resend SMTP #154 (subdomain `send.`). Pendente user: criar Gmail labels manuais (Suporte, Contato, etc) via filter `to:<alias>@dosymed.app`. Plan FASE 18.5
+- [x] **#027** [Plan — fechado v0.2.0.12 (superseded)] Substituído por #129-#133 conforme estratégia 2026-05-05 (Google Group público + Reddit recrutamento externo em vez de pessoas conhecidas). Item original "Closed Testing + 12 testers via amigos" não-aplicável.
 
 #### Closed Testing — recrutamento externo (estratégia 2026-05-05)
 > User decidiu pular recrutamento Internal com pessoas conhecidas e ir direto Closed via Google Group público + Reddit/redes.
 
-- [ ] **#129** [P0] Criar Google Group público `dosy-testers` (auto-aprovação, visibilidade pública). ~10min manual user.
-- [ ] **#130** [P0] Configurar Closed Testing track Console: tester list = e-mail Google Group + países BR + promover AAB v0.2.0.7. ~30min com agente Chrome MCP.
+- [x] **#129** [P0 — fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Google Group público `dosy-testers@googlegroups.com` criado. URL pública https://groups.google.com/g/dosy-testers (HTTP 200 anônimo). Settings: pesquisa "Qualquer pessoa da web" + participação "Qualquer pessoa pode participar" (auto-aprovação) + conversas/post/membros restritos a participantes (privacy).
+- [~] **#130** [P0 — RASCUNHO SALVO v0.2.1.0 (2026-05-05) via Chrome MCP, em HOLD pré-submit] Closed Testing track "Alpha" configurado: País Brasil + Tester list `dosy-testers@googlegroups.com` (Google Group) + AAB **v0.2.0.12 vc 45** + Release notes pt-BR + Feedback URL `https://groups.google.com/g/dosy-testers`. **Side-effects setup pré-publicação:** Categoria app Medicina + Detalhes contato `contato@dosymed.app` + `https://dosymed.app` (publicado direto). **Pendente:** 14 mudanças acumuladas (Política Privacidade URL, Classificação conteúdo, Público-alvo, Segurança dados, Intent tela cheia, Anúncios, etc) + click "Enviar 14 mudanças para revisão". Hold até #156 página `/privacidade` publicada + verificação cross-check pré-checks (HTTP 200 URL privacidade, questionários completos).
 - [ ] **#131** [P0] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + targeted r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
 - [ ] **#132** [P0 gate] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados em mini-releases.
 - [ ] **#133** [P0] Solicitar acesso de produção Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
@@ -469,7 +471,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#151** [P0 cost, descoberto + fechado v0.2.0.11 commit `78127b7`] useDoses refetchInterval opt-in only Dashboard. Antes: hardcoded 15min em TODAS queries (5 active queryKeys idle polling). Agora: default OFF, opt-in via `options.pollIntervalMs`. Dashboard explicitamente passa 15min. Outras telas (Settings, DoseHistory, Reports) sem polling — refetch só on mount + Realtime + invalidate explícito. -80% adicional idle egress.
 
 #### Web (não-bloq Android)
-- [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
+- [ ] **#018** [Plan, escopo expandido 2026-05-05 — AdMob Android prod + AdSense web] **AdMob Android (prioritário):** App ID `ca-app-pub-2350865861527931~5445284437` + ad unit Banner `/2984960441` JÁ configurados em AndroidManifest + `.env`/`.env.production`. Únicos itens pendentes: (a) flip `VITE_ADMOB_USE_TEST=true → false` em `.env.production` (sandbox sempre fill, real ad unit tem aprovação Google); (b) AdMob Console: app status "Requer revisão / Veiculação limitada" → desbloqueia automático após Play Store linking via Production track (#133). **AdSense web (secundário):** `index.html` ainda contém placeholder `ca-pub-XXXXXXXXXXXXXXXX`. AdBanner.jsx silently retorna null se `VITE_ADSENSE_CLIENT/SLOT` vazios. Foco mobile → AdSense pode permanecer placeholder/remover script até demanda real web. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
 
 #### Performance & custo
 - [x] **#023** [Auditoria, fechado v0.2.0.4 — verificado] `useDoses` já tem `refetchIntervalInBackground: false` + `staleTime: 2min` (set em #092 v0.1.7.5). Verificado em release v0.2.0.4. → [05 §4.4](auditoria/05-codigo.md#44-anti-patterns-encontrados)
@@ -487,18 +489,18 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#032** [Auditoria, fechado v0.2.0.4] Confirmar `SET search_path` em todas SECURITY DEFINER. Audit revelou 1 função sem SET (`handle_new_user_plus_promo`). Resolvido indiretamente em #119-followup: trigger + função droppadas (eram da promo beta encerrada). 0/0 funções pendentes agora.
 - [x] **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
 - [x] **#034** [Plan, fechado v0.2.0.11 commit `9a9f399`] Virtualização DoseHistory via `@tanstack/react-virtual`. VirtualTimeline component envelopa map TimelineRow (ROW_HEIGHT 62px + ROW_GAP 6 + overscan 5). MaxHeight 60vh + scroll quando >10 itens. Pre-built patientById Map evita O(n²) lookup. Plan FASE 13. Patients virtualização parqueada (lista curta tipicamente).
-- [ ] **#035** [Plan] Integration tests (`useDoses`, `useUserPrefs` mocks). Plan FASE 9.4
-- [ ] **#036** [Plan] Skeleton screens completos. Plan FASE 15
+- [ ] **#035** [Plan — diferido v0.2.2.0+] Integration tests (`useDoses`, `useUserPrefs` mocks). 1 dia esforço. Backlog estabilidade pós-rampa Closed Testing. Plan FASE 9.4
+- [ ] **#036** [Plan — proposto v0.2.1.0] Skeleton screens TreatmentList + Reports + Analytics + SOS + forms. Páginas hoje mostram blank → toda página com loading visual durante data fetch (perceived perf). Plan FASE 15
 - [x] **#037** [Plan, fechado v0.2.0.4] Erros inline em forms. PatientForm valida nome/idade/peso + TreatmentForm valida medName/unit/durationDays via state errors + Input.error prop (já existia no primitive). Erro limpa onChange do field. Substitui HTML5 required tooltip nativo (UX inconsistente browser/native).
-- [ ] **#038** [Plan] Pen test interno completo documentado. Plan FASE 8.4 + 20.3
-- [ ] **#039** [Plan] Confirmação dupla delete batch (>10). Plan FASE 15
+- [ ] **#038** [Plan — diferido v0.2.2.0+ ou pré-Open Testing] Pen test interno completo documentado (curl JWT roubado, Burp/mitmproxy, Play Integrity tampering). 1-2 dias. Recomendado executar antes Open Testing (#133) mesmo que não bloqueante Closed. Plan FASE 8.4 + 20.3
+- [ ] **#039** [Plan — bloqueado, não-aplicável atual] Confirmação dupla delete batch (>10). Hoje app NÃO tem feature batch delete (only delete 1-by-1 dose/patient/treatment). Pré-req: implementar batch select UI primeiro. Re-avaliar quando feature for priorizada. Plan FASE 15
 - [x] **#040** [Plan, fechado v0.2.0.3] Subir contraste textos secundários no dark. fg-secondary #C8B8AB → #DDC8B6 (ratio 8.7→10.5), fg-tertiary #8E7F73 → #B0A091 (ratio 4.35→5.8 — passa AA), border alpha bumps.
 - [ ] **#041** [Plan] Hierarquia headings + Dynamic Type via `rem`. Plan FASE 15
 - [ ] **#042** [Plan] Lighthouse mobile ≥90 em Reports + Dashboard. Plan FASE 17
 - [ ] **#043** [Plan] Performance scroll lista 200+ doses sem jank (já coberto por #034)
 - [x] **#044** [Plan, fechado v0.2.0.4 — verificado] Auditar continuidade RPC `register_sos_dose` (drift schema). Audit: SECURITY DEFINER ✓, search_path SET ✓, has_patient_access check ✓, sos_rules lookup case-insensitive ✓, minIntervalHours validate ✓, maxDosesIn24h validate ✓, INSERT com auth.uid() ✓. Sem schema drift.
 - [x] **#045** [Auditoria, fechado v0.2.0.2 — verificado] Confirmar `coverage/` no `.gitignore`. Já presente (linha única). → [06 BUG-010](auditoria/06-bugs.md#bug-010--coverage-versionado-no-repo-provável)
-- [ ] **#046** [Plan] Documentar runbook DR. Plan FASE 23.4
+- [x] **#046** [Plan — fechado v0.2.1.0 (2026-05-05)] Runbook DR documentado em `docs/runbook-dr.md` v1.0. Cobertura: RTO 5-15min / RPO 24h, baseline prod 2026-05-05 (5 users, 582 doses, etc), 6 procedures (daily backup restore, JWT roll #084, keystore restore #021, region outage, pós-incidente, drill schedule), 11 components mapeados (DB/Auth/Edge/Realtime/Storage/FCM/Resend/ImprovMX/CDN/AAB), contatos emergência. PITR ainda DEFERRED #009. Plan FASE 23.4
 - [ ] **#047** [Plan] Google Play Integrity API. Plan FASE 23 backlog
 - [x] **#048** [Auditoria, fechado v0.2.0.4 — verificado] Remover `tools/supabase.exe` do git (se versionado). Verificado: tools/supabase.exe + supabase.tar.gz NÃO tracked (gitignore cobre). False alarm.
 - [ ] **#049** [Plan] Pen test profissional. Plan FASE 20
@@ -543,6 +545,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [ ] **#072** [Plan] A/B test paywall e onboarding. Plan FASE 23.2
 - [ ] **#073** [Plan] Programa de indicação (1 mês PRO grátis). Plan FASE 22.3
 - [ ] **#155** [P3 cosmético] Adicionar 1-2 screenshots novos Play Console pra v0.2.0.12: tela "Alterar senha" Ajustes (#152) + tela "Recuperar senha código 6 dígitos" Login (#153). Não-bloqueador release; releitura screenshots store mostra modais novos. Capturar S25 Ultra real prod pós-merge master.
+- [x] **#156** [P0 BLOQUEADOR #130 — fechado v0.2.1.0 (2026-05-05)] Página `https://dosymed.app/privacidade` (Privacidade.jsx) atualizada com conteúdo LGPD healthcare. Mudanças: DPO email canônico `privacidade@dosymed.app` + outros 6 aliases (#026), entidade "Dosy Med LTDA", site `https://dosymed.app`, terceiros expandidos (Resend SMTP/Firebase FCM/PostHog/Sentry/Supabase São Paulo/AdMob), seção dados coletados granular (FCM token, telemetria anônima, security_events, foto paciente), bases legais art.7-I + art.11-II-f, anúncios Free não-personalizados sem dados saúde. Termos.jsx + FAQ.jsx tb atualizados emails. Versão v1.0 → v1.1. **Desbloqueia:** #130 submit Google review.
 
 #### DX / Observability
 - [x] **#074** [fechado v0.2.0.2] Habilitar upload de debug symbols (`ndk.debugSymbolLevel 'FULL'` em buildTypes.release). Resolve aviso recorrente Play Console + melhora Sentry NDK stack traces (necessário pra investigar #110 native ART crashes).

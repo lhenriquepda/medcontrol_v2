@@ -92,10 +92,10 @@
 - **Saída:** issues em backlog ou re-abertura de sub-fase relevante
 
 ### #007 — Adicionar telemetria `notification_delivered` em PostHog (regressão silenciosa)
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — proposto v0.2.1.0
 - **Origem:** [Auditoria] (Dimensão 14)
 - **Esforço:** 1-2h
-- **Dependências:** PostHog key configurada (#018)
+- **Dependências:** PostHog key já configurada (#015 ✅) — independente do #018
 - **Aceitação:**
   - Evento PostHog `notification_delivered` disparado quando push FCM chega (background) e quando LocalNotif fire
   - Evento `notification_dismissed` / `notification_action_taken` (Tomada/Pular/Adiar)
@@ -355,16 +355,40 @@
   - ✅ Disable toggle exige biometria (anti-tamper)
   - ✅ Fallback senha celular via `allowDeviceCredential: true`
 
-### #018 — AdSense IDs reais (web — não-bloqueante Android)
-- **Status:** ⏳ Aberto
-- **Origem:** [Plan.md] FASE 4.3 pendente
-- **Esforço:** 1h (criar conta AdSense + substituir)
-- **Dependências:** verificação domínio AdSense
-- **Aceitação:**
-  - `index.html` script tag com publisher ID real
-  - `VITE_ADSENSE_CLIENT` + `VITE_ADSENSE_SLOT` em Vercel env
-  - Web mostra anúncios reais (não placeholder)
-- **Notas:** [auditoria/06-bugs.md#bug-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml). Se Beta vai só Android, P3.
+### #018 — AdMob Android prod (prioritário) + AdSense web (secundário)
+- **Status:** ⏳ Aberto (parcial AdMob — escopo expandido 2026-05-05)
+- **Origem:** [Plan.md] FASE 4.3 pendente; cross-ref AdMob Console assessment 2026-05-05
+- **Esforço:** AdMob: 15min flag flip + aguardar Play Production approval. AdSense: 1h opcional.
+- **Dependências:** AdMob app approval Google (depende #133 Production track Play Console).
+
+**Estado atual AdMob (2026-05-05 — Chrome MCP Console assessment):**
+- ✅ Conta AdMob aprovada · perfil pagamento completo (dosy.med@gmail.com)
+- ✅ App "Dosy" Android registrado: App ID `ca-app-pub-2350865861527931~5445284437`
+- ✅ Banner ad unit "Dosy Bottom Banner": `ca-app-pub-2350865861527931/2984960441`
+- ✅ AndroidManifest meta-data ads.APPLICATION_ID já com prod ID real
+- ✅ `.env` + `.env.production`: `VITE_ADMOB_BANNER_ANDROID=ca-app-pub-2350865861527931/2984960441`
+- ❌ `.env.production`: `VITE_ADMOB_USE_TEST=true` — força sandbox banner Google `/6300978111` (sempre fill, $0)
+- ⏸️ AdMob Console status app: "Requer revisão / Veiculação limitada" (espera Play Store Production track #133)
+
+**Estado atual AdSense web:**
+- ❌ `index.html` linha 18-19: script tag com placeholder `client=ca-pub-XXXXXXXXXXXXXXXX` (404 silently)
+- ❌ `.env*` + Vercel env: `VITE_ADSENSE_CLIENT` + `VITE_ADSENSE_SLOT` vazios → AdBanner.jsx retorna null
+- 🟡 Foco mobile-first → web AdSense baixa prioridade. Pode permanecer placeholder OU remover script index.html cosmeticamente.
+
+**Aceitação AdMob:**
+  - Após `#133` aprovação Production: flip `VITE_ADMOB_USE_TEST=false` em Vercel + `.env.production` local
+  - Rebuild AAB + Vercel deploy: real ad unit veicula (ou no-fill no início enquanto eCPM warm-up)
+  - Validar device real: `[AdMob] no-fill / load fail` aceitável; sem crash; CSS var `--ad-banner-height` colapsa em no-fill
+
+**Aceitação AdSense (opcional):**
+  - Decisão: criar conta AdSense web + verificar domínio dosymed.app → preencher `data-ad-client` real OU remover linhas 17-19 index.html
+  - Se preencher: `VITE_ADSENSE_CLIENT=ca-pub-...` + `VITE_ADSENSE_SLOT=...` em Vercel env
+
+**Progresso v0.2.1.0 (2026-05-05):**
+  - ✅ AdSense placeholder script removido de `index.html` (linhas 17-19 viraram comentário documentado). Network tab Vercel preview não mais carrega `adsbygoogle.js` 404. Reativação documentada no comentário.
+  - ⏸️ AdMob `VITE_ADMOB_USE_TEST=false`: aguarda #133 Production track Play Console aprovado.
+
+**Notas:** [auditoria/06-bugs.md#bug-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml). Item original era "AdSense IDs em index.html" → ampliado pra cobrir ambos AdSense (web) + AdMob (Android native principal).
 
 ### #019 — Subir `minimum_password_length` para 8 + complexity
 - **Status:** ✅ Concluído @ commit eb6c06c (2026-05-02)
@@ -454,25 +478,70 @@
   - ✅ Listagem da loja → campo Vídeo preenchido com URL YouTube unlisted
 - **Pendente:** envio pra revisão Google via Visão geral da publicação
 
-### #026 — Provisionar caixa real `suporte@dosyapp.com`
-- **Status:** ⏳ Aberto
+### #026 — Emails oficiais `*@dosymed.app` via ImprovMX → dosy.med@gmail.com
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — DNS + ImprovMX + 7 aliases verificados (Gmail labels manuais user)
 - **Origem:** [Plan.md] FASE 18.5
-- **Esforço:** 30 min (Google Workspace ou alias)
-- **Dependências:** domínio dosyapp.com configurado
-- **Aceitação:**
-  - Email recebe e responde
-  - Auto-responder com SLA documentada (Free 72h, PRO 24h, Plus 12h)
-  - Testar mailto template em device Android real
+- **Esforço:** 1h setup (Chrome MCP) + 5min Gmail labels manual user
+- **Dependências:** domínio `dosymed.app` já em produção (custom domain Vercel + Resend SMTP #154)
+- **Resolução escolhida:** **ImprovMX free** (25 aliases, DNS-only, zero infra, free forever).
+
+**Setup executado (Chrome MCP dosy.med@gmail.com):**
+
+1. ✅ Conta ImprovMX criada manualmente user `dosy.med@gmail.com` + domain `dosymed.app` adicionado
+2. ✅ DNS Hostinger 3 records adicionados (apex `@`):
+   - `MX @ 10 mx1.improvmx.com`
+   - `MX @ 20 mx2.improvmx.com`
+   - `TXT @ "v=spf1 include:spf.improvmx.com ~all"`
+3. ✅ DNS propagation verificada via `nslookup -type=mx dosymed.app 8.8.8.8` (records visíveis Google DNS)
+4. ✅ ImprovMX domain status: **VERIFIED** (email confirmação "Amazing! Your domain is verified")
+5. ✅ 7 aliases criados (todos forward → `dosy.med@gmail.com`):
+
+| Alias | Uso |
+|---|---|
+| `*@dosymed.app` (catch-all) | Fallback any address |
+| `contato@dosymed.app` | Geral / Play Console contato |
+| `privacidade@dosymed.app` | DPO LGPD (#156) |
+| `suporte@dosymed.app` | Atendimento usuários |
+| `legal@dosymed.app` | Jurídico / Termos / DMCA |
+| `dpo@dosymed.app` | Data Protection Officer (sinônimo privacidade) |
+| `security@dosymed.app` | Vuln disclosures |
+| `hello@dosymed.app` | First-touch friendly outreach |
+
+**Resilience considerations:**
+- SPF não conflita com Resend SMTP outbound (#154) pq Resend usa subdomain `send.dosymed.app`
+- DKIM Resend (`resend._domainkey`) intocado
+- DMARC `_dmarc` policy `p=none` mantida — bom pra debug inicial
+- Free tier limit: 25 aliases (espaço ainda pra +18) e 10 mensagens/dia. Upgrade $9/mo se exceder
+
+**Pendente user manual (~5min):**
+- ⏳ Gmail filters/labels: criar 7 labels (Contato, Privacidade, Suporte, Legal, DPO, Security, Hello) + 7 filters `to:<alias>@dosymed.app` → apply label correspondente. Setup automation Chrome MCP travou Gmail UI; melhor fazer manual:
+  - Gmail Settings → Filters and Blocked Addresses → Create new filter
+  - To: `suporte@dosymed.app` → Create filter → check "Apply the label" → New label "Suporte" → Create filter
+  - Repetir pra cada alias
+
+**Pendente código v0.2.1.0:**
+- ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
+- ⏳ Termos.jsx + Privacidade.jsx (criando #156) referenciar emails canônicos
+- ⏳ Footer Login mostrar `contato@dosymed.app` se cabível
+
+**Validação aceitação:**
+- ✅ DNS records visíveis externamente (nslookup 8.8.8.8 OK)
+- ✅ ImprovMX domain VERIFIED (notif email recebido confirmando)
+- ⏳ Test send email pra `suporte@dosymed.app` → confirmar chegar dosy.med@gmail.com (user pode testar manual)
+- ⏳ Auto-responder SLA: parqueado v0.2.2.0+ (Gmail templates OR Resend Inbound webhook)
 
 ### #027 — Promover Closed Testing track + 12 testers via Reddit
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.0.12 (2026-05-05) — superseded por #129-#133
 - **Origem:** [Plan.md] FASE 18.9.3
-- **Esforço:** 1-2 dias setup + 14 dias passivo
-- **Dependências:** #004, #006, screenshots #025
-- **Aceitação:**
-  - Closed Testing track com Google Group público
-  - URL opt-in + posts Reddit (r/AndroidBeta, r/brasil)
-  - 12+ testers ativos por 14 dias
+- **Esforço:** N/A (substituído)
+- **Dependências:** N/A
+- **Resolução:** Item original "promover Closed Testing + 12 testers via amigos/Reddit" expandido em granularidade fina conforme estratégia 2026-05-05: User decidiu pular recrutamento Internal com pessoas conhecidas e ir direto Closed via Google Group público + Reddit/redes externas. Trabalho real distribuído em:
+  - **#129** Criar Google Group público `dosy-testers`
+  - **#130** Configurar Closed Testing track Console (tester list = e-mail group + países BR + AAB v0.2.0.7+)
+  - **#131** Recrutar 15-20 testers externos (Reddit r/AlphaAndBetausers + r/SideProject + r/brasil + targeted r/medicina/r/saude/r/tdah/r/diabetes + Twitter + LinkedIn + Discord)
+  - **#132** Gate 14d × ≥12 ativos + iterar bugs em mini-releases
+  - **#133** Solicitar Production access pós-gate
+- **Validação:** trabalho remanescente fica nos itens granulares acima.
 
 ### #088 — Dose não aparece Início (Pixel 7)
 - **Status:** ✅ Concluído @ commit 705b69f (2026-05-02)
@@ -705,16 +774,18 @@
 - **Aceitação:** `@tanstack/react-virtual` integrado; lista de 1000 doses scrolla sem jank em device mid-range.
 
 ### #035 — Integration tests (`useDoses`, `useUserPrefs` com mock Supabase)
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — diferido v0.2.2.0+ (backlog estabilidade pós-rampa Closed Testing)
 - **Origem:** [Plan.md] FASE 9.4 backlog
 - **Esforço:** 1 dia
 - **Aceitação:** 10+ tests cobrindo fluxos confirm/skip/undo + sync localStorage cache.
+- **Justificativa diferimento:** Sem testers Closed ativos hoje. Teste integração defende contra regressão durante iteração rápida em resposta a bug reports — útil quando volume de mudança crescer. Implementar antes de Open Testing/Production.
 
 ### #036 — Skeleton screens completos (TreatmentList, Reports, Analytics, SOS, forms)
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — proposto v0.2.1.0
 - **Origem:** [Plan.md] FASE 15 backlog
 - **Esforço:** 1 dia
-- **Aceitação:** todas as pages com loading state visual durante data fetch.
+- **Aceitação:** todas as pages com loading state visual durante data fetch (não blank screen). Componente `<Skeleton>` reusável já existe (verificar `src/components/ui/Skeleton.jsx`); aplicar em TreatmentList, Reports, Analytics, SOS, formulários enquanto query loading.
+- **Páginas afetadas:** confirmar lista exata via grep `useQuery.*loading|isLoading` em pages/.
 
 ### #037 — Erros inline em forms
 - **Status:** ✅ Concluído (release v0.2.0.4)
@@ -723,7 +794,7 @@
 - **Aceitação:** PatientForm, TreatmentForm, SOS, Settings com mensagens de erro abaixo de cada campo, não só toast.
 
 ### #038 — Pen test interno completo documentado
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — diferido v0.2.2.0+ ou pré-Open Testing (#133 gate)
 - **Origem:** [Plan.md] FASE 8.4 + 20.3
 - **Esforço:** 1-2 dias
 - **Aceitação:**
@@ -731,12 +802,15 @@
   - Tampering APK + Play Integrity (se #047 implementado)
   - Burp/mitmproxy análise tráfego (cert pinning bloqueia)
   - Documento `docs/audits/pentest-interno.md`
+- **Justificativa diferimento:** Não bloqueia Closed Testing (audiência controlada). Recomendado executar antes Open Testing público (#133 transição) pra detectar privilege escalation cross-tenant. Item de pré-launch público, não pré-fechado.
 
 ### #039 — Confirmação dupla ao deletar batch (>10 itens)
-- **Status:** ⏳ Aberto
+- **Status:** 🚧 Bloqueado (não-aplicável atual) — re-avaliar quando feature batch select existir
 - **Origem:** [Plan.md] FASE 15 backlog
-- **Esforço:** 2h
-- **Aceitação:** quando há >10 itens selecionados para delete, modal "Tem certeza? Esta ação não pode ser desfeita".
+- **Esforço:** 2h (UI confirm modal trivial) — mas pré-req feature inexistente
+- **Pré-requisito ausente:** App hoje delete só 1-by-1 (DoseCard menu, PatientCard menu, TreatmentForm). Não há feature batch select (multi-checkbox + delete em massa) em nenhuma página. Item proposto pressupõe UI batch que não foi implementada.
+- **Aceitação (quando feature existir):** quando há >10 itens selecionados para delete, modal "Tem certeza? Esta ação não pode ser desfeita".
+- **Decisão:** parquear até batch select ser priorizado. Sem trigger pra implementar isolado.
 
 ### #040 — Subir contraste textos secundários no dark
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -775,10 +849,21 @@
 - **Aceitação:** `git check-ignore coverage/` retorna 0.
 
 ### #046 — Documentar runbook de Disaster Recovery
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — `docs/runbook-dr.md` v1.0
 - **Origem:** [Plan.md] FASE 23.4
-- **Esforço:** 1 dia
-- **Aceitação:** `docs/runbook-dr.md` com SOPs para: keystore lost, DB corrupted, Supabase outage, Vercel down, Sentry full-replay restore.
+- **Esforço:** 1 dia (executado em 1h)
+- **Aceitação:**
+  - ✅ RTO 5-15min / RPO 24h documentados
+  - ✅ Baseline produção snapshot 2026-05-05 (5 users, 582 doses, etc) referência pré-incidente
+  - ✅ Procedure restore daily backup Supabase (passos 1-12, smoke test SQL incluído)
+  - ✅ Procedure roll JWT secret #084 (compromised key)
+  - ✅ Procedure restore keystore Android #021 (3 locais backup)
+  - ✅ Procedure region outage Supabase São Paulo
+  - ✅ Procedure pós-incidente (timeline + RCA + LGPD art.48 ANPD notification 72h)
+  - ✅ 11 components mapeados com failure modes + recovery (DB/Auth/Edge/Realtime/Storage/FCM/Resend/ImprovMX/CDN/AAB)
+  - ✅ Drill schedule semestral staging + anual full
+  - ✅ Contatos emergência (owner, DPO, Supabase support, Resend, ImprovMX)
+  - ✅ Histórico revisões + próximas iterações (v1.1 incident-comm-template, v1.2 PITR re-eval, v1.3 drill executado)
 
 ### #047 — Google Play Integrity API
 - **Status:** ⏳ Aberto
@@ -1731,28 +1816,42 @@ Comportamento desejado por user:
 Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 
 ### #129 — Criar Google Group público `dosy-testers`
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — via Chrome MCP dosy.med@gmail.com
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
-- **Esforço:** 10 min (manual user)
+- **Esforço:** 10 min (Chrome MCP automation + 1 captcha manual user)
 - **Dependências:** nenhuma
-- **Aceitação:**
-  - Group criado em https://groups.google.com → "Criar grupo"
-  - Nome: `Dosy Testers` · E-mail: `dosy-testers@googlegroups.com` (ou similar disponível)
-  - Configurações: "Qualquer pessoa pode pedir e entrar" (auto-aprovação); visibilidade pública
-  - URL pública do group salva pra divulgação (ex.: `https://groups.google.com/g/dosy-testers/about`)
+- **Resolução:**
+  - Grupo criado: **`Dosy Testers`** · email `dosy-testers@googlegroups.com` · owner Dosy Med LTDA
+  - URL pública: **https://groups.google.com/g/dosy-testers** (HTTP 200 anônimo verificado)
+  - Configurações:
+    - "Quem pode pesquisar pelo grupo" → ✅ Qualquer pessoa da web (discovery via search/Reddit)
+    - "Quem pode participar do grupo" → ✅ Qualquer pessoa pode participar (auto-aprovação)
+    - "Quem pode ver as conversas / postar / ver os membros" → Participantes do grupo (privacy testers reports)
+  - Descrição: "Grupo público de testers do Dosy (app de controle de medicação, Android). Membros recebem acesso opt-in à fase Closed Testing via Play Store. Auto-aprovação ativa. Site: https://dosymed.app"
+- **Próximo:** #130 importar email group `dosy-testers@googlegroups.com` em Closed Testing track Play Console.
 
 ### #130 — Configurar Closed Testing track no Console com Group como tester list
-- **Status:** ⏳ Aberto
+- **Status:** 🟡 Rascunho salvo HOLD pré-submit (2026-05-05) — aguarda #156 página /privacidade
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
-- **Esforço:** 30 min (manual user + agente Chrome MCP)
-- **Dependências:** #129
-- **Aceitação:**
-  - Console → Test and release → Closed testing → Create track
-  - Track nome: "Dosy Beta Fechado" (ou similar)
-  - Tester list: adicionar e-mail do Google Group `dosy-testers@googlegroups.com` (em vez de e-mails individuais)
-  - Países: Brasil + qualquer outro relevante
-  - Promover AAB v0.2.0.7 (ou versão atual em Internal) pra Closed track
-  - Salvar opt-in URL gerado pelo Console pra divulgação
+- **Esforço:** 30 min config Console + 1h cross-checks pré-submit
+- **Dependências:** #129 (✅ done) + #156 página privacidade
+- **Progresso v0.2.1.0 (Chrome MCP):**
+  - ✅ Faixa "Teste fechado - Alpha" pré-existente reutilizada
+  - ✅ País Brasil selecionado + salvo
+  - ✅ Tester list: Grupos do Google → `dosy-testers@googlegroups.com`
+  - ✅ Endereço feedback URL: `https://groups.google.com/g/dosy-testers`
+  - ✅ Versão criada: AAB **v0.2.0.12 vc 45** (vc 44 removido — estava conflitando)
+  - ✅ Release notes pt-BR: "v0.2.0.12 — Recuperação de senha por código de 6 dígitos via email + Trocar senha em Ajustes + melhorias internas (egress -50%, alarme multi-paciente fixed). Beta fechado: ajude a testar o controle de medicação e reporte bugs em https://groups.google.com/g/dosy-testers"
+  - ✅ Rascunho salvo (Step 2 "Visualizar e confirmar" — 0 erros, 1 aviso)
+  - ✅ **Side-effects pré-publicação resolvidos in-line:**
+    - Categoria do app: **Medicina** (Console → Configurações da loja, publicado)
+    - Detalhes contato: email `contato@dosymed.app` + site `https://dosymed.app` (publicado direto Google Play)
+- **Pendente pré-submit Google review:**
+  - ⏳ #156: criar/atualizar página `https://dosymed.app/privacidade` (URL referenciada nas 14 mudanças pendentes)
+  - ⏳ Verificar HTTP 200 dos URLs `/privacidade` antes click "Enviar 14 mudanças para revisão"
+  - ⏳ Conferir status questionários Conteúdo (Classificação, Público-alvo, Segurança dados, Intent tela cheia) — possivelmente já preenchidos releases passadas
+  - ⏳ Confirmação user explícita pra submeter (irreversível, dispara review Google 1-7 dias)
+- **Submit final:** Console → Visão geral da publicação → "Enviar 14 mudanças para revisão" → Google review (~24-72h pra Closed Testing categoria Medicina). URL opt-in liberada pós-aprovação.
 
 ### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
 - **Status:** ⏳ Aberto
@@ -1981,3 +2080,53 @@ Sem 7+: Produção rollout 5%→100% + P2 + P3 backlog
 ```
 
 → Ver `ROADMAP.md` para versão consolidada com links cruzados.
+
+---
+
+### #156 — Atualizar página `https://dosymed.app/privacidade` (LGPD healthcare)
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — DESBLOQUEIA #130 submit Google review
+- **Origem:** Sessão 2026-05-05 v0.2.1.0 — descoberta durante setup Closed Testing track Console (mudança pendente "Definir o URL da Política de Privacidade como https://dosymed.app/privacidade")
+- **Esforço:** 2-3h (escrever conteúdo LGPD healthcare + criar rota + linkar UI)
+- **Dependências:** #026 email `privacidade@dosymed.app` provisionado (DPO contato)
+- **Aceitação:**
+  - URL `https://dosymed.app/privacidade` retorna HTTP 200
+  - Conteúdo cobre LGPD para healthcare (controle medicação):
+    - **Identificação controlador:** Dosy Med LTDA + DPO `privacidade@dosymed.app`
+    - **Dados coletados:**
+      - Auth: email + senha hash (Supabase Auth)
+      - Saúde sensível (LGPD art.5-II + art.11): pacientes, doses, tratamentos, observações, fotos paciente
+      - Técnicos: FCM token push, user agent, IP (logs Supabase)
+      - Telemetria: PostHog events anonimizados (não-PII)
+    - **Finalidades:** alarmes lembrete medicação, sincronização multi-device, recuperação senha
+    - **Bases legais LGPD:** consentimento (art.7-I, registro signup) + cuidado saúde (art.11-II-f) + execução contrato (Plus tier)
+    - **Compartilhamento:** Supabase (cloud storage criptografado SSE), Google FCM (push delivery), Resend (transactional email recovery), PostHog (analytics anônima), Sentry (error tracking)
+    - **Internacional:** Supabase São Paulo (BR) — dados em jurisdição brasileira
+    - **Retenção:** até deletar conta via app (Settings → Excluir conta, #028 fechado)
+    - **Direitos titular (LGPD art.18):** acesso, retificação, eliminação, portabilidade, anonimização, revogação consentimento — exercício via `privacidade@dosymed.app`
+    - **Crianças/adolescentes:** uso por responsável legal (cuidador) — política específica art.14
+    - **Cookies/storage:** localStorage para cache UI + secure storage Android Keystore para tokens
+    - **Última atualização:** 2026-05-05
+  - Linkado: Settings → Privacidade + Termos.jsx (referência cruzada) + footer Login + ToS página
+- **Implementação executada:** Privacidade.jsx (React route já existia v0.2.0.0, atualizado conteúdo v0.2.1.0). Rota `/privacidade` confirmada em App.jsx linha 298. SPA fallback Vercel resolve via index.html → React Router → Privacidade lazy-loaded.
+
+**Mudanças v0.2.1.0:**
+- Email DPO: `dosy.privacidade@gmail.com` → `privacidade@dosymed.app` + adicionado `dpo@dosymed.app`, `suporte@dosymed.app`, `legal@dosymed.app`, `security@dosymed.app`
+- Entidade: "pessoa física desenvolvedor" → "Dosy Med LTDA, sediada no Brasil"
+- Site oficial linkado: https://dosymed.app
+- Contato geral linkado: contato@dosymed.app
+- Terceiros expandidos seção 6: Supabase São Paulo BR + Resend (transactional email) + Firebase FCM (push) + PostHog (telemetria anônima) + Sentry (crash) + Google AdMob (banner Free)
+- Seção 2 "Dados coletados": adicionou foto paciente, FCM token, dados técnicos, telemetria anônima, Sentry stack traces, auditoria security_events
+- Seção 3 "Como usamos": adicionou alarme nativo Foreground Service medicação, recovery OTP (#153), telemetria entrega push (#007), rate-limit defesa
+- Seção sobre AdMob: anúncios não-personalizados Free, sem dados de saúde
+- Versão bumped: v1.0 → v1.1
+- Data: Abril → Maio 2026
+- Termos.jsx idem: emails atualizados + entidade
+- FAQ.jsx: `SUPPORT_EMAIL = 'suporte@dosymed.app'` (era dosyapp.com)
+
+**Pré-checks pré-submit Google review (#130):**
+- ✅ URL `/privacidade` route existe (App.jsx:298)
+- ⏳ Verificar HTTP 200 prod via `curl -I https://dosymed.app/privacidade` após próximo deploy Vercel
+- ⏳ Conteúdo renderiza corretamente em mobile (testar Chrome MCP preview)
+- ✅ Conteúdo cobre todos requisitos LGPD para healthcare
+
+**Bloqueia:** Antes era #130. Agora #130 desbloqueado pra submit Google review (junto com cross-checks restantes).

@@ -24,14 +24,18 @@ export default function Privacidade() {
       </header>
 
       <div className="max-w-2xl mx-auto px-5 pt-6 space-y-6 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-        <p className="text-xs text-slate-400">Última atualização: Abril de 2026 · Versão 1.0</p>
+        <p className="text-xs text-slate-400">Última atualização: Maio de 2026 · Versão 1.1</p>
 
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">1. Quem somos</h2>
           <p>
-            O <strong>Dosy</strong> é um aplicativo de gestão de medicamentos desenvolvido e operado por pessoa física
-            (desenvolvedor independente), com sede no Brasil. Este documento descreve como coletamos, usamos e protegemos
+            O <strong>Dosy</strong> é um aplicativo de gestão de medicamentos operado por <strong>Dosy Med LTDA</strong>,
+            sediada no Brasil. Este documento descreve como coletamos, usamos e protegemos
             seus dados pessoais, em conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)</strong>.
+          </p>
+          <p className="text-xs text-slate-500">
+            Site oficial: <a href="https://dosymed.app" className="text-orange-600 dark:text-orange-400 underline">https://dosymed.app</a> ·
+            Contato geral: <a href="mailto:contato@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">contato@dosymed.app</a>
           </p>
         </section>
 
@@ -40,14 +44,18 @@ export default function Privacidade() {
           <p>Coletamos apenas os dados necessários para o funcionamento do serviço:</p>
           <ul className="list-disc list-inside space-y-1 ml-2">
             <li><strong>Conta:</strong> nome, endereço de e-mail, senha (armazenada com hash bcrypt)</li>
-            <li><strong>Pacientes:</strong> nome, idade, condição de saúde, médico responsável, alergias</li>
-            <li><strong>Tratamentos e doses:</strong> medicamentos, unidades, horários, status de administração</li>
-            <li><strong>Notificações push:</strong> endpoint de notificação, chave pública, plataforma do dispositivo</li>
-            <li><strong>Dados de uso:</strong> eventos de segurança (login, exportação de dados, exclusão de conta) para auditoria</li>
+            <li><strong>Pacientes:</strong> nome, idade, condição de saúde, médico responsável, alergias, foto opcional</li>
+            <li><strong>Tratamentos e doses:</strong> medicamentos, unidades, horários, status de administração, observações livres</li>
+            <li><strong>Notificações push (FCM):</strong> token de dispositivo Firebase, plataforma, idioma, fuso horário</li>
+            <li><strong>Dados técnicos:</strong> versão do app, modelo do device (ANR/crash diagnostics), IP de requisição (logs servidor)</li>
+            <li><strong>Telemetria anonimizada:</strong> eventos de uso (PostHog) sem PII pra detectar regressão (ex: notification_delivered, signup_completed)</li>
+            <li><strong>Erros (Sentry):</strong> stack traces de exceções, sem conteúdo sensível</li>
+            <li><strong>Auditoria de segurança:</strong> eventos login, exportação de dados, exclusão de conta, rate-limit triggers</li>
           </ul>
           <p className="text-xs text-slate-500">
             Dados de saúde são considerados <strong>dados sensíveis</strong> (categoria especial, Art. 11 LGPD) e recebem
-            proteção adicional. O campo "observação" nas doses não deve conter diagnósticos clínicos detalhados.
+            proteção adicional via Row-Level Security (RLS) e criptografia em trânsito. O campo "observação" em doses
+            é livre — recomendamos não incluir diagnósticos clínicos completos ou identificadores de terceiros.
           </p>
         </section>
 
@@ -55,11 +63,18 @@ export default function Privacidade() {
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">3. Como usamos os dados</h2>
           <ul className="list-disc list-inside space-y-1 ml-2">
             <li>Exibir a agenda de medicamentos e alertas de doses</li>
-            <li>Enviar notificações push de lembrete de dose (apenas com sua permissão)</li>
+            <li>Enviar notificações push de lembrete (com sua permissão explícita do sistema)</li>
+            <li>Disparar alarme nativo Android críticos (categoria Use Specialized Foreground Service: alarmes de medicação)</li>
             <li>Gerar relatórios e histórico de aderência</li>
-            <li>Garantir a segurança da conta (eventos de auditoria)</li>
+            <li>Recuperação de senha via código OTP enviado por email (#153)</li>
+            <li>Detectar regressão funcional (telemetria de entrega push, crash analytics)</li>
+            <li>Garantir segurança (rate-limit, auditoria, defesa contra abuso)</li>
           </ul>
-          <p>Não vendemos, compartilhamos nem usamos seus dados para fins de publicidade ou análise comportamental.</p>
+          <p>Não vendemos seus dados pessoais. Não usamos seus dados de saúde para perfilamento, publicidade direcionada ou análise comportamental.</p>
+          <p className="text-xs text-slate-500">
+            <strong>Anúncios (apenas plano Free):</strong> AdMob banner Android pode exibir anúncios não-personalizados.
+            Não compartilhamos dados de saúde com Google AdMob; apenas o request de banner padrão (sem perfil).
+          </p>
         </section>
 
         <section className="space-y-2">
@@ -86,11 +101,16 @@ export default function Privacidade() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">6. Armazenamento e segurança</h2>
           <ul className="list-disc list-inside space-y-1 ml-2">
-            <li>Dados armazenados na plataforma <strong>Supabase</strong> (infraestrutura em nuvem, servidores nos EUA/UE)</li>
-            <li>Transferência internacional com garantias de segurança adequadas (criptografia em trânsito via TLS 1.2+)</li>
-            <li>Row-Level Security (RLS) garante isolamento total entre contas</li>
-            <li>Senhas armazenadas com bcrypt (hash unidirecional)</li>
-            <li>Sessão limpa no logout (dados locais removidos)</li>
+            <li>Dados primários: <strong>Supabase</strong> (Postgres + RLS), região <code>sa-east-1</code> (São Paulo, Brasil)</li>
+            <li>Email transactional (recovery, alertas): <strong>Resend</strong> via SMTP (domínio dosymed.app verificado)</li>
+            <li>Push notifications: <strong>Firebase Cloud Messaging</strong> (Google) — apenas token + payload mínimo</li>
+            <li>Telemetria anônima: <strong>PostHog</strong> (eventos sem PII) e <strong>Sentry</strong> (crash analytics)</li>
+            <li>Anúncios (Free): <strong>Google AdMob</strong> banner Android (sem dados de saúde)</li>
+            <li>Tokens armazenados em <strong>Android Keystore</strong> (hardware-backed) ou <code>localStorage</code> sandboxed</li>
+            <li>Transferência via TLS 1.2+ obrigatório · App lock biométrico opcional (#017)</li>
+            <li>Row-Level Security garante isolamento total entre usuários (defesa em profundidade)</li>
+            <li>Senhas com bcrypt + mínimo 8 caracteres, complexidade letra+número obrigatória</li>
+            <li>Sessão limpa no logout local; tokens revogados server-side via signOut</li>
           </ul>
         </section>
 
@@ -125,24 +145,31 @@ export default function Privacidade() {
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">10. Contato e DPO</h2>
           <p>
-            Para exercer seus direitos ou esclarecer dúvidas sobre esta política, entre em contato:
+            Para exercer seus direitos LGPD ou esclarecer dúvidas sobre esta política, entre em contato com nosso
+            Encarregado de Proteção de Dados (DPO):
           </p>
-          <p className="font-medium">dosy.privacidade@gmail.com</p>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li><strong>DPO / Privacidade:</strong> <a href="mailto:privacidade@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">privacidade@dosymed.app</a> (também: <a href="mailto:dpo@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">dpo@dosymed.app</a>)</li>
+            <li><strong>Suporte geral:</strong> <a href="mailto:suporte@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">suporte@dosymed.app</a></li>
+            <li><strong>Questões legais / DMCA:</strong> <a href="mailto:legal@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">legal@dosymed.app</a></li>
+            <li><strong>Vulnerabilidades:</strong> <a href="mailto:security@dosymed.app" className="text-orange-600 dark:text-orange-400 underline">security@dosymed.app</a> (responsible disclosure)</li>
+          </ul>
           <p className="text-xs text-slate-500">
-            Prazo de resposta: até 15 dias úteis, conforme Art. 18 da LGPD.
+            Prazo de resposta: até 15 dias úteis, conforme Art. 18 LGPD. Para vulnerabilidades, prazo de
+            confirmação inicial 72h.
           </p>
         </section>
 
         <section className="space-y-2">
           <h2 className="font-semibold text-base text-slate-900 dark:text-white">11. Alterações nesta política</h2>
           <p>
-            Notificaremos sobre alterações relevantes por e-mail ou notificação no app com pelo menos 15 dias de antecedência.
-            O uso continuado após a notificação constitui aceitação das alterações.
+            Notificaremos sobre alterações relevantes por e-mail (canal `noreply@dosymed.app`) ou notificação no app
+            com pelo menos 15 dias de antecedência. O uso continuado após a notificação constitui aceitação das alterações.
           </p>
         </section>
 
         <p className="text-xs text-slate-400 pt-4 border-t border-slate-200 dark:border-slate-800">
-          Dosy · Política de Privacidade v1.0 · Brasil
+          Dosy Med LTDA · Política de Privacidade v1.1 · Brasil · Atualizada em maio de 2026
         </p>
       </div>
     </motion.div>
