@@ -1415,7 +1415,7 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Risco UX:** atualização cross-device até 1s extra. Healthcare app — não-crítico.
 
 ### #137 — Dashboard: consolidar 4 useDoses em 1
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 0124608 (2026-05-05)
 - **Origem:** egress-audit-2026-05-05 F3
 - **Esforço:** 2h
 - **Dependências:** nenhuma
@@ -1426,7 +1426,7 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Risco UX:** Dashboard 1 round-trip em vez de 4. Mais rápido.
 
 ### #138 — `DOSE_COLS_LIST` sem `observation`
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído @ commit 0813d94 (2026-05-05)
 - **Origem:** egress-audit-2026-05-05 F4
 - **Esforço:** 1h (incluindo verificação Reports/Analytics)
 - **Dependências:** nenhuma
@@ -1468,7 +1468,14 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Risco UX:** novo share notif pode demorar até 5min em aparecer. Aceitável (shares raros).
 
 ### #142 — Rotacionar JWT cron `schedule-alarms-fcm-6h` + refatorar pra usar vault/env
-- **Status:** ⏳ Aberto
+- **Status:** 🔴 Aberto — CRÍTICO (verificado 2026-05-05: JWT antigo iat 26 abr 2026 retorna 200 OK no Edge function = rotação #084 NÃO invalidou esse JWT, vault sem secrets)
+- **Plano:**
+  1. USER: Supabase Dashboard → Settings → API → "Roll JWT secret" (invalida TODOS JWTs antigos including service_role anterior)
+  2. USER: copia nova service_role_key
+  3. AGENTE: `vault.create_secret('SUPABASE_SERVICE_ROLE_KEY', '<new_key>')`
+  4. AGENTE: drop cron job 3 atual + recriar usando `(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='SUPABASE_SERVICE_ROLE_KEY')` no Authorization
+  5. Verificar Edge function continua respondendo 200 OK pós-rotação
+  6. Atualizar Vercel envs + .env.local + Edge Function secrets se algum usa service_role JWT antigo
 - **Origem:** egress-audit-2026-05-05 F11 (security)
 - **Esforço:** 1h
 - **Dependências:** nenhuma
