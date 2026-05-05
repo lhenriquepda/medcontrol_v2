@@ -13,9 +13,9 @@
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
 **Estado atual de testing:**
-- ✅ Internal Testing **live** (URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` — 2 testers)
-- 🔒 Closed Testing: bloqueado (precisa P0 #004 vídeo FGS + #025 screenshots + #006 device validation)
-- 🔒 Open Testing / Produção pública: bloqueado até Closed Testing rodar 14 dias com 12+ testers
+- ✅ Internal Testing **live** (URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` · só user + agente, decisão pular recrutamento conhecidos)
+- 🟡 Closed Testing: pronto pra configurar — bloqueadores formais Console fechados (#004 ✅ vídeo FGS + #025 ✅ screenshots + #003 ✅ pwd + #008 ✅ Sentry + Política Privacidade ✅ + Intent tela cheia ✅). Próximos passos: #129 Google Group + #130 Console track + #131 recrutamento externo + #132 gate 14d/12 ativos.
+- 🔒 Open Testing / Produção pública: bloqueado até #132 gate cumprido (#133 solicita produção via Console)
 
 **Veredito da auditoria:** ⚠️ **PRONTO COM RESSALVAS**.
 - Score médio: 7.0/10 across 25 dimensões.
@@ -158,16 +158,26 @@ Pendente nesta release:
 - ✅ FASE 19.1: Internal Testing setup
 - ✅ Auditoria externa multidisciplinar 2026-05-01
 
-**Bloqueando avanço para Closed Testing (P0 manuais user):**
-1. ~~#003 Rotacionar senha postgres + revogar PAT + INFOS.md~~ ✅ fechado 2026-05-04
-2. ~~#004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE`~~ ✅ fechado 2026-05-04 (YouTube unlisted + Console FGS form salvo)
-3. #006 Device validation 3 devices físicos (1-2 dias)
-4. ~~#008 Sentry GitHub Secrets~~ ✅ fechado 2026-05-04 (verificado — secrets criados 2026-04-28; aceitação completa pendente #127 CI lint fix)
-5. #009 PITR + DR drill (depende upgrade Pro plan)
-6. #007 Telemetria PostHog `notification_delivered` (depende #018)
-7. ~~#025 Screenshots phone 1080×1920~~ ✅ fechado 2026-05-04 (8 screenshots + ícone + assets YT uploadados Console rascunho)
-8. **#127** CI lint fix `AnimatedRoutes.jsx` react-hooks/refs errors (~30min, P1, libera #008 aceitação)
-9. **Submeter mudanças Console pra revisão Google** (rascunho atual: ícone novo + 8 screenshots + URL vídeo + FGS form)
+**Bloqueadores formais Console — TODOS ✅ FECHADOS 2026-05-04/05:**
+1. ~~#003 Rotacionar senha postgres + revogar PAT + INFOS.md~~ ✅
+2. ~~#004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE`~~ ✅ (YouTube unlisted + Console FGS form salvo)
+3. ~~#008 Sentry GitHub Secrets~~ ✅ (secrets criados 2026-04-28; #127 libera aceitação completa via CI)
+4. ~~#025 Screenshots phone~~ ✅ (8 screenshots + ícone + assets YT uploadados Console)
+5. ~~Política de Privacidade URL~~ ✅ atualizada pra dosymed.app
+6. ~~Intent para tela cheia declaração~~ ✅ ("Despertador" + "Sim conceder previamente")
+
+**Próximo gate — Closed Testing recrutamento externo (estratégia 2026-05-05):**
+- #129 Criar Google Group `dosy-testers` (~10min user)
+- #130 Configurar Closed Testing track Console com Group como tester list (~30min)
+- #131 Recrutar 15-20 testers externos via Reddit/redes
+- #132 Gate 14 dias × 12+ testers ativos
+- #133 Solicitar produção Console
+
+**P0 não-bloqueadores Closed Testing (mas devem fechar antes Production):**
+- #006 Device validation 3 devices (manual user — paralelo, opcional pra Closed)
+- #009 PITR + DR drill (depende upgrade Supabase Pro plan)
+- #007 Telemetria PostHog `notification_delivered` (depende #018)
+- #127 CI lint fix AnimatedRoutes.jsx (~30min código, libera Sentry source maps)
 
 ---
 
@@ -304,7 +314,16 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#020** [Plan] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
 - [x] **#025** [Plan, fechado 2026-05-04] Screenshots phone — 19 capturadas S25 Ultra (1080×2340), 8 melhores curadas em `resources/prints/processado/01-08-*.png` + ícone 512 peach (composto icon-bg + logo-mono-light) + feature graphic 1024×500 + assets YT (avatar 800 + banner 2560×1440). Tudo uploadado Console Listagem da loja como rascunho. Pendente envio revisão Google. Plan FASE 18.9.2
 - [ ] **#026** [Plan] Provisionar caixa real `suporte@dosyapp.com`. Plan FASE 18.5
-- [ ] **#027** [Plan] Closed Testing track + 12 testers (14 dias). Plan FASE 18.9.3
+- [ ] **#027** [Plan, expandido em #129-#133 conforme estratégia 2026-05-05] Closed Testing track + 12 testers (14 dias). Plan FASE 18.9.3
+
+#### Closed Testing — recrutamento externo (estratégia 2026-05-05)
+> User decidiu pular recrutamento Internal com pessoas conhecidas e ir direto Closed via Google Group público + Reddit/redes.
+
+- [ ] **#129** [P0] Criar Google Group público `dosy-testers` (auto-aprovação, visibilidade pública). ~10min manual user.
+- [ ] **#130** [P0] Configurar Closed Testing track Console: tester list = e-mail Google Group + países BR + promover AAB v0.2.0.7. ~30min com agente Chrome MCP.
+- [ ] **#131** [P0] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + targeted r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
+- [ ] **#132** [P0 gate] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados em mini-releases.
+- [ ] **#133** [P0] Solicitar acesso de produção Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
 
 #### Web (não-bloq Android)
 - [ ] **#018** [Plan] AdSense IDs reais em `index.html`. Plan FASE 4.3 · [06 BUG-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml)
@@ -588,4 +607,4 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ---
 
-🚀 **Próximo passo concreto:** v0.2.0.6 publicada 2026-05-04 19:13 UTC (Vercel dosymed.app v0.2.0.6 + AAB versionCode 39 Internal Testing live + tag v0.2.0.6 + master sync). USER executa P0 manuais em paralelo (#003 rotação pwd postgres + #004 vídeo FGS + #008 Sentry secrets + #025 screenshots + #006 device validation 3 devices) — destrava Closed Testing 14 dias → Open Testing público.
+🚀 **Próximo passo concreto:** Bloqueadores formais Console TODOS fechados (2026-05-04/05). Próximo gate é **Closed Testing externo via Google Group + Reddit** (estratégia 2026-05-05 — user pulou recrutamento conhecidos). Sequência: #129 Group → #130 track Console → #131 recrutamento → #132 gate 14d/12 ativos → #133 produção. Em paralelo: #127 CI lint fix (~30min código) + #128 investigação multi-dose alarm + #006 device validation opcional.

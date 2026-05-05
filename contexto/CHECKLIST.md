@@ -1308,6 +1308,74 @@ Comportamento desejado por user:
 
 ---
 
+## Plano Closed Testing externo (decisão user 2026-05-05)
+
+**User decidiu pular recrutamento Internal Testing com pessoas conhecidas (família/amigos) e ir direto ao Closed Testing recrutando testers externos via Google Group público + Reddit/redes.** Internal Testing fica live (ele + agente) só pra validação técnica, não pra coleta de feedback.
+
+Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
+
+### #129 — Criar Google Group público `dosy-testers`
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 10 min (manual user)
+- **Dependências:** nenhuma
+- **Aceitação:**
+  - Group criado em https://groups.google.com → "Criar grupo"
+  - Nome: `Dosy Testers` · E-mail: `dosy-testers@googlegroups.com` (ou similar disponível)
+  - Configurações: "Qualquer pessoa pode pedir e entrar" (auto-aprovação); visibilidade pública
+  - URL pública do group salva pra divulgação (ex.: `https://groups.google.com/g/dosy-testers/about`)
+
+### #130 — Configurar Closed Testing track no Console com Group como tester list
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 30 min (manual user + agente Chrome MCP)
+- **Dependências:** #129
+- **Aceitação:**
+  - Console → Test and release → Closed testing → Create track
+  - Track nome: "Dosy Beta Fechado" (ou similar)
+  - Tester list: adicionar e-mail do Google Group `dosy-testers@googlegroups.com` (em vez de e-mails individuais)
+  - Países: Brasil + qualquer outro relevante
+  - Promover AAB v0.2.0.7 (ou versão atual em Internal) pra Closed track
+  - Salvar opt-in URL gerado pelo Console pra divulgação
+
+### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
+- **Status:** ⏳ Aberto
+- **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
+- **Esforço:** 1-2h posts iniciais + acompanhamento semanal
+- **Dependências:** #129 + #130 (precisa Group + opt-in URL antes)
+- **Aceitação:**
+  - Posts em r/AlphaAndBetausers, r/SideProject, r/brasil, r/desenvolvimentopt
+  - Posts targeted: r/medicina, r/saude, r/tdah, r/diabetes (público-alvo cuidadores)
+  - Compartilhamento Twitter/X + LinkedIn pessoal
+  - Discord Indie Hackers BR + comunidades QA Android
+  - Template post: "[Beta tester] Dosy — app Android pra organizar medicação família/idosos. Diferencial: alarme estilo despertador (ignora silencioso). Grátis. Link Google Group: {URL} → após entrar instala via {opt-in Console}"
+  - Meta: 15-20 inscritos (folga pq alguns não testam)
+  - Acompanhar contador "testadores ativos" no Console
+
+### #132 — Gate Closed Testing: 14 dias rodando com ≥12 testadores ativos
+- **Status:** ⏳ Aberto
+- **Origem:** Regra Google 2023+ pra contas novas
+- **Esforço:** 14 dias passivos + iteração semanal de feedback
+- **Dependências:** #131
+- **Aceitação:**
+  - Console mostra ≥12 testadores ativos por ≥14 dias consecutivos
+  - Sentry: 0 crashes críticos novos durante janela
+  - Iterar bugs reportados em mini-releases v0.2.0.x conforme aparecerem
+  - Gate Console habilita "Solicitar acesso de produção"
+
+### #133 — Solicitar acesso Open Testing / Produção
+- **Status:** ⏳ Aberto
+- **Origem:** Pós #132 gate
+- **Esforço:** 1h (preencher form Console + responder perguntas Google)
+- **Dependências:** #132
+- **Aceitação:**
+  - Console → Solicitar acesso de produção → preencher questionário sobre teste fechado
+  - Aguardar aprovação Google (~24-72h)
+  - Após aprovação: Open Testing fica disponível com link público (sem lista) OU promover direto pra Production
+  - Decidir estratégia: passar por Open Testing 7-14 dias OU produção rollout 5%→100%
+
+---
+
 ## Resumo
 
 - **P0:** 9 itens — restantes: 6 abertos após fechamento de #001/#002/#005 em v0.1.6.10
