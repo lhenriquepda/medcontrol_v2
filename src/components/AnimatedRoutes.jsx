@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { pageTransition, shouldReduceMotion } from '../animations'
@@ -22,19 +22,17 @@ import { pageTransition, shouldReduceMotion } from '../animations'
  */
 export default function AnimatedRoutes({ children }) {
   const location = useLocation()
-  const prevPathRef = useRef(location.pathname)
-  const directionRef = useRef('forward')
+  // Item #127: state em vez de ref pra evitar leitura ref durante render (react-hooks/refs).
+  // prevPath retém pathname anterior; direction é derivado puro durante render.
+  const [prevPath, setPrevPath] = useState(location.pathname)
 
-  // Atualiza direction a cada navegação
+  const prevDepth = prevPath.split('/').filter(Boolean).length
+  const currDepth = location.pathname.split('/').filter(Boolean).length
+  const direction = currDepth < prevDepth ? 'back' : 'forward'
+
   useEffect(() => {
-    const prev = prevPathRef.current
-    const curr = location.pathname
-    // Heurística: rota com menos segmentos = back
-    const prevDepth = prev.split('/').filter(Boolean).length
-    const currDepth = curr.split('/').filter(Boolean).length
-    directionRef.current = currDepth < prevDepth ? 'back' : 'forward'
-    prevPathRef.current = curr
-  }, [location.pathname])
+    if (prevPath !== location.pathname) setPrevPath(location.pathname)
+  }, [location.pathname, prevPath])
 
   if (shouldReduceMotion()) {
     return children
@@ -42,10 +40,10 @@ export default function AnimatedRoutes({ children }) {
 
   return (
     <div className="relative w-full" style={{ minHeight: '100vh' }}>
-      <AnimatePresence mode="popLayout" custom={directionRef.current} initial={false}>
+      <AnimatePresence mode="popLayout" custom={direction} initial={false}>
         <motion.div
           key={location.pathname}
-          custom={directionRef.current}
+          custom={direction}
           variants={pageTransition.variants}
           {...pageTransition.motionProps}
           style={{ width: '100%' }}

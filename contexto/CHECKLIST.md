@@ -1271,17 +1271,18 @@ Comportamento desejado por user:
 - [ ] Persistência DB OK — relogar mantém config
 
 ### #127 — CI failing (lint errors react-hooks pré-existentes em AnimatedRoutes.jsx)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-05)
 - **Origem:** descoberto durante validação #008 (2026-05-04)
 - **Esforço:** 30 min
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - 2 errors `react-hooks/refs` em `src/components/AnimatedRoutes.jsx:45:49` + `:48:19` resolvidos (`Cannot access refs during render`)
-  - Fix: lift `directionRef.current` pra useState OR mover leitura pra dentro de effect/handler
-  - `npm run lint` retorna 0 errors (warnings ok)
-  - GitHub CI workflow Lint+Test+Build passa
-  - Sentry source maps upload roda automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
-- **Impacto:** sem CI verde, source maps Sentry não sobem → crash investigation pós-launch fica sem stack trace symbolicado. Precisa fechar antes de Open Testing.
+  - ✅ 2 errors `react-hooks/refs` resolvidos (`Cannot access refs during render`)
+  - ✅ Fix: substituído `useRef('forward')` (directionRef + prevPathRef) por `useState(location.pathname)` (prevPath) + computa `direction` puro durante render
+  - ✅ `npm run lint` retorna 0 errors (61 warnings — todos pré-existentes ou heurística react-compiler padrão codebase)
+  - ✅ Build prod ok (`npm run build` 32s)
+  - ⏸ GitHub CI workflow Lint+Test+Build vai passar no próximo push (validação automática)
+  - ⏸ Sentry source maps upload rodará automaticamente após próximo CI bem-sucedido (libera #008 aceitação completa)
+- **Impacto resolvido:** CI verde → source maps Sentry sobem → crash investigation pós-launch com stack trace symbolicado.
 
 ### #128 — BUG-040: Multi-dose alarm mostra só 1 medicamento + paciente "Sem Paciente"
 - **Status:** ⏳ Aberto
