@@ -65,14 +65,15 @@ export default function Dashboard() {
     const doseParam = searchParams.get('dose')
     const dosesParam = searchParams.get('doses')
     if (doseParam || dosesParam) {
-      setFilters({ range: 'all', patientId: null, status: null, type: null })
+      // #137 (v0.2.0.9): 'all' removido — usar '7d' (máximo visível agora)
+      setFilters({ range: '7d', patientId: null, status: null, type: null })
       const ids = dosesParam ? dosesParam.split(',').filter(Boolean) : [doseParam]
       setMultiDoseIds(ids)
       setSearchParams({}, { replace: true })
       return
     }
     if (f === 'overdue') {
-      setFilters({ range: 'all', patientId: null, status: 'overdue', type: null })
+      setFilters({ range: '7d', patientId: null, status: 'overdue', type: null })
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, setSearchParams])
