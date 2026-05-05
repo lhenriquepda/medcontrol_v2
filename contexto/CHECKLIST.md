@@ -855,13 +855,22 @@ Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED`
 - **Esforço:** 2h (revisar `theme.css`)
 - **Aceitação:** axe DevTools confirma WCAG AA em todas as pages dark mode.
 
-### #041 — Hierarquia headings + Dynamic Type via `rem`
+### #041 — Hierarquia headings + Dynamic Type via `rem` (PARTIAL v0.2.1.0)
+- **Status:** 🟡 Parcial v0.2.1.0 — audit headings done; refactor rem diferido v0.2.2.0+
+- **v0.2.1.0 done:** auditoria semantic confirmou PageHeader.jsx renderiza `<h1>` (componente reusado por 14/18 pages). Pages com h1 explicit semantic: Privacidade, Termos, Login, Install (4 outras outras usam PageHeader).
+- **v0.2.2.0+ deferred:** refactor mass `fontSize: Npx` → `rem` (172 ocorrências entre pages + components). Decisão: baixo ROI no Capacitor Android WebView (system font-scale não afeta WebView por padrão). Alto risco regressão visual. Re-avaliar quando RWD breakpoint upgrade for priorizado.
+
+
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 15 backlog
 - **Esforço:** 4h
 - **Aceitação:** font-scale 200% Android funciona; headings semânticos h1>h2>h3.
 
-### #042 — Lighthouse mobile ≥90 em Reports + Dashboard
+### #042 — Lighthouse mobile ≥90 em Reports + Dashboard (DEFERIDO v0.2.2.0+)
+- **Status:** ⏳ Diferido v0.2.2.0+ (não-bloqueante Closed Testing)
+- **Justificativa diferimento v0.2.1.0:** audit completo + iterar fixes (~1 dia trabalho). Depende ambiente prod estável + análise profile bundle. Não-bloqueante Closed Testing categoria Saúde e fitness (review padrão). Re-avaliar pré-Open Testing público (#133).
+
+
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 17 manual
 - **Esforço:** depende de findings (parcial pode ser 1 dia)
