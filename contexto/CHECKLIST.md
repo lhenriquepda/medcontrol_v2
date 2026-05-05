@@ -55,15 +55,16 @@
 - **Detalhe:** [archive/security-original.md](archive/security-original.md) seções "CRÍTICO" e "ALTO"
 
 ### #004 — Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE para Play Console
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-04)
 - **Origem:** [Plan.md] FASE 18.9.1
 - **Esforço:** 2-3h (gravar + editar + upload YouTube unlisted + Console form)
 - **Dependências:** nenhuma
 - **Aceitação:**
-  - Vídeo ~30s em YouTube unlisted demonstrando alarme crítico de dose: criar tratamento → bloquear telefone → alarme dispara fullscreen sobre lockscreen → Tomada/Pulada
-  - Console: `Conteúdo do app` → `Permissões de serviço em primeiro plano` → URL preenchida
-  - Campos descritivos em PT-BR explicando uso médico
-- **Bloqueador:** sem isso, Closed Testing não promove para Produção
+  - ✅ Vídeo `alarm.mp4` (33s) gravado S25 Ultra Dosy Dev demonstrando: cadastro de tratamento → tela bloqueada → alarme fullscreen disparando sobre lockscreen → Tomada/Adiar/Pular
+  - ✅ Upload YouTube como Shorts unlisted: https://www.youtube.com/watch?v=qLBCzualcCw
+  - ✅ Play Console: Conteúdo do app → Permissões de serviço em primeiro plano → "Outro/Uso especial" + URL vídeo + descrição completa PT-BR (1082 chars) explicando categoria SPECIAL_USE necessária para alarmes médicos críticos não-cobertos pelas categorias padrão
+  - ✅ Salvo (mensagem "A mudança foi salva")
+- **Pendente:** envio pra revisão Google via Visão geral da publicação (junto com mudanças #025 + outras)
 
 ### #005 — Resolver BUG-001 — Encoding UTF-8 quebrado em nome de paciente
 - **Status:** ✅ Concluído @ commit pendente (2026-05-01)
@@ -301,11 +302,17 @@
   + config em package.json: `"lint-staged": { "*.{js,jsx}": ["eslint --fix", "prettier --write"] }`
 
 ### #025 — Screenshots phone retrabalho (Play Store)
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído (2026-05-04)
 - **Origem:** [Plan.md] FASE 18.9.2
 - **Esforço:** 2-3h (designer)
 - **Dependências:** nenhuma
-- **Aceitação:** 4+ screenshots phone 1080×1920 polidos em `resources/screenshots/` + uploaded em Console
+- **Aceitação:**
+  - ✅ 19 screenshots brutos capturados S25 Ultra Dosy Dev (1080×2340 atende mínimo 1080px Play Store)
+  - ✅ Triagem: 8 melhores escolhidas em `resources/prints/processado/` ordenadas 01-08 (alarme multi-dose · início multi-paciente · análises · marcar dose · relatórios · paciente · histórico · onboarding alarme)
+  - ✅ Plus assets gerados via sharp: `icon-512-peach.png` (composto icon-background + logo-mono-light, safe margin 17% H · 37% V) + `feature-graphic-1024x500.png` (gradient peach + tagline) + `yt-avatar-800.png` + `yt-banner-2560x1440.png`
+  - ✅ Upload Play Console: ícone 512 + 8 screenshots phone uploadados, Salvar persistido como rascunho
+  - ✅ Listagem da loja → campo Vídeo preenchido com URL YouTube unlisted
+- **Pendente:** envio pra revisão Google via Visão geral da publicação
 
 ### #026 — Provisionar caixa real `suporte@dosyapp.com`
 - **Status:** ⏳ Aberto

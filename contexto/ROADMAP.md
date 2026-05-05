@@ -160,13 +160,14 @@ Pendente nesta release:
 
 **Bloqueando avanço para Closed Testing (P0 manuais user):**
 1. ~~#003 Rotacionar senha postgres + revogar PAT + INFOS.md~~ ✅ fechado 2026-05-04
-2. #004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE` (~2-3h)
+2. ~~#004 Vídeo demo `FOREGROUND_SERVICE_SPECIAL_USE`~~ ✅ fechado 2026-05-04 (YouTube unlisted + Console FGS form salvo)
 3. #006 Device validation 3 devices físicos (1-2 dias)
 4. ~~#008 Sentry GitHub Secrets~~ ✅ fechado 2026-05-04 (verificado — secrets criados 2026-04-28; aceitação completa pendente #127 CI lint fix)
 5. #009 PITR + DR drill (depende upgrade Pro plan)
 6. #007 Telemetria PostHog `notification_delivered` (depende #018)
-7. #025 Screenshots phone 1080×1920 retrabalho (~1h)
+7. ~~#025 Screenshots phone 1080×1920~~ ✅ fechado 2026-05-04 (8 screenshots + ícone + assets YT uploadados Console rascunho)
 8. **#127** CI lint fix `AnimatedRoutes.jsx` react-hooks/refs errors (~30min, P1, libera #008 aceitação)
+9. **Submeter mudanças Console pra revisão Google** (rascunho atual: ícone novo + 8 screenshots + URL vídeo + FGS form)
 
 ---
 
@@ -263,7 +264,7 @@ ESTADO ATUAL: Internal Testing ativo
 - [x] **#003** [Plan + Auditoria, fechado 2026-05-04] Senha postgres rotacionada via Supabase Dashboard (auto-gen 16-char, salva password manager user). PAT `sbp_aedc82d7` (conta `lhenrique.pda@gmail.com` kids-paint) já revogado anteriormente — verificado conta sem tokens. INFOS.md ausente local + git history. → [archive/security-original.md](archive/security-original.md)
 
 #### Bloqueador Play Console
-- [ ] **#004** [Plan] Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE YouTube unlisted. Plan FASE 18.9.1
+- [x] **#004** [Plan, fechado 2026-05-04] Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE — `alarm.mp4` 33s gravado S25 Ultra Dosy Dev → YouTube Shorts unlisted https://www.youtube.com/watch?v=qLBCzualcCw → Console Permissões FGS preenchido (uso especial + descrição PT-BR + URL). Pendente envio revisão Google. Plan FASE 18.9.1
 
 #### Integridade dados
 - [x] **#005** [Auditoria] Encoding UTF-8 quebrado em nome paciente. → [06 BUG-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
@@ -301,7 +302,7 @@ ESTADO ATUAL: Internal Testing ativo
 
 #### Compliance / SAC
 - [x] **#020** [Plan] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
-- [ ] **#025** [Plan] Screenshots phone retrabalho 1080×1920. Plan FASE 18.9.2
+- [x] **#025** [Plan, fechado 2026-05-04] Screenshots phone — 19 capturadas S25 Ultra (1080×2340), 8 melhores curadas em `resources/prints/processado/01-08-*.png` + ícone 512 peach (composto icon-bg + logo-mono-light) + feature graphic 1024×500 + assets YT (avatar 800 + banner 2560×1440). Tudo uploadado Console Listagem da loja como rascunho. Pendente envio revisão Google. Plan FASE 18.9.2
 - [ ] **#026** [Plan] Provisionar caixa real `suporte@dosyapp.com`. Plan FASE 18.5
 - [ ] **#027** [Plan] Closed Testing track + 12 testers (14 dias). Plan FASE 18.9.3
 
