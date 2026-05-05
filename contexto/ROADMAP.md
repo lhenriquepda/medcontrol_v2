@@ -7,8 +7,9 @@
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.7` (tag `v0.2.0.7`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.7 (master, projeto Vercel `dosy` org `lhenriquepdas-projects`). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.0.8` (tag `v0.2.0.8`) · branch `master` · sync com `origin/master`. Sem release branch ativa.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.8 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
 
@@ -59,9 +60,23 @@
 
 ## 3. Onde paramos
 
-**Última release:** v0.2.0.7 publicada 2026-05-04 23:18 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 40 + tag git `v0.2.0.7`).
-**Items v0.2.0.7 fechados:** Dosy Dev FLAG_SECURE off (debug variant `.dev` libera screenshot/screen recording pra captura de assets store) + StatusBar tema sync (light → dark icons + bg peach; dark → light icons + bg dark warm — fix ícones invisíveis em modo claro) + #128 BUG-040 catalogado (multi-dose alarm cross-patient mostra só 1 medicamento + "Sem Paciente").
-**Items v0.2.0.6:** #010 ic_stat_dosy + #017 LockScreen biometria + sync docs + Regra 9 Chrome MCP.
+**Última release:** v0.2.0.8 publicada 2026-05-05 11:23 UTC (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 41 + tag git `v0.2.0.8`).
+**Items v0.2.0.8 fechados:**
+- Auditoria egress robusta linha-a-linha (`contexto/egress-audit-2026-05-05/`)
+- 13 items #134-#146 plano fixes egress catalogados
+- #127 CI lint fix AnimatedRoutes.jsx (libera Sentry source maps)
+- #134 useAppResume short idle: REMOVIDO invalidate cascade (-30% a -45% egress estimado)
+- #135 useRealtime resume nativo: REMOVIDO invalidate ALL keys (-5% a -10%)
+- #136 useRealtime postgres_changes: debounce 1s invalidate (-15% a -25%)
+- #128 BUG-040 catalogado
+- #025 screenshots + ícone Play Console upload
+- #004 vídeo FGS YouTube unlisted + Console form preenchido
+- Plano Closed Testing externo #129-#133 (Google Group + Reddit recrutamento)
+- Test accounts atualizadas (teste-free + teste-plus, teste03 deletado)
+- Regra 9 README (Chrome MCP automation pra Play Console / Vercel / Supabase)
+
+**Items v0.2.0.7:** Dosy Dev FLAG_SECURE off + StatusBar tema sync + #128 BUG-040 catalogado.
+**Items v0.2.0.6:** #010 ic_stat_dosy + #017 LockScreen biometria + sync docs.
 **Última auditoria:** 2026-05-01 + auditoria-live-2026-05-01.
 
 **Items fechados nas releases v0.2.0.0 → v0.2.0.5 (resumo — detalhe em §6):**
@@ -624,6 +639,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ---
 
-🚀 **Próximo passo concreto:** **CRÍTICO 06 May** — egress 715% Free Tier, grace expira amanhã. Aplicar #134-#138 (P0 fixes egress, ~4h código) em release v0.2.0.8 antes do grace expirar. Em paralelo: avaliar upgrade Pro $25/mês temporário pra destravar enquanto fixes não validados. Detalhe completo em `contexto/egress-audit-2026-05-05/README.md`.
+🚀 **Próximo passo concreto:** v0.2.0.8 publicada 2026-05-05 com #134-#136 P0 egress fixes + Pro plan ativo. **Validar redução egress 24-48h** via Supabase Dashboard Reports (esperado: pico diário 9.6GB → <2GB). Pós-validação:
+- Se redução confirmada → considerar downgrade Free no fim do ciclo (26 mai)
+- Se ainda alto → release v0.2.0.9 com #137 Dashboard consolidação + #138 DOSE_COLS_LIST + #142 JWT cron security
 
-Pós-egress estabilizado: Closed Testing externo (#129-#133) destrava caminho Open Testing.
+Em paralelo: Closed Testing externo #129-#133 (Google Group + Reddit) destrava caminho Open Testing.

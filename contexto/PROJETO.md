@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-04 — pós release v0.2.0.7 (versionCode 40 / versionName 0.2.0.7). Master sincronizado, sem release branch ativa.
+> **Última revisão:** 2026-05-05 — pós release v0.2.0.8 (versionCode 41 / versionName 0.2.0.8). Master sincronizado, sem release branch ativa.
 
 ---
 
@@ -21,7 +21,7 @@ Decisões de UX devem balancear todas essas personas — letras legíveis e flux
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-app.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 40 / versionName 0.2.0.7. Closed Testing bloqueado por #004 vídeo FGS + #006 device validation + #025 screenshots. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; FLAG_SECURE off em Dosy Dev + StatusBar tema sync fechados v0.2.0.7.
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 41 / versionName 0.2.0.8. Closed Testing externo via Google Group #129-#133 pendente. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; v0.2.0.7 FLAG_SECURE off em Dosy Dev + StatusBar tema sync; v0.2.0.8 P0 egress fixes (#127 + #134-#136) + assets store + vídeo FGS + auditoria egress.
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
 
 ---
