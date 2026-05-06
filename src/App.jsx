@@ -53,7 +53,17 @@ export default function App() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  useRealtime()
+  // #157 (v0.2.1.0) — DISABLED. Bug investigation 2026-05-05 found:
+  //   1. publication `supabase_realtime` empty (NO postgres_changes events delivered)
+  //   2. useRealtime reconnect cascade burns ~13 req/s storm sustained idle hidden
+  //      tab (server logs: ChannelRateLimitReached + Stop tenant cycles)
+  //   3. onStatusChange backoff 1-2s × refetchQueries({type:'active'}) loop
+  //      generates ~5GB/h egress per idle user (extrapolated)
+  // Net: zero functional value (publication empty) + catastrophic egress cost.
+  // Re-enable plan v0.2.2.0+: populate publication via Studio → Database → Replication
+  // → supabase_realtime toggle tables (medcontrol.doses/patients/treatments/etc) +
+  // verify reconnect logic doesn't storm under empty channel state.
+  // useRealtime()
   useAppResume()
   useAdMobBanner()
   const { locked, biometricAvailable, unlock } = useAppLock()
