@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-06 — master @ tag v0.2.1.1 (versionCode 47) publicada 2026-05-06 (hotfix #159 BUG-LOGOUT). v0.2.1.0 incluiu #007 Telemetria PostHog + #026 ImprovMX 7 emails + #036 skeleton screens + #046 Runbook DR + #129 Google Group + #156 v1.3 Privacidade LGPD + #157 fix storm useRealtime + categoria Saúde e fitness. v0.2.1.1 hotfix #159 fix useAuth boot validation transient vs auth failure (user reported logout repetido). AAB v0.2.1.1 vc 47 publicado Internal Testing. Closed Testing #130 REJEITADO Google (org account required) — #158 P0 URGENTE plano 7-passos pra resolver antes próximo release v0.2.2.0.
+> **Última revisão:** 2026-05-06 — master @ tag v0.2.1.2 (versionCode 48) publicada 2026-05-06. v0.2.1.2 inclui #158 Console Apps de saúde fix (Medicina desmarcado + Outro consumer) + #158 PWA manifest medical→lifestyle + #160 PatientDetail refactor (Doses Hoje X/Y + 3 sections tratamentos por status + lista doses inline + collapse + Card peach destaque + dark mode adaptive) + #161 alerts dismiss refinement (ending 1×/dia + useState mirror feedback immediate) + Mounjaro SQL data fix. v0.2.1.1 (intermediário) #159 BUG-LOGOUT fix. AAB v0.2.1.2 vc 48 publicado Internal Testing. Closed Testing #130 aguarda Google re-review pós #158 fixes (~7d).
 
 ---
 

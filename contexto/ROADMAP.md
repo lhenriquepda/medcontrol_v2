@@ -41,8 +41,8 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.1.1` · master @ tag `v0.2.1.1` (publicada 2026-05-06 — hotfix #159 BUG-LOGOUT).
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.1 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.1.2` · master @ tag `v0.2.1.2` (publicada 2026-05-06 — Console fix #158 + PatientDetail refactor #160 + alerts dismiss #161 + Mounjaro data fix).
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.2 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -94,10 +94,23 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Última release publicada:** v0.2.1.1 em 2026-05-06 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 47 + tag git `v0.2.1.1`) — hotfix #159 BUG-LOGOUT.
+**Última release publicada:** v0.2.1.2 em 2026-05-06 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 48 + tag git `v0.2.1.2`) — Console fix #158 + PatientDetail refactor #160 + alerts dismiss #161 + Mounjaro data fix.
+
+**Items v0.2.1.2 fechados (4 features + 1 data fix):**
+- ✅ #158 fix #1 Console Apps de saúde — desmarcado todas Medicina checkboxes + texto "Outro" consumer descritivo + re-submit Closed Testing 14 mudanças (Google review ~7d)
+- ✅ #158 fix #2 PWA manifest categories ["health","medical","productivity"] → ["health","lifestyle","productivity"] (remove flag medical W3C reduce trigger Google org gate)
+- ✅ #160 v1+v2+v2.1 PatientDetail refactor — card "Adesão" → "Doses Hoje X/Y" + bug fix tratamentos 3 sections (Ativos/Pausados/Encerrados via effectiveStatus) + lista doses paciente DoseCard reuso filter 24h/Todas + reorder layout. v2: collapse opcional TODAS 4 seções + Doses dentro Card peach destaque. v2.1: dark mode adaptive (peach-100 var)
+- ✅ #161 v1+v2 alerts dismiss refinement — ending date-based 1×/dia + useState mirror localStorage feedback visual immediate (bug v1 não dismissava UI)
+- ✅ Mounjaro SQL data fix — paciente Luiz Henrique conta lhenrique.pda durationDays=4→28 + status active + 3 doses pendentes (06/05 13/05 20/05 14:30 BRT)
+
+**Items BLOQUEADOS Google review:**
+- 🚨 #130 Closed Testing track aguarda Google re-review pós #158 fixes Console (~24-72h até 7d)
+- 🚨 #158 P0 URGENTE — fixes aplicados, aguarda Google decision
+
+**Release anterior:** v0.2.1.1 em 2026-05-06 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 47 + tag git `v0.2.1.1`) — hotfix #159 BUG-LOGOUT.
 
 **Items v0.2.1.1 fechados (1):**
-- ✅ #159 BUG-LOGOUT fix useAuth boot validation distinguir transient vs auth failure (user reported app desloga toda vez que abre — fix preserva session em network slow/5xx, signOut só em 401/403/JWT-invalid)
+- ✅ #159 BUG-LOGOUT fix useAuth boot validation distinguir transient vs auth failure
 
 **Release anterior:** v0.2.1.0 em 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 46 + tag git `v0.2.1.0`).
 
