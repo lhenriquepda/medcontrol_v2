@@ -41,8 +41,8 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.1.0` · master @ tag `v0.2.1.0` (publicada 2026-05-05).
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.0 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.1.1` · master @ tag `v0.2.1.1` (publicada 2026-05-06 — hotfix #159 BUG-LOGOUT).
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.1 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -94,7 +94,12 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Última release publicada:** v0.2.1.0 em 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 46 + tag git `v0.2.1.0`).
+**Última release publicada:** v0.2.1.1 em 2026-05-06 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 47 + tag git `v0.2.1.1`) — hotfix #159 BUG-LOGOUT.
+
+**Items v0.2.1.1 fechados (1):**
+- ✅ #159 BUG-LOGOUT fix useAuth boot validation distinguir transient vs auth failure (user reported app desloga toda vez que abre — fix preserva session em network slow/5xx, signOut só em 401/403/JWT-invalid)
+
+**Release anterior:** v0.2.1.0 em 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 46 + tag git `v0.2.1.0`).
 
 **Items v0.2.1.0 fechados (12):**
 - ✅ #007 Telemetria PostHog notification_delivered + tapped (healthcare crítico, 4 listeners Capacitor)
