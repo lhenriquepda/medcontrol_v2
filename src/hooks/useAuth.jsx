@@ -31,21 +31,46 @@ export function AuthProvider({ children }) {
         // sido invalidado server-side (user deletado, banned, etc) sem evento
         // local. supabase.auth.getUser() bate na API e retorna erro se token
         // não vale mais → forçar signOut local pra limpar cache stale.
+        //
+        // Item #159 (release v0.2.1.1) FIX BUG-LOGOUT: distinguir transient
+        // errors (network slow, timeout, 5xx) vs real auth failures (401/403
+        // JWT invalid). Implementação anterior (#123) deslogava em QUALQUER
+        // erro — incluindo flutuações network mobile que são frequentes em
+        // Android cold start. Resultado: user deslogado toda vez que abria app
+        // com network instável. Agora: signOut só se evidência forte de JWT
+        // inválido (status 401/403 OR mensagem contém "jwt"/"token expired"/
+        // "user not found"). Outros erros: preservar session local, retry no
+        // próximo boot. Trade-off aceitável: user com session realmente revogada
+        // continua com cache stale até próxima request 401 (que dispara signOut
+        // via auth.onAuthStateChange normalmente).
         if (initialUser) {
           try {
             const { data: u, error } = await supabase.auth.getUser()
             if (error || !u?.user) {
-              console.warn('[useAuth] session invalid on boot, signing out:', error?.message)
-              await supabase.auth.signOut()
-              setUser(null)
-              qc.clear()
-              try {
-                localStorage.removeItem('medcontrol_notif')
-                localStorage.removeItem('dashCollapsed')
-              } catch { /* ignore */ }
+              const errMsg = error?.message || ''
+              const errStatus = error?.status
+              const isAuthFailure =
+                errStatus === 401 ||
+                errStatus === 403 ||
+                /jwt|token.*expired|user.*not.*found|invalid.*claim|invalid.*token/i.test(errMsg)
+              if (isAuthFailure) {
+                console.warn('[useAuth] session invalid on boot (auth failure), signing out:', errMsg, 'status:', errStatus)
+                await supabase.auth.signOut()
+                setUser(null)
+                qc.clear()
+                try {
+                  localStorage.removeItem('medcontrol_notif')
+                  localStorage.removeItem('dashCollapsed')
+                } catch { /* ignore */ }
+              } else {
+                // Transient (network slow / timeout / 5xx) — preservar session local.
+                // Próximo boot OU próxima request authenticada vai re-validar.
+                console.warn('[useAuth] getUser transient error (keeping session):', errMsg, 'status:', errStatus)
+              }
             }
           } catch (e) {
-            console.warn('[useAuth] getUser check failed:', e?.message)
+            // Network exception (offline) — preservar session local.
+            console.warn('[useAuth] getUser network exception (keeping session):', e?.message)
           }
         }
         const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {

@@ -2489,3 +2489,46 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 
 **Detalhe rejection email:** ver Console → Notificações → "App rejeitado · 5 de mai." → Mais detalhes (já lido na sessão).
 
+
+### #159 — BUG-LOGOUT fix: useAuth boot validation transient vs auth failure
+- **Status:** ✅ Concluído v0.2.1.1 (2026-05-06) — fix targeted commit aplicado em release/v0.2.1.1
+- **Origem:** User reported (2026-05-06 madrugada) — "abro app e está deslogado, preciso ficar logando o tempo inteiro"
+- **Prioridade:** P0 (bug crítico UX — afeta retenção user)
+- **Esforço:** 30 min investigação + 5 min fix + ceremony
+
+**Causa raiz:**
+`useAuth.jsx:34-49` (#123 release v0.2.0.3) implementou boot session validation via `supabase.auth.getUser()` API call. Lógica original deslogava em **QUALQUER erro**:
+```js
+if (error || !u?.user) {
+  await supabase.auth.signOut()  // <-- desloga até em network slow/timeout
+  ...
+}
+```
+
+Cenário trigger frequente:
+1. App cold start Android (especialmente após Doze mode OS)
+2. `supabase.auth.getSession()` retorna session local OK (cached)
+3. `supabase.auth.getUser()` bate API `/auth/v1/user`
+4. Network mobile slow OR Supabase API timeout → `error` truthy
+5. Branch desloga user mesmo com sessão válida
+
+User Android vivencia isso múltiplas vezes/dia.
+
+**Fix targeted (`src/hooks/useAuth.jsx`):**
+Distinguir error type. SignOut só em evidência forte de auth failure:
+- `error.status === 401` (Unauthorized)
+- `error.status === 403` (Forbidden)
+- Mensagem contém regex `/jwt|token.*expired|user.*not.*found|invalid.*claim|invalid.*token/i`
+
+Outros erros (network timeout, 5xx, fetch exception) → preservar session local. Próximo boot OR próxima request authenticada re-valida automaticamente.
+
+**Trade-off aceitável:**
+User com session realmente revogada (deletado/banned) continua com cache stale até próxima request 401. Auth listener `onAuthStateChange` captura SIGNED_OUT normalmente quando server responde 401 numa query subsequente.
+
+**Aceitação:**
+- ✅ Cold start Android com network instável NÃO desloga user
+- ✅ Real auth failure (JWT invalid após user deletado) ainda desloga via fallback request 401
+- ✅ Network exception (offline) preserva session
+- ✅ User + esposa relatam fim de logout repetido pós-rollout v0.2.1.1 vc 47
+
+**Detalhe code change:** ver commit release/v0.2.1.1 fix `useAuth.jsx`. Comment block in-code documenta racional + trade-off completo.
