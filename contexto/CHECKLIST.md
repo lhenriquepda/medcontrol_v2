@@ -92,7 +92,7 @@
 - **Saída:** issues em backlog ou re-abertura de sub-fase relevante
 
 ### #007 — Telemetria notificações PostHog (regressão silenciosa healthcare)
-- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — código deployed; dashboard + alert manual operacional
+- **Status:** 🟡 PARQUEADO v0.2.2.0+ (2026-05-05) — código revertido por storm 35 req/s preview Vercel. Bisect confirma culpado.
 - **Origem:** [Auditoria] (Dimensão 14)
 - **Esforço:** 1-2h código + 30min setup dashboard PostHog
 - **Dependências:** PostHog key já configurada (#015 ✅)
@@ -129,6 +129,45 @@ Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED`
 - Documentar em `docs/playbooks/posthog-dashboards.md` (criar follow-up)
 
 **Justificativa healthcare crítica:** sem esta métrica, regressão silenciosa em alarmes (3 caminhos #083) passa despercebida em produção. Healthcare = não-negociável.
+
+**🚨 Bug storm preview Vercel (2026-05-05) — bisect confirmado:**
+
+Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) detectou **storm catastrófico**:
+
+| Métrica idle 30s hidden tab | Preview release v0.2.1.0 (com #007) | Prod master | Multiplicador |
+|---|---|---|---|
+| Total reqs Supabase | 1053 | 57 | **18×** |
+| `/doses` | 809 (~27 req/s) | 48 (1.6 req/s) | 17× |
+| `/patients` | 163 (5.4 req/s) | 6 (0.2 req/s) | 27× |
+| `/treatments` | 81 (2.7 req/s) | 3 (0.1 req/s) | 27× |
+| Egress 5min idle | 27 MB só `/doses` | ~2 MB todos | 13× |
+
+**Extrapolação:** ~1 GB/h por user idle = quebra Supabase Pro tier rapidamente.
+
+**Bisect:** revert src `App.jsx` + `analytics.js` ao estado anterior #007 (commit `76dc28a`) → **storm 0 reqs idle 44s** (vs 35 req/s antes). #007 confirmado culpado.
+
+**Mecanismo (não-confirmado, candidatas):**
+1. `import { track, EVENTS } from './services/analytics'` em App.jsx força init módulo `analytics.js` no boot.
+2. `analytics.js` chama `initAnalytics()` em PROD que carrega `posthog-js` com `capture_pageview: 'history_change'` + autocapture.
+3. PostHog autocapture instrumenta `window.fetch` globalmente.
+4. Combinação possível: PostHog wrapper + interceptor próprio + `useEffect` App.jsx:126-131 (`scheduleDoses(allDoses, ...)` re-dispara em cada `allDoses` ref change) → cascade.
+5. Ou: PostHog `capture_pageview: 'history_change'` reage a `pushState/popstate` durante navegação App.jsx → side-effect React Query refetch.
+
+Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+.
+
+**Plano v0.2.2.0+ retomar:**
+1. Reproduzir storm em ambiente dev local (`npm run dev` → preview build mode + interceptor)
+2. Bisect mais fino: cherry-pick #007 mas **DESABILITAR PostHog init** primeiro (pular `initAnalytics()` boot)
+3. Se storm não retorna sem PostHog → culpa é PostHog config. Refactor: desabilitar `capture_pageview: 'history_change'`, autocapture off por default, init lazy só após user click first
+4. Se storm retorna mesmo sem PostHog → culpa está nos listeners ou import side-effect. Refactor: mover #007 listeners pra hook separado `usePushNotificationsTelemetry()` que NÃO importa em web (early return condicional via dynamic import)
+5. Validar fix com mesma receita preview Vercel + idle 5min antes ship v0.2.2.0+
+
+**Trabalho preservado (não-revertido):** `EVENTS.NOTIFICATION_DELIVERED/_TAPPED/_DISMISSED` constants em `analytics.js` mantidos (zero side-effect, prep pra retomar).
+
+**Lições (durable feedback memory):**
+- Validação preview Vercel via Chrome MCP **DEVE** rodar pré-merge release branch (Regra 9.1 README) — confirmado mais uma vez. Sem ela, storm seria descoberto pós-prod com user impact + custo egress.
+- Idle 5min hidden tab é gate crítico — capturou bug que bateria interativa (2 min) NÃO captou.
+- Lint + build + manual smoke web local NÃO substituem preview Vercel real (Capacitor shim + PROD mode + lazy chunks comportam diferente).
 
 ### #008 — Configurar `SENTRY_AUTH_TOKEN` + `ORG` + `PROJECT` em GitHub Secrets
 - **Status:** ✅ Concluído (verificado 2026-05-04 — secrets criados em 2026-04-28)
