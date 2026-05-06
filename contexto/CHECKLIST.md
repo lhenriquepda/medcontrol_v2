@@ -92,7 +92,7 @@
 - **Saída:** issues em backlog ou re-abertura de sub-fase relevante
 
 ### #007 — Telemetria notificações PostHog (regressão silenciosa healthcare)
-- **Status:** 🟡 PARQUEADO v0.2.2.0+ (2026-05-05) — código revertido por storm 35 req/s preview Vercel. Bisect confirma culpado.
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — código restaurado. Bisect inicial deu false positive (storm não escalou em window 30s); investigação aprofundada identificou root cause real em #157 (useRealtime cascade + publication vazia).
 - **Origem:** [Auditoria] (Dimensão 14)
 - **Esforço:** 1-2h código + 30min setup dashboard PostHog
 - **Dependências:** PostHog key já configurada (#015 ✅)
@@ -130,9 +130,11 @@ Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED`
 
 **Justificativa healthcare crítica:** sem esta métrica, regressão silenciosa em alarmes (3 caminhos #083) passa despercebida em produção. Healthcare = não-negociável.
 
-**🚨 Bug storm preview Vercel (2026-05-05) — bisect confirmado:**
+**🚨 Bug storm preview Vercel (2026-05-05) — bisect inicial false positive, root cause real em #157:**
 
-Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) detectou **storm catastrófico**:
+> **CORREÇÃO 2026-05-05 (sessão atual mais tarde):** Bisect inicial apontou #007 culpado por reduzir storm de 1053→0 reqs em window 30s. Investigação aprofundada (idle 5min completo) revelou que storm **escala ao longo do tempo em hidden tab** — bisect 30s capturou window pré-escalada. Storm real persistia mesmo sem #007 (715 reqs em 5min idle). Root cause real = **useRealtime reconnect cascade + publication `supabase_realtime` vazia** (ver #157). Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm caiu para 9 reqs em 7min idle (~0.02 req/s sustained, 99.7% redução). #007 restaurado via revert do bisect commit `76dc28a`.
+
+Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) detectou **storm catastrófico** (atribuído inicialmente a #007, depois identificado como #157):
 
 | Métrica idle 30s hidden tab | Preview release v0.2.1.0 (com #007) | Prod master | Multiplicador |
 |---|---|---|---|
@@ -155,19 +157,13 @@ Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) dete
 
 Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+.
 
-**Plano v0.2.2.0+ retomar:**
-1. Reproduzir storm em ambiente dev local (`npm run dev` → preview build mode + interceptor)
-2. Bisect mais fino: cherry-pick #007 mas **DESABILITAR PostHog init** primeiro (pular `initAnalytics()` boot)
-3. Se storm não retorna sem PostHog → culpa é PostHog config. Refactor: desabilitar `capture_pageview: 'history_change'`, autocapture off por default, init lazy só após user click first
-4. Se storm retorna mesmo sem PostHog → culpa está nos listeners ou import side-effect. Refactor: mover #007 listeners pra hook separado `usePushNotificationsTelemetry()` que NÃO importa em web (early return condicional via dynamic import)
-5. Validar fix com mesma receita preview Vercel + idle 5min antes ship v0.2.2.0+
-
-**Trabalho preservado (não-revertido):** `EVENTS.NOTIFICATION_DELIVERED/_TAPPED/_DISMISSED` constants em `analytics.js` mantidos (zero side-effect, prep pra retomar).
+**Resolução real (descoberta sessão atual):** root cause = #157 (useRealtime cascade + publication vazia), não #007. Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm sumiu (9 reqs / 7min idle = 0.021 req/s vs 12 req/s antes). #007 restaurado via revert bisect (commit `ff431ca`). Ver #157 entry abaixo + ver `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`.
 
 **Lições (durable feedback memory):**
 - Validação preview Vercel via Chrome MCP **DEVE** rodar pré-merge release branch (Regra 9.1 README) — confirmado mais uma vez. Sem ela, storm seria descoberto pós-prod com user impact + custo egress.
-- Idle 5min hidden tab é gate crítico — capturou bug que bateria interativa (2 min) NÃO captou.
+- **Idle 5min hidden tab é gate crítico** — capturou bug que bateria interativa (2 min) NÃO captou. **Bisect 30s window pode dar false negative** porque storm escala ao longo do tempo em hidden tab.
 - Lint + build + manual smoke web local NÃO substituem preview Vercel real (Capacitor shim + PROD mode + lazy chunks comportam diferente).
+- **Bisect deve sempre validar com window igual ao original observation** (storm 5min observed → bisect 5min, não 30s).
 
 ### #008 — Configurar `SENTRY_AUTH_TOKEN` + `ORG` + `PROJECT` em GitHub Secrets
 - **Status:** ✅ Concluído (verificado 2026-05-04 — secrets criados em 2026-04-28)
@@ -2253,3 +2249,88 @@ Sem 7+: Produção rollout 5%→100% + P2 + P3 backlog
 - ✅ Conteúdo cobre todos requisitos LGPD para healthcare
 
 **Bloqueia:** Antes era #130. Agora #130 desbloqueado pra submit Google review (junto com cross-checks restantes).
+
+### #157 — Disable useRealtime() — storm 13 req/s preview/prod
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — fix targeted commit `da61b04` + restore #007 commit `ff431ca`
+- **Origem:** Validação preview Vercel pré-merge release/v0.2.1.0 (Regra 9.1 README) descobriu storm 18× prod baseline. Bisect inicial false positive (#007). Investigação aprofundada via Chrome MCP + Supabase MCP identificou root cause real.
+- **Prioridade:** P0 (egress bloqueador prod — bug pré-existente master desde algum momento entre v0.1.7.x e v0.2.0.x)
+- **Esforço:** ~1h investigação + 5min fix
+- **Dependências:** nenhuma
+
+**Pattern observado:**
+- 13 reqs/s sustained idle hidden tab (mesmo prod master)
+- Bursts paralelas <100ms + gaps regulares ~2-3s entre bursts
+- Cada burst: 11× /doses + 1× /patients + 1× /treatments
+- Storm escalava ao longo do tempo: 30s window = ~57 reqs (1.9 req/s, parecia normal); 5min window = 3558 reqs (12 req/s); 28min window = 77k reqs (46 req/s sustained)
+- Extrapolação: ~5GB/h egress por user idle hidden tab
+
+**Investigação (Chrome MCP + Supabase MCP):**
+1. **Chrome MCP fetch interceptor + WebSocket hook + visibility events** capturaram pattern exato.
+2. **Bisect commit b3fe670 #007 src files (commit `76dc28a`):** storm 30s = 0 reqs (false positive — storm não tinha escalado em 30s).
+3. **Idle 5min validation pós-bisect:** storm voltou (715 reqs em 5min = 2.4 req/s). Não era #007.
+4. **Comparação prod master 28min idle:** 77k reqs (46 req/s) — bug pré-existente confirmado, não regressão release.
+5. **Supabase MCP `SELECT FROM pg_publication_tables WHERE pubname='supabase_realtime'`:** retornou **[]** vazio. Publication não tem tabelas configuradas.
+6. **Supabase MCP `get_logs(realtime)`:** flood de errors `IncreaseSubscriptionConnectionPool: Too many database timeouts` + `ChannelRateLimitReached: Too many channels` + `Stop tenant ... no connected users`.
+7. **Análise código `useRealtime.js:80-108`:** `onStatusChange(CLOSED/CHANNEL_ERROR/TIMED_OUT)` dispara `setTimeout(reconnect, 1-30s backoff)` → `unsubscribe + subscribe + for keys: refetchQueries({type:'active'})`. Cycle confirmed.
+
+**Mecanismo:**
+```
+Channel subscribe → server sees "no users" → STOP tenant → CLOSE ch
+  → onStatusChange CLOSED → setTimeout backoff 1-2s
+  → unsubscribe + subscribe + refetchQueries(['doses','patients','treatments',...])
+  → 13 reqs paralelos disparam (4-9 active doses keys + patients + treatments)
+  → channel briefly SUBSCRIBED → reconnectAttempts=0 reset
+  → tenant idle stops again → CLOSED → loop
+```
+
+**Por quê publication vazia:**
+Não-conhecido — provavelmente migration removeu tables do `supabase_realtime` publication em algum momento, OU publication nunca foi configurada via Studio Dashboard. Histórico release notes (#079/#092/#093/#136/#145) menciona realtime fixes mas nenhum reseta publication.
+
+**Fix aplicado v0.2.1.0:**
+```diff
+- useRealtime()
++ // #157 (v0.2.1.0) — DISABLED. Bug investigation 2026-05-05 found:
++ //   1. publication `supabase_realtime` empty (NO postgres_changes events delivered)
++ //   2. useRealtime reconnect cascade burns ~13 req/s storm sustained idle hidden tab
++ //   3. Net: zero functional value + catastrophic egress cost.
++ // Re-enable plan v0.2.2.0+: populate publication via Studio + verify reconnect logic
++ // useRealtime()
+```
+
+Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação comentada em App.jsx:67.
+
+**Validação pós-fix:**
+
+| Métrica idle hidden tab | Pre-fix | Pós-fix #157 |
+|---|---|---|
+| 30s | ~57 reqs (já escalando) | 1 req |
+| 90s | ~785 reqs (8.7 req/s) | 2 reqs |
+| 5min completo | 3558 reqs (12 req/s) | 9 reqs (0.021 req/s) |
+| Visibility | hidden | hidden |
+
+**Storm 99.7% eliminado.** 9 reqs em 7min = comportamento sano (1 auth/v1/user + 1 patient_shares + 1 patients + 1 treatments + 5 doses durante mount + occasional refetch on staleTime).
+
+**Plano v0.2.2.0+ retomar useRealtime():**
+1. Studio → Database → Replication → publication `supabase_realtime` toggle:
+   - `medcontrol.doses`
+   - `medcontrol.patients`
+   - `medcontrol.treatments`
+   - `medcontrol.sos_rules`
+   - `medcontrol.treatment_templates`
+   - `medcontrol.patient_shares`
+2. Re-enable `useRealtime()` em App.jsx:67 (uncomment)
+3. Refactor `useRealtime.js` defensive: adicionar `if (reconnectAttempts >= 5) suspend reconnects until visibilitychange visible` para evitar storm em channel empty state futuro
+4. Re-rodar preview Vercel idle 5min hidden tab → confirmar 0 reqs sustained
+5. Validar postgres_changes events chegam (test: insert dose via Studio → expect Dashboard auto-update sem refresh)
+
+**Aceitação:**
+- ✅ Storm 99.7% eliminado preview release/v0.2.1.0 (medido)
+- ✅ #007 PostHog telemetria restored (era false positive bisect)
+- ⏳ Validar prod master pós-merge (espera-se mesmo fix levar a 0.02 req/s sustained)
+
+**Lições durables:**
+- Storm pode escalar com tempo em hidden tab — bisect window deve igualar window observation original
+- publication realtime vazia + hook subscribe = silent rate-limit cascade (não-óbvio sem inspecionar BD direto)
+- Investigação multi-camada (cliente Chrome MCP + servidor Supabase MCP) é necessária pra root cause real
+
+**Detalhe completo:** `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`
