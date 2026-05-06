@@ -91,17 +91,79 @@
   - Validar: alarme dispara locked + unlocked + app killed + DND + após reboot + adiar 10min funciona + FLAG_SECURE bloqueia screenshot + biometria (se wired) + responsividade
 - **Saída:** issues em backlog ou re-abertura de sub-fase relevante
 
-### #007 — Adicionar telemetria `notification_delivered` em PostHog (regressão silenciosa)
-- **Status:** ⏳ Aberto
+### #007 — Telemetria notificações PostHog (regressão silenciosa healthcare)
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — código restaurado. Bisect inicial deu false positive (storm não escalou em window 30s); investigação aprofundada identificou root cause real em #157 (useRealtime cascade + publication vazia).
 - **Origem:** [Auditoria] (Dimensão 14)
-- **Esforço:** 1-2h
-- **Dependências:** PostHog key configurada (#018)
-- **Aceitação:**
-  - Evento PostHog `notification_delivered` disparado quando push FCM chega (background) e quando LocalNotif fire
-  - Evento `notification_dismissed` / `notification_action_taken` (Tomada/Pular/Adiar)
-  - Dashboard mostra taxa de entrega ≥ 99%
-  - Alerta PostHog: queda > 5% em 1h dispara notif Slack/email
-- **Justificativa:** SEM esta métrica, regressão em alarmes (a coisa mais crítica do app) passa despercebida em produção. Healthcare = não-negociável.
+- **Esforço:** 1-2h código + 30min setup dashboard PostHog
+- **Dependências:** PostHog key já configurada (#015 ✅)
+- **Implementação executada:**
+  - `src/services/analytics.js` EVENTS: `NOTIFICATION_DELIVERED`, `NOTIFICATION_TAPPED`, `NOTIFICATION_DISMISSED` (constants)
+  - `src/App.jsx` 4 listeners Capacitor wired (track call em cada):
+    - `LocalNotifications.localNotificationReceived` → `NOTIFICATION_DELIVERED { kind:'local_foreground' }`
+    - `LocalNotifications.localNotificationActionPerformed` → `NOTIFICATION_TAPPED { kind:'local' }`
+    - `PushNotifications.pushNotificationReceived` → `NOTIFICATION_DELIVERED { kind:'push_foreground' }`
+    - `PushNotifications.pushNotificationActionPerformed` → `NOTIFICATION_TAPPED { kind:'push' }`
+  - Cleanup `localFireHandle?.remove?.()` adicionado ao return effect
+  - Props: `kind`, `actionId`, `type`, `hasDoseId` — PII strip auto via `sanitize_properties` analytics.js (LGPD: zero email/name/observation/medName)
+
+**Cobertura granular eventos:**
+- ✅ FCM foreground delivery (Android app aberto) — `pushNotificationReceived`
+- ✅ FCM tap (background OR foreground) — `pushNotificationActionPerformed`
+- ✅ LocalNotif fire (foreground) — `localNotificationReceived`
+- ✅ LocalNotif tap — `localNotificationActionPerformed`
+- ⏳ FCM background delivery JS-side: NÃO captura (Android suspende JS background) — depende Edge `notify-doses` server-side delivery report (fora escopo #007 JS)
+- ⏳ Notification dismissed (swipe-away sem tap): Capacitor LocalNotifications/PushNotifications NÃO emitem evento "dismissed" — requer custom Android plugin pra hook NotificationListenerService (parqueado v0.2.2.0+)
+
+**Eventos relacionados já existentes:**
+- `ALARM_FIRED` — alarme nativo full-screen disparado (DosyMessagingService → AlarmReceiver)
+- `ALARM_DISMISSED` — user dismissed full-screen alarme
+- `ALARM_SNOOZED` — user adiou (snooze button)
+- `DOSE_CONFIRMED` — user marcou tomada via app
+- `DOSE_SKIPPED` — user pulou via app
+
+Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED` mapeia funnel completo: agendamento → entrega → ação user.
+
+**Pendente operacional (manual user, não bloqueante #007 fechado):**
+- Dashboard PostHog: criar funnel `notification_delivered → alarm_fired → dose_confirmed/skipped/snoozed` com taxa entrega target ≥99%
+- Alert PostHog: rule "drop >5% delivered last 1h vs prev 24h baseline" → notif email/Slack
+- Documentar em `docs/playbooks/posthog-dashboards.md` (criar follow-up)
+
+**Justificativa healthcare crítica:** sem esta métrica, regressão silenciosa em alarmes (3 caminhos #083) passa despercebida em produção. Healthcare = não-negociável.
+
+**🚨 Bug storm preview Vercel (2026-05-05) — bisect inicial false positive, root cause real em #157:**
+
+> **CORREÇÃO 2026-05-05 (sessão atual mais tarde):** Bisect inicial apontou #007 culpado por reduzir storm de 1053→0 reqs em window 30s. Investigação aprofundada (idle 5min completo) revelou que storm **escala ao longo do tempo em hidden tab** — bisect 30s capturou window pré-escalada. Storm real persistia mesmo sem #007 (715 reqs em 5min idle). Root cause real = **useRealtime reconnect cascade + publication `supabase_realtime` vazia** (ver #157). Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm caiu para 9 reqs em 7min idle (~0.02 req/s sustained, 99.7% redução). #007 restaurado via revert do bisect commit `76dc28a`.
+
+Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) detectou **storm catastrófico** (atribuído inicialmente a #007, depois identificado como #157):
+
+| Métrica idle 30s hidden tab | Preview release v0.2.1.0 (com #007) | Prod master | Multiplicador |
+|---|---|---|---|
+| Total reqs Supabase | 1053 | 57 | **18×** |
+| `/doses` | 809 (~27 req/s) | 48 (1.6 req/s) | 17× |
+| `/patients` | 163 (5.4 req/s) | 6 (0.2 req/s) | 27× |
+| `/treatments` | 81 (2.7 req/s) | 3 (0.1 req/s) | 27× |
+| Egress 5min idle | 27 MB só `/doses` | ~2 MB todos | 13× |
+
+**Extrapolação:** ~1 GB/h por user idle = quebra Supabase Pro tier rapidamente.
+
+**Bisect:** revert src `App.jsx` + `analytics.js` ao estado anterior #007 (commit `76dc28a`) → **storm 0 reqs idle 44s** (vs 35 req/s antes). #007 confirmado culpado.
+
+**Mecanismo (não-confirmado, candidatas):**
+1. `import { track, EVENTS } from './services/analytics'` em App.jsx força init módulo `analytics.js` no boot.
+2. `analytics.js` chama `initAnalytics()` em PROD que carrega `posthog-js` com `capture_pageview: 'history_change'` + autocapture.
+3. PostHog autocapture instrumenta `window.fetch` globalmente.
+4. Combinação possível: PostHog wrapper + interceptor próprio + `useEffect` App.jsx:126-131 (`scheduleDoses(allDoses, ...)` re-dispara em cada `allDoses` ref change) → cascade.
+5. Ou: PostHog `capture_pageview: 'history_change'` reage a `pushState/popstate` durante navegação App.jsx → side-effect React Query refetch.
+
+Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+.
+
+**Resolução real (descoberta sessão atual):** root cause = #157 (useRealtime cascade + publication vazia), não #007. Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm sumiu (9 reqs / 7min idle = 0.021 req/s vs 12 req/s antes). #007 restaurado via revert bisect (commit `ff431ca`). Ver #157 entry abaixo + ver `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`.
+
+**Lições (durable feedback memory):**
+- Validação preview Vercel via Chrome MCP **DEVE** rodar pré-merge release branch (Regra 9.1 README) — confirmado mais uma vez. Sem ela, storm seria descoberto pós-prod com user impact + custo egress.
+- **Idle 5min hidden tab é gate crítico** — capturou bug que bateria interativa (2 min) NÃO captou. **Bisect 30s window pode dar false negative** porque storm escala ao longo do tempo em hidden tab.
+- Lint + build + manual smoke web local NÃO substituem preview Vercel real (Capacitor shim + PROD mode + lazy chunks comportam diferente).
+- **Bisect deve sempre validar com window igual ao original observation** (storm 5min observed → bisect 5min, não 30s).
 
 ### #008 — Configurar `SENTRY_AUTH_TOKEN` + `ORG` + `PROJECT` em GitHub Secrets
 - **Status:** ✅ Concluído (verificado 2026-05-04 — secrets criados em 2026-04-28)
@@ -355,16 +417,40 @@
   - ✅ Disable toggle exige biometria (anti-tamper)
   - ✅ Fallback senha celular via `allowDeviceCredential: true`
 
-### #018 — AdSense IDs reais (web — não-bloqueante Android)
-- **Status:** ⏳ Aberto
-- **Origem:** [Plan.md] FASE 4.3 pendente
-- **Esforço:** 1h (criar conta AdSense + substituir)
-- **Dependências:** verificação domínio AdSense
-- **Aceitação:**
-  - `index.html` script tag com publisher ID real
-  - `VITE_ADSENSE_CLIENT` + `VITE_ADSENSE_SLOT` em Vercel env
-  - Web mostra anúncios reais (não placeholder)
-- **Notas:** [auditoria/06-bugs.md#bug-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml). Se Beta vai só Android, P3.
+### #018 — AdMob Android prod (prioritário) + AdSense web (secundário)
+- **Status:** ⏳ Aberto (parcial AdMob — escopo expandido 2026-05-05)
+- **Origem:** [Plan.md] FASE 4.3 pendente; cross-ref AdMob Console assessment 2026-05-05
+- **Esforço:** AdMob: 15min flag flip + aguardar Play Production approval. AdSense: 1h opcional.
+- **Dependências:** AdMob app approval Google (depende #133 Production track Play Console).
+
+**Estado atual AdMob (2026-05-05 — Chrome MCP Console assessment):**
+- ✅ Conta AdMob aprovada · perfil pagamento completo (dosy.med@gmail.com)
+- ✅ App "Dosy" Android registrado: App ID `ca-app-pub-2350865861527931~5445284437`
+- ✅ Banner ad unit "Dosy Bottom Banner": `ca-app-pub-2350865861527931/2984960441`
+- ✅ AndroidManifest meta-data ads.APPLICATION_ID já com prod ID real
+- ✅ `.env` + `.env.production`: `VITE_ADMOB_BANNER_ANDROID=ca-app-pub-2350865861527931/2984960441`
+- ❌ `.env.production`: `VITE_ADMOB_USE_TEST=true` — força sandbox banner Google `/6300978111` (sempre fill, $0)
+- ⏸️ AdMob Console status app: "Requer revisão / Veiculação limitada" (espera Play Store Production track #133)
+
+**Estado atual AdSense web:**
+- ❌ `index.html` linha 18-19: script tag com placeholder `client=ca-pub-XXXXXXXXXXXXXXXX` (404 silently)
+- ❌ `.env*` + Vercel env: `VITE_ADSENSE_CLIENT` + `VITE_ADSENSE_SLOT` vazios → AdBanner.jsx retorna null
+- 🟡 Foco mobile-first → web AdSense baixa prioridade. Pode permanecer placeholder OU remover script index.html cosmeticamente.
+
+**Aceitação AdMob:**
+  - Após `#133` aprovação Production: flip `VITE_ADMOB_USE_TEST=false` em Vercel + `.env.production` local
+  - Rebuild AAB + Vercel deploy: real ad unit veicula (ou no-fill no início enquanto eCPM warm-up)
+  - Validar device real: `[AdMob] no-fill / load fail` aceitável; sem crash; CSS var `--ad-banner-height` colapsa em no-fill
+
+**Aceitação AdSense (opcional):**
+  - Decisão: criar conta AdSense web + verificar domínio dosymed.app → preencher `data-ad-client` real OU remover linhas 17-19 index.html
+  - Se preencher: `VITE_ADSENSE_CLIENT=ca-pub-...` + `VITE_ADSENSE_SLOT=...` em Vercel env
+
+**Progresso v0.2.1.0 (2026-05-05):**
+  - ✅ AdSense placeholder script removido de `index.html` (linhas 17-19 viraram comentário documentado). Network tab Vercel preview não mais carrega `adsbygoogle.js` 404. Reativação documentada no comentário.
+  - ⏸️ AdMob `VITE_ADMOB_USE_TEST=false`: aguarda #133 Production track Play Console aprovado.
+
+**Notas:** [auditoria/06-bugs.md#bug-006](auditoria/06-bugs.md#bug-006--adsense-placeholder-em-produção-indexhtml). Item original era "AdSense IDs em index.html" → ampliado pra cobrir ambos AdSense (web) + AdMob (Android native principal).
 
 ### #019 — Subir `minimum_password_length` para 8 + complexity
 - **Status:** ✅ Concluído @ commit eb6c06c (2026-05-02)
@@ -454,25 +540,78 @@
   - ✅ Listagem da loja → campo Vídeo preenchido com URL YouTube unlisted
 - **Pendente:** envio pra revisão Google via Visão geral da publicação
 
-### #026 — Provisionar caixa real `suporte@dosyapp.com`
-- **Status:** ⏳ Aberto
+### #026 — Emails oficiais `*@dosymed.app` via ImprovMX → dosy.med@gmail.com
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — DNS + ImprovMX + 7 aliases verificados (Gmail labels manuais user)
 - **Origem:** [Plan.md] FASE 18.5
-- **Esforço:** 30 min (Google Workspace ou alias)
-- **Dependências:** domínio dosyapp.com configurado
-- **Aceitação:**
-  - Email recebe e responde
-  - Auto-responder com SLA documentada (Free 72h, PRO 24h, Plus 12h)
-  - Testar mailto template em device Android real
+- **Esforço:** 1h setup (Chrome MCP) + 5min Gmail labels manual user
+- **Dependências:** domínio `dosymed.app` já em produção (custom domain Vercel + Resend SMTP #154)
+- **Resolução escolhida:** **ImprovMX free** (25 aliases, DNS-only, zero infra, free forever).
+
+**Setup executado (Chrome MCP dosy.med@gmail.com):**
+
+1. ✅ Conta ImprovMX criada manualmente user `dosy.med@gmail.com` + domain `dosymed.app` adicionado
+2. ✅ DNS Hostinger 3 records adicionados (apex `@`):
+   - `MX @ 10 mx1.improvmx.com`
+   - `MX @ 20 mx2.improvmx.com`
+   - `TXT @ "v=spf1 include:spf.improvmx.com ~all"`
+3. ✅ DNS propagation verificada via `nslookup -type=mx dosymed.app 8.8.8.8` (records visíveis Google DNS)
+4. ✅ ImprovMX domain status: **VERIFIED** (email confirmação "Amazing! Your domain is verified")
+5. ✅ 7 aliases criados (todos forward → `dosy.med@gmail.com`):
+
+| Alias | Uso |
+|---|---|
+| `*@dosymed.app` (catch-all) | Fallback any address |
+| `contato@dosymed.app` | Geral / Play Console contato |
+| `privacidade@dosymed.app` | DPO LGPD (#156) |
+| `suporte@dosymed.app` | Atendimento usuários |
+| `legal@dosymed.app` | Jurídico / Termos / DMCA |
+| `dpo@dosymed.app` | Data Protection Officer (sinônimo privacidade) |
+| `security@dosymed.app` | Vuln disclosures |
+| `hello@dosymed.app` | First-touch friendly outreach |
+
+**Resilience considerations:**
+- SPF não conflita com Resend SMTP outbound (#154) pq Resend usa subdomain `send.dosymed.app`
+- DKIM Resend (`resend._domainkey`) intocado
+- DMARC `_dmarc` policy `p=none` mantida — bom pra debug inicial
+- Free tier limit: 25 aliases (espaço ainda pra +18) e 10 mensagens/dia. Upgrade $9/mo se exceder
+
+**Gmail filters + labels (concluído v0.2.1.0 via Chrome MCP):**
+- ✅ 7 labels criadas: Contato, Privacidade, Suporte, Legal, DPO, Security, Hello (sidebar Gmail)
+- ✅ 7 filters criados, cada um `Matches: to:(<alias>@dosymed.app) Do this: Apply label "<Label>"`
+- ✅ Filters aplicam label automaticamente em emails recebidos (mantém inbox + label, não archive)
+- Test envio futuro pra qualquer `<alias>@dosymed.app` → ImprovMX forward → dosy.med@gmail.com → filter aplica label correspondente
+
+**Fix anti-spam (2026-05-05 sessão atual via Chrome MCP):**
+- **Problema:** user enviou TESTE 1 lhenrique.pda@gmail.com → contato@dosymed.app → forward funcionou (ImprovMX dashboard SENT) MAS Gmail flagou como Spam (forwarder novo, sender desconhecido). Filtros 1-7 só aplicam label, sem flag "Never Spam".
+- **Diagnóstico:** ImprovMX dashboard 1 Received OK. DNS MX+SPF OK. Causa = Gmail spam heuristic. TESTE 1 + ImprovMX TEST email achados em Spam.
+- **Fix:** 8º filtro catch-all criado `Matches: to:(dosymed.app) Do this: Never send it to Spam, Mark it as important`. Cobre 7 aliases atuais + futuros + qualquer `<x>@dosymed.app`.
+- **Validação end-to-end:** TESTE 1 resgatado Spam → marcado "Report not spam" → Inbox `Contato` label. ImprovMX TEST `Alias test for contato@dosymed.app` chegou Inbox direto label `Contato`. Forward chain validado: gmail.com → dosymed.app MX (improvmx) → forwarder@improvmx.com → dosy.med@gmail.com Inbox + label.
+- **Limitação Gmail conhecida:** filtro NÃO aplica retroativo em Spam/Trash. Resgate manual user para emails antigos lá.
+- **Pendência (opcional):** consolidar filtros 1-7 adicionando "Never Spam"+"Mark important" em cada (catch-all 8 já cobre na prática, mas redundância protege contra Gmail decidir mover apesar do filter 8).
+
+**Pendente código v0.2.1.0:**
+- ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
+- ⏳ Termos.jsx + Privacidade.jsx (criando #156) referenciar emails canônicos
+- ⏳ Footer Login mostrar `contato@dosymed.app` se cabível
+
+**Validação aceitação:**
+- ✅ DNS records visíveis externamente (nslookup 8.8.8.8 OK)
+- ✅ ImprovMX domain VERIFIED (notif email recebido confirmando)
+- ⏳ Test send email pra `suporte@dosymed.app` → confirmar chegar dosy.med@gmail.com (user pode testar manual)
+- ⏳ Auto-responder SLA: parqueado v0.2.2.0+ (Gmail templates OR Resend Inbound webhook)
 
 ### #027 — Promover Closed Testing track + 12 testers via Reddit
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.0.12 (2026-05-05) — superseded por #129-#133
 - **Origem:** [Plan.md] FASE 18.9.3
-- **Esforço:** 1-2 dias setup + 14 dias passivo
-- **Dependências:** #004, #006, screenshots #025
-- **Aceitação:**
-  - Closed Testing track com Google Group público
-  - URL opt-in + posts Reddit (r/AndroidBeta, r/brasil)
-  - 12+ testers ativos por 14 dias
+- **Esforço:** N/A (substituído)
+- **Dependências:** N/A
+- **Resolução:** Item original "promover Closed Testing + 12 testers via amigos/Reddit" expandido em granularidade fina conforme estratégia 2026-05-05: User decidiu pular recrutamento Internal com pessoas conhecidas e ir direto Closed via Google Group público + Reddit/redes externas. Trabalho real distribuído em:
+  - **#129** Criar Google Group público `dosy-testers`
+  - **#130** Configurar Closed Testing track Console (tester list = e-mail group + países BR + AAB v0.2.0.7+)
+  - **#131** Recrutar 15-20 testers externos (Reddit r/AlphaAndBetausers + r/SideProject + r/brasil + targeted r/medicina/r/saude/r/tdah/r/diabetes + Twitter + LinkedIn + Discord)
+  - **#132** Gate 14d × ≥12 ativos + iterar bugs em mini-releases
+  - **#133** Solicitar Production access pós-gate
+- **Validação:** trabalho remanescente fica nos itens granulares acima.
 
 ### #088 — Dose não aparece Início (Pixel 7)
 - **Status:** ✅ Concluído @ commit 705b69f (2026-05-02)
@@ -483,6 +622,23 @@
   Fix viewport-specific em useDoses: refetchOnMount: 'always' (Pixel 7 emulador). NÃO repro Samsung S25 Ultra device real. Fix preserva comportamento em devices modernos.
 - **Aceitação:** Validado em release v0.1.7.4 (sem regressões reportadas)
 - **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.4.
+
+### #089 — Layout AdSense banner empurrando header parcial (Pixel 7)
+- **Status:** ✅ Concluído organicamente entre v0.1.7.4-v0.2.0.12 (validado user print Pixel 7 emulador 2026-05-05)
+- **Origem:** BUG-022 reportado user 2026-05-02
+- **Prioridade:** P2 UX visual
+- **Esforço:** Investigação não-iniciada (fix orgânico durante refactors AppHeader / CSS vars)
+- **Dependências:** nenhuma
+- **Problema original:**
+  Banner "Test Ad 468x60" ocupava topo viewport. Header "Dosy ▸ Frederico" ficava abaixo do banner com texto "Dosy" parcialmente cortado/sobreposto. Visível emulador Pixel 7 (1080×2400 @420dpi). NÃO repro Samsung S25 Ultra real.
+- **Validação fechamento (2026-05-05):**
+  Print user emulador Pixel 7 v0.2.0.12 mostra layout limpo: banner "Test Ad - This is a 320x50 test ad" topo + header Dosy abaixo + "Boa noite, Teste Free" + ⚙️ ícone. Wordmark "Dosy" inteiro visível, sem sobreposição. Tabs filtro 12h/24h/48h/7 dias/10 dias renderizam OK.
+- **Provável fix orgânico:**
+  - #113 (v0.2.0.x) buffer +4 px em `--ad-banner-height` CSS var (era exagerado +16, ajustado pra +4 sem perder safety margin)
+  - AppHeader top calc com `env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px) + var(--update-banner-height, 0px)` cobre todos viewports
+  - Cross-device validation natural durante refactors v0.2.0.x
+- **Aceitação:** ✅ User print Pixel 7 v0.2.0.12 confirma layout OK
+- **Detalhe:** Bug fechado sem fix dedicado — sintoma desapareceu durante refactors progressivos AppHeader / CSS vars.
 
 ### #090 — Pós-login redireciona pra Início
 - **Status:** ✅ Concluído @ commit 63f444c (2026-05-02)
@@ -688,16 +844,28 @@
 - **Aceitação:** `@tanstack/react-virtual` integrado; lista de 1000 doses scrolla sem jank em device mid-range.
 
 ### #035 — Integration tests (`useDoses`, `useUserPrefs` com mock Supabase)
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — diferido v0.2.2.0+ (backlog estabilidade pós-rampa Closed Testing)
 - **Origem:** [Plan.md] FASE 9.4 backlog
 - **Esforço:** 1 dia
 - **Aceitação:** 10+ tests cobrindo fluxos confirm/skip/undo + sync localStorage cache.
+- **Justificativa diferimento:** Sem testers Closed ativos hoje. Teste integração defende contra regressão durante iteração rápida em resposta a bug reports — útil quando volume de mudança crescer. Implementar antes de Open Testing/Production.
 
-### #036 — Skeleton screens completos (TreatmentList, Reports, Analytics, SOS, forms)
-- **Status:** ⏳ Aberto
+### #036 — Skeleton screens em páginas com lista
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05)
 - **Origem:** [Plan.md] FASE 15 backlog
-- **Esforço:** 1 dia
-- **Aceitação:** todas as pages com loading state visual durante data fetch.
+- **Esforço:** 1h (refinamento — componente Skeleton já existia #104 v0.2.0.0)
+- **Páginas afetadas v0.2.1.0:**
+  - ✅ TreatmentList: `loadingTreatments` from `useTreatments()` → SkeletonList count=3 antes empty state
+  - ✅ Analytics: `loadingDoses` from `useDoses()` → SkeletonList count=3 entre filter chips e Adesão card
+- **Páginas pré-existentes com skeleton (#104 + outros):**
+  - Dashboard, Patients, DoseHistory, Admin
+- **Não-aplicável (form-based, render imediato sem depender de fetch):**
+  - Reports — form date pickers + patient picker + export buttons
+  - SOS — form med + paciente + datetime + button
+  - PatientForm — form único
+  - TreatmentForm — form único
+- **Implementação:** import `SkeletonList` de `src/components/Skeleton.jsx`. Render condicional `if (loading) <SkeletonList /> else if (empty) <empty> else <list>`.
+- **Resultado UX:** elimina flash "Nenhum tratamento" / "Sem dados no período" durante 100-500ms initial fetch.
 
 ### #037 — Erros inline em forms
 - **Status:** ✅ Concluído (release v0.2.0.4)
@@ -706,7 +874,7 @@
 - **Aceitação:** PatientForm, TreatmentForm, SOS, Settings com mensagens de erro abaixo de cada campo, não só toast.
 
 ### #038 — Pen test interno completo documentado
-- **Status:** ⏳ Aberto
+- **Status:** ⏳ Aberto — diferido v0.2.2.0+ ou pré-Open Testing (#133 gate)
 - **Origem:** [Plan.md] FASE 8.4 + 20.3
 - **Esforço:** 1-2 dias
 - **Aceitação:**
@@ -714,12 +882,15 @@
   - Tampering APK + Play Integrity (se #047 implementado)
   - Burp/mitmproxy análise tráfego (cert pinning bloqueia)
   - Documento `docs/audits/pentest-interno.md`
+- **Justificativa diferimento:** Não bloqueia Closed Testing (audiência controlada). Recomendado executar antes Open Testing público (#133 transição) pra detectar privilege escalation cross-tenant. Item de pré-launch público, não pré-fechado.
 
 ### #039 — Confirmação dupla ao deletar batch (>10 itens)
-- **Status:** ⏳ Aberto
+- **Status:** 🚧 Bloqueado (não-aplicável atual) — re-avaliar quando feature batch select existir
 - **Origem:** [Plan.md] FASE 15 backlog
-- **Esforço:** 2h
-- **Aceitação:** quando há >10 itens selecionados para delete, modal "Tem certeza? Esta ação não pode ser desfeita".
+- **Esforço:** 2h (UI confirm modal trivial) — mas pré-req feature inexistente
+- **Pré-requisito ausente:** App hoje delete só 1-by-1 (DoseCard menu, PatientCard menu, TreatmentForm). Não há feature batch select (multi-checkbox + delete em massa) em nenhuma página. Item proposto pressupõe UI batch que não foi implementada.
+- **Aceitação (quando feature existir):** quando há >10 itens selecionados para delete, modal "Tem certeza? Esta ação não pode ser desfeita".
+- **Decisão:** parquear até batch select ser priorizado. Sem trigger pra implementar isolado.
 
 ### #040 — Subir contraste textos secundários no dark
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -727,13 +898,22 @@
 - **Esforço:** 2h (revisar `theme.css`)
 - **Aceitação:** axe DevTools confirma WCAG AA em todas as pages dark mode.
 
-### #041 — Hierarquia headings + Dynamic Type via `rem`
+### #041 — Hierarquia headings + Dynamic Type via `rem` (PARTIAL v0.2.1.0)
+- **Status:** 🟡 Parcial v0.2.1.0 — audit headings done; refactor rem diferido v0.2.2.0+
+- **v0.2.1.0 done:** auditoria semantic confirmou PageHeader.jsx renderiza `<h1>` (componente reusado por 14/18 pages). Pages com h1 explicit semantic: Privacidade, Termos, Login, Install (4 outras outras usam PageHeader).
+- **v0.2.2.0+ deferred:** refactor mass `fontSize: Npx` → `rem` (172 ocorrências entre pages + components). Decisão: baixo ROI no Capacitor Android WebView (system font-scale não afeta WebView por padrão). Alto risco regressão visual. Re-avaliar quando RWD breakpoint upgrade for priorizado.
+
+
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 15 backlog
 - **Esforço:** 4h
 - **Aceitação:** font-scale 200% Android funciona; headings semânticos h1>h2>h3.
 
-### #042 — Lighthouse mobile ≥90 em Reports + Dashboard
+### #042 — Lighthouse mobile ≥90 em Reports + Dashboard (DEFERIDO v0.2.2.0+)
+- **Status:** ⏳ Diferido v0.2.2.0+ (não-bloqueante Closed Testing)
+- **Justificativa diferimento v0.2.1.0:** audit completo + iterar fixes (~1 dia trabalho). Depende ambiente prod estável + análise profile bundle. Não-bloqueante Closed Testing categoria Saúde e fitness (review padrão). Re-avaliar pré-Open Testing público (#133).
+
+
 - **Status:** ⏳ Aberto
 - **Origem:** [Plan.md] FASE 17 manual
 - **Esforço:** depende de findings (parcial pode ser 1 dia)
@@ -758,10 +938,21 @@
 - **Aceitação:** `git check-ignore coverage/` retorna 0.
 
 ### #046 — Documentar runbook de Disaster Recovery
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — `docs/runbook-dr.md` v1.0
 - **Origem:** [Plan.md] FASE 23.4
-- **Esforço:** 1 dia
-- **Aceitação:** `docs/runbook-dr.md` com SOPs para: keystore lost, DB corrupted, Supabase outage, Vercel down, Sentry full-replay restore.
+- **Esforço:** 1 dia (executado em 1h)
+- **Aceitação:**
+  - ✅ RTO 5-15min / RPO 24h documentados
+  - ✅ Baseline produção snapshot 2026-05-05 (5 users, 582 doses, etc) referência pré-incidente
+  - ✅ Procedure restore daily backup Supabase (passos 1-12, smoke test SQL incluído)
+  - ✅ Procedure roll JWT secret #084 (compromised key)
+  - ✅ Procedure restore keystore Android #021 (3 locais backup)
+  - ✅ Procedure region outage Supabase São Paulo
+  - ✅ Procedure pós-incidente (timeline + RCA + LGPD art.48 ANPD notification 72h)
+  - ✅ 11 components mapeados com failure modes + recovery (DB/Auth/Edge/Realtime/Storage/FCM/Resend/ImprovMX/CDN/AAB)
+  - ✅ Drill schedule semestral staging + anual full
+  - ✅ Contatos emergência (owner, DPO, Supabase support, Resend, ImprovMX)
+  - ✅ Histórico revisões + próximas iterações (v1.1 incident-comm-template, v1.2 PITR re-eval, v1.3 drill executado)
 
 ### #047 — Google Play Integrity API
 - **Status:** ⏳ Aberto
@@ -1714,28 +1905,48 @@ Comportamento desejado por user:
 Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 
 ### #129 — Criar Google Group público `dosy-testers`
-- **Status:** ⏳ Aberto
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — via Chrome MCP dosy.med@gmail.com
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
-- **Esforço:** 10 min (manual user)
+- **Esforço:** 10 min (Chrome MCP automation + 1 captcha manual user)
 - **Dependências:** nenhuma
-- **Aceitação:**
-  - Group criado em https://groups.google.com → "Criar grupo"
-  - Nome: `Dosy Testers` · E-mail: `dosy-testers@googlegroups.com` (ou similar disponível)
-  - Configurações: "Qualquer pessoa pode pedir e entrar" (auto-aprovação); visibilidade pública
-  - URL pública do group salva pra divulgação (ex.: `https://groups.google.com/g/dosy-testers/about`)
+- **Resolução:**
+  - Grupo criado: **`Dosy Testers`** · email `dosy-testers@googlegroups.com` · owner Dosy Med LTDA
+  - URL pública: **https://groups.google.com/g/dosy-testers** (HTTP 200 anônimo verificado)
+  - Configurações:
+    - "Quem pode pesquisar pelo grupo" → ✅ Qualquer pessoa da web (discovery via search/Reddit)
+    - "Quem pode participar do grupo" → ✅ Qualquer pessoa pode participar (auto-aprovação)
+    - "Quem pode ver as conversas / postar / ver os membros" → Participantes do grupo (privacy testers reports)
+  - Descrição: "Grupo público de testers do Dosy (app de controle de medicação, Android). Membros recebem acesso opt-in à fase Closed Testing via Play Store. Auto-aprovação ativa. Site: https://dosymed.app"
+- **Próximo:** #130 importar email group `dosy-testers@googlegroups.com` em Closed Testing track Play Console.
 
 ### #130 — Configurar Closed Testing track no Console com Group como tester list
-- **Status:** ⏳ Aberto
+- **Status:** 🚨 BLOQUEADO — Google Play **REJEITOU** review pós-submit (2026-05-05 23:30 BRT). Razão: "Política de requisitos do Play Console — Alguns tipos de apps só podem ser distribuídos por organizações". App declara categoria/recursos exigindo conta de **organização (CNPJ)**, conta atual `dosy.med@gmail.com` é pessoal. Resolução demanda decisão estratégica (criar conta org Google Play + transfer app, OU reverter declarações específicas que ativaram org gate). Ver §#158 abaixo.
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
-- **Esforço:** 30 min (manual user + agente Chrome MCP)
-- **Dependências:** #129
-- **Aceitação:**
-  - Console → Test and release → Closed testing → Create track
-  - Track nome: "Dosy Beta Fechado" (ou similar)
-  - Tester list: adicionar e-mail do Google Group `dosy-testers@googlegroups.com` (em vez de e-mails individuais)
-  - Países: Brasil + qualquer outro relevante
-  - Promover AAB v0.2.0.7 (ou versão atual em Internal) pra Closed track
-  - Salvar opt-in URL gerado pelo Console pra divulgação
+- **Esforço:** 30 min config Console + 1h cross-checks pré-submit
+- **Dependências:** #129 (✅ done) + #156 página privacidade
+- **Progresso v0.2.1.0 (Chrome MCP):**
+  - ✅ Faixa "Teste fechado - Alpha" pré-existente reutilizada
+  - ✅ País Brasil selecionado + salvo
+  - ✅ Tester list: Grupos do Google → `dosy-testers@googlegroups.com`
+  - ✅ Endereço feedback URL: `https://groups.google.com/g/dosy-testers`
+  - ✅ Versão criada: AAB **v0.2.0.12 vc 45** (vc 44 removido — estava conflitando)
+  - ✅ Release notes pt-BR: "v0.2.0.12 — Recuperação de senha por código de 6 dígitos via email + Trocar senha em Ajustes + melhorias internas (egress -50%, alarme multi-paciente fixed). Beta fechado: ajude a testar o controle de medicação e reporte bugs em https://groups.google.com/g/dosy-testers"
+  - ✅ Rascunho salvo (Step 2 "Visualizar e confirmar" — 0 erros, 1 aviso)
+  - ✅ **Side-effects pré-publicação resolvidos in-line:**
+    - Categoria do app: **Saúde e fitness** (Console → Configurações da loja, publicado). Trocada de Medicina v0.2.1.0 (2026-05-05) — audiência Dosy é consumer self-care/cuidador, não profissional clínico; "Saúde e fitness" alinhado com peers (Medisafe, MyTherapy) + escrutinio Google razoável + discoverability maior.
+    - Detalhes contato: email `contato@dosymed.app` + site `https://dosymed.app` (publicado direto Google Play)
+- **Pendente pré-submit Google review:**
+  - ⏳ #156: criar/atualizar página `https://dosymed.app/privacidade` (URL referenciada nas 14 mudanças pendentes)
+  - ⏳ Verificar HTTP 200 dos URLs `/privacidade` antes click "Enviar 14 mudanças para revisão"
+  - ⏳ Conferir status questionários Conteúdo (Classificação, Público-alvo, Segurança dados, Intent tela cheia) — possivelmente já preenchidos releases passadas
+  - ⏳ Confirmação user explícita pra submeter (irreversível, dispara review Google 1-7 dias)
+- **Submit final 2026-05-05 23:14 BRT:** Console → "Enviar 14 mudanças para revisão" → Google review iniciado.
+- **Resultado submit (2026-05-05 23:30 BRT):** ❌ **REJEITADO**. Mensagem Google: "App rejeitado — O envio recente do seu app foi rejeitado por não obedecer às políticas do Google Play. Política de requisitos do Play Console: Violação dos requisitos do Play Console. Seu app não obedece à política de requisitos do Play Console. Alguns tipos de apps só podem ser distribuídos por organizações. Você selecionou uma categoria do app ou declarou que o app oferece recursos que exigem o envio usando uma conta de organização." Aplicado em 6 de mai. App não disponível Google Play até resolver.
+- **Diagnóstico provável:** alguma das declarações de Conteúdo do app (App de saúde + Permissões alarme exato + Serviços primeiro plano + Recursos financeiros + Apps governamentais + ID publicidade) ativou gate "requires organization account" do Google. Mais provável: combo "App de saúde" + "Saúde e fitness" categoria + medication tracking features = Google interpreta como app médico sensível requerendo CNPJ.
+- **Path resolução** (item dedicado **#158** abaixo):
+  - **Opção A:** criar conta Google Play Developer empresarial (CNPJ + verification documents + $25 USD nova taxa) → transferir app `com.dosyapp.dosy` da conta pessoal pra empresarial via Console "Transferir um app" workflow (1-3 semanas, complex paperwork)
+  - **Opção B:** reverter declarações específicas no Conteúdo do app pra desativar gate organização → re-submit. Risco: app perde algumas certifications (ex.: Saúde e fitness) e pode necessitar refactor features médico
+  - **Opção C:** apelar diretamente Google via formulário "Entrar em contato com o suporte" explicando que Dosy é app de auto-cuidado consumer, não app médico profissional, requesting reclassification
 
 ### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
 - **Status:** ⏳ Aberto
@@ -1964,3 +2175,317 @@ Sem 7+: Produção rollout 5%→100% + P2 + P3 backlog
 ```
 
 → Ver `ROADMAP.md` para versão consolidada com links cruzados.
+
+---
+
+### #156 — Atualizar página `https://dosymed.app/privacidade` (LGPD healthcare)
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — DESBLOQUEIA #130 submit Google review
+- **Origem:** Sessão 2026-05-05 v0.2.1.0 — descoberta durante setup Closed Testing track Console (mudança pendente "Definir o URL da Política de Privacidade como https://dosymed.app/privacidade")
+- **Esforço:** 2-3h (escrever conteúdo LGPD healthcare + criar rota + linkar UI)
+- **Dependências:** #026 email `privacidade@dosymed.app` provisionado (DPO contato)
+- **Aceitação:**
+  - URL `https://dosymed.app/privacidade` retorna HTTP 200
+  - Conteúdo cobre LGPD para healthcare (controle medicação):
+    - **Identificação controlador:** Dosy Med LTDA + DPO `privacidade@dosymed.app`
+    - **Dados coletados:**
+      - Auth: email + senha hash (Supabase Auth)
+      - Saúde sensível (LGPD art.5-II + art.11): pacientes, doses, tratamentos, observações, fotos paciente
+      - Técnicos: FCM token push, user agent, IP (logs Supabase)
+      - Telemetria: PostHog events anonimizados (não-PII)
+    - **Finalidades:** alarmes lembrete medicação, sincronização multi-device, recuperação senha
+    - **Bases legais LGPD:** consentimento (art.7-I, registro signup) + cuidado saúde (art.11-II-f) + execução contrato (Plus tier)
+    - **Compartilhamento:** Supabase (cloud storage criptografado SSE), Google FCM (push delivery), Resend (transactional email recovery), PostHog (analytics anônima), Sentry (error tracking)
+    - **Internacional:** Supabase São Paulo (BR) — dados em jurisdição brasileira
+    - **Retenção:** até deletar conta via app (Settings → Excluir conta, #028 fechado)
+    - **Direitos titular (LGPD art.18):** acesso, retificação, eliminação, portabilidade, anonimização, revogação consentimento — exercício via `privacidade@dosymed.app`
+    - **Crianças/adolescentes:** uso por responsável legal (cuidador) — política específica art.14
+    - **Cookies/storage:** localStorage para cache UI + secure storage Android Keystore para tokens
+    - **Última atualização:** 2026-05-05
+  - Linkado: Settings → Privacidade + Termos.jsx (referência cruzada) + footer Login + ToS página
+- **Implementação executada:** Privacidade.jsx (React route já existia v0.2.0.0, atualizado conteúdo v0.2.1.0). Rota `/privacidade` confirmada em App.jsx linha 298. SPA fallback Vercel resolve via index.html → React Router → Privacidade lazy-loaded.
+
+**Mudanças v0.2.1.0 (2 passes):**
+
+**Pass 1 v1.1 (initial):**
+- Email DPO: `dosy.privacidade@gmail.com` → `privacidade@dosymed.app` + outros 4 aliases
+- Entidade: "pessoa física" → "Dosy Med LTDA"
+- Terceiros expandidos: Resend, PostHog, Sentry, AdMob, FCM
+- Versão v1.0 → v1.1
+- Termos.jsx + FAQ.jsx idem
+
+**Pass 2 v1.2 (deep audit Play Store Health Apps Policy):**
+- **Estrutura expandida 11 → 15 seções** com cobertura completa
+- **§1 Controlador**: contato granular (DPO + suporte + legal + security + contato geral)
+- **§2 Dados coletados** reorganizado em 4 sub-categorias: identificação, sensíveis saúde, técnicos, telemetria anônima
+  - Adicionou: foto paciente, peso, alergias, condição médica, médico, anotações cuidador
+  - Adicionou: SOS rules (intervalos, max 24h)
+  - Adicionou: `patient_shares` table (compartilhamento entre usuários #117)
+  - Adicionou: tier subscription history
+  - Adicionou: rate-limit triggers em security_events
+- **§3 Finalidades + bases legais por finalidade**: 7 finalidades mapeadas (lembrete medicação Art.7-V+11-II-f, sharing Art.7-I, recovery Art.7-V, histórico Art.7-V+11-II-f, auditoria Art.7-IX, telemetria Art.7-IX, ads Art.7-IX)
+  - "Não fazemos" list explícita: venda, perfilamento publicitário, scoring saúde, share seguradoras
+- **§4 Sub-processadores**: tabela 10 providers (Supabase, FCM, AdMob, Play Billing, Resend, PostHog, Sentry, Vercel, Hostinger, ImprovMX) com finalidade + região + base de adequação (sa-east-1 BR para Supabase, Cláusulas-padrão LGPD para US/EU)
+  - Cobre transferência internacional Art. 33-V LGPD
+- **§5 Direitos LGPD**: lista completa Art.18 (10 direitos) + reclamação ANPD link gov.br/anpd
+- **§6 Segurança**: criptografia em repouso AES-256 (era ausente), App Lock biométrico (#017), Android Keystore hardware-backed, JWT secret rotation procedure (#084), backup diário 7-day rolling RPO 24h RTO 5-15min ref runbook DR (#046)
+- **§7 Retenção**: granular por tipo (FCM tokens revogados limpeza semanal, compartilhamentos pendentes 30d, observações > 3y anonimização, conta deletada < 30d + backups 7d adicional)
+- **§8 Cookies/storage**: enumera localStorage + Android Keystore + sessionStorage + IndexedDB PWA + zero cookies tracking
+- **§9 Menores**: idade mínima 13 anos com consentimento responsável legal (Art.14 LGPD), 16 anos GDPR EU
+- **§10 Decisões automatizadas (NOVO)**: explicit "não realiza" — sem AI diagnóstica, sem scoring saúde, sem recomendação automática (Art.20 LGPD)
+- **§11 Compliance Google Play Health Apps Policy (NOVO)**: 9 checkpoints com link policy oficial Google (support.google.com/googleplay/android-developer/answer/13316080)
+  - Política privacidade explícita
+  - Coleta limitada finalidade declarada
+  - Criptografia trânsito + repouso
+  - Não compartilha seguradoras/empregadores/anunciantes saúde
+  - Ads apenas não-personalizados sem dados saúde
+  - Mecanismo exclusão acessível user
+  - FGS Special Use declarado Console (#004)
+  - Disclaimer médico
+- **§12 Notificação incidentes ANPD (NOVO)**: comunicação Art. 48 LGPD operacional 72h, conteúdo da notificação detalhado, ref runbook DR
+- **§13 Canais contato**: 5 emails granulares com confirmação 72h pra security disclosure
+- **§14 Alterações**: 15 dias antecedência via noreply@
+- **§15 Histórico versões (NOVO)**: log v1.0 → v1.1 → v1.2
+
+**Termos.jsx + FAQ.jsx**: mantido pass 1 (emails canônicos + entidade Dosy Med LTDA).
+
+**Pré-checks pré-submit Google review (#130):**
+- ✅ URL `/privacidade` route existe (App.jsx:298)
+- ⏳ Verificar HTTP 200 prod via `curl -I https://dosymed.app/privacidade` após próximo deploy Vercel
+- ⏳ Conteúdo renderiza corretamente em mobile (testar Chrome MCP preview)
+- ✅ Conteúdo cobre todos requisitos LGPD para healthcare
+
+**Bloqueia:** Antes era #130. Agora #130 desbloqueado pra submit Google review (junto com cross-checks restantes).
+
+### #157 — Disable useRealtime() — storm 13 req/s preview/prod
+- **Status:** ✅ Concluído v0.2.1.0 (2026-05-05) — fix targeted commit `da61b04` + restore #007 commit `ff431ca`
+- **Origem:** Validação preview Vercel pré-merge release/v0.2.1.0 (Regra 9.1 README) descobriu storm 18× prod baseline. Bisect inicial false positive (#007). Investigação aprofundada via Chrome MCP + Supabase MCP identificou root cause real.
+- **Prioridade:** P0 (egress bloqueador prod — bug pré-existente master desde algum momento entre v0.1.7.x e v0.2.0.x)
+- **Esforço:** ~1h investigação + 5min fix
+- **Dependências:** nenhuma
+
+**Pattern observado:**
+- 13 reqs/s sustained idle hidden tab (mesmo prod master)
+- Bursts paralelas <100ms + gaps regulares ~2-3s entre bursts
+- Cada burst: 11× /doses + 1× /patients + 1× /treatments
+- Storm escalava ao longo do tempo: 30s window = ~57 reqs (1.9 req/s, parecia normal); 5min window = 3558 reqs (12 req/s); 28min window = 77k reqs (46 req/s sustained)
+- Extrapolação: ~5GB/h egress por user idle hidden tab
+
+**Investigação (Chrome MCP + Supabase MCP):**
+1. **Chrome MCP fetch interceptor + WebSocket hook + visibility events** capturaram pattern exato.
+2. **Bisect commit b3fe670 #007 src files (commit `76dc28a`):** storm 30s = 0 reqs (false positive — storm não tinha escalado em 30s).
+3. **Idle 5min validation pós-bisect:** storm voltou (715 reqs em 5min = 2.4 req/s). Não era #007.
+4. **Comparação prod master 28min idle:** 77k reqs (46 req/s) — bug pré-existente confirmado, não regressão release.
+5. **Supabase MCP `SELECT FROM pg_publication_tables WHERE pubname='supabase_realtime'`:** retornou **[]** vazio. Publication não tem tabelas configuradas.
+6. **Supabase MCP `get_logs(realtime)`:** flood de errors `IncreaseSubscriptionConnectionPool: Too many database timeouts` + `ChannelRateLimitReached: Too many channels` + `Stop tenant ... no connected users`.
+7. **Análise código `useRealtime.js:80-108`:** `onStatusChange(CLOSED/CHANNEL_ERROR/TIMED_OUT)` dispara `setTimeout(reconnect, 1-30s backoff)` → `unsubscribe + subscribe + for keys: refetchQueries({type:'active'})`. Cycle confirmed.
+
+**Mecanismo:**
+```
+Channel subscribe → server sees "no users" → STOP tenant → CLOSE ch
+  → onStatusChange CLOSED → setTimeout backoff 1-2s
+  → unsubscribe + subscribe + refetchQueries(['doses','patients','treatments',...])
+  → 13 reqs paralelos disparam (4-9 active doses keys + patients + treatments)
+  → channel briefly SUBSCRIBED → reconnectAttempts=0 reset
+  → tenant idle stops again → CLOSED → loop
+```
+
+**Por quê publication vazia:**
+Não-conhecido — provavelmente migration removeu tables do `supabase_realtime` publication em algum momento, OU publication nunca foi configurada via Studio Dashboard. Histórico release notes (#079/#092/#093/#136/#145) menciona realtime fixes mas nenhum reseta publication.
+
+**Fix aplicado v0.2.1.0:**
+```diff
+- useRealtime()
++ // #157 (v0.2.1.0) — DISABLED. Bug investigation 2026-05-05 found:
++ //   1. publication `supabase_realtime` empty (NO postgres_changes events delivered)
++ //   2. useRealtime reconnect cascade burns ~13 req/s storm sustained idle hidden tab
++ //   3. Net: zero functional value + catastrophic egress cost.
++ // Re-enable plan v0.2.2.0+: populate publication via Studio + verify reconnect logic
++ // useRealtime()
+```
+
+Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação comentada em App.jsx:67.
+
+**Validação pós-fix:**
+
+| Métrica idle hidden tab | Pre-fix | Pós-fix #157 |
+|---|---|---|
+| 30s | ~57 reqs (já escalando) | 1 req |
+| 90s | ~785 reqs (8.7 req/s) | 2 reqs |
+| 5min completo | 3558 reqs (12 req/s) | 9 reqs (0.021 req/s) |
+| Visibility | hidden | hidden |
+
+**Storm 99.7% eliminado.** 9 reqs em 7min = comportamento sano (1 auth/v1/user + 1 patient_shares + 1 patients + 1 treatments + 5 doses durante mount + occasional refetch on staleTime).
+
+**Plano v0.2.2.0+ retomar useRealtime():**
+1. Studio → Database → Replication → publication `supabase_realtime` toggle:
+   - `medcontrol.doses`
+   - `medcontrol.patients`
+   - `medcontrol.treatments`
+   - `medcontrol.sos_rules`
+   - `medcontrol.treatment_templates`
+   - `medcontrol.patient_shares`
+2. Re-enable `useRealtime()` em App.jsx:67 (uncomment)
+3. Refactor `useRealtime.js` defensive: adicionar `if (reconnectAttempts >= 5) suspend reconnects until visibilitychange visible` para evitar storm em channel empty state futuro
+4. Re-rodar preview Vercel idle 5min hidden tab → confirmar 0 reqs sustained
+5. Validar postgres_changes events chegam (test: insert dose via Studio → expect Dashboard auto-update sem refresh)
+
+**Aceitação:**
+- ✅ Storm 99.7% eliminado preview release/v0.2.1.0 (medido)
+- ✅ #007 PostHog telemetria restored (era false positive bisect)
+- ⏳ Validar prod master pós-merge (espera-se mesmo fix levar a 0.02 req/s sustained)
+
+**Lições durables:**
+- Storm pode escalar com tempo em hidden tab — bisect window deve igualar window observation original
+- publication realtime vazia + hook subscribe = silent rate-limit cascade (não-óbvio sem inspecionar BD direto)
+- Investigação multi-camada (cliente Chrome MCP + servidor Supabase MCP) é necessária pra root cause real
+
+**Detalhe completo:** `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`
+
+### #158 — Resolver rejection Google Play (org account required) NOVO P0 URGENTE
+- **Status:** 🚨 BLOQUEADO + URGENTE ANTES PRÓXIMO RELEASE — Google Play rejeitou submit Closed Testing 2026-05-05. Plano execução estruturado abaixo (7 passos) deve ser concluído **antes do próximo release v0.2.2.0**.
+- **Origem:** Console submit #130 release/v0.2.1.0 (2026-05-05 23:14 BRT) → Google review rejeitado em <30 min com mensagem "Violação dos requisitos do Play Console — apps de certas categorias só por organização".
+- **Prioridade:** P0 URGENTE (bloqueador rollout Closed Testing público + Production track futuro)
+- **Esforço total:** 1-3 dias investigação + plano (passos 1-7) + 1-3 semanas execução plano (opção A/B/C escolhida)
+- **Dependências:** decisão user pós passo 7
+- **Escopo:** trabalho operacional Console + paperwork — **não precisa branch git** (zero código). Updates em `contexto/decisoes/` (ADR) + `contexto/updates/` (logs sessão).
+
+**Diretrizes execução (7 passos sequenciais — agente seguir em ordem):**
+
+#### Passo 1 — Ler e-mail Google rejection completo
+- Console → Notificações (sino topo direito) → "App rejeitado · 5 de mai." → Mais detalhes
+- Click "Ver e-mail" → ler email Google completo (texto integral do reviewer)
+- Capturar: data, mensagem específica, link política violada, recursos/categorias citados especificamente
+- **Goal:** entender EXATAMENTE qual declaração foi flagged (não só "Política requisitos genérica"). Cole texto integral do email em `contexto/decisoes/{data}-rejection-google.md` como evidência.
+
+#### Passo 2 — Entrar nos links sugeridos pela página Detalhes
+- Detalhes problema referenciam: `requisitos do Play Console` + `conteúdo do app` + Central de Ajuda transferir apps + Central de Ajuda configurar org account
+- Ler políticas oficiais Google Play 2026 via WebFetch:
+  - https://support.google.com/googleplay/android-developer/answer/13316080 (Health Apps Policy)
+  - https://support.google.com/googleplay/android-developer/answer/9858738 (Developer Program Policies)
+  - Link específico do email rejection (mais autoritativo)
+- **Goal:** identificar quais features/declarações requerem org account explicitamente. Documente excerpts relevantes.
+
+#### Passo 3 — Estudar assunto org account requirements
+- Buscar Google Play documentation: "organization account requirements 2026"
+- Lista oficial categorias/features que exigem CNPJ:
+  - Apps governamentais (declaração)
+  - Apps financeiros sensíveis (Recursos financeiros declaração)
+  - Apps de saúde médica/clínica (App de saúde declaração + categoria sensível)
+  - Outras a confirmar via documentação
+- Decisões transferência app pessoal → empresarial (workflow + documents required + tempo Google approve)
+- Custo: $25 USD nova taxa Console + paperwork BR (~R$ 1000-3000 contador abertura empresa OU usar empresa CNPJ existente se user tiver)
+- **Goal:** entender opções concretas + custos/prazos reais.
+
+#### Passo 4 — Analisar app atual (declarações Conteúdo do app)
+- Console → Política e programas → Conteúdo do app (sidebar)
+- Listar TODAS declarações ativas atualmente (screenshot cada):
+  - ID de publicidade (declaração obrigatória SDK ads)
+  - Apps governamentais (provavelmente "Não")
+  - Recursos financeiros (assinaturas Play Billing — Plus/Pro)
+  - Serviços em primeiro plano (FGS Special Use #004 alarmes)
+  - Permissões de alarme exato (#004 alarme nativo)
+  - **App de saúde** (provável culprit — declaração explícita de healthcare features)
+  - Categoria do app: **Saúde e fitness** (mudou v0.2.1.0 de Medicina pra Saúde — pode ainda ser sensível pra Google)
+  - Audiência (idade 18+ #156 v1.3)
+- Cross-ref com app real: features Dosy = lembrete medicação + tracking dose + push + alarme nativo + paciente CRUD + analytics adesão + LGPD
+- **Goal:** identificar exatamente qual declaração ativou org gate. Captura screenshot Console pra evidence.
+
+#### Passo 5 — Validar app nas regras Google
+- Cross-ref features Dosy × Health Apps Policy 2026:
+  - Dosy faz diagnóstico médico? **Não** (pure tracking, no AI)
+  - Dosy interage com prescription system regulator (e-prescribing, eMR integration)? **Não** (free-form input user)
+  - Dosy é dispositivo médico classificado ANVISA/FDA? **Não** (consumer self-care)
+  - Dosy compartilha dados saúde com terceiros? **Não** (não vende, não broker — privacy policy explícita §11)
+  - Dosy serve healthcare professionals? **Não** (target consumer pais/cuidadores/idosos)
+- Compatibilidade: Dosy é **app consumer** com features healthcare leves, NÃO app médico clínico
+- Documentation reference: Google Health Apps Policy distinguishes "consumer wellness apps" (Saúde e fitness OK conta pessoal) vs "medical devices/clinical apps" (org account required)
+- **Goal:** confirmar Dosy fit consumer category (deveria passar se declarações alinhadas). Documente conclusão evidence-based.
+
+#### Passo 6 — Investigar rejeição específica (qual declaração triggered gate)
+- Hipótese A mais provável: **declaração "App de saúde"** marcada YES → Google interpreta como medical clinical → org gate
+- Hipótese B alternativa: combo de features (#004 FGS Special Use + alarme exato + saúde + medication) escalou flag automatic
+- Hipótese C: categoria "Saúde e fitness" combinado com declaração específica
+- Workflow investigação:
+  1. Console → Conteúdo do app → "App de saúde" → review configuration atual
+  2. Se YES: ler descrição/respostas do questionário "App de saúde" — quais checkboxes ativaram gate
+  3. Cross-ref com requisitos Google: cada checkbox tem implicação organização
+  4. Se possível, simular reverter cada declaração isoladamente (Console permite editar antes submit) e ver qual desliga warning
+- Capturar evidência: screenshot configuration atual + identificar trigger exato
+- **Goal:** root cause confirmed — sem isso, opção B (revert declaration) não pode ser executada cirurgicamente.
+
+#### Passo 7 — Elaborar plano correção (decision matrix + ADR)
+
+| Critério | Opção A (CNPJ + transfer) | Opção B (revert declarações) | Opção C (apelo Google) |
+|---|---|---|---|
+| Tempo | 1-3 semanas | 2-4h | 1-2 semanas |
+| Custo | R$ 1000-3000 (empresa BR se não tem) + $25 USD nova conta Console | $0 | $0 |
+| Risco | Alto setup mas resolve permanente | Médio (perde certifications + pode trigger outra rejection) | Alto (Google pode rejeitar apelo silently) |
+| Mantém escopo healthcare | Sim | **Não** (downgrade pra "lifestyle/lembrete") | Sim |
+| Permite Production track | Sim | Sim mas com escopo reduzido | Talvez |
+| Reversibilidade | Permanente | Re-submit declarations restaurar mas re-trigger | N/A |
+| Internal Testing afetado | Não (continua) | Não (continua) | Não (continua) |
+
+**Recomendação default (revisar pós passos 1-6):**
+- **Curto prazo (esta semana):** Opção B — reverter declaração "App de saúde" (most likely trigger) → re-submit Closed Testing → testers external entram via opt-in
+- **Médio prazo (próximas 2-4 semanas):** Opção A em paralelo — verificar se user já tem CNPJ; se sim, pular abertura empresa; se não, abrir Dosy Med LTDA com contador + cadastrar conta Google Play empresarial + transferir app
+- **Pós-A success:** restaurar declaração "App de saúde" + categoria Medicina se quiser → re-submit com escopo healthcare completo
+
+**Output deliverables passo 7:**
+- ADR `contexto/decisoes/2026-05-XX-rejection-google-fix.md` documentando decisão escolhida + razão
+- Plano timeline execução (datas concretas)
+- Items derivados para ROADMAP (ex.: #159 "abrir empresa Dosy Med LTDA", #160 "transferir app Console", #161 "re-submit Closed Testing post-fix")
+
+**Aceitação final #158:**
+- Closed Testing track aprovado Google (ou nova conta org com app transferido + aprovado)
+- Opt-in URL aceitando inscrições novas
+- Production track futuro submit passa review
+- Internal Testing continua funcionando independente (já garantido — não foi afetado)
+
+**Internal Testing track NÃO afetado:** continua publicando AAB normalmente (v0.2.1.0 vc 46 publicada 2026-05-05 23:42). User + esposa + testers existentes recebem updates auto Play Store.
+
+**Internal Testing track NÃO afetado:** continua publicando AAB normalmente (v0.2.1.0 vc 46 publicada 2026-05-05 23:42). User + esposa + testers existentes recebem updates.
+
+**Closed Testing público bloqueado:** sem aprovação Google, opt-in URL `https://play.google.com/apps/internaltest/4700769831647466031` permanece sem usuários novos podendo se inscrever.
+
+**Production track bloqueado:** mesma rejection vai aplicar pra Production submit futuro.
+
+**Análise opções:**
+
+**Opção A — Conta Google Play Developer empresarial (recomendada longo prazo):**
+1. Criar empresa "Dosy Med LTDA" oficialmente (se já não tem CNPJ)
+2. Cadastrar nova conta Google Play Developer com CNPJ + $25 USD taxa nova
+3. Verification documents (CNPJ, comprovante endereço empresa, possível video call)
+4. Console → app Dosy → Configurações → Transferir um app → para conta empresarial
+5. Aguardar Google approve transfer (~1-2 semanas)
+6. Re-submit Closed Testing/Production
+- **Vantagem:** resolve permanente, libera todas categorias incluindo healthcare strict, profissional + alinha com app de saúde sério
+- **Desvantagem:** demora, custos abertura empresa BR (R$ 1000-3000 contador) + paperwork
+
+**Opção B — Reverter declarações específicas (rápida mas escopo reduzido):**
+1. Identificar QUAL declaração ativou gate (Conteúdo do app → review todas as declarações):
+   - "App de saúde" — provável culpada
+   - "Permissões de alarme exato" (#004 FGS Special Use)
+   - "Serviços em primeiro plano" (#004 FGS)
+   - "Recursos financeiros" (Play Billing assinaturas)
+   - "Apps governamentais" — improvável aplica
+2. Reverter declaração mais provável (App de saúde) → mudar pra categoria menos sensível
+3. Re-submit
+- **Vantagem:** ship Closed Testing/Production rapidamente
+- **Desvantagem:** app perde certificação healthcare, pode comprometer trust/positioning consumer self-care; pode ainda falhar se outra declaração for culpada
+
+**Opção C — Apelo Google explicando contexto:**
+1. Console → Ajuda → Entrar em contato com suporte
+2. Explicar: Dosy é app consumer self-care/lembrete medicação, não app médico profissional, target audiência geral (pais, idosos, cuidadores)
+3. Solicitar reclassificação manual do reviewer
+- **Vantagem:** preserva todas declarações + categoria; sem custo
+- **Desvantagem:** Google review apelos é slow + opaque; pode demorar 1-2 semanas; pode ser rejeitado sem explanation
+
+**Recomendação:** A longo prazo + B paralelo curto prazo. Atalho: começar A (criar empresa + CNPJ se não tem), enquanto isso testar B reverting declarações específicas e ver se passa review. Se B passa, ship Closed Testing imediato com escopo reduzido enquanto A finaliza.
+
+**Aceitação:**
+- Closed Testing track aprovado Google + opt-in URL aceitando inscrições novas
+- Production track submit futuro passa review
+- Internal Testing continua funcionando independente
+
+**Detalhe rejection email:** ver Console → Notificações → "App rejeitado · 5 de mai." → Mais detalhes (já lido na sessão).
+

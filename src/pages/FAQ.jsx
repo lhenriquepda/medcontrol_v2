@@ -10,7 +10,7 @@ import PageHeader from '../components/dosy/PageHeader'
 import { FAQ as FAQ_DATA, FAQ_CATEGORIES, searchFaq } from '../data/faq'
 import { track, EVENTS } from '../services/analytics'
 
-const SUPPORT_EMAIL = 'suporte@dosyapp.com'
+const SUPPORT_EMAIL = 'suporte@dosymed.app'
 /* eslint-disable no-undef */
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 /* eslint-enable no-undef */

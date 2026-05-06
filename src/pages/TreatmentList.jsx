@@ -6,6 +6,7 @@ import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import { Card, IconButton, Button, Input, StatusPill } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
+import { SkeletonList } from '../components/Skeleton'
 import {
   useTreatments,
   usePauseTreatment,
@@ -54,7 +55,7 @@ const BY_CREATED_ASC = (a, b) => (a.createdAt || '').localeCompare(b.createdAt |
 export default function TreatmentList() {
   const { data: patients = [] } = usePatients()
   const [q, setQ] = useState('')
-  const { data: all = [] } = useTreatments()
+  const { data: all = [], isLoading: loadingTreatments } = useTreatments()
   const pauseMut = usePauseTreatment()
   const resumeMut = useResumeTreatment()
   const endMut = useEndTreatment()
@@ -135,7 +136,10 @@ export default function TreatmentList() {
           onChange={(e) => setQ(e.target.value)}
         />
 
-        {total === 0 ? (
+        {loadingTreatments ? (
+          // #036 skeleton: evita flash empty state durante initial fetch
+          <SkeletonList count={3} />
+        ) : total === 0 ? (
           <Card padding={28} style={{
             textAlign: 'center',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
