@@ -95,12 +95,16 @@ export default function DosyAppHeader() {
   const { available: updateAvailable, startUpdate } = useAppUpdate()
 
   // Item #117: shares recebidos (paciente compartilhado comigo).
-  // Compara createdAt vs lastSeen localStorage → conta NEW shares.
+  // #161 v2 (v0.2.1.2) — useState dismissed pra feedback visual immediate.
+  // localStorage.setItem não dispara re-render React; useState sim.
   const { data: receivedShares = [] } = useReceivedShares()
+  const [sharesDismissed, setSharesDismissed] = useState(() => {
+    return localStorage.getItem(LS_SHARES_SEEN) || ''
+  })
   const newSharesCount = useMemo(() => {
-    const seenAt = localStorage.getItem(LS_SHARES_SEEN) || '1970-01-01T00:00:00Z'
+    const seenAt = sharesDismissed || '1970-01-01T00:00:00Z'
     return receivedShares.filter((s) => s.createdAt > seenAt).length
-  }, [receivedShares])
+  }, [receivedShares, sharesDismissed])
 
   // Item #118: tratamentos acabando ≤3 dias (não-contínuos, status active).
   const { data: treatments = [] } = useTreatments()
@@ -110,30 +114,36 @@ export default function DosyAppHeader() {
     return treatments.filter((t) => endingSoon(t, HORIZON))
   }, [treatments])
   const [endingSheetOpen, setEndingSheetOpen] = useState(false)
-  // #161 (v0.2.1.2) — Date-based dismiss: alert ending mostra 1× por dia.
-  // Se user clicou hoje (seenDate === today), badge esconde até amanhã.
-  // Próximo dia (today muda), badge reaparece automático com mesmos trats
-  // (até trat realmente acabar e sair do endingSoonList).
+  // #161 v2 (v0.2.1.2) — useState dismissed pra feedback visual immediate.
+  // Bug v1: useMemo só re-rodava quando endingSoonList mudava ref; localStorage
+  // setItem não trigger re-render → ícone permanecia visível após click.
+  // Fix: useState mirror localStorage init lazy + setState no click sincroniza.
+  const [endingDismissedDate, setEndingDismissedDate] = useState(() => {
+    return localStorage.getItem(LS_ENDING_SEEN_DATE) || ''
+  })
   const endingSoonNew = useMemo(() => {
     if (endingSoonList.length === 0) return 0
-    const seenDate = localStorage.getItem(LS_ENDING_SEEN_DATE)
-    if (seenDate === todayISODate()) return 0
+    if (endingDismissedDate === todayISODate()) return 0
     return endingSoonList.length
-  }, [endingSoonList])
+  }, [endingSoonList, endingDismissedDate])
 
-  // Click handlers — limpam localStorage seen + navegam.
+  // Click handlers — limpam localStorage seen + state mirror + navegam.
+  // #161 v2: state mirror garante re-render immediate (localStorage só não dispara React).
   const onClickOverdue = () => nav('/?filter=overdue')
   const onClickShares = () => {
-    localStorage.setItem(LS_SHARES_SEEN, new Date().toISOString())
+    const now = new Date().toISOString()
+    localStorage.setItem(LS_SHARES_SEEN, now)
+    setSharesDismissed(now)  // forces re-render immediate
     nav('/pacientes')
   }
-  // Item #118-followup (release v0.2.0.3): user reportou que click no ícone
-  // amarelo (Pill) navegava silenciosamente sem explicar. Agora abre Sheet
-  // com lista de tratamentos acabando + dias restantes + click row → patient.
   const onClickEnding = () => {
-    // #161 (v0.2.1.2) — store today's date YYYY-MM-DD pra dismiss apenas
-    // por hoje. Próximo dia (today change), alert reaparece automático.
-    localStorage.setItem(LS_ENDING_SEEN_DATE, todayISODate())
+    // #161 v2 (v0.2.1.2) — store today YYYY-MM-DD + setState mirror pra
+    // re-render immediate. Bug v1: localStorage.setItem não trigger React
+    // re-render → ícone ficava visível mesmo dismissed. Fix: useState
+    // mirror sincroniza UI imediato.
+    const today = todayISODate()
+    localStorage.setItem(LS_ENDING_SEEN_DATE, today)
+    setEndingDismissedDate(today)  // forces re-render immediate
     setEndingSheetOpen(true)
   }
   const onClickUpdate = () => startUpdate()
