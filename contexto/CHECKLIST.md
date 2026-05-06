@@ -546,6 +546,14 @@ Combinação `ALARM_FIRED` + `NOTIFICATION_DELIVERED` + `DOSE_CONFIRMED/SKIPPED`
 - ✅ Filters aplicam label automaticamente em emails recebidos (mantém inbox + label, não archive)
 - Test envio futuro pra qualquer `<alias>@dosymed.app` → ImprovMX forward → dosy.med@gmail.com → filter aplica label correspondente
 
+**Fix anti-spam (2026-05-05 sessão atual via Chrome MCP):**
+- **Problema:** user enviou TESTE 1 lhenrique.pda@gmail.com → contato@dosymed.app → forward funcionou (ImprovMX dashboard SENT) MAS Gmail flagou como Spam (forwarder novo, sender desconhecido). Filtros 1-7 só aplicam label, sem flag "Never Spam".
+- **Diagnóstico:** ImprovMX dashboard 1 Received OK. DNS MX+SPF OK. Causa = Gmail spam heuristic. TESTE 1 + ImprovMX TEST email achados em Spam.
+- **Fix:** 8º filtro catch-all criado `Matches: to:(dosymed.app) Do this: Never send it to Spam, Mark it as important`. Cobre 7 aliases atuais + futuros + qualquer `<x>@dosymed.app`.
+- **Validação end-to-end:** TESTE 1 resgatado Spam → marcado "Report not spam" → Inbox `Contato` label. ImprovMX TEST `Alias test for contato@dosymed.app` chegou Inbox direto label `Contato`. Forward chain validado: gmail.com → dosymed.app MX (improvmx) → forwarder@improvmx.com → dosy.med@gmail.com Inbox + label.
+- **Limitação Gmail conhecida:** filtro NÃO aplica retroativo em Spam/Trash. Resgate manual user para emails antigos lá.
+- **Pendência (opcional):** consolidar filtros 1-7 adicionando "Never Spam"+"Mark important" em cada (catch-all 8 já cobre na prática, mas redundância protege contra Gmail decidir mover apesar do filter 8).
+
 **Pendente código v0.2.1.0:**
 - ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
 - ⏳ Termos.jsx + Privacidade.jsx (criando #156) referenciar emails canônicos
