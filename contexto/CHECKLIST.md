@@ -2532,3 +2532,85 @@ User com session realmente revogada (deletado/banned) continua com cache stale a
 - ✅ User + esposa relatam fim de logout repetido pós-rollout v0.2.1.1 vc 47
 
 **Detalhe code change:** ver commit release/v0.2.1.1 fix `useAuth.jsx`. Comment block in-code documenta racional + trade-off completo.
+
+### #160 — PatientDetail refactor: Doses Hoje card + dose list 24h/Todas + tratamentos por status (Ativos/Pausados/Encerrados)
+- **Status:** ⏳ Aberto v0.2.1.2 — em curso esta release
+- **Origem:** User reported (2026-05-06) — "página paciente individual: tratamentos ativos mostrando encerrados, melhorar info exibida, replicar lista doses do início pra marcar dose direto da página"
+- **Prioridade:** P1 UX (página crítica fluxo paciente)
+- **Esforço:** 2-3h refactor + test
+- **Dependências:** nenhuma
+- **Arquivo:** `src/pages/PatientDetail.jsx`
+
+**Mudanças requeridas:**
+
+1. **Substituir card "Adesão"** por card **"Doses Hoje: X de Y"**
+   - X = doses tomadas hoje (status='done' AND scheduledAt entre 00:00-23:59 hoje)
+   - Y = total doses agendadas hoje (status in ['done', 'pending', 'overdue', 'skipped'])
+   - Formato: `"Doses Hoje: 3 de 5"` ou similar
+   - Pode incluir progress bar visual peach palette
+   - Adesão move para tela Relatórios (já existe lá)
+
+2. **Manter card "Tratamentos Ativos"** como está (count tratamentos ativos)
+
+3. **Bug fix tratamentos:** atual lista "ativos" inclui encerrados. Filtro errado. Separar em **3 seções distintas**:
+   - **Tratamentos Ativos** — `status='active'` AND `endDate >= today`
+   - **Tratamentos Pausados** — `status='paused'`
+   - **Tratamentos Encerrados** — `status='ended'` OR `endDate < today`
+   - Cada seção colapsável (collapsed por default Pausados+Encerrados, Ativos expandido)
+   - Counter por seção (`Ativos (3)`, `Pausados (1)`, `Encerrados (2)`)
+
+4. **NOVA seção: Lista de doses do paciente**
+   - Replica visual da Dashboard (mesma `DoseCard` component)
+   - Filtro segmentado simples: `24h | Todas`
+   - Default: 24h
+   - Doses do paciente apenas (filter `patientId === current.id`)
+   - Ações inline: marcar tomada, pular, undo (mesma UX Dashboard)
+   - Mesma DoseModal abre on click
+   - Empty state se zero doses no filtro
+
+5. **Reordenar layout** (top → bottom):
+   ```
+   [Foto avatar grande]
+   Nome
+   Idade · Peso
+   [Compartilhar / Compartilhado badge]
+   ─────────────────────────────────
+   [Card Doses Hoje X/Y]  [Card Tratamentos Ativos count]
+   ─────────────────────────────────
+   Lista de doses
+   [Filtro: 24h | Todas]
+   • Dose 1 (action buttons)
+   • Dose 2
+   ...
+   ─────────────────────────────────
+   Tratamentos Ativos (3) ▼
+     • Tratamento A
+     • Tratamento B
+     • Tratamento C
+   ─────────────────────────────────
+   Tratamentos Pausados (1) ▶
+   ─────────────────────────────────
+   Tratamentos Encerrados (2) ▶
+   ```
+
+**Implementação técnica:**
+- Reusar `DoseCard` ou similar component da Dashboard
+- Reusar `useDoses({ patientId, from, to })` hook com filter por paciente
+- Reusar `useConfirmDose` / `useSkipDose` / `useUndoDose` mutations
+- Reusar `useTreatments({ patientId })` hook + group by status client-side via useMemo
+- Adicionar collapse state useState pra Pausados/Encerrados
+- Filtro 24h/Todas: useState segmented control (similar ao Dashboard 12h/24h/48h chips)
+
+**Aceitação:**
+- ✅ Card "Doses Hoje: X de Y" no topo (substitui Adesão)
+- ✅ Card "Tratamentos Ativos" mantido
+- ✅ Tratamentos separados em 3 seções (Ativos/Pausados/Encerrados) — encerrados NÃO aparecem em Ativos
+- ✅ Lista de doses com filtro 24h/Todas + ações marcar/pular funcionando idêntico ao Dashboard
+- ✅ Layout reordenado conforme spec
+- ✅ Build OK + lint zero errors
+- ✅ Test manual prod preview Vercel (paciente real ou teste)
+
+**Out of scope (parqueado v0.2.2.0+):**
+- Filtros adicionais (paciente, status, tipo) na lista doses paciente
+- Edição inline tratamentos (atual Editar/Pausar/Encerrar buttons mantidos)
+- Stats avançadas (gráficos adesão semanal, etc) — vão pra Reports/Analytics
