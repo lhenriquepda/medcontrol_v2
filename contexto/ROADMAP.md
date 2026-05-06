@@ -41,8 +41,8 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.0.12` (em desenvolvimento) · branch `release/v0.2.0.12`. Master @ tag `v0.2.0.11`.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.0.11 (master). Preview release/v0.2.0.12 via `https://dosy-git-release-v02012-lhenriquepdas-projects.vercel.app/`. Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.1.0` · master @ tag `v0.2.1.0` (publicada 2026-05-05).
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.0 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -94,16 +94,32 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Em desenvolvimento — v0.2.0.12 (release/v0.2.0.12 ativa):**
-- ✅ #152 ChangePasswordModal em Ajustes (Conta → Alterar senha, modal 3 inputs, re-auth + update)
-- ✅ #153 Recovery senha via OTP 6 dígitos email (substitui magic-link broken #147 BUG-041)
-- ✅ #154 NOVO Custom SMTP Resend pra dosymed.app (DNS Hostinger DKIM/SPF/MX/DMARC + API key + Supabase SMTP)
-- ✅ #144 Auth Hook tier claim re-ativado (qc.clear scoped fix em useAuth onAuthStateChange)
-- ✅ #147 BUG-041 magic-link recovery FECHADO via #152 + #153 (escopo movido v0.2.1.0 → v0.2.0.12)
-- ✅ traduzirErro tradução OTP/rate-limit erros (commit 9dfb0f5)
-- ⏳ Em curso: items v0.2.0.12 (todos fechados — release publicada)
+**Última release publicada:** v0.2.1.0 em 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 46 + tag git `v0.2.1.0`).
 
-**Última release:** v0.2.0.11 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 44 + tag git `v0.2.0.11`).
+**Items v0.2.1.0 fechados (12):**
+- ✅ #007 Telemetria PostHog notification_delivered + tapped (healthcare crítico, 4 listeners Capacitor)
+- ✅ #018 cleanup AdSense placeholder index.html
+- ✅ #026 ImprovMX 7 emails @dosymed.app + Gmail filtros + fix anti-spam (8º filtro catch-all `to:(dosymed.app)` Never Spam)
+- ✅ #036 skeleton screens TreatmentList + Analytics
+- ✅ #041 partial (headings audit) + #042 deferred v0.2.2.0+
+- ✅ #046 Runbook DR `docs/runbook-dr.md` v1.0
+- ✅ #089 BUG-022 fechado organicamente (validado print user Pixel 7)
+- ✅ #129 Google Group `dosy-testers@googlegroups.com`
+- ✅ #156 v1.3 Privacidade.jsx LGPD + Google Play Health Apps Policy + idade 18+
+- ✅ #157 NOVO P0 fix storm useRealtime cascade (12 req/s → 0.02 req/s, 99.7% redução; root cause publication `supabase_realtime` vazia + reconnect cascade; fix targeted: comentar `useRealtime()` em App.jsx:67)
+- ✅ Categoria Console Medicina → Saúde e fitness
+- ✅ Bump v0.2.1.0 (versionCode 46) + AAB publicado Internal Testing 23:42
+
+**Items BLOQUEADOS Google review:**
+- 🚨 #130 Closed Testing track REJEITADO Google (org account required) 2026-05-05 23:30 BRT
+- 🚨 #158 NOVO P0 URGENTE — plano 7-passos resolução rejection antes próximo release v0.2.2.0 (ler email Google + estudar policies + analisar app + investigar trigger + decision matrix opção A/B/C)
+
+**Process improvement v0.2.1.0:**
+- README Regra 9.1 reforçada — bisect deve usar window igual ao observation original (storm 30s ≠ 5min, false positive risk)
+- Investigação multi-camada: Chrome MCP fetch interceptor + WebSocket hook + visibility events (cliente) + Supabase MCP execute_sql + get_logs (backend) + code analysis
+- Lições durables: storm escala ao longo do tempo em hidden tab; publication realtime vazia + hook subscribe = silent rate-limit cascade; bug pré-existente latente é mais perigoso que regressão fresh
+
+**Release anterior:** v0.2.0.12 publicada 2026-05-05 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 45 + tag git `v0.2.0.12`).
 **Items v0.2.0.11 fechados (12 items — 8 planejados + 4 descobertos validação Chrome MCP):**
 
 **Planejados (8):**

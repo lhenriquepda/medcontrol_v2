@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-05 — em desenvolvimento v0.2.0.12 (release branch ativa). Master @ tag v0.2.0.11 (versionCode 44). v0.2.0.12 inclui #152 ChangePasswordModal + #153 OTP recovery + #154 Custom SMTP Resend + #144 hook re-ativado conservador.
+> **Última revisão:** 2026-05-05 — master @ tag v0.2.1.0 (versionCode 46) publicada 2026-05-05. v0.2.1.0 inclui #007 Telemetria PostHog notifications + #026 ImprovMX 7 emails dosymed.app + #036 skeleton screens + #046 Runbook DR + #129 Google Group dosy-testers + #156 v1.3 Privacidade LGPD + Health Apps Policy + idade 18+ + #157 NOVO P0 fix storm useRealtime cascade (99.7% redução egress) + categoria Saúde e fitness. AAB v0.2.1.0 vc 46 publicado Internal Testing. Closed Testing track #130 REJEITADO Google (org account required) — #158 NOVO P0 URGENTE plano 7-passos pra resolver antes próximo release v0.2.2.0.
 
 ---
 
