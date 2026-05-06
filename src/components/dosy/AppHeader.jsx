@@ -38,10 +38,23 @@ import { useAppUpdate } from '../../hooks/useAppUpdate'
 import { shortName } from '../../utils/userDisplay'
 import logoMonoDark from '../../assets/dosy/logo-mono-dark.png'
 
-// localStorage keys — track "last seen" timestamps por tipo de alerta.
+// localStorage keys — track "last seen" markers por tipo de alerta.
 // Permite badge zerar quando user clica (sem persistir backend).
+//
+// #161 (release v0.2.1.2) — User feedback 2026-05-06:
+//   - Compartilhamento: dismiss permanente após user clica (createdAt > seenAt)
+//   - Encerrando: dismiss POR DIA (mostra de novo cada novo dia até trat acabar)
+//   - Atrasadas: persistente (sempre conta enquanto há overdue ativo)
+//
+// Mudança: LS_ENDING_SEEN agora armazena DATE (YYYY-MM-DD) ao invés timestamp.
+// Compare seenDate === today → dismissed hoje. Próximo dia (today muda),
+// alert reaparece automaticamente.
 const LS_SHARES_SEEN = 'dosy_shares_seen_at'
-const LS_ENDING_SEEN = 'dosy_ending_seen_at'
+const LS_ENDING_SEEN_DATE = 'dosy_ending_seen_date' // YYYY-MM-DD
+
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10) // YYYY-MM-DD UTC
+}
 
 /**
  * Computa endDate de tratamento finito (não-contínuo).
@@ -97,11 +110,15 @@ export default function DosyAppHeader() {
     return treatments.filter((t) => endingSoon(t, HORIZON))
   }, [treatments])
   const [endingSheetOpen, setEndingSheetOpen] = useState(false)
+  // #161 (v0.2.1.2) — Date-based dismiss: alert ending mostra 1× por dia.
+  // Se user clicou hoje (seenDate === today), badge esconde até amanhã.
+  // Próximo dia (today muda), badge reaparece automático com mesmos trats
+  // (até trat realmente acabar e sair do endingSoonList).
   const endingSoonNew = useMemo(() => {
-    const seenAt = localStorage.getItem(LS_ENDING_SEEN) || '1970-01-01T00:00:00Z'
-    // count only treatments cujo updatedAt > seenAt (notificou desde última visualização)
-    // OR todos se nunca abriu — first-time user vê todos.
-    return endingSoonList.filter((t) => (t.updatedAt || t.createdAt || '') > seenAt).length
+    if (endingSoonList.length === 0) return 0
+    const seenDate = localStorage.getItem(LS_ENDING_SEEN_DATE)
+    if (seenDate === todayISODate()) return 0
+    return endingSoonList.length
   }, [endingSoonList])
 
   // Click handlers — limpam localStorage seen + navegam.
@@ -114,7 +131,9 @@ export default function DosyAppHeader() {
   // amarelo (Pill) navegava silenciosamente sem explicar. Agora abre Sheet
   // com lista de tratamentos acabando + dias restantes + click row → patient.
   const onClickEnding = () => {
-    localStorage.setItem(LS_ENDING_SEEN, new Date().toISOString())
+    // #161 (v0.2.1.2) — store today's date YYYY-MM-DD pra dismiss apenas
+    // por hoje. Próximo dia (today change), alert reaparece automático.
+    localStorage.setItem(LS_ENDING_SEEN_DATE, todayISODate())
     setEndingSheetOpen(true)
   }
   const onClickUpdate = () => startUpdate()

@@ -59,8 +59,9 @@ export default function PatientDetail() {
   const [selectedDose, setSelectedDose] = useState(null)
   // #160 — filtro segmentado lista doses paciente
   const [doseFilter, setDoseFilter] = useState('24h') // '24h' | 'all'
-  // #160 — collapse state pra 3 seções tratamentos
-  const [collapsed, setCollapsed] = useState({ paused: true, ended: true })
+  // #160 v2 — collapse state pra TODAS 4 seções (Doses + 3 tratamentos)
+  // Defaults: doses=expanded, active=expanded, paused=collapsed, ended=collapsed
+  const [collapsed, setCollapsed] = useState({ doses: false, active: false, paused: true, ended: true })
   const toggleSection = (k) => setCollapsed((s) => ({ ...s, [k]: !s[k] }))
 
   // Item #115: detail page tem photo_url full carregado. Pré-aquece cache
@@ -312,102 +313,151 @@ export default function PatientDetail() {
           />
         </div>
 
-        {/* #160 NOVA seção: Lista de doses paciente com filtro 24h/Todas + ações inline */}
-        <div>
-          <SectionTitle style={{ padding: '4px 4px 8px' }}>Doses</SectionTitle>
-
-          {/* Filtro segmentado 24h | Todas */}
-          <div style={{
-            display: 'inline-flex', gap: 4, padding: 4,
-            background: 'var(--dosy-bg-sunken)', borderRadius: 12,
-            marginBottom: 10,
-          }}>
-            {[
-              { key: '24h', label: '24h' },
-              { key: 'all', label: 'Todas' },
-            ].map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setDoseFilter(opt.key)}
-                className="dosy-press"
-                style={{
-                  padding: '6px 14px',
-                  border: 'none', cursor: 'pointer',
-                  fontSize: 12.5, fontWeight: 700,
-                  fontFamily: 'var(--dosy-font-display)',
-                  borderRadius: 8,
-                  background: doseFilter === opt.key ? 'var(--dosy-primary)' : 'transparent',
-                  color: doseFilter === opt.key ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg-secondary)',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >{opt.label}</button>
-            ))}
-          </div>
-
-          {sortedListDoses.length === 0 ? (
-            <Card padding={20} style={{
-              textAlign: 'center', color: 'var(--dosy-fg-tertiary)',
-              fontSize: 13.5, fontWeight: 500,
+        {/* #160 v2 — Lista de doses paciente: Card peach destaque + header collapsable + filtro 24h/Todas */}
+        <Card padding={14} style={{
+          // Destaque visual: gradient sunset suave (peach 50/100) — distingue de outras seções
+          background: 'var(--dosy-gradient-sunset-soft)',
+          border: '1px solid var(--dosy-border)',
+        }}>
+          {/* Header collapsable */}
+          <button
+            type="button"
+            onClick={() => toggleSection('doses')}
+            className="dosy-press"
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              width: '100%', marginBottom: collapsed.doses ? 0 : 10,
+              fontFamily: 'var(--dosy-font-display)',
+              color: 'var(--dosy-fg)',
+            }}
+          >
+            <span style={{
+              fontSize: 16, fontWeight: 800, letterSpacing: '-0.015em',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
             }}>
-              <Pill size={28} strokeWidth={1.5} style={{ margin: '0 auto 8px', display: 'block' }}/>
-              {doseFilter === '24h' ? 'Sem doses nas próximas 24h' : 'Sem doses no histórico'}
-            </Card>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <AnimatePresence initial={false}>
-                {sortedListDoses.map((d) => (
-                  <motion.div
-                    key={d.id}
-                    layout
-                    variants={{
-                      initial: { opacity: 0, y: 8 },
-                      animate: { opacity: 1, y: 0, transition: { duration: TIMING.fast, ease: EASE.inOut } },
-                      exit: { opacity: 0, y: 6, transition: { duration: 0.12, ease: EASE.inOut } },
-                    }}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                  >
-                    <DoseCard
-                      dose={d}
-                      onClick={() => setSelectedDose(d)}
-                      onSwipeConfirm={async (dose) => {
-                        try {
-                          await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
-                          toast.show({
-                            message: `${dose.medName} marcada como tomada.`, kind: 'success',
-                            undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                          })
-                        } catch (e) {
-                          toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
-                        }
-                      }}
-                      onSwipeSkip={async (dose) => {
-                        try {
-                          await skipMut.mutateAsync({ id: dose.id, observation: '' })
-                          toast.show({
-                            message: `${dose.medName} marcada como pulada.`, kind: 'warn',
-                            undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                          })
-                        } catch (e) {
-                          toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
-                        }
-                      }}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
+              Doses
+              {sortedListDoses.length > 0 && (
+                <span style={{
+                  fontSize: 12, fontWeight: 700,
+                  color: 'var(--dosy-fg-tertiary)',
+                  background: 'rgba(255, 255, 255, 0.4)',
+                  borderRadius: 9999,
+                  padding: '2px 8px',
+                }}>{sortedListDoses.length}</span>
+              )}
+            </span>
+            <ChevronDown
+              size={18}
+              strokeWidth={1.75}
+              style={{
+                color: 'var(--dosy-fg-tertiary)',
+                transform: collapsed.doses ? 'rotate(0deg)' : 'rotate(180deg)',
+                transition: 'transform 0.2s',
+              }}
+            />
+          </button>
 
-        {/* #160 — 3 seções tratamentos por status (Ativos / Pausados / Encerrados) */}
-        {/* Tratamentos Ativos — sempre expandido + Botão Novo */}
+          {!collapsed.doses && (
+            <>
+              {/* Filtro segmentado 24h | Todas */}
+              <div style={{
+                display: 'inline-flex', gap: 4, padding: 4,
+                background: 'rgba(255, 255, 255, 0.3)', borderRadius: 12,
+                marginBottom: 10,
+              }}>
+                {[
+                  { key: '24h', label: '24h' },
+                  { key: 'all', label: 'Todas' },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setDoseFilter(opt.key)}
+                    className="dosy-press"
+                    style={{
+                      padding: '6px 14px',
+                      border: 'none', cursor: 'pointer',
+                      fontSize: 12.5, fontWeight: 700,
+                      fontFamily: 'var(--dosy-font-display)',
+                      borderRadius: 8,
+                      background: doseFilter === opt.key ? 'var(--dosy-primary)' : 'transparent',
+                      color: doseFilter === opt.key ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg-secondary)',
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
+                  >{opt.label}</button>
+                ))}
+              </div>
+
+              {sortedListDoses.length === 0 ? (
+                <div style={{
+                  textAlign: 'center', color: 'var(--dosy-fg-tertiary)',
+                  fontSize: 13.5, fontWeight: 500,
+                  padding: 20,
+                  background: 'rgba(255, 255, 255, 0.4)',
+                  borderRadius: 14,
+                }}>
+                  <Pill size={28} strokeWidth={1.5} style={{ margin: '0 auto 8px', display: 'block' }}/>
+                  {doseFilter === '24h' ? 'Sem doses nas próximas 24h' : 'Sem doses no histórico'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <AnimatePresence initial={false}>
+                    {sortedListDoses.map((d) => (
+                      <motion.div
+                        key={d.id}
+                        layout
+                        variants={{
+                          initial: { opacity: 0, y: 8 },
+                          animate: { opacity: 1, y: 0, transition: { duration: TIMING.fast, ease: EASE.inOut } },
+                          exit: { opacity: 0, y: 6, transition: { duration: 0.12, ease: EASE.inOut } },
+                        }}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                      >
+                        <DoseCard
+                          dose={d}
+                          onClick={() => setSelectedDose(d)}
+                          onSwipeConfirm={async (dose) => {
+                            try {
+                              await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
+                              toast.show({
+                                message: `${dose.medName} marcada como tomada.`, kind: 'success',
+                                undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                              })
+                            } catch (e) {
+                              toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
+                            }
+                          }}
+                          onSwipeSkip={async (dose) => {
+                            try {
+                              await skipMut.mutateAsync({ id: dose.id, observation: '' })
+                              toast.show({
+                                message: `${dose.medName} marcada como pulada.`, kind: 'warn',
+                                undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+                              })
+                            } catch (e) {
+                              toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
+                            }
+                          }}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        {/* #160 v2 — 3 seções tratamentos por status (Ativos / Pausados / Encerrados) — TODAS collapsable */}
+        {/* Tratamentos Ativos — collapsable + Botão Novo */}
         <TreatmentSection
           title="Tratamentos ativos"
           treatments={treatmentGroups.active}
-          collapsed={false}
+          collapsed={collapsed.active}
+          onToggle={() => toggleSection('active')}
           actionRight={
             <Link
               to={`/tratamento/novo?patientId=${id}`}
