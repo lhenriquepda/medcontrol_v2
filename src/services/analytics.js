@@ -141,11 +141,6 @@ export const EVENTS = {
   ALARM_DISMISSED: 'alarm_dismissed',
   ALARM_SNOOZED: 'alarm_snoozed',
 
-  // Notifications (push + local) — #007 telemetria delivery healthcare crítico
-  NOTIFICATION_DELIVERED: 'notification_delivered', // FCM foreground OR LocalNotif fire
-  NOTIFICATION_TAPPED: 'notification_tapped',       // user tap (push OR local)
-  NOTIFICATION_DISMISSED: 'notification_dismissed', // user swipe-away sem ação
-
   // Permissions
   NOTIF_PERM_GRANTED: 'notification_permission_granted',
   NOTIF_PERM_DENIED: 'notification_permission_denied',
