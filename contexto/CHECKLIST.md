@@ -2532,3 +2532,175 @@ User com session realmente revogada (deletado/banned) continua com cache stale a
 - ✅ User + esposa relatam fim de logout repetido pós-rollout v0.2.1.1 vc 47
 
 **Detalhe code change:** ver commit release/v0.2.1.1 fix `useAuth.jsx`. Comment block in-code documenta racional + trade-off completo.
+
+### #160 — PatientDetail refactor: Doses Hoje card + dose list 24h/Todas + tratamentos por status (Ativos/Pausados/Encerrados)
+- **Status:** ✅ Concluído v0.2.1.2 (2026-05-06) — commits `c6f6963` (v1) + `1913b56` (v2 collapse + Doses card destaque) + `c371072` (v2.1 dark mode adaptive). Ver entry "#160 v2" abaixo pra detalhe completo extensão.
+- **Origem:** User reported (2026-05-06) — "página paciente individual: tratamentos ativos mostrando encerrados, melhorar info exibida, replicar lista doses do início pra marcar dose direto da página"
+- **Prioridade:** P1 UX (página crítica fluxo paciente)
+- **Esforço:** 2-3h refactor + test
+- **Dependências:** nenhuma
+- **Arquivo:** `src/pages/PatientDetail.jsx`
+
+**Mudanças requeridas:**
+
+1. **Substituir card "Adesão"** por card **"Doses Hoje: X de Y"**
+   - X = doses tomadas hoje (status='done' AND scheduledAt entre 00:00-23:59 hoje)
+   - Y = total doses agendadas hoje (status in ['done', 'pending', 'overdue', 'skipped'])
+   - Formato: `"Doses Hoje: 3 de 5"` ou similar
+   - Pode incluir progress bar visual peach palette
+   - Adesão move para tela Relatórios (já existe lá)
+
+2. **Manter card "Tratamentos Ativos"** como está (count tratamentos ativos)
+
+3. **Bug fix tratamentos:** atual lista "ativos" inclui encerrados. Filtro errado. Separar em **3 seções distintas**:
+   - **Tratamentos Ativos** — `status='active'` AND `endDate >= today`
+   - **Tratamentos Pausados** — `status='paused'`
+   - **Tratamentos Encerrados** — `status='ended'` OR `endDate < today`
+   - Cada seção colapsável (collapsed por default Pausados+Encerrados, Ativos expandido)
+   - Counter por seção (`Ativos (3)`, `Pausados (1)`, `Encerrados (2)`)
+
+4. **NOVA seção: Lista de doses do paciente**
+   - Replica visual da Dashboard (mesma `DoseCard` component)
+   - Filtro segmentado simples: `24h | Todas`
+   - Default: 24h
+   - Doses do paciente apenas (filter `patientId === current.id`)
+   - Ações inline: marcar tomada, pular, undo (mesma UX Dashboard)
+   - Mesma DoseModal abre on click
+   - Empty state se zero doses no filtro
+
+5. **Reordenar layout** (top → bottom):
+   ```
+   [Foto avatar grande]
+   Nome
+   Idade · Peso
+   [Compartilhar / Compartilhado badge]
+   ─────────────────────────────────
+   [Card Doses Hoje X/Y]  [Card Tratamentos Ativos count]
+   ─────────────────────────────────
+   Lista de doses
+   [Filtro: 24h | Todas]
+   • Dose 1 (action buttons)
+   • Dose 2
+   ...
+   ─────────────────────────────────
+   Tratamentos Ativos (3) ▼
+     • Tratamento A
+     • Tratamento B
+     • Tratamento C
+   ─────────────────────────────────
+   Tratamentos Pausados (1) ▶
+   ─────────────────────────────────
+   Tratamentos Encerrados (2) ▶
+   ```
+
+**Implementação técnica:**
+- Reusar `DoseCard` ou similar component da Dashboard
+- Reusar `useDoses({ patientId, from, to })` hook com filter por paciente
+- Reusar `useConfirmDose` / `useSkipDose` / `useUndoDose` mutations
+- Reusar `useTreatments({ patientId })` hook + group by status client-side via useMemo
+- Adicionar collapse state useState pra Pausados/Encerrados
+- Filtro 24h/Todas: useState segmented control (similar ao Dashboard 12h/24h/48h chips)
+
+**Aceitação:**
+- ✅ Card "Doses Hoje: X de Y" no topo (substitui Adesão)
+- ✅ Card "Tratamentos Ativos" mantido
+- ✅ Tratamentos separados em 3 seções (Ativos/Pausados/Encerrados) — encerrados NÃO aparecem em Ativos
+- ✅ Lista de doses com filtro 24h/Todas + ações marcar/pular funcionando idêntico ao Dashboard
+- ✅ Layout reordenado conforme spec
+- ✅ Build OK + lint zero errors
+- ✅ Test manual prod preview Vercel (paciente real ou teste)
+
+**Out of scope (parqueado v0.2.2.0+):**
+- Filtros adicionais (paciente, status, tipo) na lista doses paciente
+- Edição inline tratamentos (atual Editar/Pausar/Encerrar buttons mantidos)
+- Stats avançadas (gráficos adesão semanal, etc) — vão pra Reports/Analytics
+
+### #161 — Alerts dismiss refinement: ending 1×/dia + share permanent + overdue persist
+- **Status:** ✅ Concluído v0.2.1.2 (2026-05-06) — AppHeader.jsx LS_ENDING_SEEN_DATE date-based
+- **Origem:** User reported (2026-05-06) — "alertas precisam sumir depois de vistos. Doses atrasadas persistente sempre. Compartilhamento aparece quando recebe, depois some pra sempre. Tratamento encerrando aparece 1× por dia, dismiss = some hoje, amanhã reaparece"
+- **Prioridade:** P1 UX
+- **Esforço:** 15 min
+- **Arquivo:** `src/components/dosy/AppHeader.jsx`
+
+**Comportamento por tipo de alerta:**
+
+| Tipo | Trigger | Dismiss | Persist? |
+|---|---|---|---|
+| Doses atrasadas | overdueCount > 0 | NÃO dismissable | Sempre enquanto há overdue |
+| Compartilhamento | createdAt > LS_SHARES_SEEN | Click pra ver = some pra sempre | Sim (já existia) |
+| Tratamento encerrando | endingSoonList ≠ [] AND seenDate ≠ today | Click hoje = some hoje | **Reaparece amanhã** |
+
+**Mudança técnica:**
+- Antes: `LS_ENDING_SEEN` armazenava timestamp ISO. Filter `t.updatedAt > seenAt` = só re-mostrar quando trat fosse atualizado (raro, dias restantes muda mas updatedAt não)
+- Depois: `LS_ENDING_SEEN_DATE` armazena date string YYYY-MM-DD. Compare `seenDate === todayISODate()`:
+  - Se mesmo dia → badge zero (dismissed hoje)
+  - Próximo dia (today muda) → badge reaparece automaticamente
+  - Quando trat sair do endingSoonList (vencer ou ser encerrado), badge zera permanente
+
+**Aceitação:**
+- ✅ User clica ícone Pill amarelo → Sheet abre → fecha → ícone some pelo resto do dia
+- ✅ Próximo dia (00:00 UTC virou) → ícone reaparece com mesmos trats (até saírem do horizon ≤3d)
+- ✅ Compartilhamento mantém comportamento: dismiss permanente
+- ✅ Doses atrasadas mantém: persistente
+
+**Detalhe code change:**
+```js
+const LS_ENDING_SEEN_DATE = 'dosy_ending_seen_date' // YYYY-MM-DD
+
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+const endingSoonNew = useMemo(() => {
+  if (endingSoonList.length === 0) return 0
+  const seenDate = localStorage.getItem(LS_ENDING_SEEN_DATE)
+  if (seenDate === todayISODate()) return 0
+  return endingSoonList.length
+}, [endingSoonList])
+
+const onClickEnding = () => {
+  localStorage.setItem(LS_ENDING_SEEN_DATE, todayISODate())
+  setEndingSheetOpen(true)
+}
+```
+
+### #160 v2 — PatientDetail collapse opcional Doses + Tratamentos Ativos + header card destaque
+- **Status:** ✅ Concluído v0.2.1.2 (2026-05-06) — extensão #160
+- **Origem:** User reported (2026-05-06) — "lista retrátil de encerrados/pausados ok, quero retrair tb Doses + Tratamentos Ativos. Header Doses mais destacado, talvez dentro de card cor diferente"
+- **Esforço:** 20 min
+
+**Mudanças:**
+- collapse state: `{ doses: false, active: false, paused: true, ended: true }` (defaults)
+- Doses agora dentro **Card com gradient sunset soft** (peach/orange) — destaque visual claro vs outras seções
+- Header Doses font display 16px bold + count badge (rgba white 40%) + chevron rotate
+- Tratamentos Ativos: collapse toggle adicionado (antes era forçado expanded)
+- Filtro 24h/Todas e DoseCard list movidos pra dentro card destaque
+- Visual collapse pause/ended mantido conforme #160 v1
+
+**Aceitação:**
+- ✅ Card Doses com background gradient peach distinto vs outras seções background neutral
+- ✅ Click header Doses → collapse/expand
+- ✅ Click header Tratamentos Ativos → collapse/expand
+- ✅ Pausados/Encerrados continuam collapse default
+
+### Mounjaro fix — paciente Luiz Henrique conta lhenrique.pda@gmail.com
+- **Status:** ✅ Concluído v0.2.1.2 (2026-05-06) — SQL data fix
+- **Origem:** User reported (2026-05-06) — "cadastrei Mounjaro 4 doses 1×/semana, fez uma semana ontem e não me avisou, está em encerrados"
+- **Causa raiz:** `durationDays: 4` salvo (literal "4 dias") quando user esperava 28 (4 doses × 7 dias intervalo). Form `TreatmentForm.jsx` pede "Duração (dias)" — UX confusa pra tratamentos semanais/mensais.
+- **Fix data SQL** (1-time):
+  ```sql
+  UPDATE medcontrol.treatments
+  SET "durationDays" = 28, status = 'active', "updatedAt" = NOW()
+  WHERE id = '4af9b31d-5971-4a8b-b09a-5fa1003bb16a';
+
+  -- Insert doses 2-4 (1×/semana 14:30 BRT)
+  INSERT INTO medcontrol.doses (...)
+  VALUES
+    ('2026-05-06 17:30:00+00'::timestamptz),  -- HOJE
+    ('2026-05-13 17:30:00+00'::timestamptz),  -- 7d
+    ('2026-05-20 17:30:00+00'::timestamptz);  -- 14d
+  ```
+- **Resultado:** Mounjaro volta pra Tratamentos Ativos + dose hoje aparece no Início (overdue se já passou 14:30) + alarme dispara nos próximos.
+
+**Pendente v0.2.2.0+ (não nesta release):**
+- TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. Item separado a criar próxima release.
