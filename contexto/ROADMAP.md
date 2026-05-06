@@ -4,6 +4,47 @@
 
 ---
 
+## 📍 Legenda visual (global)
+
+> Referência rápida usada em todo doc — §6 catálogo, §3 onde paramos, §6.3 Δ release log.
+
+**Status do item** (4 principais):
+
+| Emoji | Status | Significado |
+|---|---|---|
+| ✅ | **concluído** | Item fechado e mergeado em commit |
+| ⏳ | **aberto** | Falta começar / em fila / aguardando priorização |
+| 🚫 | **cancelado** | Não-aplicável / superseded por outro item / fora de escopo |
+| 🚨 | **problema/pendência** | BLOQUEADO (Google review, dependência externa, decisão pendente) ou risco aberto |
+
+**Status secundários** (uso opcional):
+
+| Emoji | Status | Quando usar |
+|---|---|---|
+| 🚧 | em progresso | Iniciado mas ainda não fechado |
+| ⏸️ | bloqueado dep | Aguardando outro item interno fechar |
+| ⏭️ | parqueado | Movido pra release futura específica (ex: v0.2.2.0+) |
+
+**Categorias §6** (cada item pertence a 1):
+
+| Ícone | Categoria | Escopo |
+|---|---|---|
+| 🚀 | **IMPLEMENTAÇÃO** | Caminho launch Play Store — compliance Console + recrutamento testers + Production gate |
+| ✨ | **MELHORIAS** | Incrementais visuais/UX/perf não-bloqueadoras |
+| 🐛 | **BUGS** | Correções de bug específicos (Sentry, user-reported, audit findings) |
+| 🔄 | **TURNAROUND** | Mudanças drásticas (redesign visual, pivot Negócio, schema breaking change) |
+
+**Bolinhas prioridade** (cada item P0-P3):
+
+| Bullet | Prioridade | SLA |
+|---|---|---|
+| 🔴 | **P0** | Bloqueador — fechar antes próxima release ou launch |
+| 🟠 | **P1** | Alta — fechar próximas 1-2 releases |
+| 🟡 | **P2** | Média — 30 dias pós-launch |
+| 🟢 | **P3** | Baixa — 90 dias pós-launch / backlog |
+
+---
+
 ## 🛠️ Regra de manutenção (CRÍTICA — leia ANTES de atualizar)
 
 **`ROADMAP.md` (este arquivo) e `CHECKLIST.md` são complementares, não-redundantes:**
@@ -428,45 +469,36 @@ ESTADO ATUAL: Internal Testing ativo
 
 ## 6. Itens (catálogo)
 
-> **Refactor v0.2.1.4** (2026-05-06): §6 reorganizado em 4 categorias visuais — 🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND. Cada item mantém prioridade P0/P1/P2/P3. Closed items movidos pra §6.8 "Items fechados — referência cronológica" com link CHECKLIST §#XXX pra detalhe técnico.
+> **Refactor v0.2.1.4** (2026-05-06): §6 reorganizado em 4 categorias visuais (🚀 ✨ 🐛 🔄) com sub-prioridade P0/P1/P2/P3. Cada item mostra status visual (✅ ⏳ 🚫 🚨 — ver §📍 Legenda visual no topo). Items fechados ficam **na posição correta** dentro da categoria/prioridade (ordem ascendente por #), apenas marcados com ✅. Resumo cronológico de releases em §3.
 
-### 6.1 📍 Legenda
+### 6.1 📍 Pointer pra legenda
 
-**Categorias** (cada item pertence a 1):
-
-| Ícone | Categoria | Escopo |
-|---|---|---|
-| 🚀 | **IMPLEMENTAÇÃO** | Caminho launch Play Store — compliance Console + recrutamento testers + Production gate |
-| ✨ | **MELHORIAS** | Incrementais visuais/UX/perf não-bloqueadoras |
-| 🐛 | **BUGS** | Correções de bug específicos (Sentry, user-reported, audit findings) |
-| 🔄 | **TURNAROUND** | Mudanças drásticas (redesign visual, pivot Negócio, schema breaking change) |
-
-**Prioridade** (cada item P0-P3, bolinha colorida):
-
-| Bullet | Prioridade | SLA |
-|---|---|---|
-| 🔴 | **P0** | Bloqueador — fechar antes próxima release ou launch |
-| 🟠 | **P1** | Alta — fechar próximas 1-2 releases |
-| 🟡 | **P2** | Média — 30 dias pós-launch |
-| 🟢 | **P3** | Baixa — 90 dias pós-launch / backlog |
-
-**Status:**
-
-- ✅ fechado @ commit · 🚧 em progresso · ⏳ aberto · 🚨 BLOQUEADO Google review · ⏸️ bloqueado outro item · 🚫 cancelado · ⏭️ parqueado vX.Y.Z
+Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda visual (global)** no topo deste doc — usadas em todo o catálogo abaixo + §3 onde paramos + §6.3 Δ release log.
 
 ### 6.2 📊 Counter
 
-**Total:** 162 itens · 114 fechados · 44 abertos · 2 BLOQUEADOS Google review
+**Total:** ~162 itens · ✅ 115 fechados · ⏳ 41 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+
+**Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 5 (2 🚨) | 2 | 2 | 0 | 9 |
+| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 2 | 2 | 0 | 10 |
 | ✨ MELHORIAS | 0 | 0 | 6 | 24 | 30 |
 | 🐛 BUGS | 0 | 0 | 3 | 0 | 3 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **5** | **2** | **11** | **24** | **42** |
+| **Total abertos** | **6** | **2** | **11** | **24** | **43** |
 
-> Counter atualizado release v0.2.1.4 (2026-05-06). Recompor exato via auditoria semestral cross-ref `grep -cE` ROADMAP × CHECKLIST. Distribuição prioridade histórica aproximada permanece: P0:~25 · P1:~50 · P2:~50 · P3:~30 across todas releases. Origem itens: [Plan.md] · [Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD].
+**Fechados por categoria** (todos inline na posição correta dentro de §6.4-§6.7):
+
+| Categoria | ✅ Fechados | 🚫 Cancelados | Comentário |
+|---|---|---|---|
+| 🚀 IMPLEMENTAÇÃO | ~17 | 1 (#027) | Launch path infrastructure (security + emails + Console + recrutamento setup) |
+| ✨ MELHORIAS | ~66 | 0 | Egress + perf + UX + a11y + features pacientes incrementais |
+| 🐛 BUGS | ~31 | 2 (#106-old, #147) | BUG-001 a BUG-041 + Sentry crashes + user-reported |
+| 🔄 TURNAROUND | 1 | 0 | Redesign visual Dosy v0.2.0.0 |
+
+> Counter atualizado release v0.2.1.4 (2026-05-06). Recompor exato via `grep -cE "^- (✅\|⏳\|🚨\|🚫) " ROADMAP.md` ou auditoria semestral cross-ref ROADMAP × CHECKLIST. Origem itens: [Plan.md] · [Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD].
 
 ### 6.3 Δ Release log (cronológico)
 
@@ -478,7 +510,7 @@ ESTADO ATUAL: Internal Testing ativo
 
 **Δ 2026-05-06 v0.2.1.2:** +**#158 fix #1** Console "Apps de saúde" desmarcado todas Medicina checkboxes + Outro texto consumer descritivo + re-submit Closed Testing 14 mudanças (Google review ~7d) + **#158 fix #2** PWA manifest.webmanifest categories ["health","medical","productivity"] → ["health","lifestyle","productivity"] (remove flag medical W3C que pode trigger Google org gate) + bump v0.2.1.1→v0.2.1.2 (versionCode 48). +**#160 NOVO P1** PatientDetail refactor — v1: card "Adesão" → "Doses Hoje X de Y" + bug fix tratamentos 3 seções (Ativos/Pausados/Encerrados via effectiveStatus) + lista doses paciente DoseCard reuso filter 24h/Todas + reorder layout. v2: collapse opcional TODAS 4 seções + Doses dentro Card peach destaque + count badge + chevron rotate. v2.1: dark mode adaptive (peach-100 var ao invés gradient fixo). +**#161 NOVO P1** Alerts dismiss refinement — ending date-based 1×/dia (LS_ENDING_SEEN_DATE YYYY-MM-DD), reaparece automático próximo dia. v2: useState mirror localStorage pra feedback visual immediate (bug v1 não dismissava UI). +**Mounjaro data fix SQL** (operacional sem código) — paciente lhenrique.pda durationDays=4→28 + status active + 3 doses pendentes (06/05 13/05 20/05 14:30 BRT). UX root cause parqueado novo #162. Counter: 114 fechados / 43 abertos + 2 BLOQUEADOS Google review.
 
-**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6** ROADMAP em 4 categorias (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) com bolinhas P0/P1/P2/P3 + sub-counter por categoria + legenda + closed items movidos pra §6.8 cronológica. Adequação README Regra 1 alinhando estrutura nova. Counter: 114 fechados / 44 abertos + 2 BLOQUEADOS.
+**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6 v2** — items fechados redistribuídos **inline na posição correta** (categoria + prioridade certa, ordem # ascendente) marcados ✅; abertos ⏳; bloqueados 🚨; cancelados 🚫. §6.8 antiga (lista cronológica fechados) eliminada — release log cronológico mantido em §3 + §6.3. Legenda visual global movida pro topo do doc. Counter: 114 fechados / 44 abertos + 2 BLOQUEADOS.
 
 ---
 
@@ -486,35 +518,127 @@ ESTADO ATUAL: Internal Testing ativo
 
 #### 🔴 P0 — Bloqueadores
 
-- 🚨 **#158** [P0 v0.2.1.0 — BLOQUEADO Google review, fixes em curso v0.2.1.2] **Resolver rejection Google Play Política org account.** Console submit Closed Testing track Alpha rejeitado <30min após "Enviar 14 mudanças" (2026-05-05 23:14→23:30 BRT). Internal Testing intacto; Closed + Production travados. **Plano 7 passos** (CHECKLIST §#158): (1) ler email Google rejection completo; (2) entrar links sugeridos (Health Apps Policy 13316080 + Developer Program Policies 9858738); (3) estudar org account requirements 2026; (4) analisar app atual via Console Conteúdo do app; (5) validar regras Google (consumer wellness vs medical clinical); (6) investigar declaração específica que triggered gate; (7) elaborar correção via decision matrix + ADR. **3 opções:** (A) criar conta Developer empresarial CNPJ + transferir app — 1-3 semanas; (B) reverter declarações app específicas — 2-4h mas perde certificações; (C) apelo Google reclassificação consumer — 1-2 semanas. Recomendação default: A longo prazo + B paralelo curto prazo. **Fixes v0.2.1.2 aplicados:** Console 13 declarações Apps de saúde desmarcadas Medicina + manifest categories medical→lifestyle. Bloqueia: #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
-- 🚨 **#130** [P0 v0.2.1.0 — BLOQUEADO Google review, em HOLD pré-submit] **Closed Testing track "Alpha" Console.** Configurado: País Brasil + Tester list `dosy-testers@googlegroups.com` (Google Group) + AAB **v0.2.0.12 vc 45** + Release notes pt-BR + Feedback URL. Pendente 14+ mudanças acumuladas (Política Privacidade ✅ #156 done, Classificação conteúdo, Público-alvo, Segurança dados, Intent tela cheia, Anúncios) + click "Enviar mudanças para revisão". Hold cross-check pré-checks pós-deploy.
-- ⏳ **#006** [P0, Plan + Auditoria] **Device validation FASE 17 em 3 devices físicos.** Não-bloqueador formal Closed Testing (manual user, paralelo). Documento: `docs/device-validation-checklist.md`.
-- ⏳ **#131** [P0 — bloqueado por #158] **Recrutar 15-20 testers externos.** Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + targeted r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
-- ⏳ **#132** [P0 gate — bloqueado por #131] **Aguardar 14 dias rodando com ≥12 testers ativos** + iterar bugs reportados em mini-releases.
-- ⏳ **#133** [P0 — bloqueado por #132] **Solicitar acesso de produção Console pós-gate.** Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
+- ✅ **#003** [Plan + Auditoria, fechado 2026-05-04] Senha postgres rotacionada via Supabase Dashboard (auto-gen 16-char) + PAT `sbp_aedc82d7` revogado + INFOS.md ausente git history. → [archive/security-original.md](archive/security-original.md)
+- ✅ **#004** [Plan, fechado 2026-05-04] Vídeo demo FOREGROUND_SERVICE_SPECIAL_USE — `alarm.mp4` 33s S25 Ultra → YouTube Shorts unlisted https://www.youtube.com/watch?v=qLBCzualcCw → Console FGS form preenchido. Plan FASE 18.9.1
+- ⏳ **#006** [Plan + Auditoria] **Device validation FASE 17 em 3 devices físicos.** Manual user, paralelo. → `docs/device-validation-checklist.md`
+- ✅ **#007** [Auditoria, fechado v0.2.1.0 (2026-05-05)] Telemetria PostHog `notification_delivered` + `notification_tapped` + `notification_dismissed` (4 listeners Capacitor: localNotificationReceived/ActionPerformed + pushNotificationReceived/ActionPerformed). PII strip auto via `sanitize_properties`. Bisect inicial false positive — root cause real era #157. RESTAURADO via revert. → [01 §14](auditoria/01-relatorio-completo.md#14--observabilidade-e-monitoramento--score-7510)
+- ✅ **#008** [Plan, fechado 2026-05-04] GitHub Secrets `SENTRY_AUTH_TOKEN`/`SENTRY_ORG=lhp-tech`/`SENTRY_PROJECT=dosy`/`VITE_SENTRY_DSN` configurados Actions. Aceitação completa pendente #127. Plan FASE 10.1
+- ✅ **#009** [Auditoria, fechado v0.2.0.11 — DEFERRED PITR] PITR Pro add-on $100/mo deferred. DR drill via daily backup baseline 2026-05-05. RTO 5-15min RPO 24h. Re-avaliar PITR pós-revenue Q3 2026 / 50+ paying users.
+- ✅ **#025** [Plan, fechado 2026-05-04] Screenshots phone — 19 capturadas S25 Ultra (1080×2340), 8 melhores curadas + ícone 512 peach + feature graphic 1024×500 + assets YT. Tudo Console Listagem. Plan FASE 18.9.2
+- ✅ **#084** [INCIDENTE 2026-05-02 22:23 UTC, fechado v0.1.7.5 commit `8b32245`] Migração Supabase legacy JWT → sb_publishable_/sb_secret_ + revoke HS256 signing key + disable JWT-based API keys. Service_role JWT vazado em commit 85d5e61 = inválido server-side. Edge functions migradas pra `SERVICE_ROLE_KEY` custom env. Vercel envs atualizados. Webhook Vercel↔GitHub reconectado.
+- ✅ **#126** [P0 SECURITY, fechado v0.2.0.5] Pre-commit secret scanning + investigação root cause vazamentos. gitleaks 8.30.1 + .gitleaks.toml + .husky/pre-commit + .github/workflows/gitleaks.yml. 27→0 leaks após allowlist. Postgres pwd Dosy `xoeDZAnfn8TvBD5m` + VAPID rotação manual user-action.
+- ✅ **#129** [P0, fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Google Group público `dosy-testers@googlegroups.com` criado. URL https://groups.google.com/g/dosy-testers (HTTP 200 anônimo). Settings: pesquisa "Qualquer pessoa" + auto-aprovação participação + privacy outros campos.
+- 🚨 **#130** [P0 — RASCUNHO SALVO v0.2.1.0 (2026-05-05) via Chrome MCP, BLOQUEADO Google review] Closed Testing track "Alpha" Console — País Brasil + Tester list `dosy-testers@googlegroups.com` + AAB v0.2.0.12 vc 45 + Release notes pt-BR + Feedback URL Google Group. Pendente 14+ mudanças acumuladas + click "Enviar mudanças para revisão". REJEITADO Google org account required.
+- ⏳ **#131** [P0 — bloqueado por #158] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
+- ⏳ **#132** [P0 gate — bloqueado por #131] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados.
+- ⏳ **#133** [P0 — bloqueado por #132] Solicitar Production access Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
+- ✅ **#142** [P0 SECURITY, fechado v0.2.0.9 + cleanup v0.2.0.10 commit `bf45f80`] Legacy JWT secret REVOKED (PostgREST 401). Edge function pública via `verify_jwt: false` autoriza via `SERVICE_ROLE_KEY` env interna. Cleanup cosmético: drop+recreate cron job sem header `Authorization` hardcoded.
+- ✅ **#154** [P0 INFRA, fechado v0.2.0.12] Custom SMTP Resend pra dosymed.app. DNS Hostinger 4 records (DKIM + MX send → feedback-smtp.sa-east-1 + SPF + DMARC). Domain Resend VERIFIED. Supabase Auth SMTP smtp.resend.com:465 sender Dosy <noreply@dosymed.app>. Recovery OTP funcionando real prod. ADR `decisoes/2026-05-05-resend-smtp-setup.md`.
+- ✅ **#156** [P0 BLOQUEADOR #130 — fechado v0.2.1.0 (2026-05-05)] Página `/privacidade` (Privacidade.jsx) v1.3 LGPD healthcare. DPO email `privacidade@dosymed.app` + entidade "Dosy Med LTDA" + terceiros expandidos (Resend SMTP/Firebase FCM/PostHog/Sentry/Supabase São Paulo/AdMob) + dados granular + bases legais art.7-I + art.11-II-f + idade 18+ + Google Play Health Apps Policy. Termos.jsx + FAQ.jsx tb atualizados.
+- 🚨 **#158** [P0 v0.2.1.0 NOVO — BLOQUEADO Google review, fixes em curso v0.2.1.2] **Resolver rejection Google Play Política org account.** Console submit Closed Testing track Alpha rejeitado <30min após "Enviar 14 mudanças" (2026-05-05). Internal Testing intacto; Closed + Production travados. **Plano 7 passos** CHECKLIST §#158: ler email → policies → analisar Console → validar regras → identify trigger → decision matrix opção A/B/C → ADR. **Recomendação default:** A longo prazo (org account CNPJ + transferir app) + B paralelo curto (reverter declaração). **Fixes v0.2.1.2 aplicados:** Console 13 declarações Apps de saúde desmarcadas Medicina + manifest categories medical→lifestyle. Bloqueia: #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
 
 #### 🟠 P1 — Alta
 
+- ⏳ **#018** [P1, Plan FASE 4.3 — escopo expandido 2026-05-05] **AdMob Android prod + AdSense web.** AdMob: App ID `ca-app-pub-2350865861527931~5445284437` + Banner ad unit JÁ configurados AndroidManifest + .env. Pendente: (a) flip `VITE_ADMOB_USE_TEST=true → false` em `.env.production`; (b) AdMob Console: "Requer revisão" desbloqueia auto pós-Play Store linking via Production track (#133). AdSense web (secundário): index.html ainda placeholder. AdBanner.jsx silently retorna null se vazio. Foco mobile.
 - ⏳ **#021** [P1, Plan FASE 18.3] **Backup keystore 3 locais seguros.**
-- ⏳ **#018** [P1, Plan FASE 4.3 — escopo expandido 2026-05-05] **AdMob Android prod + AdSense web.** AdMob: App ID `ca-app-pub-2350865861527931~5445284437` + ad unit Banner JÁ configurados em AndroidManifest + .env. Pendente: (a) flip `VITE_ADMOB_USE_TEST=true → false` em `.env.production`; (b) AdMob Console: app status "Requer revisão / Veiculação limitada" → desbloqueia automático após Play Store linking via Production track (#133). AdSense web (secundário): index.html ainda contém placeholder. AdBanner.jsx silently retorna null se vazio. Foco mobile.
+- ✅ **#024** [Plan, fechado v0.2.0.5 — parte de #126] Pre-commit hooks. Antes só eslint via lint-staged. Agora gitleaks `protect --staged` (block secrets) + lint-staged (block lint). Husky 9.1.7 + gitleaks 8.30.1 + GitHub Action gitleaks/gitleaks-action@v2.
+- ✅ **#026** [Plan — fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Emails oficiais @dosymed.app via **ImprovMX free**. DNS Hostinger 2 MX + SPF TXT. Domain VERIFIED. 7 aliases ativos forward → `dosy.med@gmail.com`: catch-all + contato + privacidade + suporte + legal + dpo + security + hello. Não conflita Resend SMTP #154 (subdomain `send.`). + 8º filtro Gmail catch-all `to:(dosymed.app)` Never Spam. Plan FASE 18.5
+- 🚫 **#027** [Plan — superseded v0.2.0.12] Substituído por #129-#133 (estratégia Reddit + Google Group público em vez de pessoas conhecidas). Item original "Closed Testing + 12 testers via amigos" não-aplicável.
+- ✅ **#127** [P1 fechado v0.2.0.8] CI lint fix AnimatedRoutes.jsx (libera Sentry source maps upload em CI).
 
 #### 🟡 P2 — Média
 
+- ✅ **#046** [Plan — fechado v0.2.1.0 (2026-05-05)] Runbook DR `docs/runbook-dr.md` v1.0. RTO 5-15min/RPO 24h, baseline prod 2026-05-05, 6 procedures (daily backup restore, JWT roll #084, keystore restore #021, region outage, pós-incidente, drill schedule), 11 components mapeados (DB/Auth/Edge/Realtime/Storage/FCM/Resend/ImprovMX/CDN/AAB), contatos emergência. Plan FASE 23.4
+- ✅ **#074** [P2 fechado v0.2.0.2] Habilitar upload debug symbols (`ndk.debugSymbolLevel 'FULL'`). Resolve aviso recorrente Play Console + melhora Sentry NDK stack traces (necessário pra #110 native crashes).
 - ⏳ **#047** [P2, Plan FASE 23 backlog] **Google Play Integrity API.**
-- ⏳ **#155** [P2 launch polish] **Adicionar 1-2 screenshots novos Play Console pós-v0.2.0.12:** tela "Alterar senha" Ajustes (#152) + tela "Recuperar senha código 6 dígitos" Login (#153). Capturar S25 Ultra real prod pós-merge master.
+- ⏳ **#155** [P2 launch polish] **Adicionar 2 screenshots Console pós-v0.2.0.12:** "Alterar senha" Ajustes (#152) + "Recuperar senha código 6 dígitos" Login (#153). Capturar S25 Ultra real prod pós-merge master.
 
 ---
 
 ### 6.5 ✨ MELHORIAS — Incrementais
 
+#### 🔴 P0 — Bloqueadores (egress + critical perf)
+
+- ✅ **#079** [BUG-016, fechado v0.1.7.1 commit `b4812e0`] Realtime heartbeat keep-alive + reconnect automático useRealtime.js. Heartbeat 30s detecta silent fail. Caminho 1 de 3.
+- ✅ **#080** [BUG-016, fechado v0.1.7.1 commit `4b82d16`] Edge `notify-doses` retry exponential FCM + cleanup tokens inválidos + idempotência via `dose_notifications` + advanceMins fallback. Caminho 2 de 3.
+- ✅ **#081** [BUG-016, fechado v0.1.7.1 commit `49550e4`] Defense-in-depth Android: WorkManager DoseSyncWorker periódico 6h fetcha doses 72h + agenda via setAlarmClock. Independe foreground/websocket/push. Caminho 3 de 3.
+- ✅ **#083** [v0.1.7.1→v0.1.7.2 commits `23deca4`+`3465ab6`+`26c51ab`] FCM-driven alarm scheduling + 4 caminhos coordenados. Trigger DB <2s + Cron 6h FCM data + rescheduleAll quando app abre + WorkManager 6h. Push tray inteligente: skip se alarme nativo agendado. Fecha BUG-016 100%. Validado end-to-end device.
+- ✅ **#115** [P0 cost+UX, fechado v0.2.0.2] Photo cache versioned. Antes: removeu photo_url de PATIENT_COLS_LIST (egress) → quebrou foto na lista. Fix: coluna `photo_version` SMALLINT (2B) na tabela patients + hook `usePatientPhoto(id, version)` cache localStorage. Foto baixa 1× por device. Storage 100 pacientes × 50KB = 5MB localStorage.
+- ✅ **#134** [P0 cost, fechado v0.2.0.8] useAppResume short idle: removido invalidate cascade (-30% a -45% egress).
+- ✅ **#135** [P0 cost, fechado v0.2.0.8] useRealtime resume nativo: removido invalidate ALL keys CapacitorApp.resume. -5% a -10% egress.
+- ✅ **#136** [P0 cost, fechado v0.2.0.8] useRealtime postgres_changes: debounce 1s invalidate por queryKey. -15% a -25% egress.
+- ✅ **#137** [P0 cost, fechado v0.2.0.9 commit `0124608`] Dashboard 4 useDoses paralelas → 1 query base + filtros memo client-side. -20% a -30% egress.
+- ✅ **#138** [P0 cost, fechado v0.2.0.9 commit `0813d94`] DOSE_COLS_LIST sem observation + lazy-load DoseModal. -15% a -30% payload.
+- ✅ **#148** [P0 cost, fechado v0.2.0.11 commit `7c8cf5b`] Dashboard extend_continuous_treatments rpc 2× por mount fix (AnimatePresence popLayout). Module-scope flag debounce 60s.
+- ✅ **#149** [P0 cost, fechado v0.2.0.11 commit `758035b`] useDoses mutation refetch storm 12 fetches/200s → debounce 2s. -75% storm.
+- ✅ **#150** [P0 cost, fechado v0.2.0.11 commit `017916d`] useDoses refetchInterval 5min → 15min. -67% polling rate.
+- ✅ **#151** [P0 cost, fechado v0.2.0.11 commit `78127b7`] useDoses refetchInterval opt-in só Dashboard (outras telas off). -80% adicional idle egress.
+- ✅ **#157** [P0 v0.2.1.0 NOVO — fechado commit `da61b04`] Disable `useRealtime()` App.jsx — fix storm 12 req/s sustained idle. Storm 99.7% eliminado pós-fix (9 reqs/7min idle = 0.021 req/s). Bug PRÉ-EXISTENTE master. Plano retomar v0.2.2.0+: populate publication `supabase_realtime` + refactor reconnect guard.
+
+#### 🟠 P1 — Alta
+
+- ✅ **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813`] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados + setColor accent peach.
+- ✅ **#011** [Auditoria, fechado v0.1.7.4] `<label>` em inputs Login (TalkBack + screen readers).
+- ✅ **#012** [Plan, fechado v0.1.7.4] RLS policies recriadas com `TO authenticated`. 48 policies finais. Plan FASE 8.3
+- ✅ **#013** [Plan, fechado v0.1.7.4] Splitar policies `cmd=ALL` em 4 (push_subs, user_prefs, subscriptions, security_events). Plan FASE 8.3
+- ✅ **#014** [Plan + Auditoria, fechado v0.1.7.4] RPC `extend_continuous_treatments` recriada + reativada client Dashboard.
+- ✅ **#015** [Plan, fechado v0.1.7.4] PostHog key + dashboards launch. Plan FASE 14.1
+- ✅ **#016** [Plan, fechado v0.1.7.4] Sentry alerts (crash spike >10/h, error threshold). Plan FASE 14.2
+- ✅ **#017** [Plan, fechado v0.2.0.6 commit `869ab34`] LockScreen UI + biometria (`useAppLock`). Overlay App.jsx + Toggle Settings + timeout configurável + biometric-auth allowDeviceCredential fallback.
+- ✅ **#019** [Auditoria, fechado v0.1.7.4] Subir `minimum_password_length` 6 → 8 + complexity (config.toml + cloud).
+- ✅ **#020** [Plan, fechado v0.1.7.4] Disclaimer médico visível ("Não substitui orientação"). Plan FASE 18.5.1
+- ✅ **#022** [Auditoria, fechado v0.1.7.4] Verificar legitimidade `typescript@^6.0.3` — confirmed legítimo.
+- ✅ **#023** [Auditoria, fechado v0.2.0.4] useDoses já tem `refetchIntervalInBackground: false` + `staleTime: 2min` (set em #092). Verificado.
+- ✅ **#036** [Plan — fechado v0.2.1.0 (2026-05-05)] Skeleton screens TreatmentList + Analytics. Componente `<SkeletonList count={N} />` reusado de #104 v0.2.0.0. Plan FASE 15
+- ✅ **#075** [Sessão v0.1.7.0] Reduzir agressividade RQ global em main.jsx (`staleTime: 30_000`, `refetchOnMount: true` em vez de `'always'`). Mitiga lentidão geral.
+- ✅ **#076** [Sessão v0.1.7.0] Refatorar useAppResume.js — soft recover (refresh JWT + reconnect realtime + invalidate, preserva URL).
+- ✅ **#077** [Sessão v0.1.7.0] Listener `TOKEN_REFRESHED` em useRealtime.js pra resubscribe quando JWT renova.
+- ✅ **#078** [Sessão v0.1.7.0] Bumpar SW cache version `medcontrol-v5` → `v6`.
+- ✅ **#082** [Sessão v0.1.7.1 commit `5b5938e`] Dual-app dev/prod: `com.dosyapp.dosy.dev` "Dosy Dev" coexiste com `com.dosyapp.dosy` oficial. Permite testes destrutivos (force stop, idle 24h) sem afetar Dosy oficial.
+- ✅ **#102** [P1 UX, fechado v0.2.0.1 commit `f02bf12`] Atalho hardware silenciar alarme. AlarmActivity.onKeyDown override KEYCODE_VOLUME_UP/DOWN → toggleMute() + return true (consume). Match comportamento padrão Android.
+- ✅ **#114** [P1 BUG-038, fechado v0.2.0.2] Avatar foto crop manual UI. `react-easy-crop` em CropModal — zoom 1-3x + drag pan + cropShape circular live preview → canvas 512×512 jpeg q0.78 (~50KB).
+- ✅ **#116** [P1 UX, fechado v0.2.0.3] Header alertas: sino dropdown → ícones diretos. Cada tipo de alerta tem ícone próprio com badge contador + click direto. Padrão WhatsApp/Gmail. AlertCircle pulse (overdue) + Users (shares) + Pill (ending soon) + Download (update). UpdateBanner mantido.
+- ✅ **#118-followup** [P1 UX, fechado v0.2.0.3] Pill amarelo (tratamento acabando) abre EndingSoonSheet componente novo com lista tratamentos + paciente avatar + dias restantes ("termina hoje", "amanhã", "N dias"). Click row → patient detail.
+- ✅ **#119** [P1 cost+truth, fechado v0.2.0.3] Promo `free → plus` removida do client. subscriptionService.getMyTier vem direto DB via RPC `my_tier`. Paywall ativo pra users free reais. teste-free@teste.com permite testar paywall.
+- ✅ **#119-followup** [P1 truth, fechado v0.2.0.4] Server-side trigger drop. Migration `drop_signup_plus_promo_trigger`: DROP TRIGGER `on_auth_user_signup_plus` + DROP FUNCTION `handle_new_user_plus_promo`. Novos signups começam tier='free' real. Side-effect: resolve #032.
+- ✅ **#139** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] dose-trigger-handler v11 skip se scheduledAt > 6h futuro (early return `skipped: 'beyond-cron-horizon'`). Doses < 6h fluxo normal; doses > 6h via cron `schedule-alarms-fcm`. Edge invocations -50% a -70%.
+- ✅ **#140** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] schedule-alarms-fcm v10 HORIZON 72h → 24h. AlarmManager re-agenda cada cron 6h ciclo (4×6h = 24h coverage). Payload FCM ~3× menor.
+- ✅ **#141** [P1 cost, fechado v0.2.0.10 commit `bf45f80`] useReceivedShares staleTime 60s → 5min. -80% calls listReceivedShares.
+- ✅ **#152** [P1 UX, fechado v0.2.0.12 commit `b2f53ff`] ChangePasswordModal Ajustes. Botão "Alterar senha" Settings → Conta. Modal padrão Dosy + 3 inputs (atual + nova + repetir) + validação inline. Re-autentica via signInWithPassword → updateUser.
+- ✅ **#153** [P1 UX, fechado v0.2.0.12 commits `b2f53ff`+`31da691`] Recovery senha OTP 6 dígitos (substitui magic-link broken #147). useAuth.sendRecoveryOtp/verifyRecoveryOtp + Login 2 sub-modes 'forgot-email'/'forgot-otp' + flag localStorage `dosy_force_password_change=1` + ForceNewPasswordModal auto. Email OTP length Supabase Dashboard 8→6 dígitos. Email template Magic Link customizado design Dosy peach.
+- ✅ **#160** [P1 UX v0.2.1.2 NOVO — fechado commits `c6f6963`+extensão v2+v2.1] PatientDetail refactor. v1: card "Adesão" → "Doses Hoje X de Y" + tratamentos 3 seções (Ativos/Pausados/Encerrados via effectiveStatus) + lista doses paciente DoseCard reuso filter 24h/Todas. v2: collapse opcional 4 seções + Doses dentro Card peach destaque. v2.1: dark mode adaptive (peach-100 var).
+- ✅ **#161** [P1 UX v0.2.1.2 NOVO — fechado v1+v2] Alerts dismiss refinement. ending date-based 1×/dia (LS_ENDING_SEEN_DATE YYYY-MM-DD). v2: useState mirror localStorage feedback visual immediate.
+
 #### 🟡 P2 — Média
 
-- ⏳ **#035** [P2, Plan FASE 9.4 — diferido v0.2.2.0+] **Integration tests** (`useDoses`, `useUserPrefs` mocks). 1 dia esforço. Backlog estabilidade pós-rampa Closed Testing.
-- ⏳ **#038** [P2, Plan FASE 8.4 + 20.3 — diferido v0.2.2.0+ ou pré-Open Testing] **Pen test interno completo documentado** (curl JWT roubado, Burp/mitmproxy, Play Integrity tampering). 1-2 dias. Recomendado executar antes Open Testing (#133).
-- ⏳ **#041** [P2, Plan FASE 15 — partial v0.2.1.0, refactor rem diferido v0.2.2.0+] **Refactor mass `fontSize: Npx` → `rem`** (172 ocorrências). Diferido: trabalho substancial (4h) + baixo ROI Android WebView Capacitor (não respeita user font-scale system) + alto risco regressão visual.
-- ⏳ **#042** [P2, Plan FASE 17 — diferido v0.2.2.0+] **Lighthouse mobile ≥90** em Reports + Dashboard. Audit completo + iterar fixes (~1 dia).
-- ⏳ **#043** [P2, Plan] **Performance scroll lista 200+ doses sem jank** (já parcialmente coberto por #034 virtualização DoseHistory).
-- ⏳ **#049** [P2, Plan FASE 20] **Pen test profissional.**
+- ✅ **#028** [Auditoria, fechado v0.2.0.4] Rate limit `delete-account` Edge fn v7. 1 attempt/user/60s via security_events. Resposta 429 + Retry-After. Insert event antes da operação.
+- ✅ **#029** [Plan + Auditoria, fechado v0.2.0.11 commit `9a9f399`] Refatorar Settings.jsx 692 LOC → src/pages/Settings/ com 4 arquivos: index.jsx (276 LOC orchestrator) + sections.jsx (470 LOC, 7 components) + Row.jsx + constants.js.
+- ✅ **#030** [Plan SECURITY + Auditoria, fechado v0.2.0.11 commit `9a9f399`] Refatorar services/notifications.js 613 LOC → src/services/notifications/ com 5 arquivos (prefs/channels/scheduler/fcm/index barrel). API pública 100% retro-compat.
+- ✅ **#031** [Auditoria, fechado v0.2.0.4] Confirmar `FORCE_RLS` em todas tabelas. 13/13 tabelas medcontrol com `relrowsecurity=true` AND `relforcerowsecurity=true`.
+- ✅ **#032** [Auditoria, fechado v0.2.0.4] Confirmar `SET search_path` em todas SECURITY DEFINER. 1 função sem SET (`handle_new_user_plus_promo`) — resolvido indiretamente em #119-followup (trigger + função droppadas).
+- ✅ **#033** [Auditoria, fechado v0.2.0.3] React.memo em DoseCard (PatientCard já tinha; TreatmentCard não existe — falso achado).
+- ✅ **#034** [Plan, fechado v0.2.0.11 commit `9a9f399`] Virtualização DoseHistory via `@tanstack/react-virtual`. VirtualTimeline (ROW_HEIGHT 62px + ROW_GAP 6 + overscan 5). MaxHeight 60vh quando >10 itens. Pre-built patientById Map evita O(n²). Plan FASE 13. Patients virtualização parqueada (lista curta).
+- ⏳ **#035** [Plan — diferido v0.2.2.0+] Integration tests (`useDoses`, `useUserPrefs` mocks). 1 dia esforço. Backlog estabilidade pós-Closed Testing.
+- ✅ **#037** [Plan, fechado v0.2.0.4] Erros inline em forms. PatientForm valida nome/idade/peso + TreatmentForm valida medName/unit/durationDays via state errors + Input.error prop. Erro limpa onChange.
+- ⏳ **#038** [Plan — diferido v0.2.2.0+ ou pré-Open Testing] Pen test interno (curl JWT roubado, Burp/mitmproxy, Play Integrity tampering). 1-2 dias.
+- ⏳ **#039** [Plan — bloqueado, não-aplicável atual] Confirmação dupla delete batch (>10). Hoje app NÃO tem batch delete. Pré-req: implementar batch select UI primeiro.
+- ✅ **#040** [Plan, fechado v0.2.0.3] Subir contraste textos secundários dark. fg-secondary #C8B8AB → #DDC8B6 (8.7→10.5), fg-tertiary #8E7F73 → #B0A091 (4.35→5.8 — passa AA).
+- ✅ **#041 partial** [Plan — partial v0.2.1.0, refactor rem diferido v0.2.2.0+] Hierarquia headings auditada. `<h1>` semantic em PageHeader.jsx. Refactor mass `fontSize: Npx` → `rem` (172 ocorrências) **diferido**: 4h esforço + baixo ROI Capacitor (não respeita user font-scale system).
+- ⏳ **#042** [Plan — diferido v0.2.2.0+] Lighthouse mobile ≥90 em Reports + Dashboard. Audit completo + iterar fixes (~1 dia).
+- ⏳ **#043** [Plan] Performance scroll lista 200+ doses sem jank (já parcialmente coberto por #034 virtualização DoseHistory).
+- ✅ **#044** [Plan, fechado v0.2.0.4] Audit RPC `register_sos_dose`. SECURITY DEFINER + search_path SET + has_patient_access check + sos_rules lookup case-insensitive + minIntervalHours/maxDosesIn24h validate + INSERT auth.uid(). Sem schema drift.
+- ✅ **#045** [Auditoria, fechado v0.2.0.2] `coverage/` no `.gitignore` já presente.
+- ✅ **#048** [Auditoria, fechado v0.2.0.4] tools/supabase.exe + supabase.tar.gz NÃO tracked (gitignore cobre). False alarm.
+- ⏳ **#049** [Plan FASE 20] Pen test profissional.
+- ✅ **#100** [P2 UX, fechado PARCIAL v0.2.0.11 commit `9a9f399`] Avatar emoji redesign — 6 categorias (Família, Saúde NOVO, Pessoas, Animais, Atividades NOVO, Cores). Saúde inclui emojis médicos (🩺💊💉🫀🧠). Default `'👤'` → `'🙂'`. Fallbacks PatientAvatar/FilterBar/Dashboard/PatientDetail. Escopo NÃO executado (parqueado): SVG flat tinted, sliders cor, migration ALTER TABLE.
+- ✅ **#117** [P2 UX, fechado v0.2.0.3] Alerta header paciente compartilhado novo `patient_share`. Service `listReceivedShares` consulta `patient_shares WHERE sharedWithUserId = me`. Hook `useReceivedShares` (staleTime 60s). Header conta shares com `createdAt > localStorage[dosy_shares_seen_at]`. Click → seenAt=now → nav /pacientes.
+- ✅ **#118** [P2 UX, fechado v0.2.0.3] Alerta header tratamento acabando ≤3 dias. Computa endDate = startDate + durationDays*24h em memória. Filtra: !isContinuous && status='active' && endDate >= now && endDate-now ≤ 3d. seenAt-based decay. Click → nav /pacientes.
+- ✅ **#120** [P2 truth, fechado v0.2.0.3] SharePatientSheet copy condicional baseado tier real (era hardcoded "free"). Server-side check OK (RPC `APENAS_PRO_COMPARTILHA`), só client copy.
+- ✅ **#121** [P2 a11y, fechado v0.2.0.3] PaywallModal Escape close. Fix em Sheet+Modal primitives keydown listener `Escape` chamando onClose. Cobre todos sheets/modals (PaywallModal, SharePatientSheet, EndingSoonSheet).
+- ✅ **#143** [P2, fechado v0.2.0.10 commit `bf45f80`] useUserPrefs.queryFn `getSession()` em vez de `getUser()` — local-only (lê localStorage cache), zero round-trip /auth/v1/user. -100% calls /auth/v1/user em useUserPrefs path.
+- ✅ **#144** [P2 longo prazo, fechado v0.2.0.12 commit `54e0d0a`] Custom JWT claim `tier` via Auth Hook. Backend permanente: migration `144_jwt_claim_tier_auth_hook` (schema `auth_hooks` + função `add_tier_to_jwt`). v0.2.0.11 frontend ROLLBACK (qc.clear cascade loop). v0.2.0.12 fix conservador: qc.clear scoped só em SIGNED_OUT ou SIGNED_IN com user diff. -100% rpc('my_tier') round-trip.
+- ✅ **#145** [P2, fechado v0.2.0.11 commit `9a9f399`] useRealtime watchdog + onStatusChange reconnect: substitui `qc.invalidateQueries(...)` blanket por `qc.refetchQueries({type:'active'})` scoped. Inactive queries NÃO refetcham — só ativas. Reduz blast radius reconnect.
+- ✅ **#146** [P2 audit, fechado v0.2.0.11 commit `9a9f399`] pg_cron extend_continuous_treatments: tabela `medcontrol.cron_audit_log` + wrapper `run_extend_continuous_with_audit()` + view `cron_health_recent` últimos 30 runs com flag `suspicious_zero_doses` + auto-cleanup 90d. Cron job 2 alterado pra wrapper.
 
 #### 🟢 P3 — Baixa (90 dias / backlog)
 
@@ -563,206 +687,61 @@ ESTADO ATUAL: Internal Testing ativo
 - ⏳ **#072** A/B test paywall e onboarding. Plan FASE 23.2
 - ⏳ **#073** Programa de indicação (1 mês PRO grátis). Plan FASE 22.3
 
+**Cosmético fechado:**
+
+- ✅ **#122** [P3 cosmético, fechado v0.2.0.3] AppHeader greeting `firstName` → `shortName` em userDisplay.js. Retorna primeira+segunda palavra se ambas ≤6 chars (cobre "Teste Free", "Teste Plus", "Plus Beta"), senão só primeira (preserva "Luiz", "Daffiny").
+
 ---
 
 ### 6.6 🐛 BUGS — Correções
 
+#### 🔴 P0 — Bloqueadores
+
+- ✅ **#001** [Auditoria] Admin auth check em `send-test-push` Edge Function. → [04 §7.2](auditoria/04-supabase.md#72-send-test-pushindexts-120-linhas--crítico) · [06 BUG-002](auditoria/06-bugs.md#bug-002--edge-function-send-test-push-não-valida-autorização-auditoria-estática) · [03 §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function)
+- ✅ **#002** [Auditoria] Sanitizar erro email enumeration. → [06 BUG-015](auditoria/06-bugs.md#bug-015--resposta-de-erro-user-not-found-em-send-test-push-permite-enumeration)
+- ✅ **#005** [Auditoria] Encoding UTF-8 quebrado em nome paciente. → [06 BUG-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
+- ✅ **#091** [BUG-024, fechado v0.1.7.4 — CRÍTICO] pg_cron extends contínuos com TZ UTC errado em firstDoseTime array. User lhenrique.pda Cortisol 27/04 horários 5h+9h BRT (08/12 UTC raw). Fix: combina date+time em America/Sao_Paulo, converte AT TIME ZONE UTC. 3 treatments afetados (Triiodotironina, Cortisol, Citrato Magnésio). Cleanup: DELETE pending futuras + reset doseHorizon NULL + regen via fn fixed. Migration `20260503025200_fix_extend_continuous_tz_bug.sql`.
+- ✅ **#092** [BUG-025, fechado v0.1.7.5 commit `557dcd9`] Egress reduction Supabase. Multi-frente: (1) Realtime postgres_changes filter `userId=eq.X` server-side; (2) subscriptions removido Realtime; (3) listDoses default range fail-safe (-30d/+60d); (4) listDoses paginate cap 5 pages; (5) useDoses queryKey hour-norm; (6) refetchInterval 60s→5min, staleTime 30s→2min; (7) staleTime bumps; (8) App.jsx alarm scope -1d/+14d. Critical alarm path NÃO regrediu.
+- ✅ **#094** [BUG-027, fechado v0.1.7.5 commit `8b32245`] Paywall falso fires pra users plus/pro durante mount race. Causa: usePatientLimitReached retornava true quando tier=undefined; getMyTier auth.getUser() race resolvia null. Fix: useMyTier `enabled: !!user` via useAuth + queryKey inclui userId + usePatientLimitReached retorna false durante loading.
+- ✅ **#101** [P0 cost/audit, fechado v0.2.0.1] Auditoria egress Supabase pós-#092 — pg_stat_statements + pg_replication_slots. 2 slots logical Realtime ativos lag 176 bytes (saudável). Top calls esperados (WAL polling, set_config, INSERT doses bulk via pg_cron). Sem queries patológicas. #092 fix manteve.
+- ✅ **#106** [P0 BUG-034, fix completo v0.2.0.3] Ícone launcher + splash continuavam antigos. Causa: pasta `assets/` legacy precedência sobre `resources/` no `@capacitor/assets generate`. Fix: deletado assets/ legado + criado resources/icon-only.png composto + deletado mipmap-*/ic_launcher* + drawable-port/land/splash + re-run cap/assets → 86→61 outputs corretos.
+- 🚫 **#106-old** [P0 BUG-034, partial v0.2.0.1 commit `1683f4f`] Removido legacy `drawable/ic_launcher_background.xml` template Capacitor (vector teal grid #26A69A). Superseded por #106 full fix v0.2.0.3.
+- ✅ **#107** [P0 BUG-035, fechado v0.2.0.0+ — Sentry DOSY-J/F/G] **TypeError: schema(...).rpc(...).catch is not a function** em Dashboard pull-to-refresh. 6 events 3 bundle hashes. Causa: `supabase.schema().rpc()` retorna PostgrestFilterBuilder (PromiseLike, só `.then`). Fix: `.then(undefined, errHandler)` form 2-arg.
+- ✅ **#109** [P0 BUG-037, fechado v0.2.0.1 commit `09724c1`] useRealtime concurrent subscribe race. Lock flag `subscribing` + try/catch ch.on() defensive previne 4 paths convergent (status reconnect + watchdog + TOKEN_REFRESHED + native resume). 9 events 4 issues distintas. #093 (closed v0.1.7.5) aplicou fix nome único + await removeChannel + generation counter.
+- ✅ **#159** [P0 v0.2.1.1 NOVO BUG-LOGOUT — fechado] useAuth boot validation distinguir transient (network/5xx) vs real auth failure (401/403/JWT-invalid). User reportava app desloga toda vez que abria — fix preserva session em network errors transient.
+
+#### 🟠 P1 — Alta
+
+- ✅ **#085** [BUG-018, fechado v0.1.7.3 commit `f22f5a9`] Alarme Crítico desligado em Ajustes mas alarme tocou mesmo assim. User toggle OFF → alarme nativo fullscreen disparou normalmente. Fix: single source-of-truth via user_prefs.notif.criticalAlarm sincronizado em DB + localStorage + SharedPreferences. Validado emulador Pixel 7 cenários A/B/C.
+- ✅ **#086** [BUG-019, parqueado v0.1.8.0] Resumo Diário não funciona — nunca dispara. UI ocultada em Settings. Precisa Edge cron + migration timezone — parqueado release futura.
+- ✅ **#087** [BUG-020, Fase A fechada v0.1.7.3; Fase B parqueada v0.1.7.4] DND UX condicional (aparece só se Alarme Crítico ON) + Edges respeitam janela DND (skip FCM data dentro window). Validado emulador. Fase B (Android nativo fire time) parqueada.
+- ✅ **#088** [BUG-021, fechado v0.1.7.4] Dose cadastrada não aparece em Início sem refresh. Causa: `invalidateQueries(['doses'])` não chamado após mutation INSERT em emulador Pixel 7 (latência realtime emulador-only). NÃO repro em S25 Ultra device real. Fix: refetchOnMount=always específico.
+- ✅ **#090** [BUG-023, fechado v0.1.7.4] Pós-login redireciona pra Ajustes ao invés de Início. Causa: React Router preserva pathname após user mudar null→logged. Fix: navigate('/', {replace:true}) explícito em Login.submit após signin success se path atual não é `/` nem `/reset-password`.
+- ✅ **#093** [BUG-026, fechado v0.1.7.5 commit `557dcd9`] Race condition em useRealtime: "cannot add postgres_changes callbacks after subscribe()". Fix: nome único `realtime:${userId}:${gen}:${Date.now()}` por subscribe + await `supabase.removeChannel()` (era fire-and-forget) + generation counter ignora callbacks de canais antigos.
+- ✅ **#095** [P1 UX, fechado v0.1.7.5] /Ajustes mostra versão real do app via `Capacitor.App.getInfo()` packageInfo (não bundle baked-in). Bonus fix FAQ.jsx APP_VERSION hardcoded → `__APP_VERSION__` injetado.
+- ✅ **#096** [BUG-028, fechado v0.2.0.1 commit `60d4422`] Admin panel tier inconsistente. listAllUsers agora aplica mesmo promo `free→plus` que getMyTier — admin panel sincroniza com client view.
+- ✅ **#099** [P1 BUG-031, fechado v0.2.0.1 commit `1fcff21`] Avatar paciente — upload de foto não persiste + falta crop circular. Fix: canvas client-side center-square-crop 512x512 + JPEG 0.78 (~50KB). PatientForm submit invalidate ['patients'].
+- ✅ **#103** [P1 BUG-032, fechado v0.2.0.1 commit `4a6e39c`] UpdateBanner URL apontava `dosy-teal.vercel.app` (preview antigo morto) → fetch 404 silent → available=false. Fix: `window.location.origin` runtime.
+- ✅ **#104** [P2 UX, fechado v0.2.0.1 commit `8e093a0`] Skeleton legacy slate → Dosy peach palette. Card primitive bg-elevated + bg-sunken bars + dosy-shadow-xs. Componente SkeletonList (Dashboard isLoading, DoseHistory).
+- ✅ **#105** [P1 BUG-033, fechado v0.2.0.1 commit `65211cb`] MultiDoseModal Dosy primitives. Sheet + Card per dose + StatusPill kind + Buttons ghost/secondary/primary com Lucide icons. Modal aparece em momento crítico pós-alarme nativo.
+- ✅ **#108** [P1 BUG-036, fechado v0.2.0.1 commit `09724c1`] PatientForm weight.replace TypeError. Fix: coerce String(weight) antes onSubmit.
+- ✅ **#125** [P1 BUG-039, fechado v0.2.0.4] Splash distorcido S25 Ultra (Android 12+). Causa: `drawable/splash_icon.png` 3224×1292 stale (legado wide). Fix: `cp resources/splash_icon.png android/app/src/main/res/drawable/splash_icon.png` (1024×1024 quadrado correto).
+- ✅ **#128** [BUG-040, fechado v0.2.0.9 commit `559004b`] Backend: `schedule-alarms-fcm` + `dose-trigger-handler` Edge functions agora populam `patientName` no FCM payload data. `patients` query expandida `SELECT id, name`, `patientNameById` Map preenche `dosesPayload`. Falta apenas reproduzir 6 doses cross-patient device real S25 Ultra (validation pendente em #006).
+- 🚫 **#147** [P1 BUG-041, fechado v0.2.0.12 via #152 + #153] Recuperação senha reformulada com OTP 6 dígitos via email (substitui magic-link broken localhost). Substituição completa #153.
+
 #### 🟡 P2 — Média
 
-- ⏳ **#110** [P2 native, Sentry DOSY-3 REGRESSED + DOSY-7] **Android native crashes — `art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown.** DOSY-3: 2 events 2 users, REGRESSED 4d ago. DOSY-7: 1 event Segfault unknown stack. Native code crash em ART runtime. Investigar: (a) AlarmActivity refactor v0.2.0.0 introduziu ValueAnimator + FrameLayout; (b) DosyMessagingService FCM data handler; (c) plugin nativo version mismatch; (d) ProGuard/R8 rules; (e) Sentry NDK upload disponível pós-#074 v0.2.0.2 — próxima crash terá stack symbolicado.
-- ⏳ **#101-followup** [P2 cost] **Re-audit egress quando user base ≥100** — comparar baseline atual (~5 testers) vs scaled, decidir se Realtime poll bump (50ms→200ms) é necessário.
-- ⏳ **#162** [P2 UX healthcare-adjacent NOVO v0.2.1.4] **TreatmentForm warning `intervalHours/24 > durationDays`.** User lhenrique.pda 2026-05-06 reportou Mounjaro semanal salvo `durationDays=4` (literal 4 dias) ao invés 28 (4 doses × 7d). `effectiveStatus` auto-ended dia 03/05 — alerta "encerrando" silenciou cedo demais. SQL data fix aplicado v0.2.1.2 (durationDays 4→28 + status active + 3 doses pendentes 06/05 13/05 20/05 14:30 BRT). UX root cause: form aceita durationDays < intervalHours/24 sem warning visual. **Fix v0.2.2.0+:** validação inline `intervalHours/24 > durationDays` → warning amarelo "Tratamento dura menos que intervalo entre doses — durar X dias significa X doses únicas? Continuar mesmo assim?" + sugestão calcular automático (intervalHours/24 × N doses esperadas). Detalhe completo CHECKLIST §#162.
+- ✅ **#089** [BUG-022, fechado organicamente entre v0.1.7.4-v0.2.0.12 — validado user print Pixel 7 emulador 2026-05-05] Layout AdSense banner topo + header Dosy abaixo sem sobreposição. "Dosy" wordmark inteiro visível. Provável fix em release intermediária buffer +4 px `--ad-banner-height` OR refactor AppHeader top calc com `safe-area-inset` + `--ad-banner-height` + `--update-banner-height`. NÃO precisou device-specific intervention.
+- ⏳ **#101-followup** [P2 cost] Re-audit egress quando user base ≥100 — comparar baseline atual (~5 testers) vs scaled, decidir se Realtime poll bump (50ms→200ms) é necessário.
+- ⏳ **#110** [P2 native, Sentry DOSY-3 REGRESSED + DOSY-7] **Android native crashes — `art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown.** DOSY-3: 2 events 2 users. DOSY-7: 1 event Segfault. Investigar: AlarmActivity refactor v0.2.0.0 ValueAnimator + FrameLayout / DosyMessagingService FCM data handler / plugin nativo version mismatch / ProGuard R8 rules / Sentry NDK upload (#074 unblocked).
+- ✅ **#123** [P2 UX/security, fechado v0.2.0.3] Sessão não invalida após DELETE auth.users. Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Erro/null força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation.
+- ⏳ **#162** [P2 UX healthcare-adjacent NOVO v0.2.1.4] **TreatmentForm warning `intervalHours/24 > durationDays`.** User lhenrique.pda 2026-05-06 reportou Mounjaro semanal salvo `durationDays=4` ao invés 28 (4 doses × 7d). `effectiveStatus` auto-ended dia 03/05 — alerta "encerrando" silenciou cedo. SQL data fix aplicado v0.2.1.2. **Fix v0.2.2.0+:** validação inline + warning amarelo + sugestão calcular automático. Detalhe completo CHECKLIST §#162.
 
 ---
 
 ### 6.7 🔄 TURNAROUND — Mudanças drásticas
 
-(Vazio — última turnaround foi **REDESIGN visual Dosy v0.2.0.0** já fechado: peach/sunset palette + Sheet/Modal/Card primitives + DoseCard + PatientCard + AppHeader + 18 telas migradas. Próximas turnaround candidatas hipotéticas: pivot iOS first, schema breaking change LGPD, modelo plano Family DB schema rework.)
-
----
-
-### 6.8 📚 Items fechados — referência cronológica
-
-> **114 itens fechados** desde release v0.1.7.0 → v0.2.1.2. Detalhe técnico de cada item em CHECKLIST §#XXX. Lista cronológica abaixo (mais recentes primeiro):
-
-**v0.2.1.2** (2026-05-06):
-- ✅ #158 fix #1+#2 — Console Apps de saúde Medicina checkboxes desmarcadas + manifest categories ["health","lifestyle","productivity"]
-- ✅ #160 v1+v2+v2.1 PatientDetail refactor — Doses Hoje X/Y card + 3 sections tratamentos + lista doses + collapse + dark mode adaptive
-- ✅ #161 v1+v2 Alerts dismiss refinement — ending date-based 1×/dia + useState mirror immediate feedback
-- ✅ Mounjaro durationDays SQL data fix (operacional sem código — paciente lhenrique.pda 4→28 + 3 doses inseridas; UX root cause parqueado #162)
-
-**v0.2.1.1** (2026-05-06 — hotfix):
-- ✅ #159 BUG-LOGOUT — useAuth boot validation distinguir transient vs auth failure
-
-**v0.2.1.0** (2026-05-05):
-- ✅ #007 Telemetria PostHog notification_delivered/tapped (4 listeners Capacitor)
-- ✅ #018 cleanup AdSense placeholder index.html (parcial)
-- ✅ #026 ImprovMX 7 emails @dosymed.app + Gmail filtros + anti-spam catch-all
-- ✅ #036 skeleton screens TreatmentList + Analytics
-- ✅ #041 partial (headings audit)
-- ✅ #046 Runbook DR docs/runbook-dr.md v1.0
-- ✅ #089 BUG-022 layout AdSense fechado organicamente
-- ✅ #129 Google Group dosy-testers@googlegroups.com criado
-- ✅ #156 v1.3 Privacidade.jsx LGPD + Health Apps Policy + idade 18+
-- ✅ #157 NOVO P0 fix storm useRealtime cascade (12 req/s → 0.02 req/s, 99.7% redução)
-- ✅ Categoria Console Medicina → Saúde e fitness
-
-**v0.2.0.12** (2026-05-05):
-- ✅ #029 refactor Settings.jsx 692 LOC → src/pages/Settings/
-- ✅ #030 split notifications.js 613 LOC → 5 arquivos
-- ✅ #034 virtualizar DoseHistory @tanstack/react-virtual VirtualTimeline
-- ✅ #100 avatar emoji 6 categorias + default 👤→🙂 + Saúde category
-- ✅ #144 Custom JWT claim tier (Auth Hook conservador read-only)
-- ✅ #145 useRealtime watchdog scoped refetchQueries({active})
-- ✅ #146 pg_cron audit log + view health + 90d retention
-- ✅ #147 BUG-041 substituído por #152+#153 (recovery flow link broken localhost)
-- ✅ #152 ChangePasswordModal Ajustes
-- ✅ #153 Recovery senha OTP 6 dígitos (substitui magic-link broken)
-- ✅ #154 Custom SMTP Resend pra dosymed.app
-- ✅ #148 Dashboard extend_continuous rpc 2× → debounce 60s
-- ✅ #149 useDoses mutation refetch storm → debounce 2s
-- ✅ #150 useDoses refetchInterval 5min→15min
-- ✅ #151 useDoses refetchInterval opt-in Dashboard
-
-**v0.2.0.10** (2026-05-05):
-- ✅ #139 dose-trigger-handler skip > 6h horizon (-50% a -70%)
-- ✅ #140 schedule-alarms-fcm HORIZON 24h (3× menor payload FCM)
-- ✅ #141 useReceivedShares staleTime 5min (-80% calls listReceivedShares)
-- ✅ #142 cleanup cron JWT cosmetic
-- ✅ #143 useUserPrefs getSession() vs getUser() (-100% calls /auth/v1/user)
-
-**v0.2.0.9** (2026-05-05):
-- ✅ #137 Dashboard 4 useDoses → 1 query + filtros memo client
-- ✅ #138 DOSE_COLS_LIST sem observation + lazy-load DoseModal
-- ✅ #128 BUG-040 patientName payload Edge functions
-
-**v0.2.0.8** (2026-05-05):
-- ✅ #134 useAppResume short idle no invalidate cascade (-30% a -45%)
-- ✅ #135 useRealtime resume nativo no invalidate ALL keys (-5% a -10%)
-- ✅ #136 useRealtime postgres_changes debounce 1s invalidate (-15% a -25%)
-- ✅ #127 CI lint AnimatedRoutes.jsx (libera Sentry source maps)
-- ✅ #025 screenshots phone Console + ícone + feature graphic + assets YT
-- ✅ #004 vídeo FGS YouTube unlisted + Console form
-- ✅ #027 superseded por #129-#133
-
-**v0.2.0.7** (2026-05-04):
-- ✅ Dosy Dev FLAG_SECURE off + StatusBar tema sync
-
-**v0.2.0.6** (2026-05-04):
-- ✅ #010 ic_stat_dosy notification icon vector drawable
-- ✅ #017 LockScreen UI + biometria + timeout configurável
-
-**v0.2.0.5** (2026-05-04):
-- ✅ #126 gitleaks pre-commit + root cause vazamentos secrets
-- ✅ #024 husky reforçado (gitleaks + lint-staged)
-
-**v0.2.0.4** (2026-05-04):
-- ✅ #028 rate limit delete-account Edge fn v7 (1/user/60s)
-- ✅ #031 FORCE_RLS audit (13/13 tabelas)
-- ✅ #032 search_path SECURITY DEFINER audit (resolvido via #119-followup)
-- ✅ #044 register_sos_dose audit (sem schema drift)
-- ✅ #048 supabase.exe gitignore audit (false alarm)
-- ✅ #023 useDoses background-aware verify
-- ✅ #037 inline errors forms (PatientForm + TreatmentForm)
-- ✅ #119-followup trigger free→plus drop server-side
-- ✅ #125 BUG-039 splash S25 Ultra fix (drawable/splash_icon.png 1024×1024)
-- ✅ #090 BUG-023 pós-login redirect Início
-
-**v0.2.0.3** (2026-05-03):
-- ✅ #033 React.memo DoseCard (PatientCard já tinha)
-- ✅ #040 contraste textos secundários dark (fg-secondary AA)
-- ✅ #106 launcher full fix (cap/assets pipeline assets/ legado removido)
-- ✅ #116 header alertas direct icons (sino dropdown → ícones diretos)
-- ✅ #117 patient_share alert recebido novo
-- ✅ #118 ending soon ≤3d alert
-- ✅ #118-followup EndingSoonSheet (lista tratamentos)
-- ✅ #119 promo client free→plus removida (paywall Free real)
-- ✅ #120 SharePatientSheet copy plus (não-só free)
-- ✅ #121 PaywallModal Escape key (Sheet/Modal primitives)
-- ✅ #122 AppHeader shortName (preserva 2 palavras curtas)
-- ✅ #123 deleted user signOut auto via getUser() boot
-
-**v0.2.0.2** (2026-05-04):
-- ✅ #074 debug symbols NDK FULL (Sentry stack symbolicado)
-- ✅ #114 avatar crop UI react-easy-crop (BUG-038)
-- ✅ #115 photo cache versioned localStorage (BUG-035 cost+UX)
-- ✅ #045 coverage gitignore (já presente)
-- ✅ #048 supabase.exe verify
-
-**v0.2.0.1** (2026-05-03):
-- ✅ #099 avatar crop center-square 512×512 (BUG-031)
-- ✅ #102 atalho hardware silenciar volume AlarmActivity
-- ✅ #103 UpdateBanner URL fix (origin runtime, BUG-032)
-- ✅ #104 skeleton legacy slate → Dosy peach palette
-- ✅ #105 MultiDoseModal Dosy primitives (BUG-033)
-- ✅ #106-old launcher partial fix
-- ✅ #108 PatientForm weight String coerce (BUG-036)
-- ✅ #109 useRealtime concurrent subscribe lock (BUG-037)
-- ✅ #096 admin panel tier sync (BUG-028)
-- ✅ #107 schema().rpc().catch TypeError fix (BUG-035)
-
-**v0.2.0.0** (2026-05-03):
-- ✅ **🔄 TURNAROUND: REDESIGN visual Dosy** — peach/sunset palette + Sheet/Modal/Card primitives + DoseCard + PatientCard + AppHeader + 18 telas migradas
-
-**v0.1.7.5** (2026-05-03):
-- ✅ #092 BUG-025 egress reduction multi-frente (Realtime filter server + listDoses range fail-safe + paginate cap + queryKey hour-norm + refetchInterval 5min + staleTime bumps)
-- ✅ #093 BUG-026 useRealtime race subscribe (nome único + await removeChannel + generation counter)
-- ✅ #094 BUG-027 paywall falso plus mount race (useMyTier enabled + queryKey userId)
-- ✅ #095 versão real app via Capacitor.App.getInfo packageInfo
-- ✅ #084 JWT rotation legacy → sb_publishable_/sb_secret_ + revoke HS256
-
-**v0.1.7.4** (2026-05-02):
-- ✅ #012 #013 RLS hardening 48 policies (TO authenticated + split cmd=ALL)
-- ✅ #014 RPC extend_continuous_treatments recriada
-- ✅ #011 label Login a11y (TalkBack)
-- ✅ #019 password length 8 + complexity
-- ✅ #020 Disclaimer médico signup
-- ✅ #022 typescript 6.0.3 verify legítimo
-- ✅ #024 husky lint-staged setup
-- ✅ #088 BUG-021 dose-not-shown viewport-specific (refetchOnMount=always)
-- ✅ #091 BUG-024 TZ extend_continuous fix America/Sao_Paulo
-- ✅ #015 PostHog dashboard
-- ✅ #016 Sentry alert crash spike >10/h
-- ✅ #081 gate validação 24h Dosy Dev fechado
-- ✅ #086 Resumo Diário UI ocultada parqueado v0.1.8.0
-- ✅ #087 Fase A BUG-020 DND UX condicional
-- ✅ #085 BUG-018 Alarme Crítico OFF respeitado 6 caminhos
-
-**v0.1.7.3** (2026-05-02):
-- ✅ #085 BUG-018 Alarme Crítico OFF respeitado 6 caminhos (commit `f22f5a9`)
-
-**v0.1.7.2** (2026-05-02):
-- ✅ #083 FCM-driven alarm + 4 caminhos coordenados (BUG-016 fix definitivo)
-
-**v0.1.7.1** (2026-05-01):
-- ✅ #079 Realtime heartbeat keep-alive
-- ✅ #080 notify-doses retry exp + cleanup tokens + idempotência
-- ✅ #081 WorkManager DoseSyncWorker 6h (defense-in-depth)
-- ✅ #082 Dual-app dev/prod com.dosyapp.dosy.dev "Dosy Dev"
-
-**v0.1.7.0** (2026-05-01):
-- ✅ #023 useDoses background-aware
-- ✅ #075 React Query global staleTime (30s + refetchOnMount:true)
-- ✅ #076 useAppResume soft recover (refresh JWT + reconnect realtime + invalidate)
-- ✅ #077 useRealtime TOKEN_REFRESHED listener resubscribe
-- ✅ #078 SW cache version v5→v6
-
-**v0.1.6.10** (anterior):
-- ✅ #001 Admin auth check send-test-push Edge Function
-- ✅ #002 Sanitizar email enumeration send-test-push
-- ✅ #005 BUG-001 encoding UTF-8 paciente legacy
-
-**v0.1.6.x → v0.1.6.9** (Plan FASE 0-19 resumo):
-- ✅ FASE 0-15: segurança, LGPD, alarme crítico, FCM, A11y partial, code splitting, Sentry, PostHog setup
-- ✅ FASE 18.4.5: hot-fixes pós-deploy
-- ✅ FASE 18.5: FAQ in-app
-- ✅ FASE 19.1: Internal Testing setup
-- ✅ Auditoria externa multidisciplinar 2026-05-01
-
-**Itens superseded / cancelados:**
-- 🚫 #027 Closed Testing pessoas conhecidas (superseded por #129-#133 estratégia Reddit + Google Group público 2026-05-05)
-- 🚫 #147 BUG-041 magic-link recovery localhost (superseded por #152+#153 OTP 6 dígitos v0.2.0.12)
-- 🚫 #106-old launcher partial fix (superseded por #106 full fix v0.2.0.3)
+- ✅ **REDESIGN v0.2.0.0** [Turnaround visual completo, fechado 2026-05-03] Peach/sunset palette + Sheet/Modal/Card primitives + DoseCard + PatientCard + AppHeader + 18 telas migradas. Coleção de items individualmente classificados (#099 #102-#109 #114-#123 — ver §6.5/§6.6). Próximas turnarounds candidatas hipotéticas: pivot iOS first, schema breaking change LGPD, modelo plano Family DB rework.
 
 ---
 
@@ -775,28 +754,30 @@ ESTADO ATUAL: Internal Testing ativo
 
 ## 8. Critérios de saída por fase
 
+> Estado real cruzando contra §6 catálogo. Status ✅ = critério cumprido; ⏳ = pendente; 🚨 = bloqueado.
+
 ### Internal Testing → Closed Testing
-- ✅ Todos P0 fechados (#001-009)
+- ⏳ Todos P0 fechados (#001-009) — **#006 device validation 3 devices ABERTO**; #009 PITR DEFERRED com DR drill alternativo
 - ✅ Vídeo FGS demo no Console (#004)
-- ✅ Device validation FASE 17 (#006)
+- ⏳ Device validation FASE 17 (#006) — manual user, 3 devices físicos
 - ✅ Telemetria notification_delivered ativa (#007)
 - ✅ BUG-001 encoding verificado em criação via UI (#005)
 - ✅ Screenshots retrabalhados (#025)
 
 ### Closed Testing → Produção
-- ✅ 12+ testers ativos por 14 dias (#027)
-- ✅ NPS médio ≥7
-- ✅ Zero crashes nos últimos 7 dias
-- ✅ Todos P1 fechados ou justificados
-- ✅ Crash-free rate ≥99.5%, ANR <0.5%
-- ✅ Notification delivery rate ≥99% (medido via #007)
+- 🚨 12+ testers ativos por 14 dias (#131 + #132) — **bloqueado por #158 rejection Google**
+- ⏳ NPS médio ≥7 — sem dashboard medindo formalmente
+- ⏳ Zero crashes nos últimos 7 dias — depende Sentry monitoring durante Closed Testing
+- ⏳ Todos P1 fechados ou justificados — #018 + #021 pendentes
+- ⏳ Crash-free rate ≥99.5%, ANR <0.5% — sem dashboard medindo formalmente
+- ⏳ Notification delivery rate ≥99% (medido via #007) — telemetria ativa, dashboard PostHog manual pendente
 
 ### Critérios contínuos pós-launch
-- ✅ Crash-free rate ≥99.5%
-- ✅ ANR rate <0.5%
-- ✅ Retention D7 ≥40%
-- ✅ Avaliação Play Store ≥4.3
-- ✅ Notification delivery ≥99%
+- ⏳ Crash-free rate ≥99.5% — aspiracional (app não está em Produção ainda)
+- ⏳ ANR rate <0.5% — aspiracional
+- ⏳ Retention D7 ≥40% — aspiracional
+- ⏳ Avaliação Play Store ≥4.3 — aspiracional
+- ⏳ Notification delivery ≥99% — aspiracional
 
 ---
 
@@ -861,11 +842,15 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 ## 12. Resumo numérico (atualize após cada item fechado)
 
-> Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria.
+> Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** 162 itens · 114 fechados · 44 abertos · 2 BLOQUEADOS Google review
-- **Distribuição por categoria abertos:**
-  - 🚀 IMPLEMENTAÇÃO: 9 (5 P0 + 2 P1 + 2 P2)
+- **Total:** ~162 itens
+  - ✅ 115 fechados
+  - ⏳ 41 abertos
+  - 🚨 2 BLOQUEADOS Google review
+  - 🚫 3 cancelados
+- **Distribuição por categoria abertos (43 total ⏳/🚨):**
+  - 🚀 IMPLEMENTAÇÃO: 10 (6 P0 + 2 P1 + 2 P2)
   - ✨ MELHORIAS: 30 (6 P2 + 24 P3)
   - 🐛 BUGS: 3 (P2)
   - 🔄 TURNAROUND: 0
