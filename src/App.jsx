@@ -28,6 +28,7 @@ const FAQ = lazy(() => import('./pages/FAQ'))
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
 import { useAppResume } from './hooks/useAppResume'
+import { track, EVENTS } from './services/analytics'
 import { useAdMobBanner } from './hooks/useAdMobBanner'
 import { usePushNotifications } from './hooks/usePushNotifications'
 import { useDoses } from './hooks/useDoses'
@@ -142,7 +143,7 @@ export default function App() {
   // ─── Notification tap handlers (LocalNotifications + FCM) ─────────────
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !user) return
-    let localTapHandle, pushTapHandle, pushFgHandle
+    let localTapHandle, pushTapHandle, pushFgHandle, localFireHandle
 
     const setupListeners = async () => {
       const { LocalNotifications } = await import('@capacitor/local-notifications')
@@ -163,9 +164,25 @@ export default function App() {
         }
       }
 
+      // LocalNotifications received (fire — apenas quando app foreground;
+      // background fire não dispara este listener no Capacitor). #007 telemetria.
+      localFireHandle = await LocalNotifications.addListener('localNotificationReceived', (notif) => {
+        track(EVENTS.NOTIFICATION_DELIVERED, {
+          kind: 'local_foreground',
+          type: notif?.extra?.type,
+          hasDoseId: Boolean(notif?.extra?.doseId || notif?.extra?.doseIds)
+        })
+      })
+
       // LocalNotifications tap (alarmes agendados — doses + resumo)
       localTapHandle = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
         console.log('[LocalNotif] tap:', action?.notification?.extra)
+        // #007 telemetria: user tocou notif local (resposta ativa). PII strip auto via sanitize_properties.
+        track(EVENTS.NOTIFICATION_TAPPED, {
+          kind: 'local',
+          actionId: action?.actionId || 'tap',
+          type: action?.notification?.extra?.type
+        })
         handleTap(action?.notification?.extra)
       })
 
@@ -173,6 +190,12 @@ export default function App() {
       pushTapHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         console.log('[FCM] tap:', action?.notification?.data)
         const data = action?.notification?.data
+        // #007 telemetria: user tocou notif FCM background (delivered + tapped).
+        track(EVENTS.NOTIFICATION_TAPPED, {
+          kind: 'push',
+          actionId: action?.actionId || 'tap',
+          type: data?.type
+        })
         if (data) {
           handleTap({
             type: data.type,
@@ -187,6 +210,14 @@ export default function App() {
       // FCM redisplay would cause duplicate sound + tray entries.
       pushFgHandle = await PushNotifications.addListener('pushNotificationReceived', (notif) => {
         console.log('[FCM] foreground received (suppressed redisplay):', notif?.data)
+        // #007 telemetria CRÍTICA healthcare: confirma chegada FCM foreground.
+        // Background delivery NÃO captura aqui (Android suspende JS) — fica
+        // dependente Edge `notify-doses` server-side delivery report (out of scope JS).
+        track(EVENTS.NOTIFICATION_DELIVERED, {
+          kind: 'push_foreground',
+          type: notif?.data?.type,
+          hasDoseId: Boolean(notif?.data?.doseId || notif?.data?.doseIds)
+        })
       })
     }
     setupListeners()
@@ -194,6 +225,7 @@ export default function App() {
       localTapHandle?.remove?.()
       pushTapHandle?.remove?.()
       pushFgHandle?.remove?.()
+      localFireHandle?.remove?.()
     }
   }, [user, navigate, location.pathname])
 
