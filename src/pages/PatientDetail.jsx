@@ -313,19 +313,21 @@ export default function PatientDetail() {
           />
         </div>
 
-        {/* #160 v2 — Lista de doses paciente: Card peach destaque + header collapsable + filtro 24h/Todas */}
+        {/* #160 v2 — Lista de doses paciente: Card peach destaque + header collapsable + filtro 24h/Todas
+            Background: --dosy-peach-100 adapta dark mode (light #FFE5D6, dark #3A2820)
+            Antes: --dosy-gradient-sunset-soft fixo light (bug visível dark mode) */}
         <Card padding={14} style={{
-          // Destaque visual: gradient sunset suave (peach 50/100) — distingue de outras seções
-          background: 'var(--dosy-gradient-sunset-soft)',
+          background: 'var(--dosy-peach-100)',
           border: '1px solid var(--dosy-border)',
         }}>
-          {/* Header collapsable */}
+          {/* Header collapsable — outline none pra evitar focus ring blue browser default */}
           <button
             type="button"
             onClick={() => toggleSection('doses')}
             className="dosy-press"
             style={{
               background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              outline: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', marginBottom: collapsed.doses ? 0 : 10,
               fontFamily: 'var(--dosy-font-display)',
@@ -340,8 +342,8 @@ export default function PatientDetail() {
               {sortedListDoses.length > 0 && (
                 <span style={{
                   fontSize: 12, fontWeight: 700,
-                  color: 'var(--dosy-fg-tertiary)',
-                  background: 'rgba(255, 255, 255, 0.4)',
+                  color: 'var(--dosy-fg-secondary)',
+                  background: 'var(--dosy-bg-elevated)',
                   borderRadius: 9999,
                   padding: '2px 8px',
                 }}>{sortedListDoses.length}</span>
@@ -360,10 +362,10 @@ export default function PatientDetail() {
 
           {!collapsed.doses && (
             <>
-              {/* Filtro segmentado 24h | Todas */}
+              {/* Filtro segmentado 24h | Todas — bg adapta dark mode via --dosy-bg-elevated */}
               <div style={{
                 display: 'inline-flex', gap: 4, padding: 4,
-                background: 'rgba(255, 255, 255, 0.3)', borderRadius: 12,
+                background: 'var(--dosy-bg-elevated)', borderRadius: 12,
                 marginBottom: 10,
               }}>
                 {[
@@ -394,7 +396,7 @@ export default function PatientDetail() {
                   textAlign: 'center', color: 'var(--dosy-fg-tertiary)',
                   fontSize: 13.5, fontWeight: 500,
                   padding: 20,
-                  background: 'rgba(255, 255, 255, 0.4)',
+                  background: 'var(--dosy-bg-elevated)',
                   borderRadius: 14,
                 }}>
                   <Pill size={28} strokeWidth={1.5} style={{ margin: '0 auto 8px', display: 'block' }}/>
