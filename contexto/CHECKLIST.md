@@ -2534,7 +2534,7 @@ User com session realmente revogada (deletado/banned) continua com cache stale a
 **Detalhe code change:** ver commit release/v0.2.1.1 fix `useAuth.jsx`. Comment block in-code documenta racional + trade-off completo.
 
 ### #160 — PatientDetail refactor: Doses Hoje card + dose list 24h/Todas + tratamentos por status (Ativos/Pausados/Encerrados)
-- **Status:** ⏳ Aberto v0.2.1.2 — em curso esta release
+- **Status:** ✅ Concluído v0.2.1.2 (2026-05-06) — commits `c6f6963` (v1) + `1913b56` (v2 collapse + Doses card destaque) + `c371072` (v2.1 dark mode adaptive). Ver entry "#160 v2" abaixo pra detalhe completo extensão.
 - **Origem:** User reported (2026-05-06) — "página paciente individual: tratamentos ativos mostrando encerrados, melhorar info exibida, replicar lista doses do início pra marcar dose direto da página"
 - **Prioridade:** P1 UX (página crítica fluxo paciente)
 - **Esforço:** 2-3h refactor + test
