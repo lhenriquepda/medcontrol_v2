@@ -69,32 +69,69 @@ contexto/
 
 | Documento | Propósito | Granularidade | Quando consultar |
 |---|---|---|---|
-| `ROADMAP.md` §6 | **Lista RESUMIDA** de todas as tarefas — visão macro | 1 linha por item (descrição curta + status `[ ]/[x]` + commit/release) | "O que falta? O que foi feito?" — overview |
+| `ROADMAP.md` §6 | **Lista RESUMIDA** de todas as tarefas — visão macro organizada em **4 categorias** | 1-2 linhas por item (descrição curta + status visual + bullet prioridade + commit/release) | "O que falta? O que foi feito? Qual categoria?" — overview |
 | `CHECKLIST.md` | **Lista DETALHADA** das tarefas — visão técnica completa | Entry completo por item (snippet de código, dependências, critério de aceitação, racional, links auditoria) | "Como implemento o #042? Qual é o snippet? Que critério aceitar?" — execução |
 
 **Ambos compartilham numeração** (`#001` ROADMAP = `#001` CHECKLIST). Toda mudança de status atualiza **AMBOS** — inconsistência = bug de manutenção que propaga para sessões futuras.
 
+#### Estrutura §6 ROADMAP — 4 categorias × 4 prioridades
+
+Refactor v0.2.1.4 (2026-05-06): §6 reorganizado em **4 categorias**, cada uma com sub-classificação P0/P1/P2/P3:
+
+| Categoria | Ícone | Escopo |
+|---|---|---|
+| **IMPLEMENTAÇÃO** | 🚀 | Caminho launch Play Store (compliance Console + recrutamento testers + Production gate) |
+| **MELHORIAS** | ✨ | Incrementais visuais/UX/perf não-bloqueadoras |
+| **BUGS** | 🐛 | Correções de bug específicos (Sentry, user-reported, audit findings) |
+| **TURNAROUND** | 🔄 | Mudanças drásticas (redesign visual, pivot Negócio, schema breaking change) |
+
+**Bolinhas prioridade** (visual rápido):
+
+| Bullet | Prioridade | SLA |
+|---|---|---|
+| 🔴 | **P0** | Bloqueador — fechar antes próxima release ou launch |
+| 🟠 | **P1** | Alta — fechar próximas 1-2 releases |
+| 🟡 | **P2** | Média — 30 dias pós-launch |
+| 🟢 | **P3** | Baixa — 90 dias pós-launch / backlog |
+
+**Status emojis** (substituem `[x]`/`[ ]`):
+
+- ✅ fechado @ commit · 🚧 em progresso · ⏳ aberto · 🚨 BLOQUEADO Google review · ⏸️ bloqueado outro item · 🚫 cancelado · ⏭️ parqueado vX.Y.Z
+
+**Sub-counter por categoria** mantido em §6.2 — atualizar a cada item fechado.
+
 #### Workflow obrigatório por item
 
 **Ao FECHAR um item:**
-1. ✅ ROADMAP §6 → marcar `- [x] **#XXX** [...] **fechado v0.X.Y.Z commit `{sha}`** {descrição curta 1-2 linhas}`
+1. ✅ ROADMAP §6 → mover item de "abertos" pra §6.8 "Items fechados — referência cronológica" agrupado pela release. Linha simples: `- ✅ #XXX descrição curta + commit hash` na sub-seção da release.
 2. ✅ CHECKLIST §#XXX → atualizar campo `**Status:**` para `✅ Concluído @ commit {sha} ({YYYY-MM-DD})`
 3. ✅ Update log da release (`updates/YYYY-MM-DD-release-vX.Y.Z-*.md`) → adicionar item à seção "Items fechados v0.X.Y.Z"
+4. ✅ ROADMAP §6.2 sub-counter: decrementar contador da categoria/prioridade correspondente (ex: 🚀 IMPLEMENTAÇÃO P0 5→4)
+5. ✅ ROADMAP §6.3 Δ Release log: documentar item fechado na entry da release ativa
 
 **Ao DESCOBRIR um item novo (durante sessão):**
-1. ✅ ROADMAP §6 → adicionar entry `- [ ] **#XXX** [PRIORIDADE] {descrição curta}` na seção certa (P0/P1/P2/P3)
-2. ✅ CHECKLIST → criar entry completo com template:
+1. ✅ **Decidir categoria** (1 das 4): IMPLEMENTAÇÃO 🚀 / MELHORIAS ✨ / BUGS 🐛 / TURNAROUND 🔄
+   - Bug user-reported / Sentry / audit finding → **BUGS** 🐛
+   - Compliance Console / launch gate / recrutamento testers → **IMPLEMENTAÇÃO** 🚀
+   - UX/perf/refactor não-crítico / nova feature pequena → **MELHORIAS** ✨
+   - Redesign / pivot Negócio / breaking schema → **TURNAROUND** 🔄
+2. ✅ **Decidir prioridade** (P0/P1/P2/P3) per SLA acima
+3. ✅ ROADMAP §6 → adicionar entry `- ⏳ **#XXX** [PRIORIDADE] {descrição curta}` na sub-seção da categoria/prioridade certa (ex: §6.4 P0 ou §6.6 P2)
+4. ✅ CHECKLIST → criar entry completo com template:
    - `## #XXX — {título}`
    - `**Status:** ⏳ Aberto`
+   - `**Categoria:** 🚀 IMPLEMENTAÇÃO | ✨ MELHORIAS | 🐛 BUGS | 🔄 TURNAROUND`
    - `**Prioridade:** P0/P1/P2/P3`
    - `**Origem:** {sessão YYYY-MM-DD / Sentry / user-reported / auditoria}`
    - `**Problema:** {descrição detalhada}`
    - `**Abordagem:** {snippet/plano técnico}`
    - `**Dependências:** {outros itens / libs / config}`
    - `**Critério de aceitação:** {como validar}`
-3. ✅ Update log atual → adicionar à seção "Items novos descobertos"
+5. ✅ ROADMAP §6.2 sub-counter: incrementar categoria/prioridade
+6. ✅ ROADMAP §6.3 Δ Release log: documentar item novo na entry da release ativa
+7. ✅ Update log atual → adicionar à seção "Items novos descobertos"
 
-**Numeração sequencial GLOBAL:** próximo número livre é o maior `#XXX` em uso + 1. Verificar:
+**Numeração sequencial GLOBAL** (cross-categoria — categoria não reseta numeração):
 ```bash
 grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail -5
 ```
@@ -110,12 +147,17 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 #### Validação de consistência (sanity check pré-merge)
 
 ```bash
-# Items abertos CHECKLIST = items [ ] ROADMAP §6 (deve bater)
-grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*⏸️ Bloqueado" contexto/CHECKLIST.md
-grep -c "^- \[ \]" contexto/ROADMAP.md
+# Items abertos CHECKLIST = items ⏳/🚧/⏸️/🚨 ROADMAP §6.4-§6.7 (deve bater)
+grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*🚧\|Status:.*⏸️ Bloqueado" contexto/CHECKLIST.md
+grep -cE "^- (⏳|🚧|⏸️|🚨)" contexto/ROADMAP.md
 
 # Items órfãos CHECKLIST (em CHECKLIST mas sem entry ROADMAP)
-diff <(grep -oE "^## #[0-9]+" contexto/CHECKLIST.md | sort -u) <(grep -oE "^- \[.\] \*\*#[0-9]+" contexto/ROADMAP.md | grep -oE "#[0-9]+" | sort -u)
+diff <(grep -oE "^## #[0-9]+" contexto/CHECKLIST.md | sort -u) <(grep -oE "\*\*#[0-9]+\*\*" contexto/ROADMAP.md | grep -oE "#[0-9]+" | sort -u)
+
+# Sub-counter §6.2 vs realidade — recompor totais
+grep -cE "^- ⏳ \*\*#" contexto/ROADMAP.md   # abertos
+grep -cE "^- ✅ #" contexto/ROADMAP.md       # fechados §6.8
+grep -cE "^- 🚨 \*\*#" contexto/ROADMAP.md   # bloqueados Google
 ```
 
 Inconsistência entre ROADMAP e CHECKLIST = **bug de manutenção bloqueante**. Corrigir antes de commit final + master merge.
@@ -575,25 +617,26 @@ User pede feature nova ("quero seção X", "adicionar Y"):
    - (c) feature diferente, criar novos items separados
 
 3. **Se nova de fato** → quebrar em sub-tarefas executáveis. Cada sub-task vira 1 item.
-   Exemplo "estoque medicação":
+   Exemplo "estoque medicação" (categoria ✨ MELHORIAS — feature incremental):
    ```
-   #074 ADR-NNN: arquitetura estoque (tabela vs coluna)         P1  1h
-   #075 Migration: tabela medication_stock + FKs + RLS           P1  2h
-   #076 RPC decrement_stock_on_dose_taken                        P1  1h
-   #077 UI seção "Estoque" em PatientDetail                      P1  4h
-   #078 Form add/edit estoque                                    P1  3h
-   #079 Alerta "acabando" (≤ N doses restantes)                  P1  2h
-   #080 Integração com Notifications (push refill)               P1  2h
-   #081 Testes unit + integration                                P1  3h
-   #082 Atualizar PROJETO.md §6 e §4                             P1  30min
+   #074 ADR-NNN: arquitetura estoque (tabela vs coluna)         ✨ P1  1h
+   #075 Migration: tabela medication_stock + FKs + RLS           ✨ P1  2h
+   #076 RPC decrement_stock_on_dose_taken                        ✨ P1  1h
+   #077 UI seção "Estoque" em PatientDetail                      ✨ P1  4h
+   #078 Form add/edit estoque                                    ✨ P1  3h
+   #079 Alerta "acabando" (≤ N doses restantes)                  ✨ P1  2h
+   #080 Integração com Notifications (push refill)               ✨ P1  2h
+   #081 Testes unit + integration                                ✨ P1  3h
+   #082 Atualizar PROJETO.md §6 e §4                             ✨ P1  30min
    ```
 
-4. **Confirmar lista com user** — esforço, prioridade, escopo. Aguardar OK.
+4. **Confirmar lista com user** — categoria, esforço, prioridade, escopo. Aguardar OK.
 
 5. **Após confirmação:**
-   - Adicionar items em `ROADMAP.md` §6 na prioridade negociada (P0/P1/P2/P3)
-   - Adicionar entries detalhadas em `CHECKLIST.md` (numeração sequencial, `Status: ⏳ Aberto`, esforço, deps, snippet quando possível, aceitação)
-   - Atualizar `ROADMAP.md` §12 contadores
+   - Adicionar items em `ROADMAP.md` §6 na **categoria certa** (🚀 §6.4 / ✨ §6.5 / 🐛 §6.6 / 🔄 §6.7) **+ sub-seção prioridade** (P0/P1/P2/P3)
+   - Adicionar entries detalhadas em `CHECKLIST.md` com campo `**Categoria:**` + `**Prioridade:**` (numeração sequencial cross-categoria, `Status: ⏳ Aberto`, esforço, deps, snippet quando possível, aceitação)
+   - Atualizar `ROADMAP.md` §6.2 sub-counter (incrementar categoria/prioridade) + §12 totais
+   - Adicionar entry no §6.3 Δ Release log da release ativa
    - Se mudança arquitetural → criar ADR em `decisoes/` ANTES de implementar
 
 6. **Implementar:** seguir workflow padrão item por item.
@@ -624,11 +667,11 @@ User pede auditoria (estática, live nav, pen test, etc.):
      - Ex.: BUG-002 (send-test-push) virou #001 (admin check) + #002 (sanitizar erro)
 
 4. **Adicionar action items** ao ROADMAP/CHECKLIST:
-   - Numeração sequencial (próximo após #073 = #074)
-   - Em `ROADMAP.md` §6 prioridade certa (P0 se bloqueador, P1 se alta, etc.)
-   - Em `CHECKLIST.md` entry completa com link cruzado para bug: `Detalhe: contexto/auditoria-{tipo}-{data}/bugs-encontrados.md#bug-NNN`
+   - Numeração sequencial cross-categoria (próximo após #161 = #162)
+   - Em `ROADMAP.md` §6 — categoria 🐛 BUGS (§6.6) + prioridade certa (P0 se bloqueador, P1 alta, P2 média, P3 baixa)
+   - Em `CHECKLIST.md` entry completa com `**Categoria:** 🐛 BUGS` + link cruzado para bug: `Detalhe: contexto/auditoria-{tipo}-{data}/bugs-encontrados.md#bug-NNN`
    - `Status: ⏳ Aberto`
-   - Atualizar `ROADMAP.md` §12 contadores
+   - Atualizar `ROADMAP.md` §6.2 sub-counter + §6.3 Δ Release log + §12 totais
 
 5. **Reportar ao user** com template:
    ```
@@ -662,7 +705,7 @@ Durante outro trabalho ou uso casual, achou bug:
      - Sem auditoria recente → criar `auditoria-live-{data}/bugs-encontrados.md` minimalista (1-2 bugs OK)
    - BUG-NNN com numeração sequencial cross-pasta
    - Classificar plataforma + severidade
-   - Se [ANDROID]/[AMBOS] → adicionar item(s) `#NNN` ROADMAP/CHECKLIST
+   - Se [ANDROID]/[AMBOS] → adicionar item(s) `#NNN` ROADMAP §6.6 (categoria 🐛 BUGS) + sub-prioridade certa + CHECKLIST entry com `**Categoria:** 🐛 BUGS`
 4. **Reportar ao user** + perguntar se prioriza ou continua trabalho atual.
 
 ---

@@ -2703,4 +2703,64 @@ const onClickEnding = () => {
 - **Resultado:** Mounjaro volta pra Tratamentos Ativos + dose hoje aparece no Início (overdue se já passou 14:30) + alarme dispara nos próximos.
 
 **Pendente v0.2.2.0+ (não nesta release):**
-- TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. Item separado a criar próxima release.
+- TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. **Item criado: #162 (próxima release).**
+
+### #162 — TreatmentForm UX warning intervalHours/24 > durationDays (Mounjaro repro prevention)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P2
+- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2)
+- **Esforço:** 1-2h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Form `TreatmentForm.jsx` aceita `durationDays < intervalHours/24` sem warning visual. Resultado: tratamento semanal (intervalHours=168) com `durationDays=4` gera apenas 1 dose (em vez de 4 doses ao longo de 28 dias). Tratamento auto-encerra cedo (`effectiveStatus → 'auto-ended'` quando `endDate < now`) e user não percebe — alerta "tratamento acabando" silencia precoce, app vai pra "Encerrados" sem aviso óbvio.
+
+**Repro Mounjaro v0.2.1.2 (paciente lhenrique.pda):**
+- Mounjaro: intervalHours=168 (semanal) + durationDays=4 (literal 4 dias) → endDate 03/05 → auto-ended dia 03/05 → user esperava 4 doses × 7d = 28 dias.
+- SQL data fix aplicado v0.2.1.2 (durationDays 4→28 + status active + 3 doses pendentes).
+
+**Causa raiz UX:**
+- Campo "Duração (dias)" no form = ambíguo pra tratamentos com `intervalHours >= 24`. User pensa "4 doses" digita "4" mas semantic correto = "28 dias" (4 doses × 7d intervalo).
+- Sem validação inline, sem hint, sem warning amarelo.
+
+**Abordagem (escolher 1 ou ambos):**
+
+**Opção A — Warning inline (mínimo viável, 30min):**
+```jsx
+// TreatmentForm.jsx — após onChange durationDays/intervalHours
+const dosesPossiveis = Math.floor((durationDays * 24) / intervalHours)
+const warningSilent = intervalHours >= 24 && dosesPossiveis < 2
+{warningSilent && (
+  <div style={{ background: 'var(--dosy-amber-bg)', padding: 12, borderRadius: 8 }}>
+    ⚠️ Com intervalo de {intervalHours/24}d e duração {durationDays}d,
+    apenas {dosesPossiveis} dose{dosesPossiveis !== 1 ? 's serão' : ' será'} agendada
+    {dosesPossiveis > 1 ? 's' : ''}. Tratamento auto-encerra em {durationDays}d.
+    <div style={{ fontSize: 12, marginTop: 6 }}>
+      Esperava mais doses? Aumente "Duração (dias)" pra {Math.ceil((intervalHours/24) * dosesEsperadas)}d
+    </div>
+  </div>
+)}
+```
+
+**Opção B — Refactor campo "Número de doses" (1-2h, melhor UX):**
+- Pra `intervalHours >= 24`, trocar campo "Duração (dias)" por "Número de doses" + calcular `durationDays = numDoses * (intervalHours/24)` internamente
+- Pra `intervalHours < 24` (cada X horas), manter "Duração (dias)" atual
+- Toggle automático baseado em `intervalHours` value
+- Side-effect: schema DB inalterado (durationDays continua persistindo) — só UI muda
+
+**Decisão recomendada:** Opção A primeiro (warning, low risk), Opção B v0.2.3.0+ se feedback usuário continuar mostrando confusão.
+
+**Dependências:**
+- TreatmentForm.jsx atual lê durationDays + intervalHours via state form
+- Tokens design `--dosy-amber-bg` (já existe pra warnings)
+
+**Critério de aceitação:**
+- ✅ Form com intervalHours=168 + durationDays=4 → warning amarelo visível
+- ✅ Form com intervalHours=24 + durationDays=30 → sem warning (30 doses faz sentido)
+- ✅ Form com intervalHours=168 + durationDays=28 → sem warning (4 doses faz sentido)
+- ✅ Texto warning calcula dosesPossiveis correto
+- ✅ Sugestão de "Aumente para Xd" arredonda pra cima
+- ✅ Validado no preview Vercel via Chrome MCP (Regra 9.1)
