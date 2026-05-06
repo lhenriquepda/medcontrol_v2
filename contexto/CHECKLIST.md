@@ -1920,7 +1920,7 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Próximo:** #130 importar email group `dosy-testers@googlegroups.com` em Closed Testing track Play Console.
 
 ### #130 — Configurar Closed Testing track no Console com Group como tester list
-- **Status:** 🟡 Rascunho salvo HOLD pré-submit (2026-05-05) — aguarda #156 página /privacidade
+- **Status:** 🚨 BLOQUEADO — Google Play **REJEITOU** review pós-submit (2026-05-05 23:30 BRT). Razão: "Política de requisitos do Play Console — Alguns tipos de apps só podem ser distribuídos por organizações". App declara categoria/recursos exigindo conta de **organização (CNPJ)**, conta atual `dosy.med@gmail.com` é pessoal. Resolução demanda decisão estratégica (criar conta org Google Play + transfer app, OU reverter declarações específicas que ativaram org gate). Ver §#158 abaixo.
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
 - **Esforço:** 30 min config Console + 1h cross-checks pré-submit
 - **Dependências:** #129 (✅ done) + #156 página privacidade
@@ -1940,7 +1940,13 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
   - ⏳ Verificar HTTP 200 dos URLs `/privacidade` antes click "Enviar 14 mudanças para revisão"
   - ⏳ Conferir status questionários Conteúdo (Classificação, Público-alvo, Segurança dados, Intent tela cheia) — possivelmente já preenchidos releases passadas
   - ⏳ Confirmação user explícita pra submeter (irreversível, dispara review Google 1-7 dias)
-- **Submit final:** Console → Visão geral da publicação → "Enviar mudanças para revisão" → Google review (~24-72h pra Closed Testing categoria Saúde e fitness — review padrão). URL opt-in liberada pós-aprovação.
+- **Submit final 2026-05-05 23:14 BRT:** Console → "Enviar 14 mudanças para revisão" → Google review iniciado.
+- **Resultado submit (2026-05-05 23:30 BRT):** ❌ **REJEITADO**. Mensagem Google: "App rejeitado — O envio recente do seu app foi rejeitado por não obedecer às políticas do Google Play. Política de requisitos do Play Console: Violação dos requisitos do Play Console. Seu app não obedece à política de requisitos do Play Console. Alguns tipos de apps só podem ser distribuídos por organizações. Você selecionou uma categoria do app ou declarou que o app oferece recursos que exigem o envio usando uma conta de organização." Aplicado em 6 de mai. App não disponível Google Play até resolver.
+- **Diagnóstico provável:** alguma das declarações de Conteúdo do app (App de saúde + Permissões alarme exato + Serviços primeiro plano + Recursos financeiros + Apps governamentais + ID publicidade) ativou gate "requires organization account" do Google. Mais provável: combo "App de saúde" + "Saúde e fitness" categoria + medication tracking features = Google interpreta como app médico sensível requerendo CNPJ.
+- **Path resolução** (item dedicado **#158** abaixo):
+  - **Opção A:** criar conta Google Play Developer empresarial (CNPJ + verification documents + $25 USD nova taxa) → transferir app `com.dosyapp.dosy` da conta pessoal pra empresarial via Console "Transferir um app" workflow (1-3 semanas, complex paperwork)
+  - **Opção B:** reverter declarações específicas no Conteúdo do app pra desativar gate organização → re-submit. Risco: app perde algumas certifications (ex.: Saúde e fitness) e pode necessitar refactor features médico
+  - **Opção C:** apelar diretamente Google via formulário "Entrar em contato com o suporte" explicando que Dosy é app de auto-cuidado consumer, não app médico profissional, requesting reclassification
 
 ### #131 — Recrutar testers externos via Reddit + redes (meta 15-20 inscritos)
 - **Status:** ⏳ Aberto
@@ -2334,3 +2340,152 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 - Investigação multi-camada (cliente Chrome MCP + servidor Supabase MCP) é necessária pra root cause real
 
 **Detalhe completo:** `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`
+
+### #158 — Resolver rejection Google Play (org account required) NOVO P0 URGENTE
+- **Status:** 🚨 BLOQUEADO + URGENTE ANTES PRÓXIMO RELEASE — Google Play rejeitou submit Closed Testing 2026-05-05. Plano execução estruturado abaixo (7 passos) deve ser concluído **antes do próximo release v0.2.2.0**.
+- **Origem:** Console submit #130 release/v0.2.1.0 (2026-05-05 23:14 BRT) → Google review rejeitado em <30 min com mensagem "Violação dos requisitos do Play Console — apps de certas categorias só por organização".
+- **Prioridade:** P0 URGENTE (bloqueador rollout Closed Testing público + Production track futuro)
+- **Esforço total:** 1-3 dias investigação + plano (passos 1-7) + 1-3 semanas execução plano (opção A/B/C escolhida)
+- **Dependências:** decisão user pós passo 7
+- **Escopo:** trabalho operacional Console + paperwork — **não precisa branch git** (zero código). Updates em `contexto/decisoes/` (ADR) + `contexto/updates/` (logs sessão).
+
+**Diretrizes execução (7 passos sequenciais — agente seguir em ordem):**
+
+#### Passo 1 — Ler e-mail Google rejection completo
+- Console → Notificações (sino topo direito) → "App rejeitado · 5 de mai." → Mais detalhes
+- Click "Ver e-mail" → ler email Google completo (texto integral do reviewer)
+- Capturar: data, mensagem específica, link política violada, recursos/categorias citados especificamente
+- **Goal:** entender EXATAMENTE qual declaração foi flagged (não só "Política requisitos genérica"). Cole texto integral do email em `contexto/decisoes/{data}-rejection-google.md` como evidência.
+
+#### Passo 2 — Entrar nos links sugeridos pela página Detalhes
+- Detalhes problema referenciam: `requisitos do Play Console` + `conteúdo do app` + Central de Ajuda transferir apps + Central de Ajuda configurar org account
+- Ler políticas oficiais Google Play 2026 via WebFetch:
+  - https://support.google.com/googleplay/android-developer/answer/13316080 (Health Apps Policy)
+  - https://support.google.com/googleplay/android-developer/answer/9858738 (Developer Program Policies)
+  - Link específico do email rejection (mais autoritativo)
+- **Goal:** identificar quais features/declarações requerem org account explicitamente. Documente excerpts relevantes.
+
+#### Passo 3 — Estudar assunto org account requirements
+- Buscar Google Play documentation: "organization account requirements 2026"
+- Lista oficial categorias/features que exigem CNPJ:
+  - Apps governamentais (declaração)
+  - Apps financeiros sensíveis (Recursos financeiros declaração)
+  - Apps de saúde médica/clínica (App de saúde declaração + categoria sensível)
+  - Outras a confirmar via documentação
+- Decisões transferência app pessoal → empresarial (workflow + documents required + tempo Google approve)
+- Custo: $25 USD nova taxa Console + paperwork BR (~R$ 1000-3000 contador abertura empresa OU usar empresa CNPJ existente se user tiver)
+- **Goal:** entender opções concretas + custos/prazos reais.
+
+#### Passo 4 — Analisar app atual (declarações Conteúdo do app)
+- Console → Política e programas → Conteúdo do app (sidebar)
+- Listar TODAS declarações ativas atualmente (screenshot cada):
+  - ID de publicidade (declaração obrigatória SDK ads)
+  - Apps governamentais (provavelmente "Não")
+  - Recursos financeiros (assinaturas Play Billing — Plus/Pro)
+  - Serviços em primeiro plano (FGS Special Use #004 alarmes)
+  - Permissões de alarme exato (#004 alarme nativo)
+  - **App de saúde** (provável culprit — declaração explícita de healthcare features)
+  - Categoria do app: **Saúde e fitness** (mudou v0.2.1.0 de Medicina pra Saúde — pode ainda ser sensível pra Google)
+  - Audiência (idade 18+ #156 v1.3)
+- Cross-ref com app real: features Dosy = lembrete medicação + tracking dose + push + alarme nativo + paciente CRUD + analytics adesão + LGPD
+- **Goal:** identificar exatamente qual declaração ativou org gate. Captura screenshot Console pra evidence.
+
+#### Passo 5 — Validar app nas regras Google
+- Cross-ref features Dosy × Health Apps Policy 2026:
+  - Dosy faz diagnóstico médico? **Não** (pure tracking, no AI)
+  - Dosy interage com prescription system regulator (e-prescribing, eMR integration)? **Não** (free-form input user)
+  - Dosy é dispositivo médico classificado ANVISA/FDA? **Não** (consumer self-care)
+  - Dosy compartilha dados saúde com terceiros? **Não** (não vende, não broker — privacy policy explícita §11)
+  - Dosy serve healthcare professionals? **Não** (target consumer pais/cuidadores/idosos)
+- Compatibilidade: Dosy é **app consumer** com features healthcare leves, NÃO app médico clínico
+- Documentation reference: Google Health Apps Policy distinguishes "consumer wellness apps" (Saúde e fitness OK conta pessoal) vs "medical devices/clinical apps" (org account required)
+- **Goal:** confirmar Dosy fit consumer category (deveria passar se declarações alinhadas). Documente conclusão evidence-based.
+
+#### Passo 6 — Investigar rejeição específica (qual declaração triggered gate)
+- Hipótese A mais provável: **declaração "App de saúde"** marcada YES → Google interpreta como medical clinical → org gate
+- Hipótese B alternativa: combo de features (#004 FGS Special Use + alarme exato + saúde + medication) escalou flag automatic
+- Hipótese C: categoria "Saúde e fitness" combinado com declaração específica
+- Workflow investigação:
+  1. Console → Conteúdo do app → "App de saúde" → review configuration atual
+  2. Se YES: ler descrição/respostas do questionário "App de saúde" — quais checkboxes ativaram gate
+  3. Cross-ref com requisitos Google: cada checkbox tem implicação organização
+  4. Se possível, simular reverter cada declaração isoladamente (Console permite editar antes submit) e ver qual desliga warning
+- Capturar evidência: screenshot configuration atual + identificar trigger exato
+- **Goal:** root cause confirmed — sem isso, opção B (revert declaration) não pode ser executada cirurgicamente.
+
+#### Passo 7 — Elaborar plano correção (decision matrix + ADR)
+
+| Critério | Opção A (CNPJ + transfer) | Opção B (revert declarações) | Opção C (apelo Google) |
+|---|---|---|---|
+| Tempo | 1-3 semanas | 2-4h | 1-2 semanas |
+| Custo | R$ 1000-3000 (empresa BR se não tem) + $25 USD nova conta Console | $0 | $0 |
+| Risco | Alto setup mas resolve permanente | Médio (perde certifications + pode trigger outra rejection) | Alto (Google pode rejeitar apelo silently) |
+| Mantém escopo healthcare | Sim | **Não** (downgrade pra "lifestyle/lembrete") | Sim |
+| Permite Production track | Sim | Sim mas com escopo reduzido | Talvez |
+| Reversibilidade | Permanente | Re-submit declarations restaurar mas re-trigger | N/A |
+| Internal Testing afetado | Não (continua) | Não (continua) | Não (continua) |
+
+**Recomendação default (revisar pós passos 1-6):**
+- **Curto prazo (esta semana):** Opção B — reverter declaração "App de saúde" (most likely trigger) → re-submit Closed Testing → testers external entram via opt-in
+- **Médio prazo (próximas 2-4 semanas):** Opção A em paralelo — verificar se user já tem CNPJ; se sim, pular abertura empresa; se não, abrir Dosy Med LTDA com contador + cadastrar conta Google Play empresarial + transferir app
+- **Pós-A success:** restaurar declaração "App de saúde" + categoria Medicina se quiser → re-submit com escopo healthcare completo
+
+**Output deliverables passo 7:**
+- ADR `contexto/decisoes/2026-05-XX-rejection-google-fix.md` documentando decisão escolhida + razão
+- Plano timeline execução (datas concretas)
+- Items derivados para ROADMAP (ex.: #159 "abrir empresa Dosy Med LTDA", #160 "transferir app Console", #161 "re-submit Closed Testing post-fix")
+
+**Aceitação final #158:**
+- Closed Testing track aprovado Google (ou nova conta org com app transferido + aprovado)
+- Opt-in URL aceitando inscrições novas
+- Production track futuro submit passa review
+- Internal Testing continua funcionando independente (já garantido — não foi afetado)
+
+**Internal Testing track NÃO afetado:** continua publicando AAB normalmente (v0.2.1.0 vc 46 publicada 2026-05-05 23:42). User + esposa + testers existentes recebem updates auto Play Store.
+
+**Internal Testing track NÃO afetado:** continua publicando AAB normalmente (v0.2.1.0 vc 46 publicada 2026-05-05 23:42). User + esposa + testers existentes recebem updates.
+
+**Closed Testing público bloqueado:** sem aprovação Google, opt-in URL `https://play.google.com/apps/internaltest/4700769831647466031` permanece sem usuários novos podendo se inscrever.
+
+**Production track bloqueado:** mesma rejection vai aplicar pra Production submit futuro.
+
+**Análise opções:**
+
+**Opção A — Conta Google Play Developer empresarial (recomendada longo prazo):**
+1. Criar empresa "Dosy Med LTDA" oficialmente (se já não tem CNPJ)
+2. Cadastrar nova conta Google Play Developer com CNPJ + $25 USD taxa nova
+3. Verification documents (CNPJ, comprovante endereço empresa, possível video call)
+4. Console → app Dosy → Configurações → Transferir um app → para conta empresarial
+5. Aguardar Google approve transfer (~1-2 semanas)
+6. Re-submit Closed Testing/Production
+- **Vantagem:** resolve permanente, libera todas categorias incluindo healthcare strict, profissional + alinha com app de saúde sério
+- **Desvantagem:** demora, custos abertura empresa BR (R$ 1000-3000 contador) + paperwork
+
+**Opção B — Reverter declarações específicas (rápida mas escopo reduzido):**
+1. Identificar QUAL declaração ativou gate (Conteúdo do app → review todas as declarações):
+   - "App de saúde" — provável culpada
+   - "Permissões de alarme exato" (#004 FGS Special Use)
+   - "Serviços em primeiro plano" (#004 FGS)
+   - "Recursos financeiros" (Play Billing assinaturas)
+   - "Apps governamentais" — improvável aplica
+2. Reverter declaração mais provável (App de saúde) → mudar pra categoria menos sensível
+3. Re-submit
+- **Vantagem:** ship Closed Testing/Production rapidamente
+- **Desvantagem:** app perde certificação healthcare, pode comprometer trust/positioning consumer self-care; pode ainda falhar se outra declaração for culpada
+
+**Opção C — Apelo Google explicando contexto:**
+1. Console → Ajuda → Entrar em contato com suporte
+2. Explicar: Dosy é app consumer self-care/lembrete medicação, não app médico profissional, target audiência geral (pais, idosos, cuidadores)
+3. Solicitar reclassificação manual do reviewer
+- **Vantagem:** preserva todas declarações + categoria; sem custo
+- **Desvantagem:** Google review apelos é slow + opaque; pode demorar 1-2 semanas; pode ser rejeitado sem explanation
+
+**Recomendação:** A longo prazo + B paralelo curto prazo. Atalho: começar A (criar empresa + CNPJ se não tem), enquanto isso testar B reverting declarações específicas e ver se passa review. Se B passa, ship Closed Testing imediato com escopo reduzido enquanto A finaliza.
+
+**Aceitação:**
+- Closed Testing track aprovado Google + opt-in URL aceitando inscrições novas
+- Production track submit futuro passa review
+- Internal Testing continua funcionando independente
+
+**Detalhe rejection email:** ver Console → Notificações → "App rejeitado · 5 de mai." → Mais detalhes (já lido na sessão).
+
