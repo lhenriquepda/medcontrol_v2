@@ -97,8 +97,8 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.1.2` · master @ tag `v0.2.1.2` (publicada 2026-05-06 — Console fix #158 + PatientDetail refactor #160 + alerts dismiss #161 + Mounjaro data fix).
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.2 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.1.4` (web/docs only) · master @ tag `v0.2.1.4` (publicada 2026-05-07 — refactor §6 ROADMAP 4 categorias + 27 NOVOS items planejamento #162-#189). **Android Play Store mantém v0.2.1.2 vc 48** (sem AAB build esta release). Versão `0.2.1.3` reservada pra próxima release code work.
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.4 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -150,9 +150,21 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.1.4` (refactor docs §6 ROADMAP em 4 categorias + #162 NOVO BUG TreatmentForm UX warning).
+**Próxima branch:** `release/v0.2.1.3` (reservada pra code work próxima sessão — pulou v0.2.1.3 cronologicamente porque v0.2.1.4 saiu primeiro como docs-only release).
 
-**Última release publicada:** v0.2.1.2 em 2026-05-06 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 48 + tag git `v0.2.1.2`) — Console fix #158 + PatientDetail refactor #160 + alerts dismiss #161 + Mounjaro data fix.
+**Última release publicada:** v0.2.1.4 em 2026-05-07 (Vercel `dosymed.app` + tag git `v0.2.1.4` — sem AAB Play Store, **Android mantém v0.2.1.2 vc 48**) — release **docs-only**: refactor completo §6 ROADMAP em 4 categorias visuais (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) + bolinhas P0/P1/P2/P3 + legenda visual global topo doc + items fechados redistribuídos inline na posição correta + 27 NOVOS items planejamento criados (#162-#189).
+
+**Items v0.2.1.4 (27 NOVOS items planejamento + 0 código):**
+- ✅ Refactor §6 ROADMAP completo (4 categorias + bolinhas + legenda topo)
+- ✅ #162 BUG TreatmentForm UX warning Mounjaro repro
+- ✅ #163-#168 plano egress otimização escala (RPC consolidado + Realtime broadcast + Delta sync + persist + MessagePack + Cursor pagination + CDN cache)
+- ✅ #169-#173 marketing/ASO/growth playbook BR (Play Store ASO + In-App Review + Reddit/Instagram/LinkedIn/TikTok + Healthcare moat #064-#066 promovidos)
+- ✅ #174-#187 features differentiators concorrentes (OCR med scan + receita scan auto-import + adesão report PDF/email + WhatsApp share + Modo Alzheimer escalada + Wear OS + health metrics + voz/TTS + symptom diary + refill affiliate + telemedicina + B2B caregiver mode + Apple Health/Google Fit + Memed/Nexodata receita digital BR)
+- ✅ #188 🔥 KILLER feature Mini IA Chat NLP cadastro tratamento via escrita/fala natural (Anthropic Claude API tool use)
+- ✅ #189 BUG UpdateBanner mostra versionCode → versionName fix
+- ✅ #026 followup Sentry whitelist 9º filter Gmail (resolveu emails Sentry em Spam)
+
+**Última release com AAB Play Store:** v0.2.1.2 em 2026-05-06 (versionCode 48) — Console fix #158 + PatientDetail refactor #160 + alerts dismiss #161 + Mounjaro data fix.
 
 **Items v0.2.1.2 fechados (4 features + 1 data fix):**
 - ✅ #158 fix #1 Console Apps de saúde — desmarcado todas Medicina checkboxes + texto "Outro" consumer descritivo + re-submit Closed Testing 14 mudanças (Google review ~7d)
