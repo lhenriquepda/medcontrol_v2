@@ -2717,14 +2717,51 @@ const onClickEnding = () => {
 **Pendente v0.2.2.0+ (não nesta release):**
 - TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. **Item criado: #162 (próxima release).**
 
-### #162 — TreatmentForm UX warning intervalHours/24 > durationDays (Mounjaro repro prevention)
+### #162 — TreatmentForm UX warning intervalHours/24 > durationDays + toggle granularidade Dias/Semanas/Meses
 
-- **Status:** ⏳ Aberto
+- **Status:** 🚧 v1 fechado v0.2.1.3 vc 50, v2 em curso v0.2.1.3 vc 51
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P2
-- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2)
-- **Esforço:** 1-2h
-- **Release sugerida:** v0.2.2.0+
+- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2) + feedback v1 2026-05-07
+- **Esforço:** 1-2h v1 + 2h v2
+- **Release:** v0.2.1.3 vc 50 (v1) + vc 51 (v2)
+
+**v1 (vc 50) — fechado:**
+Warning amarelo inline em form quando `intervalHours/24 > durationDays`. User valida cenários: 168h+4d trigger warning, 28d sem warning, 24h+30d sem warning, contínuo OFF/ON.
+
+**v2 (vc 51) — user feedback 2026-05-07 "ok mas não gostei":**
+
+User pediu mudar abordagem. Em vez de só warning, quer **toggle granularidade** acima do campo "Duração":
+
+- Toggle 3 chips: **Dias / Semanas / Meses** (default Dias)
+- Auto-switch baseado intervalHours:
+  - 4h, 6h, 8h, 12h, 24h, 48h, 72h → **Dias**
+  - 168h (semanal), 336h (quinzenal) → **Semanas**
+  - 720h (mensal) → **Meses**
+- Internamente persiste sempre `durationDays` (multiplier × value: ×1, ×7, ×30)
+- Edit mode detecta best unit pra display (ex: 28d → 4 semanas)
+
+Vantagem: user escolhe granularidade natural ao tipo tratamento. Mounjaro semanal → "4 semanas" (não "28 dias"). Anticoncepcional → "21 dias". Hormônio mensal → "6 meses".
+
+Implementation:
+- New state `durationUnit: 'days' | 'weeks' | 'months'` + `durationValue: number`
+- Constant `DURATION_MULTIPLIER = { days: 1, weeks: 7, months: 30 }`
+- Helper `setDurationValue(v)` recalcula durationDays
+- Helper `setDurationUnit(unit)` preserva intent user
+- useEffect auto-switch quando user muda intervalHours (não em edit)
+- Label dinâmico: "Duração (dias/semanas/meses)"
+- 3 chips estilo Dosy primary peach (active state) + bg-elevated (inactive)
+
+Warning v1 mantido (calcula em durationDays internamente).
+
+**Critério aceitação v2:**
+- ✅ Default Dias com input numérico
+- ✅ Click chip Semanas → label muda + 7 entrada vira 49 dias internamente
+- ✅ Mudar intervalo 24h→168h auto-switch chip pra Semanas (form novo)
+- ✅ Edit existing 28d treatment → mostra 4 Semanas no toggle
+- ✅ Edit existing 30d treatment → mostra 1 Mês
+- ✅ Edit existing 21d treatment → mostra 21 Dias (não divide perfeitamente)
+- ✅ Toggle Uso contínuo ON oculta toggle granularidade + input
 
 **Problema:**
 
