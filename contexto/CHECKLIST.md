@@ -4172,3 +4172,640 @@ Frontend: `/consultas` rota nova + AppointmentCard + AppointmentForm. Local noti
 ---
 
 > **Nota promotion #064/#065/#066:** entries originais em §6.5 ✨ MELHORIAS P3 ficam mantidas pra histórico mas com flag `[promovido P1 via #173]`. Quando implementar, mover entries do P3 pra fechado normal (✅).
+
+---
+
+## Plano features differentiators concorrentes (análise gap 2026-05-07)
+
+> **Análise concorrentes BR/global:** Medisafe (~200K MAU BR) tem drug interactions parcial, sem OCR forte; MyTherapy (~100K BR) tem mood tracking + medições simples; Pílula Certa (~500K BR) só nicho contraceptivos; Cuidador.io (~50K) B2B fragmento. Gaps Dosy pode atacar:
+> - **Onboarding friction**: nenhum BR tem OCR forte caixa+receita auto-import (#174 #175)
+> - **B2B trust healthcare**: report PDF visual robusto pra médico nenhum tem (#176)
+> - **Cultural BR**: WhatsApp dominância 90% smartphones — feature share dose status nenhum BR tem (#177)
+> - **Acessibilidade**: Wear OS BR Galaxy Watch crescendo (#179) + voz/TTS idosos baixa visão (#181)
+> - **Healthcare deep**: health metrics correlação dose-outcome (#180) + mood tracking psiquiátrica (#182)
+> - **Niche profundo**: modo Alzheimer escalada nenhum tem (#178)
+> - **Monetização extra**: refill affiliate (#183) + telemedicina integration (#184)
+> - **B2B mode profissional**: Cuidador.io fragmento, espaço pra Dosy (#185)
+> - **Ecosystem**: Apple Health/Google Fit (#186) + receita digital BR Memed/Nexodata (#187)
+>
+> Decisão user 2026-05-07: iOS (#068) **NÃO promove** antes tração Android — custo dev/validação/infra alto. Foca Android-first 100%.
+
+### #174 — OCR camera medication scan (foto caixa → auto-cadastro)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth differentiator launch)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.2.2.0+
+
+**Problema:** Onboarding TreatmentForm friction — user digita manualmente nome med + dose + interval (5min cadastro 1 medicamento). Idosos abandonam.
+
+**Abordagem:** Plugin `@capacitor-mlkit/text-recognition` (Google ML Kit on-device, free, offline-capable):
+
+```bash
+npm i @capacitor-mlkit/text-recognition
+npx cap sync
+```
+
+```js
+// src/services/ocrMedication.js
+import { TextRecognition, TextRecognitionLanguage } from '@capacitor-mlkit/text-recognition'
+
+export async function scanMedicationBox(photoUri) {
+  const { text } = await TextRecognition.recognizeText({
+    path: photoUri,
+    language: TextRecognitionLanguage.Latin
+  })
+  return parseMedicationLabel(text)
+}
+
+function parseMedicationLabel(rawText) {
+  // Regex BR med labels: "METFORMINA 500mg" / "Mounjaro 5mg/0.5ml" / "Aspirin 100mg"
+  const lines = rawText.split('\n')
+  const medMatch = lines.find(l => /[A-Z]{4,}\s+\d+\s*(mg|mcg|g|ml|ui)/i.test(l))
+  const doseMatch = medMatch?.match(/(\d+)\s*(mg|mcg|g|ml|ui)/i)
+
+  // ANVISA RDC bulário scraping (futuro): match medName → known interval
+  return {
+    medName: medMatch?.replace(doseMatch?.[0], '').trim() || '',
+    dose: doseMatch?.[1] || '',
+    unit: doseMatch?.[2] || 'mg',
+    rawText, // user pode editar
+  }
+}
+```
+
+UX TreatmentForm: botão "📷 Escanear caixa" → Camera plugin → ML Kit OCR → preview parsed fields user edita confirma → salva treatment.
+
+**Critério aceitação:**
+- ✅ Plugin instalado + funcional Android device real
+- ✅ OCR retorna text bruto + parsed structured fields confidence scoring
+- ✅ User edita campos antes salvar (não auto-save sem review)
+- ✅ Suporta offline (ML Kit on-device)
+- ✅ 80%+ accuracy em 20 caixas BR test set (Mounjaro/Metformina/Pantoprazol/Losartana/etc)
+
+**Métrica esperada:**
+- Onboarding cadastro 1 med: 5min → 30s (-90%)
+- Conversion rate primeira sessão: +30-40%
+
+---
+
+### #175 — Receita médica scan OCR auto-import (foto receita → batch treatments)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth differentiator launch — único BR)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-16h
+- **Release:** v0.2.2.0+ → v0.2.3.0+
+
+**Problema:** User chega Dosy com receita médica papel/PDF → cadastrar 5 medicamentos manualmente = 25min friction. Receita médica BR estruturada (RDC ANVISA): nome paciente + médico CRM + medicamentos + posologia.
+
+**Abordagem:** Mesmo ML Kit OCR (#174) + parser regex robusto receita BR + UX confirmação batch:
+
+```js
+// src/services/ocrPrescription.js
+export async function scanPrescription(photoUri) {
+  const { text } = await TextRecognition.recognizeText({ path: photoUri })
+  return parsePrescriptionBR(text)
+}
+
+function parsePrescriptionBR(rawText) {
+  const lines = rawText.split('\n')
+
+  // Extrai paciente (após "Paciente:" ou "Nome:")
+  const patientLine = lines.find(l => /paciente|nome:/i.test(l))
+  const patientName = patientLine?.replace(/^.*?:/, '').trim()
+
+  // Extrai medicamentos (linhas estruturadas: "1. METFORMINA 500mg - tomar 1cp 2x ao dia")
+  const medRegex = /^\d+[\.\)]\s*([A-Z\s]+)\s+(\d+\s*(?:mg|mcg|g|ml|ui))[\s\-]+(.+)/gim
+  const meds = []
+  let match
+  while ((match = medRegex.exec(rawText)) !== null) {
+    const [, medName, dose, posology] = match
+    const intervalHours = parsePosology(posology) // "2x ao dia" → 12; "8/8h" → 8
+    meds.push({ medName: medName.trim(), dose, intervalHours, posology })
+  }
+
+  // Médico CRM (rodapé)
+  const crmLine = lines.find(l => /CRM[\s\-:]/i.test(l))
+
+  return { patientName, meds, doctor: crmLine, rawText }
+}
+
+function parsePosology(text) {
+  const lower = text.toLowerCase()
+  if (/\b(\d+)x?\s*(?:ao dia|por dia|\/dia)\b/.test(lower)) {
+    const n = parseInt(RegExp.$1)
+    return Math.round(24 / n)
+  }
+  if (/\b(\d+)\/(\d+)h\b/.test(lower)) return parseInt(RegExp.$1)
+  if (/\bcada\s+(\d+)\s*horas?\b/.test(lower)) return parseInt(RegExp.$1)
+  if (/\bsemanal|1x?\s*por semana\b/.test(lower)) return 168
+  if (/\bmensal|1x?\s*por m[eê]s\b/.test(lower)) return 720
+  return 24 // default diário
+}
+```
+
+UX: PatientDetail → botão "📋 Importar receita" → Camera → ML Kit OCR → preview list parsed meds → user edita/confirma cada → salva batch treatments.
+
+**Critério aceitação:**
+- ✅ OCR receita 1 página retorna 5+ medicamentos estruturados
+- ✅ Posology parser cobre 80%+ formatos BR ("2x ao dia", "8/8h", "1cp cada 12h", "semanal")
+- ✅ User edita lista antes batch save (não auto-save)
+- ✅ Validado 10 receitas reais BR (acumular dataset progressivo)
+- ✅ Patient name auto-fill se já existe paciente (matching nome similar)
+
+**Métrica esperada:**
+- Onboarding 5 medicamentos receita: 25min → 2min (-92%)
+- Único concorrente BR com feature → ASO listing differentiator forte
+
+---
+
+### #176 — Adesão report PDF/email pra médico 30/60/90d
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (B2B trust healthcare professional)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.2.0+
+
+**Problema:** Médico precisa saber adesão tratamento. User leva consulta sem dados → médico ajusta cego. App pode gerar report visual robusto.
+
+**Abordagem:** Edge function Puppeteer ou client `jsPDF` + email Resend SMTP (#154):
+
+```js
+// src/services/adesaoReport.js
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+
+export async function generateAdherenceReport(patientId, periodDays = 30) {
+  const doses = await listDosesRange({ patientId, days: periodDays })
+  const taken = doses.filter(d => d.status === 'taken').length
+  const skipped = doses.filter(d => d.status === 'skipped').length
+  const overdue = doses.filter(d => d.status === 'overdue').length
+  const adherenceRate = (taken / doses.length * 100).toFixed(1)
+
+  const doc = new jsPDF()
+  doc.setFontSize(20)
+  doc.text(`Relatório de Adesão — Dosy`, 14, 20)
+  doc.setFontSize(12)
+  doc.text(`Paciente: ${patient.name}`, 14, 35)
+  doc.text(`Período: ${periodDays} dias`, 14, 42)
+  doc.text(`Adesão: ${adherenceRate}%`, 14, 49)
+
+  // Stats summary
+  doc.autoTable({
+    startY: 60,
+    head: [['Status', 'Doses']],
+    body: [
+      ['Tomadas', taken],
+      ['Puladas', skipped],
+      ['Atrasadas', overdue],
+    ],
+  })
+
+  // Detalhe por medicamento
+  const byMed = groupBy(doses, 'medName')
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 10,
+    head: [['Medicamento', 'Dose', 'Adesão %', 'Tomadas/Total']],
+    body: Object.entries(byMed).map(([med, list]) => {
+      const t = list.filter(d => d.status === 'taken').length
+      return [med, list[0].dose, `${(t/list.length*100).toFixed(0)}%`, `${t}/${list.length}`]
+    }),
+  })
+
+  return doc.output('blob')
+}
+
+export async function emailAdherenceReport(patientId, doctorEmail, periodDays = 30) {
+  const pdfBlob = await generateAdherenceReport(patientId, periodDays)
+  // Edge function envia email via Resend com PDF attachment
+  await supabase.functions.invoke('send-adherence-report', {
+    body: { patientId, doctorEmail, periodDays, pdfBase64: await blobToBase64(pdfBlob) }
+  })
+}
+```
+
+UX PatientDetail → botão "📊 Relatório pra médico" → modal escolhe período (30/60/90d) + email médico → gera PDF + envia via Resend.
+
+**Critério aceitação:**
+- ✅ PDF gerado com header Dosy + stats summary + detalhe por med
+- ✅ Email enviado via Resend SMTP com PDF attachment
+- ✅ User pode também baixar PDF local (sem email)
+- ✅ Período 30/60/90d cobertos
+- ✅ Médico recebe email visual profissional (não plain text)
+
+**Métrica esperada:**
+- B2B trust healthcare professional ↑ (médicos recomendam app pacientes)
+- Differential vs MyTherapy weekly email simples
+
+---
+
+### #177 — WhatsApp share dose status (cuidador remoto cultural BR)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (cultural BR launch)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 3-4h
+- **Release:** v0.2.2.0+
+
+**Problema:** Filha distante quer saber se mãe tomou remédio. Hoje liga/manda mensagem manual. WhatsApp dominante BR (90%+ smartphones).
+
+**Abordagem:** Deep link WhatsApp pre-formatted message:
+
+```js
+// src/components/ShareDoseStatusButton.jsx
+function shareDoseStatus(dose, patient) {
+  const status = dose.status === 'taken' ? '✅ Tomou' : dose.status === 'skipped' ? '⏭️ Pulou' : '⏰ Atrasado'
+  const time = formatTime(dose.takenAt || dose.scheduledAt)
+  const text = `${patient.name} ${status} ${dose.medName} ${dose.dose}${dose.unit} às ${time} 💊\n\nDosy: dosymed.app`
+  const encoded = encodeURIComponent(text)
+
+  // Universal WhatsApp deeplink (works web + app)
+  const url = `https://wa.me/?text=${encoded}`
+  window.open(url, '_blank')
+}
+```
+
+UX: PatientDetail → DoseCard tem botão "📱 Compartilhar" (alongside já existing actions) → click abre WhatsApp picker contato → user escolhe família → mensagem pre-formatted enviada.
+
+Versão PRO: configurar "auto-share doses" → toda dose tomada gera WhatsApp share automático pra contato configurado (filho/cuidador).
+
+**Critério aceitação:**
+- ✅ Botão share funciona Android (WhatsApp app) + Web (WhatsApp Web)
+- ✅ Mensagem pre-formatted clara + signature dosymed.app
+- ✅ Múltiplas linguagens dose status (Tomou/Pulou/Atrasado/Encerrou)
+- ✅ Validado device real Galaxy S25 Ultra + Android emulator
+
+**Métrica esperada:**
+- Word-of-mouth orgânico forte ("nossa, isso ajuda demais!" → instala app)
+- Cultural BR fit: 90% market WhatsApp
+
+---
+
+### #178 — Modo Alzheimer escalada (alarme intensifica + SMS/WhatsApp cuidador)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (healthcare niche profundo)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.3.0+
+
+**Problema:** Paciente Alzheimer/demência não responde alarme normal (esquece, não entende, dorme profundo). Cuidador remoto não sabe.
+
+**Abordagem:** Toggle PatientForm "Cuidados especiais (Alzheimer/demência)" → ativa modo escalada:
+
+```js
+// android/app/src/main/java/com/dosyapp/dosy/AlarmActivity.java extending #083 FCM-driven alarm
+// Após alarm dispara:
+// T+0: Volume normal + vibração padrão
+// T+5min sem dismiss: Volume 2× + vibração contínua
+// T+10min sem dismiss: SMS/WhatsApp cuidador via Edge function
+// T+15min sem dismiss: 2ª chamada cuidador
+
+// supabase/functions/escalate-alarm/index.ts
+serve(async (req) => {
+  const { doseId, patientId, level } = await req.json()
+  const patient = await getPatient(patientId)
+  const caregivers = await getPatientCaregivers(patientId) // patient_shares
+
+  if (level === 'sms') {
+    await sendTwilioSMS(caregivers[0].phone, `⚠️ ${patient.name} não tomou ${dose.medName} (alarme não atendido)`)
+  } else if (level === 'whatsapp') {
+    await sendWhatsAppBusinessAPI(caregivers[0].phone, escalation_template)
+  }
+})
+```
+
+UX:
+- PatientForm: toggle "Cuidados especiais" → ativa modo
+- Settings global: configurar canal escalation (SMS/WhatsApp/Push) + cooldown
+- Cuidador recebe alerta: deep link app cuidador → vê paciente + dose missed
+
+**Dependências:**
+- #117 patient_share (existente — caregivers list)
+- Twilio account ($1/100 SMS BR) ou WhatsApp Business API
+- Phone field paciente_shares (migration adicionar)
+
+**Critério aceitação:**
+- ✅ Toggle Alzheimer mode ativa escalada (default off)
+- ✅ T+5 / T+10 / T+15 escalation triggers funcionais
+- ✅ Cuidador recebe notif + deep link
+- ✅ Validado device real S25 Ultra + emulador
+
+**Métrica esperada:**
+- Niche real-world saver — Alzheimer = 1.2M BR (IBGE)
+- Differentiator único no mercado mundial
+
+---
+
+### #179 — Wear OS / Galaxy Watch support (alarme pulso)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (acessibilidade + diferencial)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.2.3.0+
+
+**Problema:** Idoso dorme profundo, celular longe (cabeceira/sala), perde alarme. Galaxy Watch BR mercado crescendo.
+
+**Abordagem:** Wear OS API native bridge Android (custom Capacitor plugin OR `@capacitor/wear` se existir):
+
+```kotlin
+// android/app/src/main/java/com/dosyapp/dosy/WearAlarmHandler.kt
+class WearAlarmHandler(context: Context) {
+  fun sendAlarmToWear(doseId: String, medName: String) {
+    val dataClient = Wearable.getDataClient(context)
+    val request = PutDataMapRequest.create("/dose-alarm")
+      .apply {
+        dataMap.putString("doseId", doseId)
+        dataMap.putString("medName", medName)
+        dataMap.putLong("timestamp", System.currentTimeMillis())
+      }
+      .asPutDataRequest()
+      .setUrgent()
+
+    dataClient.putDataItem(request)
+  }
+}
+```
+
+Wear app companion separate (Android Studio Wear OS template) — display alarm + buttons "Tomei" / "Adiar".
+
+**Dependências:**
+- Wear OS companion app (separate AAB linked main app)
+- Test em Galaxy Watch real (user precisa hardware)
+
+**Critério aceitação:**
+- ✅ Alarm dispara celular + watch simultaneous
+- ✅ Dismiss via watch button → main app marca dose taken
+- ✅ Vibração watch funcional
+
+**Métrica esperada:**
+- BR Galaxy Watch market crescendo (Samsung dominante)
+- Diferencial vs Medisafe (sem Wear OS)
+
+---
+
+### #180 — Health metrics tracking (PA, glicemia, peso, temperatura)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (healthcare deep)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 10-14h
+- **Release:** v0.2.3.0+
+
+**Problema:** Diabéticos precisam glicemia + medicação link; hipertensos PA + med. Hoje user tem app separado pra metrics.
+
+**Abordagem:** Schema novo + UX integrate dose tomada:
+
+```sql
+CREATE TABLE medcontrol.health_metrics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  metric_type text NOT NULL, -- 'blood_pressure', 'glucose', 'weight', 'temperature'
+  value_numeric numeric, -- 110 (glicemia mg/dL) ou 75 (peso kg)
+  value_systolic integer, value_diastolic integer, -- BP only
+  unit text NOT NULL,
+  measured_at timestamptz DEFAULT now(),
+  related_dose_id uuid REFERENCES medcontrol.doses, -- linked metric
+  notes text
+);
+
+CREATE INDEX idx_health_metrics_patient_time ON medcontrol.health_metrics(patient_id, measured_at DESC);
+```
+
+UX:
+- DoseModal "Tomada" → opcional input metric (ex: "Antes de tomar Mounjaro: glicemia ___")
+- PatientDetail nova section "Saúde": chart trend 30/60/90d (lib `recharts` ou `victory`)
+- Form rápido add metric standalone (sem dose linked)
+
+**Critério aceitação:**
+- ✅ 4 metric types funcionais
+- ✅ Chart trend renderiza patient detail
+- ✅ Linked metric ↔ dose visível (correlação dose-outcome)
+- ✅ Export CSV pra médico
+
+**Métrica esperada:**
+- Diabéticos retention ↑ (glicemia + dose linked = único app)
+- PRO upsell (feature exclusiva PRO?)
+
+---
+
+### #181 — Voz/TTS prompts + comando voz (acessibilidade idosos baixa visão)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (acessibilidade)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.3.0+
+
+**Problema:** Idoso baixa visão não vê tela. TalkBack ajuda mas é genérico. App pode ser pro-ativo: alarme dispara → TTS fala "É hora do Mounjaro 14:30".
+
+**Abordagem:**
+
+```js
+// src/services/voice.js
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
+import { SpeechRecognition } from '@capacitor-community/speech-recognition'
+
+export async function speakDoseAlarm(dose) {
+  await TextToSpeech.speak({
+    text: `É hora do ${dose.medName}, ${dose.dose}${dose.unit}, às ${formatTime(dose.scheduledAt)}.`,
+    lang: 'pt-BR',
+    rate: 0.9, // levemente mais lento idosos
+    pitch: 1.0,
+  })
+}
+
+export async function listenForDoseConfirmation() {
+  await SpeechRecognition.requestPermission()
+  const result = await SpeechRecognition.start({
+    language: 'pt-BR',
+    maxResults: 3,
+    prompt: 'Diga "tomei minha dose" ou "pulei"',
+    partialResults: false,
+    popup: false,
+  })
+  const text = result.matches?.[0]?.toLowerCase() || ''
+  if (/tomei|tomado|sim/i.test(text)) return 'taken'
+  if (/pulei|pulou|não/i.test(text)) return 'skipped'
+  return null
+}
+```
+
+UX Settings: toggle "Acessibilidade voz" → ativa TTS em alarmes + comando voz pós alarme. AlarmActivity dispara → TTS fala → após 3s auto-listen 5s → marca dose status.
+
+**Critério aceitação:**
+- ✅ TTS PT-BR clear pronunciation medicamentos
+- ✅ Comando voz reconhece "tomei" / "pulei" / "adiar" 80%+ accuracy
+- ✅ Toggle Settings off por default (opt-in)
+- ✅ Validado device real S25 Ultra + idoso real test (user pai/mãe?)
+
+**Métrica esperada:**
+- Acessibilidade demographic +30% (idosos baixa visão são target heavy)
+
+---
+
+### #182 — Symptom diary + mood tracking (antes/depois dose)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (backlog futuro)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.3.0.0+
+
+**Problema:** Medicação psiquiátrica (ansiedade/depressão/bipolar) requer ajuste fino baseado em sintomas/humor. App pode capturar.
+
+**Abordagem:**
+
+```sql
+CREATE TABLE medcontrol.symptom_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  related_dose_id uuid REFERENCES medcontrol.doses,
+  mood_score integer CHECK (mood_score BETWEEN 1 AND 5), -- 😢😞😐🙂😊
+  symptoms text[], -- ['ansiedade', 'fadiga', 'dor cabeça']
+  notes text,
+  logged_at timestamptz DEFAULT now()
+);
+```
+
+UX DoseModal "Tomada" → após mark taken, opcional "Como se sente?" emoji 5-scale + sintomas checkbox + observation. Trend chart PatientDetail seção "Saúde".
+
+**Critério aceitação:**
+- ✅ Mood tracking 5-emoji scale
+- ✅ Symptoms common BR list (psiquiátrica + crônica)
+- ✅ Trend chart 30d/60d
+- ✅ Export combined dose+mood (correlação)
+
+---
+
+### #183 — Refill affiliate links Drogasil/Drogaria SP/Pague Menos
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (monetização extra — combinado #065 estoque)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 4-6h (incluindo signup affiliate)
+- **Release:** v0.2.3.0+ (depende #065 implementado primeiro)
+
+**Problema:** User estoque acabando precisa comprar. App pode oferecer atalho + ganhar comissão.
+
+**Abordagem:**
+
+Signup affiliate programs:
+- Drogasil afiliados (via Lomadee ou direto)
+- Drogaria São Paulo afiliados
+- Pague Menos afiliados
+- Raia afiliados
+
+Deeplinks com tracking ID afiliado:
+
+```js
+// src/services/refillLinks.js
+const AFFILIATE_LINKS = {
+  drogasil: (medName) => `https://www.drogasil.com.br/search?q=${encodeURIComponent(medName)}&utm_source=dosy&utm_medium=affiliate&utm_id=DOSY123`,
+  drogaria_sp: (medName) => `https://www.drogariasaopaulo.com.br/search?...`,
+  paguemenos: (medName) => `https://www.paguemenos.com.br/search?...`,
+  raia: (medName) => `https://www.drogaraia.com.br/search?...`,
+}
+
+export function getRefillOptions(medName) {
+  return Object.entries(AFFILIATE_LINKS).map(([store, fn]) => ({
+    store,
+    url: fn(medName),
+    name: STORE_NAMES[store],
+  }))
+}
+```
+
+UX: alert header novo (#117/#118 padrão) "📦 Mounjaro acabando — Comprar?" → click → bottom sheet 4 drogarias → click drogaria → abre app/web com search pre-filled medicamento.
+
+**Dependências:**
+- #065 estoque implementado (#173)
+- Affiliate programs signup (1-2 semanas approval cada)
+
+**Critério aceitação:**
+- ✅ 4 drogarias deeplinks funcionais
+- ✅ Tracking ID afiliado validado (clicks tracked)
+- ✅ Sheet UX consistent Dosy primitives
+- ✅ Settings toggle off (user opt-out se não quer)
+
+**Métrica esperada:**
+- 2-5% comissão venda (R$ 50 venda Mounjaro = R$ 1-2.50)
+- Volume escala 1000 MAU = ~100 refill clicks/mês = R$ 100-250/mês adicional
+
+---
+
+### #184 — Telemedicina integration (Doctoralia/Conexa Saúde/Drogasil Telemedicina)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (backlog futuro — depende parcerias)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.3.0.0+
+
+**Abordagem:** Botão "Agendar consulta" PatientDetail → opções providers parceiros affiliate. Doctoralia API (limited public) ou deeplinks.
+
+**Critério aceitação:** Deeplinks 3 providers funcionais + tracking affiliate + UX consent privacy.
+
+---
+
+### #185 — Cuidador profissional B2B mode (1 cuidador 5+ idosos diferentes residências)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (B2B mercado nicho)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 16-24h (UX redesign + RLS expansion)
+- **Release:** v0.4.0.0+ (mais futuro)
+
+**Abordagem:** Toggle Settings "Modo cuidadora profissional" → habilita gerenciar 5+ pacientes residências distintas + reports separados + cobranças por hora cuidado (futuro).
+
+**Dependências:** #117 patient_share expansion + RLS rework + UX redesign navegação multi-residência.
+
+---
+
+### #186 — Apple Health / Google Fit / Samsung Health bidirectional sync
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (ecosystem integration)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-16h
+- **Release:** v0.3.0.0+ (depende #180 health metrics)
+
+**Abordagem:** Plugin `@capacitor-community/health` (ou Health Connect Android API). Doses Dosy → Health platforms; metrics #180 → Health platforms.
+
+**Critério aceitação:** Bidirectional sync funcional + user consent + privacy controls granulares.
+
+---
+
+### #187 — Receita digital prescription import (Memed, Nexodata BR)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (BR-specific future-proof)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-20h
+- **Release:** v0.3.0.0+
+
+**Abordagem:** Memed (1ª receita digital BR) + Nexodata API integração. User receba receita digital → app importa automático criando treatments. Diferente #175 OCR scan — esse é integração nativa receita digital pre-formatted.
+
+**Dependências:** Signup parceria Memed/Nexodata API + RDC ANVISA compliance.
+
+**Critério aceitação:** Import automático batch treatments + paciente nome match + médico CRM linked.
