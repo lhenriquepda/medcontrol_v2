@@ -5479,3 +5479,135 @@ Plus catch handler:
 - ✅ Sentry sem regressão (DOSY-* events) — verifica não introduz cascade outro
 - ✅ Refresh_token realmente revogado (admin DELETE auth.users) → signOut funciona dentro 1-2 requests authenticated naturais
 - ✅ Reportes user "não desloga mais" pós-install vc 50
+
+---
+
+### #191 — Tela "Meu plano" acessível a Free/Plus/Pro (não só paywall)
+
+- **Status:** ⏳ Pendente
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P0 pré-OpenTest (sem isso Plus não consegue virar Pro = revenue ceiling)
+- **Origem:** User-flagged 2026-05-07 ("usuario Free/Plus precisa migrar pro Pro sem ser pelo paywall")
+- **Esforço:** 4-6h (UI nova + refactor PaywallModal pra modo "manage")
+
+**Problema:**
+
+Hoje paywall só aparece no fluxo Free quando bate limite (1 paciente / 3 tratamentos). User Plus não tem caminho UI pra virar Pro — preso no Plus indefinidamente. Pro features (sem ad, export, multi-paciente ilimitado) inacessíveis sem ir manualmente na Play Store assinar SKU separado.
+
+**Sintomas:**
+- Plus user que quer remover ads → não acha botão
+- Free user em telas que NÃO batem limite (ex: Configurações) → não vê opção de upgrade voluntário
+- Pro user (já pago) → quer ver/gerenciar/cancelar assinatura → vai onde?
+
+**Solução proposta:**
+
+Tela `/meu-plano` (ou Sheet) com 3 estados:
+1. **Free:** mostra Plus + Pro lado-a-lado, CTA upgrade ambos
+2. **Plus:** mostra plano atual com ✓ destacando benefícios + card Pro com diferenciais (sem ad, multi-paciente, export PDF, etc) + CTA upgrade Pro
+3. **Pro:** mostra plano atual + link "Gerenciar no Google Play" (cancel, downgrade, payment method, etc — Play Store handle isso, não dá pra fazer in-app)
+
+Acesso:
+- Item Sidebar/Profile "Meu plano"
+- CTA discreto na home/configurações pra Free user voluntário ("desbloquear tudo")
+
+**Impacto:**
+- Plus → Pro path desbloqueado = revenue conversion possível
+- Free pode upgrade voluntário (sem precisar bater limite)
+- Pro tem onde gerenciar = trust + LGPD ("transparência sobre assinatura")
+
+**Critério aceitação:**
+- ✅ Free user clica "Meu plano" → vê 3 cards (Free atual + Plus + Pro com CTA)
+- ✅ Plus user clica "Meu plano" → vê Plus atual + card Pro com upgrade CTA
+- ✅ Pro user clica "Meu plano" → vê Pro atual + link Play Store gerenciar
+- ✅ Upgrade Plus → Pro funciona via Play Billing real (sandbox + prod)
+- ✅ Cancel Pro via Play Store → app detecta downgrade no próximo refresh tier (RevenueCat ou Play Console webhook)
+
+---
+
+### #192 — Validar fluxo pagamento end-to-end (sandbox + Play Console testers)
+
+- **Status:** ⏳ Pendente
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P0 pré-OpenTest (BLOQUEADOR launch)
+- **Origem:** User-flagged 2026-05-07 ("quando for pra opentest isso tudo precisa estar rodando liso... pagamento inclusive")
+- **Esforço:** 1-2 dias (depende #191 + setup tester accounts Play Console)
+
+**Escopo de validação:**
+
+1. **Free → Plus** via paywall
+   - Bate limite → modal aparece → click Plus → Play Billing flow → confirma compra → tier vira plus → limite removido
+   - Cancela compra mid-flow → tier permanece free, sem side-effect
+   - Compra reembolsada (Google) → app detecta downgrade
+
+2. **Free → Pro** via tela #191
+   - Click "Pro" → Play Billing → tier vira pro → ads removidos imediatamente
+
+3. **Plus → Pro** via tela #191
+   - Click "Pro" → Play Billing handle "upgrade" SKU → tier vira pro → ads removidos sem perder dados
+
+4. **Pro → Cancel**
+   - User vai Play Store → cancela → próximo refresh tier detecta → vira free na data de expiração (NÃO antes)
+   - Durante "grace period" (assinatura paga mas cancelada) → tier permanece pro até expiração
+
+5. **Restore purchases**
+   - User reinstala app → entra mesma conta Google → click "Restaurar compras" → tier correto re-aplicado
+
+6. **Edge cases**
+   - Network falha durante compra → flow recupera na próxima abertura
+   - User troca conta Google → restoration funciona
+   - Múltiplos devices mesma conta → tier sincronizado
+
+**Critério aceitação:**
+- ✅ Cada fluxo acima testado em real device com Play Console License Tester
+- ✅ Sentry sem erros de billing
+- ✅ PostHog tracking events `upgrade_complete` / `upgrade_failed` funcionais
+- ✅ Subscriptions table reflete tier correto pós-fluxo (RPC `my_tier` consistente)
+- ✅ Restore purchases funciona após reinstall
+
+---
+
+### #193 — Webhook Google Play subscription notifications (RTDN)
+
+- **Status:** ⏳ Pendente
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (necessário pra cancel/refund detectar fora do app)
+- **Origem:** Implicit em #192 (sem isso, cancel só detecta na próxima abertura do app)
+- **Esforço:** 1-2 dias (Edge Function + Pub/Sub setup + Play Console config)
+
+**Por quê:**
+
+Sem RTDN (Real-Time Developer Notifications), app só sabe que user cancelou quando abre o app + chama `purchaseService.refresh()`. Se user cancela no Play Store e nunca mais abre o app, tier permanece pro infinitamente no DB.
+
+Com RTDN: Google Pub/Sub → Edge Function `play-billing-webhook` recebe notification → atualiza tier em `subscriptions` table imediatamente.
+
+**Critério aceitação:**
+- ✅ Edge Function `play-billing-webhook` deployed
+- ✅ Validação Pub/Sub signature
+- ✅ Handle SUBSCRIPTION_CANCELED / EXPIRED / RECOVERED / RESTARTED / GRACE_PERIOD
+- ✅ Logs Sentry de eventos processados
+- ✅ Idempotente (replay safe)
+
+---
+
+### #194 — Tracking analytics flow upgrade (eventos PostHog completos)
+
+- **Status:** ⏳ Pendente
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 pré-OpenTest (sem isso não dá pra debugar conversão drop-off)
+- **Origem:** Implicit em #191/#192
+- **Esforço:** 2-3h
+
+**Eventos novos (já parcialmente em `EVENTS` catalog):**
+- `manage_plan_opened` (entrou na tela #191) — origem (sidebar/home/config)
+- `plan_card_clicked` (qual plano) — Plus ou Pro
+- `upgrade_checkout_started` ✅ existe
+- `upgrade_complete` ✅ existe — incluir from_tier + to_tier
+- `upgrade_failed` ✅ existe — incluir error code
+- `restore_purchases_clicked` ✅ existe — incluir result
+- `manage_subscription_play_clicked` (clicou link Play Store)
+- `cancel_detected` (RTDN do #193 detectou cancel)
+
+**Critério aceitação:**
+- ✅ Painel admin `/analytics` mostra funnel `manage_plan_opened → plan_card_clicked → upgrade_complete`
+- ✅ Drop-off rate visível por etapa
+- ✅ Sentry sem PII em eventos
