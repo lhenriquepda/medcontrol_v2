@@ -477,17 +477,17 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~162 itens · ✅ 115 fechados · ⏳ 41 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~167 itens · ✅ 115 fechados · ⏳ 46 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
 | 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 2 | 2 | 0 | 10 |
-| ✨ MELHORIAS | 0 | 0 | 6 | 24 | 30 |
+| ✨ MELHORIAS | 0 | 3 | 8 | 24 | 35 |
 | 🐛 BUGS | 0 | 0 | 3 | 0 | 3 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **2** | **11** | **24** | **43** |
+| **Total abertos** | **6** | **5** | **13** | **24** | **48** |
 
 **Fechados por categoria** (todos inline na posição correta dentro de §6.4-§6.7):
 
@@ -510,7 +510,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 **Δ 2026-05-06 v0.2.1.2:** +**#158 fix #1** Console "Apps de saúde" desmarcado todas Medicina checkboxes + Outro texto consumer descritivo + re-submit Closed Testing 14 mudanças (Google review ~7d) + **#158 fix #2** PWA manifest.webmanifest categories ["health","medical","productivity"] → ["health","lifestyle","productivity"] (remove flag medical W3C que pode trigger Google org gate) + bump v0.2.1.1→v0.2.1.2 (versionCode 48). +**#160 NOVO P1** PatientDetail refactor — v1: card "Adesão" → "Doses Hoje X de Y" + bug fix tratamentos 3 seções (Ativos/Pausados/Encerrados via effectiveStatus) + lista doses paciente DoseCard reuso filter 24h/Todas + reorder layout. v2: collapse opcional TODAS 4 seções + Doses dentro Card peach destaque + count badge + chevron rotate. v2.1: dark mode adaptive (peach-100 var ao invés gradient fixo). +**#161 NOVO P1** Alerts dismiss refinement — ending date-based 1×/dia (LS_ENDING_SEEN_DATE YYYY-MM-DD), reaparece automático próximo dia. v2: useState mirror localStorage pra feedback visual immediate (bug v1 não dismissava UI). +**Mounjaro data fix SQL** (operacional sem código) — paciente lhenrique.pda durationDays=4→28 + status active + 3 doses pendentes (06/05 13/05 20/05 14:30 BRT). UX root cause parqueado novo #162. Counter: 114 fechados / 43 abertos + 2 BLOQUEADOS Google review.
 
-**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6 v2** — items fechados redistribuídos **inline na posição correta** (categoria + prioridade certa, ordem # ascendente) marcados ✅; abertos ⏳; bloqueados 🚨; cancelados 🚫. §6.8 antiga (lista cronológica fechados) eliminada — release log cronológico mantido em §3 + §6.3. Legenda visual global movida pro topo do doc. +**#026 followup Sentry whitelist** via Chrome MCP — user reportou Sentry issues em Spam + dúvida sobre TESTE 02 contato@dosymed.app. Investigação: TESTE 02 chegou normal (~7min delay forward chain, SPF/DKIM/DMARC PASS); Sentry sender direto pra dosy.med@gmail.com bypass ImprovMX. Fix: 9º filter Gmail `from:(getsentry.com OR sentry.io)` Never Spam + Mark important + 5 emails Sentry resgatados Spam→Inbox manual. Counter: 114 fechados / 44 abertos + 2 BLOQUEADOS.
+**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6 v2** — items fechados redistribuídos **inline na posição correta** (categoria + prioridade certa, ordem # ascendente) marcados ✅; abertos ⏳; bloqueados 🚨; cancelados 🚫. §6.8 antiga (lista cronológica fechados) eliminada — release log cronológico mantido em §3 + §6.3. Legenda visual global movida pro topo do doc. +**#026 followup Sentry whitelist** via Chrome MCP — user reportou Sentry issues em Spam + dúvida sobre TESTE 02 contato@dosymed.app. Investigação: TESTE 02 chegou normal (~7min delay forward chain, SPF/DKIM/DMARC PASS); Sentry sender direto pra dosy.med@gmail.com bypass ImprovMX. Fix: 9º filter Gmail `from:(getsentry.com OR sentry.io)` Never Spam + Mark important + 5 emails Sentry resgatados Spam→Inbox manual. +**Plano egress otimização escala** — investigação Supabase Dashboard cycle 8.74 GB / 250 GB Pro com 4 MAU (=3.75 GB/user/mês ≈ 30× padrão SaaS healthcare). Storm pré-#157 dominou (7.2 GB May 5 → 0.5 GB May 6, redução 14×). Items NOVOS P1 MELHORIAS: **#163** RPC consolidado Dashboard `get_dashboard_payload` (-40% a -60% Dashboard); **#164** Realtime broadcast vez postgres_changes streaming (combinado retomar #157, -80% a -90% Realtime); **#165** Delta sync doses + TanStack persist IndexedDB offline-first (-70% a -90% reads steady state). Items NOVOS P2: **#166** MessagePack Edge functions payload + compression headers (50-70% menor payload); **#167** Cursor pagination + DOSE_COLS_LIST aggressive (status int code) + Supavisor transaction mode pooler. Combined target: 5-10× redução egress = preparar Open Testing/Production scale. Counter: 114 fechados / 49 abertos + 2 BLOQUEADOS (5 NOVOS P1+P2 escala).
 
 ---
 
@@ -576,6 +576,14 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ✅ **#157** [P0 v0.2.1.0 NOVO — fechado commit `da61b04`] Disable `useRealtime()` App.jsx — fix storm 12 req/s sustained idle. Storm 99.7% eliminado pós-fix (9 reqs/7min idle = 0.021 req/s). Bug PRÉ-EXISTENTE master. Plano retomar v0.2.2.0+: populate publication `supabase_realtime` + refactor reconnect guard.
 
 #### 🟠 P1 — Alta
+
+> **Plano egress otimização escala (2026-05-06):** baseline cycle atual 8.74 GB / 250 GB Pro com 4 MAU = ~3.75 GB/user/mês (30× padrão SaaS). Storm pré-#157 dominou (~7.2 GB May 5; pós-fix ~0.5 GB/dia). Pós steady state esperado ainda 5-15 GB/mês com user único; com 100+ users heavy estourará Pro 250 GB. Items #163-#167 preparam escala Open Testing/Production (objetivo ≤500 MB/user/mês = 5 GB/mês com 10 users / 50 GB/mês com 100 users — 5-10× redução).
+
+- ⏳ **#163** [P1 cost escala v0.2.1.4 NOVO] **RPC consolidado Dashboard `get_dashboard_payload`.** Dashboard hoje faz 4 queries paralelas (doses + patients + treatments + extend_continuous_treatments rpc). Substituir por single RPC `get_dashboard_payload(user_id)` retornando JSON consolidado: `{doses:[...], patients:[...], treatments:[...], stats:{overdue:N,upcoming:N}}`. Reduz round-trips 4→1 + payload duplicado eliminado (cada query carrega user/auth context separado). Esperado -40% a -60% Dashboard egress. Esforço 3-4h. Detalhe completo CHECKLIST §#163.
+- ⏳ **#164** [P1 cost escala v0.2.1.4 NOVO — combinado retomar #157] **Realtime broadcast healthcare alerts** (em vez postgres_changes streaming). Hoje #157 disabled `useRealtime()` por storm publication empty + reconnect cascade. Retomar via padrão **broadcast** (server pushes evento delta ~1KB) ao invés de **postgres_changes** (cliente refetch full row 50KB). Edge function `dose-trigger-handler` envia `realtime.send({type:'dose_update', payload:{id, status, takenAt}})` → cliente recebe + patch cache local. Bypass refetch network completo. Esperado -80% a -90% Realtime egress + retoma sync multi-device. Pré-req: refactor reconnect guard + populate publication `supabase_realtime` SE precisar postgres_changes paralelo. Esforço 4-6h. Detalhe completo CHECKLIST §#164.
+- ⏳ **#165** [P1 cost escala v0.2.1.4 NOVO] **Delta sync doses + TanStack persist IndexedDB offline-first.** (a) `listDoses(?since=lastSyncedAt)` server-side filter `WHERE updatedAt > since` retorna só rows mudadas após último sync (initial pull pesado, depois ~zero idle); (b) TanStack Query persist plugin (`@tanstack/query-persist-client`) salva cache em IndexedDB → app abre renderiza cache local instant + background refetch só se >5min stale; (c) staleTime bump 15min → 30min combinado com persist. Esperado -70% a -90% reads steady state + UX offline-first. Esforço 3-5h. Detalhe completo CHECKLIST §#165.
+- ⏳ **#166** [P2 cost escala v0.2.1.4 NOVO] **MessagePack Edge functions payload + compression.** Edge functions (`dose-trigger-handler`, `schedule-alarms-fcm`, `notify-doses`, `send-test-push`) hoje retornam JSON. Trocar por **MessagePack** binary (`@msgpack/msgpack` deno port) → 50-70% menor payload. Cliente decode no fetch wrapper. Verificar `Accept-Encoding: br,gzip` headers Supabase + Vercel CDN explicit. Esforço 2-3h. Detalhe completo CHECKLIST §#166.
+- ⏳ **#167** [P2 cost escala v0.2.1.4 NOVO] **Cursor pagination + selective columns aggressive + Supavisor transaction mode.** (a) Trocar offset pagination por cursor (`?after=last_id`) em listDoses/listTreatments — evita re-pull rows; (b) DOSE_COLS_LIST mais aggressive (status int code `0=scheduled 1=taken 2=skipped 3=overdue` em vez string + drop campos read-rare); (c) Supavisor transaction mode pooler em vez direct conn (reduz handshake overhead 200-400 bytes/request). Esforço 3-5h. Detalhe completo CHECKLIST §#167.
 
 - ✅ **#010** [Auditoria, fechado v0.2.0.6 commit `cbfc813`] `ic_stat_dosy` notification icon — vector drawable 24dp + 3 paths Java migrados + setColor accent peach.
 - ✅ **#011** [Auditoria, fechado v0.1.7.4] `<label>` em inputs Login (TalkBack + screen readers).
@@ -844,19 +852,21 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~162 itens
+- **Total:** ~167 itens
   - ✅ 115 fechados
-  - ⏳ 41 abertos
+  - ⏳ 46 abertos
   - 🚨 2 BLOQUEADOS Google review
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (43 total ⏳/🚨):**
+- **Distribuição por categoria abertos (48 total ⏳/🚨):**
   - 🚀 IMPLEMENTAÇÃO: 10 (6 P0 + 2 P1 + 2 P2)
-  - ✨ MELHORIAS: 30 (6 P2 + 24 P3)
+  - ✨ MELHORIAS: 35 (3 P1 + 8 P2 + 24 P3)
   - 🐛 BUGS: 3 (P2)
   - 🔄 TURNAROUND: 0
 - **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
+- **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
 - **Esforço P0 restante até Production:** ~3-5 dias manual user (recrutamento + 14d gate testers) + variável (Google review #158 1-3 semanas)
-- **Wallclock até Open Testing pública:** ~5-7 semanas (rejection #158 fix → Closed Testing 14d gate → ramp → estabilização)
+- **Esforço P1 escala egress:** ~12-18h código (#163-#167 distribuído próximas releases)
+- **Wallclock até Open Testing pública:** ~5-7 semanas (rejection #158 fix → Closed Testing 14d gate → ramp → estabilização) — egress otimização em paralelo
 
 ---
 

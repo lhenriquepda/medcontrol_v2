@@ -2776,3 +2776,573 @@ const warningSilent = intervalHours >= 24 && dosesPossiveis < 2
 - ✅ Texto warning calcula dosesPossiveis correto
 - ✅ Sugestão de "Aumente para Xd" arredonda pra cima
 - ✅ Validado no preview Vercel via Chrome MCP (Regra 9.1)
+
+---
+
+## Plano egress otimização escala (preparar Open Testing/Production)
+
+> **Contexto investigação 2026-05-06:** Supabase Pro cycle (05 May - 05 Jun) consumiu 8.74 GB / 250 GB com 4 MAU = **3.75 GB/user/mês** (~30× padrão SaaS healthcare 50-200 MB/user/mês). Storm pré-#157 dominou cycle (May 5 = 7.2 GB, May 6 pós-fix = 0.5 GB, **redução 14× dia-a-dia**). Steady state estimado pós #157 fix: ~15 GB/mês com user atual. Math escala: 100 users heavy = ~375 GB/mês → ESTOURA Pro 250 GB. Items #163-#167 preparam escala Open Testing/Production (objetivo ≤500 MB/user/mês = 5-10× redução combined).
+>
+> **Sequência sugerida** (ordem dependência + ROI):
+> 1. **#163** RPC consolidado Dashboard (3-4h, -40% a -60% Dashboard egress, low risk)
+> 2. **#165** Delta sync + TanStack persist (3-5h, -70% a -90% reads steady state, médio risk)
+> 3. **#164** Realtime broadcast (4-6h, -80% a -90% Realtime, alto ROI mas requer #157 retomar coordenado)
+> 4. **#166** MessagePack + compression (2-3h, 50-70% payload, low risk)
+> 5. **#167** Cursor pagination + cols aggressive + Supavisor (3-5h, marginal mas estrutural)
+>
+> Total esforço: **~12-18h código distribuído v0.2.2.0+ → v0.2.3.0+**.
+
+### #163 — RPC consolidado Dashboard `get_dashboard_payload`
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — preparar Open Testing)
+- **Origem:** Investigação egress 2026-05-06 (3.75 GB/user/mês = 30× padrão SaaS)
+- **Esforço:** 3-4h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Dashboard atual faz 4 queries paralelas em paralelo no mount:
+- `useDoses(filter)` → listDoses RPC
+- `usePatients()` → listPatients
+- `useTreatments()` → listTreatments
+- `extend_continuous_treatments` rpc
+
+Cada query carrega:
+- Auth context (set_config search_path + auth.uid + JWT decode) ~1-2 KB
+- Response payload (rows + duplicate metadata)
+- HTTP overhead (headers + TLS handshake reuse)
+
+Resultado: 4× round-trip + ~4× auth overhead duplicado. PostgREST + RLS context per request.
+
+**Abordagem:**
+
+Migration: criar SQL function `medcontrol.get_dashboard_payload(p_user_id uuid)` SECURITY DEFINER com `SET search_path = medcontrol, public`:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.get_dashboard_payload(p_user_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = medcontrol, public
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  -- Auth check (caller deve ser user)
+  IF auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT jsonb_build_object(
+    'doses', (
+      SELECT coalesce(jsonb_agg(d ORDER BY "scheduledAt"), '[]'::jsonb)
+      FROM (
+        SELECT id, "patientId", "treatmentId", "medName", dose, unit, "scheduledAt", "takenAt", status
+        FROM medcontrol.doses
+        WHERE "userId" = p_user_id
+          AND "scheduledAt" >= now() - interval '30 days'
+          AND "scheduledAt" <= now() + interval '60 days'
+        ORDER BY "scheduledAt"
+        LIMIT 500
+      ) d
+    ),
+    'patients', (
+      SELECT coalesce(jsonb_agg(p), '[]'::jsonb)
+      FROM (
+        SELECT id, name, "ageMonths", weight, avatar, "photoVersion", "isShared"
+        FROM medcontrol.patients
+        WHERE "ownerId" = p_user_id OR id IN (
+          SELECT "patientId" FROM medcontrol.patient_shares WHERE "sharedWithUserId" = p_user_id
+        )
+      ) p
+    ),
+    'treatments', (
+      SELECT coalesce(jsonb_agg(t), '[]'::jsonb)
+      FROM (
+        SELECT id, "patientId", "medName", dose, unit, "intervalHours", "isContinuous", "durationDays", "startDate", status
+        FROM medcontrol.treatments
+        WHERE "userId" = p_user_id
+      ) t
+    ),
+    'stats', (
+      SELECT jsonb_build_object(
+        'overdue', count(*) FILTER (WHERE status = 'overdue'),
+        'upcoming_24h', count(*) FILTER (WHERE status = 'scheduled' AND "scheduledAt" <= now() + interval '24 hours')
+      )
+      FROM medcontrol.doses
+      WHERE "userId" = p_user_id
+    ),
+    'serverTime', extract(epoch from now())::int
+  ) INTO result;
+
+  RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION medcontrol.get_dashboard_payload(uuid) TO authenticated;
+```
+
+Frontend: novo hook `useDashboardPayload(userId)`:
+
+```js
+// src/hooks/useDashboardPayload.js
+export function useDashboardPayload() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['dashboard', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_dashboard_payload', { p_user_id: user.id })
+      if (error) throw error
+      return data
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+    refetchInterval: 15 * 60_000, // 15min, opt-in só Dashboard
+  })
+}
+```
+
+Dashboard.jsx — substituir 4 hooks por 1:
+
+```js
+// Antes
+const { data: doses } = useDoses(filter)
+const { data: patients } = usePatients()
+const { data: treatments } = useTreatments()
+useEffect(() => extendContinuous(), [])
+
+// Depois
+const { data: payload } = useDashboardPayload()
+const { doses = [], patients = [], treatments = [], stats } = payload || {}
+```
+
+**Dependências:**
+- Migration SQL nova (testar local + apply prod)
+- Hook novo `useDashboardPayload`
+- Refactor Dashboard.jsx (manter compat outras telas que usam useDoses/usePatients separados)
+
+**Critério de aceitação:**
+- ✅ Migration aplica sem erro
+- ✅ RPC retorna payload completo Dashboard render OK
+- ✅ Auth check funciona (caller != p_user_id retorna error)
+- ✅ Validação Chrome MCP preview: Dashboard 1 fetch (vez de 4) + payload size ≤60% original combinado
+- ✅ Sentry sem regressões (DOSY-* events)
+
+**Métrica esperada:**
+- -40% a -60% Dashboard egress
+- -75% Dashboard request count (4 → 1)
+- Round-trip time -300ms (4 paralelas → 1 single)
+
+---
+
+### #164 — Realtime broadcast healthcare alerts (combinado retomar #157)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — combinado retomar #157)
+- **Origem:** Investigação egress 2026-05-06 + plano retomar #157 v0.2.2.0+
+- **Esforço:** 4-6h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+#157 disabled `useRealtime()` em App.jsx (commit `da61b04`) por storm 12 req/s sustained idle. Root cause: publication `supabase_realtime` vazia + reconnect cascade gerava `ChannelRateLimitReached` + refetch loop. Mas **realtime sync é necessário** pra UX multi-device (user marca dose tomada num device → outro device vê instantâneo).
+
+Solução tradicional `postgres_changes` streaming:
+- Cliente subscribe canal `realtime:medcontrol.doses`
+- Cada UPDATE/INSERT no DB → server envia full row pro cliente
+- Cliente recebe row 50KB → invalidate query → refetch full list 200KB
+
+Padrão **broadcast** (Supabase Realtime channels):
+- Edge function envia `supabase.channel('user:<userId>').send({type:'broadcast', event:'dose_update', payload:{id, status, takenAt}})`
+- Cliente subscribe canal user-scoped → recebe payload customizado ~1KB (só campos mudados)
+- Patch cache local diretamente via `qc.setQueryData(['doses'], (old) => old.map(d => d.id === payload.id ? {...d, ...payload} : d))`
+- Bypass refetch network completo
+
+**Abordagem:**
+
+Server side — modificar Edge `dose-trigger-handler` (cron + INSERT trigger):
+
+```ts
+// supabase/functions/dose-trigger-handler/index.ts
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+async function broadcastDoseUpdate(userId: string, doseUpdate: {id, status, takenAt?, scheduledAt?}) {
+  const channel = supabase.channel(`user:${userId}`)
+  await channel.send({
+    type: 'broadcast',
+    event: 'dose_update',
+    payload: doseUpdate
+  })
+}
+
+// Após INSERT/UPDATE dose:
+await broadcastDoseUpdate(userId, { id, status: 'taken', takenAt: new Date().toISOString() })
+```
+
+Client side — novo hook `useUserBroadcast`:
+
+```js
+// src/hooks/useUserBroadcast.js
+import { useEffect } from 'react'
+import { useAuth } from './useAuth'
+import { useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../lib/supabaseClient'
+
+export function useUserBroadcast() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`user:${user.id}`)
+      .on('broadcast', { event: 'dose_update' }, ({ payload }) => {
+        // Patch cache local sem refetch
+        qc.setQueriesData({ queryKey: ['doses'] }, (old) => {
+          if (!Array.isArray(old)) return old
+          return old.map(d => d.id === payload.id ? { ...d, ...payload } : d)
+        })
+        qc.setQueryData(['dashboard', user.id], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            doses: old.doses.map(d => d.id === payload.id ? { ...d, ...payload } : d)
+          }
+        })
+      })
+      .on('broadcast', { event: 'patient_update' }, ({ payload }) => {
+        // Similar pra patients
+      })
+      .on('broadcast', { event: 'treatment_update' }, ({ payload }) => {
+        // Similar pra treatments
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, qc])
+}
+```
+
+App.jsx — re-enable mas usando broadcast:
+
+```js
+// Antes (#157 disabled): // useRealtime()
+// Agora:
+useUserBroadcast()
+```
+
+**Dependências:**
+- Edge functions modificadas (dose-trigger-handler + handler PATCH/DELETE)
+- Hook novo client
+- Manter `useRealtime.js` desabled (postgres_changes stream substituído)
+- Validação multi-device
+
+**Critério de aceitação:**
+- ✅ Marcar dose tomada device A → device B atualiza ≤2s sem refetch
+- ✅ Network tab: payload broadcast event ≤1.5 KB (vs ~50 KB postgres_changes)
+- ✅ Idle 5min sem requests automáticos (broadcast só dispara em events)
+- ✅ Reconnect resiliente (sem cascade storm #157)
+- ✅ Validação Chrome MCP preview Vercel: idle 5min = 0 fetches
+
+**Métrica esperada:**
+- -80% a -90% Realtime egress
+- Latência sync multi-device <2s
+- Zero idle polling
+
+---
+
+### #165 — Delta sync doses + TanStack persist IndexedDB offline-first
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — UX offline-first)
+- **Origem:** Investigação egress 2026-05-06 (steady state still high)
+- **Esforço:** 3-5h
+- **Release sugerida:** v0.2.2.0+ ou v0.2.3.0+
+
+**Problema:**
+
+Hoje cliente abre app → 4 queries paralelas full pull (doses 30d + patients all + treatments all). Mesmo com staleTime 15min (#150), navigate entre rotas + refresh manual + open app revisita cache mas não persiste entre sessions (TanStack Query in-memory only).
+
+Ideal: cache persist entre sessions + initial render instant + delta sync background only.
+
+**Abordagem:**
+
+(a) **Server-side delta filter** — adicionar `?since=lastSyncedAt` em listDoses:
+
+```js
+// src/services/dosesService.js
+export async function listDoses({ from, to, status, since }) {
+  let q = supabase.schema('medcontrol').from('doses').select(DOSE_COLS_LIST)
+  if (from) q = q.gte('scheduledAt', from)
+  if (to) q = q.lte('scheduledAt', to)
+  if (status) q = q.eq('status', status)
+  if (since) q = q.gt('updatedAt', since) // ← novo filter delta
+  return q.order('scheduledAt')
+}
+```
+
+useDoses tracks `lastSyncedAt` via localStorage:
+
+```js
+// src/hooks/useDoses.js
+const lastSyncedAt = localStorage.getItem('dosy_doses_last_sync') || '1970-01-01'
+const { data: deltaRows } = useQuery({
+  queryKey: ['doses', 'delta', lastSyncedAt],
+  queryFn: async () => {
+    const rows = await listDoses({ since: lastSyncedAt })
+    if (rows.length > 0) {
+      localStorage.setItem('dosy_doses_last_sync', new Date().toISOString())
+    }
+    return rows
+  },
+  staleTime: 30_000,
+})
+```
+
+Patch cache local com delta rows ao invés de full list refetch.
+
+(b) **TanStack persist plugin** — instalar `@tanstack/query-persist-client` + `@tanstack/query-async-storage-persister`:
+
+```bash
+npm i @tanstack/query-persist-client @tanstack/query-async-storage-persister idb-keyval
+```
+
+```js
+// src/main.jsx
+import { persistQueryClient } from '@tanstack/query-persist-client'
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
+import { get, set, del } from 'idb-keyval'
+
+const persister = createAsyncStoragePersister({
+  storage: { getItem: get, setItem: set, removeItem: del },
+  key: 'dosy-query-cache',
+  throttleTime: 2000,
+})
+
+persistQueryClient({
+  queryClient,
+  persister,
+  maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+  buster: __APP_VERSION__, // invalida cache em deploy novo
+  dehydrateOptions: {
+    shouldDehydrateQuery: (q) => {
+      // Persist só queries safe (não auth, não temp)
+      return ['doses', 'patients', 'treatments', 'dashboard'].includes(q.queryKey[0])
+    },
+  },
+})
+```
+
+(c) **staleTime bump** combinado: 15min → 30min (cache persist garante boot instant + delta sync atualiza background).
+
+**Dependências:**
+- Migration: garantir `updatedAt` index em medcontrol.doses (`CREATE INDEX IF NOT EXISTS idx_doses_updated_at ON medcontrol.doses("userId", "updatedAt") WHERE "updatedAt" IS NOT NULL`)
+- Trigger: garantir `updatedAt` auto-update em todas mutations
+- IndexedDB compat (Capacitor WebView OK; older Android <7.0 sem fallback)
+
+**Critério de aceitação:**
+- ✅ App restart → render Dashboard ≤500ms (cache local instant)
+- ✅ Cache persist sobrevive force stop + reabrir
+- ✅ Delta sync 1 request retorna só rows mudadas (verificar payload size)
+- ✅ Cache invalida em deploy novo (buster __APP_VERSION__)
+- ✅ Validação Chrome MCP: idle 5min sem app aberto + reabrir = boot rápido + 1 delta fetch ≤5KB
+
+**Métrica esperada:**
+- -70% a -90% reads steady state (após initial pull pesado)
+- Boot time -800ms (cache local vs network round-trip)
+- UX offline-first (modo avião funcional read-only)
+
+---
+
+### #166 — MessagePack Edge functions payload + compression headers
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — payload size optimization)
+- **Origem:** Investigação egress 2026-05-06
+- **Esforço:** 2-3h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+Edge functions atuais (`dose-trigger-handler`, `schedule-alarms-fcm`, `notify-doses`, `send-test-push`) retornam JSON. JSON tem overhead significativo: keys repetidos em arrays, strings numbers, null verbose. MessagePack binary ~50-70% menor pra mesmo payload.
+
+Compression: Supabase serve gzip por default. Verificar headers cliente `Accept-Encoding: br, gzip` (Brotli melhor que gzip — verificar Vercel CDN pass-through).
+
+**Abordagem:**
+
+(a) **MessagePack** Edge functions:
+
+```ts
+// supabase/functions/dose-trigger-handler/index.ts
+import { encode } from 'jsr:@msgpack/msgpack'
+
+return new Response(encode(payload), {
+  headers: {
+    'Content-Type': 'application/x-msgpack',
+    'Cache-Control': 'no-store',
+  },
+})
+```
+
+Cliente decode no fetch wrapper:
+
+```js
+// src/lib/supabaseClient.js fetch interceptor
+import { decode } from '@msgpack/msgpack'
+
+const origFetch = window.fetch
+window.fetch = async (...args) => {
+  const resp = await origFetch(...args)
+  if (resp.headers.get('content-type')?.includes('application/x-msgpack')) {
+    const buf = await resp.arrayBuffer()
+    const data = decode(buf)
+    return new Response(JSON.stringify(data), {
+      status: resp.status,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  return resp
+}
+```
+
+(b) **Compression headers** verify:
+
+```js
+// Adicionar Accept-Encoding em todos fetches
+fetch(url, {
+  headers: {
+    'Accept-Encoding': 'br, gzip, deflate',
+  },
+})
+```
+
+Verificar Vercel `vercel.json` headers config:
+
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Accept-CH", "value": "Save-Data" }
+      ]
+    }
+  ]
+}
+```
+
+**Dependências:**
+- `@msgpack/msgpack` deno port (server) + npm pkg (client)
+- Fetch wrapper compat (não quebrar JSON endpoints PostgREST)
+
+**Critério de aceitação:**
+- ✅ Edge function retorna application/x-msgpack
+- ✅ Cliente decode + render OK
+- ✅ Network tab: payload binary ≤50% size original JSON
+- ✅ Brotli compression aplicado pelo Vercel CDN (verificar `content-encoding: br`)
+- ✅ Sentry sem regressões parsing
+
+**Métrica esperada:**
+- -50% a -70% Edge function payload size
+- -10% a -20% adicional via Brotli vs Gzip
+
+---
+
+### #167 — Cursor pagination + selective columns aggressive + Supavisor pooler
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — estrutural)
+- **Origem:** Investigação egress 2026-05-06
+- **Esforço:** 3-5h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+(a) **Offset pagination** atual (`?from=N&to=M`) força server re-scan rows skipped. Cursor pagination (`?after=last_id`) usa index seek direto.
+
+(b) **DOSE_COLS_LIST** já reduzido (#138 sem observation). Pode ir mais aggressive: status string `'scheduled' | 'taken' | 'skipped' | 'overdue'` → int code `0 | 1 | 2 | 3` (1 byte vs 8-9 bytes). Drop campos read-rare (`updatedBy`, `createdBy` em listas).
+
+(c) **Supavisor transaction mode** — Supabase Pro inclui pooler. Trocar direct conn por `aws-0-sa-east-1.pooler.supabase.com:6543` pra reduzir handshake overhead 200-400 bytes/request (PG handshake + RLS context setup mais leve em pooled conn).
+
+**Abordagem:**
+
+(a) **Cursor pagination**:
+
+```js
+// src/services/dosesService.js
+export async function listDosesCursor({ after, limit = 100 }) {
+  let q = supabase.schema('medcontrol').from('doses').select(DOSE_COLS_LIST)
+    .order('scheduledAt')
+    .order('id') // tiebreaker
+    .limit(limit)
+  if (after) {
+    const [scheduledAt, id] = after.split('|')
+    q = q.or(`scheduledAt.gt.${scheduledAt},and(scheduledAt.eq.${scheduledAt},id.gt.${id})`)
+  }
+  const { data } = await q
+  const lastRow = data[data.length - 1]
+  const nextCursor = lastRow ? `${lastRow.scheduledAt}|${lastRow.id}` : null
+  return { rows: data, nextCursor }
+}
+```
+
+(b) **Status int code** — migration:
+
+```sql
+ALTER TABLE medcontrol.doses
+  ADD COLUMN status_code smallint;
+
+UPDATE medcontrol.doses SET status_code = CASE status
+  WHEN 'scheduled' THEN 0
+  WHEN 'taken' THEN 1
+  WHEN 'skipped' THEN 2
+  WHEN 'overdue' THEN 3
+END;
+
+CREATE INDEX idx_doses_status_code ON medcontrol.doses("userId", status_code);
+```
+
+DOSE_COLS_LIST drop string `status` da lista, usar `status_code`. Frontend decode:
+
+```js
+const STATUS_DECODE = { 0: 'scheduled', 1: 'taken', 2: 'skipped', 3: 'overdue' }
+const STATUS_ENCODE = Object.fromEntries(Object.entries(STATUS_DECODE).map(([k, v]) => [v, +k]))
+```
+
+(c) **Supavisor pooler** — trocar URL `.env`:
+
+```env
+# Antes
+VITE_SUPABASE_URL=https://guefraaqbkcehofchnrc.supabase.co
+
+# Depois (transaction mode pooler)
+VITE_SUPABASE_URL=https://guefraaqbkcehofchnrc.supabase.co  # API gateway mantém
+# Direct DB conn (SSR/Edge) usa pooler
+DATABASE_URL=postgres://postgres.guefraaqbkcehofchnrc:[pwd]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+```
+
+Edge functions usar `DATABASE_URL` pooler.
+
+**Dependências:**
+- Migration status_code + index
+- Refactor frontend status display (manter compat string display)
+- Pool conn URL Edge functions
+
+**Critério de aceitação:**
+- ✅ Cursor pagination retorna rows consistentes (sem duplicate/skip em concurrent INSERT)
+- ✅ Status int code: payload list -8 bytes/row (1500 doses = -12 KB save)
+- ✅ Supavisor pooler conn estável (Edge function logs sem timeout/disconnect)
+- ✅ Sentry sem regressões
+
+**Métrica esperada:**
+- Marginal -5% a -10% por item, mas cumulativo estrutural longprazo
+- Permite scale 1000+ users sem re-arq major
