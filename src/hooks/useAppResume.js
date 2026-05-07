@@ -40,8 +40,30 @@ export function useAppResume() {
         console.log('[useAppResume] long idle', Math.round(inactiveMs / 1000), 's → soft recover')
         try {
           // 1. Renovar JWT — Supabase rotaciona refresh token automaticamente.
-          // Se refresh token expirou, retorna error e auth listener faz signOut.
-          await supabase.auth.refreshSession()
+          //
+          // Item #190 (release v0.2.1.3) FIX BUG-LOGOUT-RESUME (extends #159):
+          // distinguir refresh transient errors (network slow, timeout, 5xx,
+          // SecureStorage hiccup) vs real auth failures (refresh_token revoked,
+          // user deleted, JWT corrupt). Implementação anterior tratava QUALQUER
+          // erro como falha — onAuthStateChange disparava SIGNED_OUT em network
+          // glitch. Resultado: user deslogado toda vez voltava de >5min idle
+          // com network instável (Android Doze + cellular fluctuations típicos).
+          // Agora: signOut só se evidência forte de invalid refresh token. Outros
+          // erros: log + preservar session, próxima request authenticated re-valida.
+          const { error: refreshErr } = await supabase.auth.refreshSession()
+          if (refreshErr) {
+            const errMsg = refreshErr.message || ''
+            const errStatus = refreshErr.status
+            const isAuthFailure =
+              errStatus === 401 ||
+              errStatus === 403 ||
+              /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
+            if (!isAuthFailure) {
+              console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
+            } else {
+              console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
+            }
+          }
           // 2. Drop dead websocket channels — useRealtime resubscribe via
           //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
           await supabase.removeAllChannels()
@@ -52,9 +74,13 @@ export function useAppResume() {
           //    sozinho re-executa só queries observadas.
           await qc.refetchQueries({ type: 'active' })
         } catch (err) {
-          console.warn('[useAppResume] soft recover failed', err)
-          // Fallback de último caso: reload preservando URL atual.
-          if (typeof window !== 'undefined') window.location.reload()
+          // Item #190 (release v0.2.1.3): NÃO forçar reload em catch.
+          // Reload remonta React tree → useAuth init → getUser() boot check.
+          // Se network ainda instável, getUser() falha → cascade signOut.
+          // Preservar session local + log. Próxima request authenticated
+          // vai re-validar OR onAuthStateChange dispara SIGNED_OUT se token
+          // realmente revogado.
+          console.warn('[useAppResume] soft recover network exception (keeping session):', err?.message || err)
         }
       }
       // Item #134 (egress-audit-2026-05-05 F1): short idle (<5min) NÃO invalida

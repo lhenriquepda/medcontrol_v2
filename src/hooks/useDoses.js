@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listDoses, confirmDose, skipDose, undoDose, registerSos, listSosRules, upsertSosRule } from '../services/dosesService'
 import { track, EVENTS } from '../services/analytics'
+import { incrementReviewSignal } from './useInAppReview'
 
 // #092 (release v0.1.7.5) — queryKey timestamp normalization.
 // Callers tipicamente passam `new Date().toISOString()` em filter.from/to,
@@ -91,7 +92,11 @@ export function useConfirmDose() {
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
-    onSuccess: () => track(EVENTS.DOSE_CONFIRMED),
+    onSuccess: () => {
+      track(EVENTS.DOSE_CONFIRMED)
+      // #170 (v0.2.1.3) — engagement signal pra in-app review trigger
+      incrementReviewSignal('dose_confirmed')
+    },
     onSettled: () => refetchDoses(qc)
   })
 }

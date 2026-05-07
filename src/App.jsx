@@ -28,6 +28,7 @@ const FAQ = lazy(() => import('./pages/FAQ'))
 import { useAuth } from './hooks/useAuth'
 import { useRealtime } from './hooks/useRealtime'
 import { useAppResume } from './hooks/useAppResume'
+import { useInAppReview, incrementReviewSignal } from './hooks/useInAppReview'
 import { track, EVENTS } from './services/analytics'
 import { useAdMobBanner } from './hooks/useAdMobBanner'
 import { usePushNotifications } from './hooks/usePushNotifications'
@@ -67,6 +68,10 @@ export default function App() {
   // useRealtime()
   useAppResume()
   useAdMobBanner()
+  // #170 (v0.2.1.3) — In-App Review smart prompt trigger.
+  // Hook agenda check 30s pós mount + verifica conditions
+  // (≥7d install + ≥3 doses confirmed + ≥1 alarm fired + active <24h).
+  useInAppReview()
   const { locked, biometricAvailable, unlock } = useAppLock()
   const [showSummary, setShowSummary] = useState(false)
   // Tour shows after permissions modal closes (granted OR skipped). Web also shows immediately
@@ -172,6 +177,10 @@ export default function App() {
           type: notif?.extra?.type,
           hasDoseId: Boolean(notif?.extra?.doseId || notif?.extra?.doseIds)
         })
+        // #170 (v0.2.1.3) — alarm validated signal pra in-app review trigger
+        if (notif?.extra?.doseId || notif?.extra?.doseIds) {
+          incrementReviewSignal('alarm_fired')
+        }
       })
 
       // LocalNotifications tap (alarmes agendados — doses + resumo)

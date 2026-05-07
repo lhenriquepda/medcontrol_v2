@@ -58,6 +58,12 @@ export default function TreatmentForm() {
     dailyTimes: ['08:00'],
     durationDays: 7,
     isContinuous: false,
+    // #162 v2 (v0.2.1.3) — duration UI granularity (días/semanas/meses).
+    // Persiste durationDays internamente (single source of truth);
+    // durationUnit + durationValue são UI-only state.
+    // Auto-switch baseado em intervalHours (semanal → semanas, etc).
+    durationUnit: 'days', // 'days' | 'weeks' | 'months'
+    durationValue: 7,
     startAt: toDatetimeLocalInput(new Date().toISOString()),
     firstDoseTime: '08:00',
     saveAsTemplate: false,
@@ -73,6 +79,16 @@ export default function TreatmentForm() {
       if (mode === 'times' && existing.firstDoseTime) {
         try { dailyTimes = JSON.parse(existing.firstDoseTime) } catch { dailyTimes = [existing.firstDoseTime] }
       }
+      // #162 v2 — detecta best unit pra display existing durationDays.
+      // Prioriza maior unit que divide perfeitamente (e.g. 28d → 4 semanas, não 28 dias).
+      const days = existing.isContinuous ? CONTINUOUS_DAYS : existing.durationDays
+      let unit = 'days'
+      let value = days
+      if (days > 0 && days % 30 === 0 && days >= 30) {
+        unit = 'months'; value = days / 30
+      } else if (days > 0 && days % 7 === 0 && days >= 7) {
+        unit = 'weeks'; value = days / 7
+      }
       setForm((f) => ({
         ...f,
         patientId: existing.patientId,
@@ -81,7 +97,9 @@ export default function TreatmentForm() {
         mode,
         intervalHours: existing.intervalHours || 8,
         dailyTimes,
-        durationDays: existing.isContinuous ? CONTINUOUS_DAYS : existing.durationDays,
+        durationDays: days,
+        durationUnit: unit,
+        durationValue: value,
         isContinuous: !!existing.isContinuous,
         startAt: toDatetimeLocalInput(existing.startDate),
         firstDoseTime: mode === 'interval' ? (existing.firstDoseTime || '08:00') : '08:00',
@@ -94,6 +112,42 @@ export default function TreatmentForm() {
   function addTime() { setForm((f) => ({ ...f, dailyTimes: [...f.dailyTimes, '12:00'] })) }
   function removeTime(i) { setForm((f) => ({ ...f, dailyTimes: f.dailyTimes.filter((_, idx) => idx !== i) })) }
   function setTime(i, v) { setForm((f) => ({ ...f, dailyTimes: f.dailyTimes.map((t, idx) => idx === i ? v : t) })) }
+
+  // #162 v2 — duration unit conversion helpers
+  const DURATION_MULTIPLIER = { days: 1, weeks: 7, months: 30 }
+
+  // Update durationDays + durationValue mantendo durationUnit
+  function setDurationValue(v) {
+    setForm((f) => {
+      const value = Number(v) || 0
+      const days = value * DURATION_MULTIPLIER[f.durationUnit]
+      return { ...f, durationValue: v, durationDays: days }
+    })
+    if (errors.durationDays) setErrors({ ...errors, durationDays: undefined })
+  }
+
+  // Trocar unit recalcula durationDays preservando intent user (ex: 4 semanas → 28 dias)
+  function setDurationUnit(unit) {
+    setForm((f) => {
+      const days = (Number(f.durationValue) || 0) * DURATION_MULTIPLIER[unit]
+      return { ...f, durationUnit: unit, durationDays: days }
+    })
+  }
+
+  // Auto-switch unit baseado em intervalHours quando user muda interval (não em edit existing).
+  useEffect(() => {
+    if (existing) return // Não auto-switch em edit mode (preserva escolha original)
+    if (form.mode !== 'interval') return
+    const ih = Number(form.intervalHours)
+    let newUnit
+    if (ih === 720) newUnit = 'months'           // mensal
+    else if (ih === 168 || ih === 336) newUnit = 'weeks' // semanal/quinzenal
+    else newUnit = 'days'                        // 4h, 6h, 8h, 12h, 24h, 48h, 72h
+    if (newUnit !== form.durationUnit) {
+      setDurationUnit(newUnit)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.intervalHours, form.mode])
 
   async function submit(e) {
     e.preventDefault()
@@ -183,6 +237,24 @@ export default function TreatmentForm() {
     }
     return `${form.dailyTimes.length * days} doses${suffix}`
   }, [form])
+
+  // #162 (v0.2.1.3) — warning silent fail Mounjaro repro prevention.
+  // Quando intervalHours/24 > durationDays (ex: semanal 168h + 4 dias),
+  // só dispara 1 dose e auto-encerra. User não percebe = trust violation.
+  // Detalhe: paciente lhenrique.pda 2026-05-06 cadastrou Mounjaro semanal
+  // com durationDays=4 (literal) ao invés 28 (4 doses × 7d). effectiveStatus
+  // auto-ended dia 03/05 — alerta encerrando silenciou cedo.
+  const silentFailWarning = useMemo(() => {
+    if (form.isContinuous || form.mode !== 'interval') return null
+    const interval = Number(form.intervalHours || 0)
+    const duration = Number(form.durationDays || 0)
+    if (interval < 24 || duration <= 0) return null
+    const intervalDays = interval / 24
+    if (intervalDays <= duration) return null
+    const dosesPossiveis = Math.floor((duration * 24) / interval)
+    const sugerido = Math.ceil(intervalDays * 4) // sugere mínimo 4 doses
+    return { intervalDays: Math.round(intervalDays), duration, dosesPossiveis, sugerido }
+  }, [form.isContinuous, form.mode, form.intervalHours, form.durationDays])
 
   return (
     <motion.div
@@ -411,6 +483,51 @@ export default function TreatmentForm() {
             />
           </div>
 
+          {/* #162 v2 (v0.2.1.3) — toggle Dias/Semanas/Meses acima do input.
+              Auto-switch baseado em intervalHours (semanal→Semanas, mensal→Meses).
+              Internamente persiste durationDays (multiplier × value). */}
+          {!form.isContinuous && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+                color: 'var(--dosy-fg-secondary)',
+                fontFamily: 'var(--dosy-font-display)',
+                marginBottom: 6,
+              }}>Unidade da duração</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  { unit: 'days', label: 'Dias' },
+                  { unit: 'weeks', label: 'Semanas' },
+                  { unit: 'months', label: 'Meses' },
+                ].map(({ unit, label }) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    onClick={() => setDurationUnit(unit)}
+                    className="dosy-press"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px', borderRadius: 9999,
+                      fontSize: 13, fontWeight: 600,
+                      fontFamily: 'var(--dosy-font-body)',
+                      border: '1px solid var(--dosy-border)',
+                      background: form.durationUnit === unit
+                        ? 'var(--dosy-primary)'
+                        : 'var(--dosy-bg-elevated)',
+                      color: form.durationUnit === unit
+                        ? '#fff'
+                        : 'var(--dosy-fg)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{
             display: 'grid',
             gridTemplateColumns: form.isContinuous ? '1fr' : '1fr 1fr',
@@ -418,12 +535,16 @@ export default function TreatmentForm() {
           }}>
             {!form.isContinuous && (
               <Input
-                label="Duração (dias)"
+                label={
+                  form.durationUnit === 'weeks' ? 'Duração (semanas)'
+                  : form.durationUnit === 'months' ? 'Duração (meses)'
+                  : 'Duração (dias)'
+                }
                 type="number"
                 inputMode="numeric"
                 min={1}
-                value={form.durationDays}
-                onChange={(e) => { set('durationDays', e.target.value); if (errors.durationDays) setErrors({ ...errors, durationDays: undefined }) }}
+                value={form.durationValue}
+                onChange={(e) => setDurationValue(e.target.value)}
                 error={errors.durationDays}
               />
             )}
@@ -435,6 +556,31 @@ export default function TreatmentForm() {
             />
           </div>
         </Card>
+
+        {/* #162 (v0.2.1.3) Warning silent fail Mounjaro prevention */}
+        {silentFailWarning && (
+          <div role="alert" style={{
+            background: 'var(--dosy-warning-bg)',
+            border: '1px solid var(--dosy-warning)',
+            borderRadius: 12, padding: 12,
+            fontSize: 13.5, lineHeight: 1.5,
+            color: 'var(--dosy-fg)',
+            fontFamily: 'var(--dosy-font-body)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }} aria-hidden>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <strong>Atenção:</strong> Com intervalo de <strong>{silentFailWarning.intervalDays} dia{silentFailWarning.intervalDays > 1 ? 's' : ''}</strong>{' '}
+                e duração <strong>{silentFailWarning.duration} dia{silentFailWarning.duration > 1 ? 's' : ''}</strong>,
+                {' '}apenas <strong>{silentFailWarning.dosesPossiveis} dose{silentFailWarning.dosesPossiveis !== 1 ? 's' : ''}</strong>{' '}
+                {silentFailWarning.dosesPossiveis === 1 ? 'será agendada' : 'serão agendadas'}. O tratamento auto-encerra em {silentFailWarning.duration} dia{silentFailWarning.duration > 1 ? 's' : ''}.
+                <div style={{ fontSize: 12.5, marginTop: 6, opacity: 0.85 }}>
+                  Quer mais doses? Aumente <strong>"Duração"</strong> para pelo menos <strong>{silentFailWarning.sugerido} dias</strong> (4 doses), ou ative <strong>"Uso contínuo"</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <p style={{
           fontSize: 12.5, color: 'var(--dosy-fg-secondary)',

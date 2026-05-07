@@ -2717,14 +2717,51 @@ const onClickEnding = () => {
 **Pendente v0.2.2.0+ (não nesta release):**
 - TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. **Item criado: #162 (próxima release).**
 
-### #162 — TreatmentForm UX warning intervalHours/24 > durationDays (Mounjaro repro prevention)
+### #162 — TreatmentForm UX warning intervalHours/24 > durationDays + toggle granularidade Dias/Semanas/Meses
 
-- **Status:** ⏳ Aberto
+- **Status:** 🚧 v1 fechado v0.2.1.3 vc 50, v2 em curso v0.2.1.3 vc 51
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P2
-- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2)
-- **Esforço:** 1-2h
-- **Release sugerida:** v0.2.2.0+
+- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2) + feedback v1 2026-05-07
+- **Esforço:** 1-2h v1 + 2h v2
+- **Release:** v0.2.1.3 vc 50 (v1) + vc 51 (v2)
+
+**v1 (vc 50) — fechado:**
+Warning amarelo inline em form quando `intervalHours/24 > durationDays`. User valida cenários: 168h+4d trigger warning, 28d sem warning, 24h+30d sem warning, contínuo OFF/ON.
+
+**v2 (vc 51) — user feedback 2026-05-07 "ok mas não gostei":**
+
+User pediu mudar abordagem. Em vez de só warning, quer **toggle granularidade** acima do campo "Duração":
+
+- Toggle 3 chips: **Dias / Semanas / Meses** (default Dias)
+- Auto-switch baseado intervalHours:
+  - 4h, 6h, 8h, 12h, 24h, 48h, 72h → **Dias**
+  - 168h (semanal), 336h (quinzenal) → **Semanas**
+  - 720h (mensal) → **Meses**
+- Internamente persiste sempre `durationDays` (multiplier × value: ×1, ×7, ×30)
+- Edit mode detecta best unit pra display (ex: 28d → 4 semanas)
+
+Vantagem: user escolhe granularidade natural ao tipo tratamento. Mounjaro semanal → "4 semanas" (não "28 dias"). Anticoncepcional → "21 dias". Hormônio mensal → "6 meses".
+
+Implementation:
+- New state `durationUnit: 'days' | 'weeks' | 'months'` + `durationValue: number`
+- Constant `DURATION_MULTIPLIER = { days: 1, weeks: 7, months: 30 }`
+- Helper `setDurationValue(v)` recalcula durationDays
+- Helper `setDurationUnit(unit)` preserva intent user
+- useEffect auto-switch quando user muda intervalHours (não em edit)
+- Label dinâmico: "Duração (dias/semanas/meses)"
+- 3 chips estilo Dosy primary peach (active state) + bg-elevated (inactive)
+
+Warning v1 mantido (calcula em durationDays internamente).
+
+**Critério aceitação v2:**
+- ✅ Default Dias com input numérico
+- ✅ Click chip Semanas → label muda + 7 entrada vira 49 dias internamente
+- ✅ Mudar intervalo 24h→168h auto-switch chip pra Semanas (form novo)
+- ✅ Edit existing 28d treatment → mostra 4 Semanas no toggle
+- ✅ Edit existing 30d treatment → mostra 1 Mês
+- ✅ Edit existing 21d treatment → mostra 21 Dias (não divide perfeitamente)
+- ✅ Toggle Uso contínuo ON oculta toggle granularidade + input
 
 **Problema:**
 
@@ -5348,3 +5385,97 @@ const checkNative = useCallback(async () => {
 **Métrica esperada:**
 - UX consistency — user vê mesma string em Console release notes + banner update
 - Trust trust — "code 49" parece error message; "v0.2.1.4" parece release oficial
+
+---
+
+### #190 — BUG-LOGOUT-RESUME: app desloga após idle >5min (extends #159)
+
+- **Status:** 🚧 Em progresso (fix implementado v0.2.1.3 vc 50, validação device pending)
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (trust killer — bloqueador Reddit recrutamento testers)
+- **Origem:** User-reported 2026-05-07
+- **Esforço:** 1-2h (fix + AAB build + Internal upload)
+- **Release:** v0.2.1.3 vc 50 hotfix mid-flight
+
+**User report:**
+> "BUG captado... o app no celular esta deslogando CONSTANTEMENTE e isso é muito chato, ja digitei a senha hoje umas 4 vezes, não sei se tem um padrão, mas percebi que as vezes o app ta aberto em idle no celular e quando volto pra ele ele pede login e senha DE NOVO"
+
+**Pattern user observado:** idle ≥5min → volta foreground → app pede login.
+
+**Root cause:**
+
+`src/hooks/useAppResume.js:44` em long idle (≥5min) chama `supabase.auth.refreshSession()`. Em Android Capacitor com network instável, esse refresh pode falhar por múltiplas razões:
+
+1. **Network slow** durante app resume (background → foreground transition)
+2. **Android Doze** matou socket/cellular durante idle, recovery slow
+3. **SecureStorage hiccup** retorna stale token momento errado
+4. **Server clock skew** rejeita token tecnicamente válido
+5. **Refresh_token revogado** (auth real failure)
+
+Implementação anterior tratava QUALQUER erro como falha:
+```js
+try {
+  await supabase.auth.refreshSession()
+  // ...
+} catch (err) {
+  console.warn('[useAppResume] soft recover failed', err)
+  if (typeof window !== 'undefined') window.location.reload()  // ← DESTRUTIVO
+}
+```
+
+Resultado:
+- Erro transient → Supabase auth dispatcher pode disparar `SIGNED_OUT` event
+- `onAuthStateChange` listener em `useAuth.jsx` chama `setUser(null)` + `qc.clear()`
+- User vê tela login
+
+Plus fallback `window.location.reload()` agrava cascade:
+- Reload remount React tree
+- `useAuth` init() roda novamente boot path
+- Boot `getUser()` check pode falhar de novo (mesma network instable)
+- Cascade signOut
+
+**Background histórico:**
+
+#159 v0.2.1.1 (2026-05-06) já fixou cenário similar **boot path**: distinguir transient errors vs auth real em `useAuth.jsx` init. Faltou cobrir **resume path** equivalente em `useAppResume.js`.
+
+**Fix v0.2.1.3 vc 50:**
+
+Mesma estratégia #159 aplicada `useAppResume.js`:
+
+```js
+const { error: refreshErr } = await supabase.auth.refreshSession()
+if (refreshErr) {
+  const errMsg = refreshErr.message || ''
+  const errStatus = refreshErr.status
+  const isAuthFailure =
+    errStatus === 401 ||
+    errStatus === 403 ||
+    /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
+  if (!isAuthFailure) {
+    console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
+  } else {
+    console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
+  }
+}
+// Continue: removeAllChannels + refetchQueries even em transient
+```
+
+Plus catch handler:
+```js
+} catch (err) {
+  // NÃO forçar reload em catch — reload causa init() cascade.
+  console.warn('[useAppResume] soft recover network exception (keeping session):', err?.message || err)
+}
+```
+
+**Trade-offs aceitos:**
+- User com refresh_token realmente revogado pode continuar com cache stale por algumas requisições, até onAuthStateChange dispatch via Supabase ou getUser() failure dispara signOut natural
+- Trust violation reduzido massivamente vs current behavior (false logouts em network glitch comum mobile)
+
+**Critério aceitação:**
+- ✅ App idle 30min em background → volta foreground → continua logado (sem pedir senha)
+- ✅ Validado real device S25 Ultra cellular (network típico instável Brasil)
+- ✅ Validado real device emulador Pixel 7 com network throttle "Slow 3G"
+- ✅ Sentry sem regressão (DOSY-* events) — verifica não introduz cascade outro
+- ✅ Refresh_token realmente revogado (admin DELETE auth.users) → signOut funciona dentro 1-2 requests authenticated naturais
+- ✅ Reportes user "não desloga mais" pós-install vc 50
