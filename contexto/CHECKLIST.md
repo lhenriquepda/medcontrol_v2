@@ -5348,3 +5348,97 @@ const checkNative = useCallback(async () => {
 **Métrica esperada:**
 - UX consistency — user vê mesma string em Console release notes + banner update
 - Trust trust — "code 49" parece error message; "v0.2.1.4" parece release oficial
+
+---
+
+### #190 — BUG-LOGOUT-RESUME: app desloga após idle >5min (extends #159)
+
+- **Status:** 🚧 Em progresso (fix implementado v0.2.1.3 vc 50, validação device pending)
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (trust killer — bloqueador Reddit recrutamento testers)
+- **Origem:** User-reported 2026-05-07
+- **Esforço:** 1-2h (fix + AAB build + Internal upload)
+- **Release:** v0.2.1.3 vc 50 hotfix mid-flight
+
+**User report:**
+> "BUG captado... o app no celular esta deslogando CONSTANTEMENTE e isso é muito chato, ja digitei a senha hoje umas 4 vezes, não sei se tem um padrão, mas percebi que as vezes o app ta aberto em idle no celular e quando volto pra ele ele pede login e senha DE NOVO"
+
+**Pattern user observado:** idle ≥5min → volta foreground → app pede login.
+
+**Root cause:**
+
+`src/hooks/useAppResume.js:44` em long idle (≥5min) chama `supabase.auth.refreshSession()`. Em Android Capacitor com network instável, esse refresh pode falhar por múltiplas razões:
+
+1. **Network slow** durante app resume (background → foreground transition)
+2. **Android Doze** matou socket/cellular durante idle, recovery slow
+3. **SecureStorage hiccup** retorna stale token momento errado
+4. **Server clock skew** rejeita token tecnicamente válido
+5. **Refresh_token revogado** (auth real failure)
+
+Implementação anterior tratava QUALQUER erro como falha:
+```js
+try {
+  await supabase.auth.refreshSession()
+  // ...
+} catch (err) {
+  console.warn('[useAppResume] soft recover failed', err)
+  if (typeof window !== 'undefined') window.location.reload()  // ← DESTRUTIVO
+}
+```
+
+Resultado:
+- Erro transient → Supabase auth dispatcher pode disparar `SIGNED_OUT` event
+- `onAuthStateChange` listener em `useAuth.jsx` chama `setUser(null)` + `qc.clear()`
+- User vê tela login
+
+Plus fallback `window.location.reload()` agrava cascade:
+- Reload remount React tree
+- `useAuth` init() roda novamente boot path
+- Boot `getUser()` check pode falhar de novo (mesma network instable)
+- Cascade signOut
+
+**Background histórico:**
+
+#159 v0.2.1.1 (2026-05-06) já fixou cenário similar **boot path**: distinguir transient errors vs auth real em `useAuth.jsx` init. Faltou cobrir **resume path** equivalente em `useAppResume.js`.
+
+**Fix v0.2.1.3 vc 50:**
+
+Mesma estratégia #159 aplicada `useAppResume.js`:
+
+```js
+const { error: refreshErr } = await supabase.auth.refreshSession()
+if (refreshErr) {
+  const errMsg = refreshErr.message || ''
+  const errStatus = refreshErr.status
+  const isAuthFailure =
+    errStatus === 401 ||
+    errStatus === 403 ||
+    /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
+  if (!isAuthFailure) {
+    console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
+  } else {
+    console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
+  }
+}
+// Continue: removeAllChannels + refetchQueries even em transient
+```
+
+Plus catch handler:
+```js
+} catch (err) {
+  // NÃO forçar reload em catch — reload causa init() cascade.
+  console.warn('[useAppResume] soft recover network exception (keeping session):', err?.message || err)
+}
+```
+
+**Trade-offs aceitos:**
+- User com refresh_token realmente revogado pode continuar com cache stale por algumas requisições, até onAuthStateChange dispatch via Supabase ou getUser() failure dispara signOut natural
+- Trust violation reduzido massivamente vs current behavior (false logouts em network glitch comum mobile)
+
+**Critério aceitação:**
+- ✅ App idle 30min em background → volta foreground → continua logado (sem pedir senha)
+- ✅ Validado real device S25 Ultra cellular (network típico instável Brasil)
+- ✅ Validado real device emulador Pixel 7 com network throttle "Slow 3G"
+- ✅ Sentry sem regressão (DOSY-* events) — verifica não introduz cascade outro
+- ✅ Refresh_token realmente revogado (admin DELETE auth.users) → signOut funciona dentro 1-2 requests authenticated naturais
+- ✅ Reportes user "não desloga mais" pós-install vc 50
