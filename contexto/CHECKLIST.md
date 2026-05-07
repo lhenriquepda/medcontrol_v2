@@ -589,6 +589,18 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Limitação Gmail conhecida:** filtro NÃO aplica retroativo em Spam/Trash. Resgate manual user para emails antigos lá.
 - **Pendência (opcional):** consolidar filtros 1-7 adicionando "Never Spam"+"Mark important" em cada (catch-all 8 já cobre na prática, mas redundância protege contra Gmail decidir mover apesar do filter 8).
 
+**Fix Sentry whitelist (2026-05-06 sessão v0.2.1.4 via Chrome MCP):**
+- **Problema:** user reportou TESTE 02 enviado contato@dosymed.app não chegou + emails Sentry em Spam.
+- **Investigação:**
+  - TESTE 02 **CHEGOU** Inbox + label "Contato" 11:29 PM (~7min delay forward chain). Headers SPF: PASS / DKIM: PASS / DMARC: PASS / dara=fail (irrelevant). Filter #026 catch-all funcionou. User talvez checou antes de chegar.
+  - 5 emails Sentry achados Spam (May 1-2, errors `postgres_changes` callbacks — issue #093 já fixed mas Sentry envio reverberou). Sender `noreply@md.getsentry.com` envia DIRETO pra `dosy.med@gmail.com` — bypass ImprovMX dosymed.app. Filter #026 catch-all (`to:(dosymed.app)`) NÃO cobre.
+- **Fix:** 9º filter Gmail criado `Matches: from:(getsentry.com OR sentry.io) Do this: Never send it to Spam, Always mark it as important`. Cobre `noreply@md.getsentry.com` (issue alerts), `noreply@sentry.io` (account/billing), e qualquer outro Sentry domain.
+- **Resgate retroativo:** 5 conversations Sentry desmarcadas Spam → Inbox manual via "Not spam" toolbar (filter Gmail não aplica retroativo Spam/Trash). Toast confirmou: "Future messages from these senders will be sent to Inbox".
+- **Estado final 9 filters Gmail:**
+  1-7 — `to:(<alias>@dosymed.app)` → label "<Alias>"
+  8 — `to:(dosymed.app)` → Never Spam + Mark important (catch-all #026)
+  9 — `from:(getsentry.com OR sentry.io)` → Never Spam + Mark important (Sentry whitelist)
+
 **Pendente código v0.2.1.0:**
 - ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
 - ⏳ Termos.jsx + Privacidade.jsx (criando #156) referenciar emails canônicos
