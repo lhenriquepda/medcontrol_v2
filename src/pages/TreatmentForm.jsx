@@ -184,6 +184,24 @@ export default function TreatmentForm() {
     return `${form.dailyTimes.length * days} doses${suffix}`
   }, [form])
 
+  // #162 (v0.2.1.3) — warning silent fail Mounjaro repro prevention.
+  // Quando intervalHours/24 > durationDays (ex: semanal 168h + 4 dias),
+  // só dispara 1 dose e auto-encerra. User não percebe = trust violation.
+  // Detalhe: paciente lhenrique.pda 2026-05-06 cadastrou Mounjaro semanal
+  // com durationDays=4 (literal) ao invés 28 (4 doses × 7d). effectiveStatus
+  // auto-ended dia 03/05 — alerta encerrando silenciou cedo.
+  const silentFailWarning = useMemo(() => {
+    if (form.isContinuous || form.mode !== 'interval') return null
+    const interval = Number(form.intervalHours || 0)
+    const duration = Number(form.durationDays || 0)
+    if (interval < 24 || duration <= 0) return null
+    const intervalDays = interval / 24
+    if (intervalDays <= duration) return null
+    const dosesPossiveis = Math.floor((duration * 24) / interval)
+    const sugerido = Math.ceil(intervalDays * 4) // sugere mínimo 4 doses
+    return { intervalDays: Math.round(intervalDays), duration, dosesPossiveis, sugerido }
+  }, [form.isContinuous, form.mode, form.intervalHours, form.durationDays])
+
   return (
     <motion.div
       style={{ paddingBottom: 110 }}
@@ -435,6 +453,31 @@ export default function TreatmentForm() {
             />
           </div>
         </Card>
+
+        {/* #162 (v0.2.1.3) Warning silent fail Mounjaro prevention */}
+        {silentFailWarning && (
+          <div role="alert" style={{
+            background: 'var(--dosy-warning-bg)',
+            border: '1px solid var(--dosy-warning)',
+            borderRadius: 12, padding: 12,
+            fontSize: 13.5, lineHeight: 1.5,
+            color: 'var(--dosy-fg)',
+            fontFamily: 'var(--dosy-font-body)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }} aria-hidden>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <strong>Atenção:</strong> Com intervalo de <strong>{silentFailWarning.intervalDays} dia{silentFailWarning.intervalDays > 1 ? 's' : ''}</strong>{' '}
+                e duração <strong>{silentFailWarning.duration} dia{silentFailWarning.duration > 1 ? 's' : ''}</strong>,
+                {' '}apenas <strong>{silentFailWarning.dosesPossiveis} dose{silentFailWarning.dosesPossiveis !== 1 ? 's' : ''}</strong>{' '}
+                {silentFailWarning.dosesPossiveis === 1 ? 'será agendada' : 'serão agendadas'}. O tratamento auto-encerra em {silentFailWarning.duration} dia{silentFailWarning.duration > 1 ? 's' : ''}.
+                <div style={{ fontSize: 12.5, marginTop: 6, opacity: 0.85 }}>
+                  Quer mais doses? Aumente <strong>"Duração"</strong> para pelo menos <strong>{silentFailWarning.sugerido} dias</strong> (4 doses), ou ative <strong>"Uso contínuo"</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <p style={{
           fontSize: 12.5, color: 'var(--dosy-fg-secondary)',

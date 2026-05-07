@@ -81,21 +81,49 @@ export function useAppUpdate() {
   }, [])
 
   // ─── Native check (Play Store) ──────────────────────────────────────
+  // #189 (v0.2.1.3): triple fallback chain pra resolver versionName ao invés
+  // de versionCode no banner. Play Core API frequentemente retorna
+  // info.availableVersion=undefined em Android < API 31 OR Play Core SDK older.
+  // Fix: paralelo Play Core + version.json Vercel (canônico versionName) +
+  // local map versionCode→versionName + fallback PT-BR friendly "versão N".
+  const VERSION_CODE_TO_NAME = {
+    46: '0.2.1.0',
+    47: '0.2.1.1',
+    48: '0.2.1.2',
+    49: '0.2.1.3',
+    // adicionar próximas releases aqui
+  }
   const checkNative = useCallback(async () => {
     try {
       const { AppUpdate } = await import('@capawesome/capacitor-app-update')
-      const info = await AppUpdate.getAppUpdateInfo()
+      // Paralelo: Play Core + version.json Vercel
+      const [infoResult, webResult] = await Promise.allSettled([
+        AppUpdate.getAppUpdateInfo(),
+        fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ])
+      const info = infoResult.status === 'fulfilled' ? infoResult.value : null
+      const versionData = webResult.status === 'fulfilled' ? webResult.value : null
+
       // updateAvailability: 1=NOT_AVAILABLE, 2=UPDATE_AVAILABLE, 3=DEVELOPER_TRIGGERED_IN_PROGRESS
       // installStatus: 0=UNKNOWN, 1=PENDING, 2=DOWNLOADING, 11=DOWNLOADED, 4=INSTALLED, 5=FAILED, 6=CANCELED
-      if (info.updateAvailability === 2 && info.flexibleUpdateAllowed) {
-        setLatest({
-          version: info.availableVersion ?? `code ${info.availableVersionCode}`,
-          source: 'play'
-        })
+      if (info?.updateAvailability === 2 && info.flexibleUpdateAllowed) {
+        // Triple fallback chain pra resolver versionName user-friendly:
+        // 1. Play Core availableVersion (versionName) — primary
+        // 2. version.json Vercel (canônico web) — secondary
+        // 3. Local map versionCode → versionName — tertiary
+        // 4. PT-BR friendly "versão N" — final fallback (vs ugly "code N")
+        const version =
+          info.availableVersion
+          ?? versionData?.version
+          ?? VERSION_CODE_TO_NAME[info.availableVersionCode]
+          ?? `versão ${info.availableVersionCode}`
+        setLatest({ version, source: 'play' })
       } else {
         setLatest(null)
       }
-      if (info.installStatus === 11) setDownloaded(true)
+      if (info?.installStatus === 11) setDownloaded(true)
     } catch (e) {
       console.log('[useAppUpdate] native check skipped:', e?.message || e)
     }

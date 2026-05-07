@@ -186,4 +186,9 @@ export const EVENTS = {
   FAQ_SEARCH_QUERY: 'faq_search_query',
   FAQ_QUESTION_EXPANDED: 'faq_question_expanded',
   FAQ_SUPPORT_EMAIL_CLICKED: 'faq_support_email_clicked',
+
+  // In-App Review (#170 v0.2.1.3)
+  REVIEW_PROMPT_SHOWN: 'review_prompt_shown',           // Play Core dialog displayed
+  REVIEW_PROMPT_SKIPPED_QUOTA: 'review_prompt_skipped_quota', // Google quota exceeded
+  REVIEW_PROMPT_FAILED: 'review_prompt_failed',         // plugin error
 }
