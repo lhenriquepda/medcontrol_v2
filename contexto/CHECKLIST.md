@@ -5487,8 +5487,9 @@ Plus catch handler:
 - **Status:** ⏳ Pendente
 - **Categoria:** ✨ MELHORIAS
 - **Prioridade:** P0 pré-OpenTest (sem isso Plus não consegue virar Pro = revenue ceiling)
-- **Origem:** User-flagged 2026-05-07 ("usuario Free/Plus precisa migrar pro Pro sem ser pelo paywall")
+- **Origem:** User-flagged 2026-05-07 ("usuario Free/Plus precisa migrar pro Pro sem ser pelo paywall") + promove plan-original FASE 16.3 nunca migrada
 - **Esforço:** 4-6h (UI nova + refactor PaywallModal pra modo "manage")
+- **Inclui (FASE 16.3 plan-original):** Settings.jsx seção "Assinatura", reforço card More.jsx, botão "Restaurar compras", link "Política de cobrança", badge sutil Free pages-chave
 
 **Problema:**
 
@@ -5529,7 +5530,7 @@ Acesso:
 - **Status:** ⏳ Pendente
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 pré-OpenTest (BLOQUEADOR launch)
-- **Origem:** User-flagged 2026-05-07 ("quando for pra opentest isso tudo precisa estar rodando liso... pagamento inclusive")
+- **Origem:** User-flagged 2026-05-07 ("quando for pra opentest isso tudo precisa estar rodando liso... pagamento inclusive") + promove plan-original FASE 16.4
 - **Esforço:** 1-2 dias (depende #191 + setup tester accounts Play Console)
 
 **Escopo de validação:**
@@ -5571,8 +5572,9 @@ Acesso:
 - **Status:** ⏳ Pendente
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P1 (necessário pra cancel/refund detectar fora do app)
-- **Origem:** Implicit em #192 (sem isso, cancel só detecta na próxima abertura do app)
+- **Origem:** Implicit em #192 (sem isso, cancel só detecta na próxima abertura do app) + reformula plan-original FASE 16.2
 - **Esforço:** 1-2 dias (Edge Function + Pub/Sub setup + Play Console config)
+- **Reformulação plan-original:** plan original especificava "Webhook RevenueCat → Supabase". Reformulado direto Pub/Sub → Edge Function (RTDN nativo Google) — evita custo + dependência RevenueCat. Plan-original FASE 16.2 também tinha `validate-purchase` Edge Function, que vai ser implementada em #192 separadamente (validar receipt no client side da compra).
 
 **Por quê:**
 
