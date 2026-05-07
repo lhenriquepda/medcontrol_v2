@@ -477,7 +477,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~188 itens · ✅ 115 fechados · ⏳ 67 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~189 itens · ✅ 115 fechados · ⏳ 68 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
 
 **Abertos por categoria × prioridade:**
 
@@ -485,9 +485,9 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 |---|---|---|---|---|---|
 | 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 11 (#018 #021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 20 |
 | ✨ MELHORIAS | 0 | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 46 |
-| 🐛 BUGS | 0 | 0 | 3 | 0 | 3 |
+| 🐛 BUGS | 0 | 0 | 4 (#101-followup #110 #162 #189) | 0 | 4 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **14** | **20** | **29** | **69** |
+| **Total abertos** | **6** | **14** | **21** | **29** | **70** |
 
 **Fechados por categoria** (todos inline na posição correta dentro de §6.4-§6.7):
 
@@ -778,6 +778,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#110** [P2 native, Sentry DOSY-3 REGRESSED + DOSY-7] **Android native crashes — `art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown.** DOSY-3: 2 events 2 users. DOSY-7: 1 event Segfault. Investigar: AlarmActivity refactor v0.2.0.0 ValueAnimator + FrameLayout / DosyMessagingService FCM data handler / plugin nativo version mismatch / ProGuard R8 rules / Sentry NDK upload (#074 unblocked).
 - ✅ **#123** [P2 UX/security, fechado v0.2.0.3] Sessão não invalida após DELETE auth.users. Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Erro/null força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation.
 - ⏳ **#162** [P2 UX healthcare-adjacent NOVO v0.2.1.4] **TreatmentForm warning `intervalHours/24 > durationDays`.** User lhenrique.pda 2026-05-06 reportou Mounjaro semanal salvo `durationDays=4` ao invés 28 (4 doses × 7d). `effectiveStatus` auto-ended dia 03/05 — alerta "encerrando" silenciou cedo. SQL data fix aplicado v0.2.1.2. **Fix v0.2.2.0+:** validação inline + warning amarelo + sugestão calcular automático. Detalhe completo CHECKLIST §#162.
+- ⏳ **#189** [P2 UX NOVO v0.2.1.4] **UpdateBanner mostra versionCode em vez versionName.** `useAppUpdate.js:90-94` fallback `code ${info.availableVersionCode}` quando Play Core retorna `availableVersion=undefined` (Android < API 31 OR Play Core older). Banner usuário vê "v code 49" em vez "v0.2.1.4". User reportou banner mostra `~44` (versionCode) — quer versionName que usamos no Console release notes. Fix: (a) primary — fetch `version.json` Vercel mesmo em native path quando `info.availableVersion` undefined; (b) fallback secondary — local map `VERSION_CODE_TO_NAME = {46:'0.2.1.0', 47:'0.2.1.1', 48:'0.2.1.2', 49:'0.2.1.4', ...}` mantido em build constant. Esforço 1-2h. Detalhe completo CHECKLIST §#189.
 
 ---
 
@@ -886,15 +887,15 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~188 itens
+- **Total:** ~189 itens
   - ✅ 115 fechados
-  - ⏳ 67 abertos
+  - ⏳ 68 abertos
   - 🚨 2 BLOQUEADOS Google review
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (69 total ⏳/🚨):**
+- **Distribuição por categoria abertos (70 total ⏳/🚨):**
   - 🚀 IMPLEMENTAÇÃO: 20 (6 P0 + 11 P1 + 3 P2)
   - ✨ MELHORIAS: 46 (3 P1 + 14 P2 + 29 P3)
-  - 🐛 BUGS: 3 (P2)
+  - 🐛 BUGS: 4 (P2 — #101-followup #110 #162 #189)
   - 🔄 TURNAROUND: 0
 - **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist

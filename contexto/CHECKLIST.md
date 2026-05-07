@@ -5200,3 +5200,151 @@ V2 (voz future v0.3.0+):
 - Mark dose taken via chat ("já tomei o Mounjaro")
 - Query history ("quantas doses faltam pra Mounjaro?")
 - LLM personalizado fine-tuned BR healthcare data (longprazo)
+
+---
+
+### #189 — UpdateBanner mostra versionCode em vez de versionName
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P2 (UX bug não-blocker)
+- **Origem:** User-reported 2026-05-07
+- **Esforço:** 1-2h
+- **Release:** v0.2.1.5+ (próxima code release)
+
+**Problema:**
+
+UpdateBanner mostra `v code 49` (versionCode) ao invés `v0.2.1.4` (versionName) que user vê em Console release notes.
+
+User quote: "no banner de update que aparece, ele mostra o v code do console, atualmente ta em ~44 eu acho. Eu gostaria que aparecesse o versionamento correto do app... no caso, o que colocamos entre ( ) no console na hora que subimos aab".
+
+**Root cause:**
+
+`src/hooks/useAppUpdate.js:90-94` Native check Play Core API:
+
+```js
+if (info.updateAvailability === 2 && info.flexibleUpdateAllowed) {
+  setLatest({
+    version: info.availableVersion ?? `code ${info.availableVersionCode}`,
+    source: 'play'
+  })
+}
+```
+
+Plugin `@capawesome/capacitor-app-update` `getAppUpdateInfo()` Android Play Core API:
+- `availableVersionCode` — sempre populated (integer ex: 49)
+- `availableVersion` (versionName) — populated em SOME Android versions / SOME Play Core versions. Frequently undefined em older devices OR Play Core SDK older.
+
+Quando `availableVersion === undefined` → fallback `code ${info.availableVersionCode}` mostra "code 49" feio.
+
+UpdateBanner.jsx:67-71 usa esse `latest.version` direto:
+```jsx
+} else if (latest?.version) {
+  subtitle = isNative
+    ? `v${latest.version} · toque para baixar`
+    : `v${latest.version} · toque para recarregar`
+}
+```
+
+Resultado visível user: "v code 49 · toque para baixar" em vez de "v0.2.1.4 · toque para baixar".
+
+**Abordagem:**
+
+Fix dual fallback strategy useAppUpdate.js:
+
+```js
+// Local map mantido em build constant (atualiza a cada release)
+const VERSION_CODE_TO_NAME = {
+  46: '0.2.1.0',
+  47: '0.2.1.1',
+  48: '0.2.1.2',
+  49: '0.2.1.4',
+  // adicionar próximas releases aqui
+}
+
+const checkNative = useCallback(async () => {
+  try {
+    const { AppUpdate } = await import('@capawesome/capacitor-app-update')
+    const info = await AppUpdate.getAppUpdateInfo()
+    if (info.updateAvailability === 2 && info.flexibleUpdateAllowed) {
+      // Primary: availableVersion (versionName) from Play Core
+      let version = info.availableVersion
+
+      // Fallback 1: local map versionCode → versionName
+      if (!version && info.availableVersionCode) {
+        version = VERSION_CODE_TO_NAME[info.availableVersionCode]
+      }
+
+      // Fallback 2: fetch version.json Vercel (web fallback in native path)
+      if (!version) {
+        try {
+          const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' })
+          if (res.ok) {
+            const data = await res.json()
+            version = data.version
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Fallback 3: ainda undefined → use versionCode mas com label clearer
+      if (!version) {
+        version = `versão ${info.availableVersionCode}` // PT-BR friendly vs "code 49"
+      }
+
+      setLatest({ version, source: 'play' })
+    }
+    // ... resto
+  } catch (e) {
+    console.log('[useAppUpdate] native check skipped:', e?.message)
+  }
+}, [])
+```
+
+Alternative simpler: SEMPRE fetch version.json no native path (paralelo Play Core). version.json é fonte canônica versionName (já updated a cada release v0.2.1.0 #103 BUG-032 fix URL origin runtime).
+
+**Approach recomendada:** Sempre fetch version.json em paralelo com Play Core check. version.json define versionName; Play Core define availability + downloadable. Combina informações.
+
+```js
+const checkNative = useCallback(async () => {
+  try {
+    const { AppUpdate } = await import('@capawesome/capacitor-app-update')
+    const [info, webData] = await Promise.allSettled([
+      AppUpdate.getAppUpdateInfo(),
+      fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+    ])
+
+    const playInfo = info.status === 'fulfilled' ? info.value : null
+    const versionData = webData.status === 'fulfilled' ? webData.value : null
+
+    if (playInfo?.updateAvailability === 2 && playInfo.flexibleUpdateAllowed) {
+      const version = playInfo.availableVersion
+        ?? versionData?.version
+        ?? `versão ${playInfo.availableVersionCode}`
+
+      setLatest({ version, source: 'play' })
+    } else {
+      setLatest(null)
+    }
+    if (playInfo?.installStatus === 11) setDownloaded(true)
+  } catch (e) {
+    console.log('[useAppUpdate] native check skipped:', e?.message)
+  }
+}, [])
+```
+
+**Dependências:**
+- `public/version.json` deploy Vercel auto-update a cada build (verify Vite plugin)
+- VERSION_URL constant em `src/lib/constants.js` ou similar
+
+**Critério de aceitação:**
+
+- ✅ Banner mostra `v0.2.1.4 · toque para baixar` (versionName) em vez de `v code 49`
+- ✅ Fallback gracefully se Play Core retorna availableVersion undefined
+- ✅ Fallback secondary version.json Vercel funcional
+- ✅ Última fallback `versão N` PT-BR friendly (não "code N")
+- ✅ Validação device real S25 Ultra: instalar versão antiga → publish nova versão Console → banner aparece com versionName correto
+- ✅ Validação web (Vercel preview): banner mostra versionName de version.json
+
+**Métrica esperada:**
+- UX consistency — user vê mesma string em Console release notes + banner update
+- Trust trust — "code 49" parece error message; "v0.2.1.4" parece release oficial
