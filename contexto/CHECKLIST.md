@@ -2788,9 +2788,10 @@ const warningSilent = intervalHours >= 24 && dosesPossiveis < 2
 > 2. **#165** Delta sync + TanStack persist (3-5h, -70% a -90% reads steady state, médio risk)
 > 3. **#164** Realtime broadcast (4-6h, -80% a -90% Realtime, alto ROI mas requer #157 retomar coordenado)
 > 4. **#166** MessagePack + compression (2-3h, 50-70% payload, low risk)
-> 5. **#167** Cursor pagination + cols aggressive + Supavisor (3-5h, marginal mas estrutural)
+> 5. **#168** CDN cache strategy (2-3h, low risk + aproveita Cached Egress 250 GB ociosa)
+> 6. **#167** Cursor pagination + cols aggressive + Supavisor (3-5h, marginal mas estrutural)
 >
-> Total esforço: **~12-18h código distribuído v0.2.2.0+ → v0.2.3.0+**.
+> Total esforço: **~17-26h código distribuído v0.2.2.0+ → v0.2.3.0+**.
 
 ### #163 — RPC consolidado Dashboard `get_dashboard_payload`
 
@@ -3346,3 +3347,158 @@ Edge functions usar `DATABASE_URL` pooler.
 **Métrica esperada:**
 - Marginal -5% a -10% por item, mas cumulativo estrutural longprazo
 - Permite scale 1000+ users sem re-arq major
+
+---
+
+### #168 — CDN cache strategy: bundle + assets via Vercel CDN + Supabase Storage cache headers
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — aproveitar Cached Egress separado)
+- **Origem:** Investigação egress 2026-05-06 (Pro Cached Egress 250 GB separado, 0/250 atualmente)
+- **Esforço:** 2-3h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+Pro plan tem **2 quotas separadas**:
+- **Database Egress 250 GB** — traffic PostgREST + Edge functions (consumido 8.74 GB / 250 atualmente)
+- **Cached Egress 250 GB** — traffic via CDN cache hits (Storage, Edge function cached responses, static assets) — atualmente **0 / 250 GB**
+
+Quota Cached Egress está completamente ociosa. Otimização: deslocar traffic do DB Egress para Cached Egress quando possível, aproveitando 250 GB extras gratuitos no Pro.
+
+Exemplos de oportunidades:
+- Bundle JS Dosy serve de Vercel CDN (não Supabase) — verificar HIT rate `cache-control` headers
+- Imagens estáticas (logo, splash, ícones) servem Vercel CDN
+- Fotos pacientes (Supabase Storage `patient-photos`): hoje sem `cache-control` → cliente re-baixa toda vez. Setar `cache-control: public, max-age=31536000, immutable` (foto path versioned via `photo_version` #115, então safe immutable)
+- Edge functions retornando dados estáticos-ish (FAQ, Termos, Privacidade conteúdo) com `cache-control: public, max-age=3600 s-maxage=86400` → CDN cache hit em vez de re-execute
+- PostgREST `etag` headers permitem 304 Not Modified em refetch idempotente (cliente reusa cache local)
+
+**Abordagem:**
+
+(a) **Verificar Vercel CDN cache hit rate atual:**
+
+```bash
+# Curl Vercel asset com headers
+curl -I https://dosymed.app/assets/index-Cmc-tujf.js
+# Esperar: cache-control: public, max-age=31536000, immutable
+# x-vercel-cache: HIT (após 1ª request)
+```
+
+Vercel default cobre `/assets/*` immutable (Vite hash filenames). Verificar `index.html` cache curto (max-age=0 must-revalidate) pra deploys novos serem detectados.
+
+`vercel.json` (criar se não existir):
+
+```json
+{
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/icon-(.*).png",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/(.*\\.svg|.*\\.woff2)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}
+```
+
+(b) **Supabase Storage `patient-photos` cache headers** — atualizar upload service:
+
+```js
+// src/services/patientService.js (upload photo path)
+async function uploadPatientPhoto(patientId, file, version) {
+  const path = `${patientId}/${version}.jpg`
+  const { error } = await supabase.storage
+    .from('patient-photos')
+    .upload(path, file, {
+      cacheControl: '31536000, immutable', // 1 year, version garante busting
+      upsert: true,
+      contentType: 'image/jpeg',
+    })
+  if (error) throw error
+  return path
+}
+```
+
+Nota: `photo_version` #115 já garante busting — quando user troca foto, version++ → new path → cache miss legítimo. Files antigos viram garbage collected (Supabase Storage não auto-deleta — pode adicionar pg_cron pra cleanup `photo_version < current` rows, mas low priority).
+
+(c) **Edge functions cache-control** — endpoints estáticos-ish:
+
+```ts
+// Hipotético: edge function retornando FAQ.md content (se mover pra DB futuro)
+return new Response(content, {
+  headers: {
+    'Content-Type': 'text/markdown',
+    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+  },
+})
+```
+
+(d) **PostgREST etag verify** — Supabase já envia `etag` em responses GET; cliente HTTP cache automático respeita 304. Verificar Network tab Chrome MCP: requests duplicadas idempotentes retornam 304 Not Modified em vez de 200 + payload.
+
+(e) **Service Worker cache strategy** — atualizar `public/sw.js` (atualmente v6 #078) com strategy mais agressiva:
+
+```js
+// Cache First pra assets imutáveis
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+
+  // Assets versioned (Vite hash) → cache forever
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => cached || fetch(event.request).then(resp => {
+        const cloned = resp.clone()
+        caches.open('dosy-assets-v6').then(c => c.put(event.request, cloned))
+        return resp
+      }))
+    )
+    return
+  }
+
+  // index.html → network first (deploys novos)
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    )
+    return
+  }
+})
+```
+
+**Dependências:**
+- `vercel.json` config commit
+- patientService upload path com cacheControl
+- Service worker bump v6 → v7 (#078 pattern)
+- Validar Network tab Chrome MCP HIT/MISS rate
+
+**Critério de aceitação:**
+- ✅ Curl Vercel asset retorna `cache-control: max-age=31536000, immutable`
+- ✅ 2ª visita Dosy (mesmo browser) → assets retornam `x-vercel-cache: HIT`
+- ✅ Supabase Storage upload setou `cache-control` 1 year
+- ✅ Foto paciente carrega 1× por device por version (cache hit local + CDN)
+- ✅ Service worker v7 deployed + cache strategy assets-first funcional offline
+- ✅ Validação Chrome MCP: visita repetida Dosy → assets bytes ≤10% original (cache hit)
+- ✅ Cached Egress dashboard começa subir (sinal traffic deslocado pra cache quota)
+
+**Métrica esperada:**
+- Bundle JS + assets: 100% CDN cache (já parcialmente)
+- Fotos pacientes: 1 download por version por device (vs every refetch)
+- Cached Egress quota usage: 0 → ~30-50 GB/mês com 100 users (ainda dentro 250 GB)
+- DB Egress save: -10% a -15% (asset traffic pequeno em relação DB queries, ROI moderado)
+
+**Notas:**
+- ROI menor que #163-#165 (que atacam DB queries diretamente) MAS quase grátis (config files apenas, low risk)
+- Aproveita quota Cached Egress 250 GB ociosa do Pro plan
+- Combinado com #166 (compression headers) cobre todo bullet 7 da análise original
