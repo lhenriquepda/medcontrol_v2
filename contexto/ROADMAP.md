@@ -477,17 +477,17 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~168 itens · ✅ 115 fechados · ⏳ 47 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~173 itens · ✅ 115 fechados · ⏳ 52 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 2 | 2 | 0 | 10 |
+| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 6 (#018 #021 #169 #170 #171 #173) | 3 (#047 #155 #172) | 0 | 15 |
 | ✨ MELHORIAS | 0 | 3 | 9 | 24 | 36 |
 | 🐛 BUGS | 0 | 0 | 3 | 0 | 3 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **5** | **14** | **24** | **49** |
+| **Total abertos** | **6** | **9** | **15** | **24** | **54** |
 
 **Fechados por categoria** (todos inline na posição correta dentro de §6.4-§6.7):
 
@@ -510,7 +510,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 **Δ 2026-05-06 v0.2.1.2:** +**#158 fix #1** Console "Apps de saúde" desmarcado todas Medicina checkboxes + Outro texto consumer descritivo + re-submit Closed Testing 14 mudanças (Google review ~7d) + **#158 fix #2** PWA manifest.webmanifest categories ["health","medical","productivity"] → ["health","lifestyle","productivity"] (remove flag medical W3C que pode trigger Google org gate) + bump v0.2.1.1→v0.2.1.2 (versionCode 48). +**#160 NOVO P1** PatientDetail refactor — v1: card "Adesão" → "Doses Hoje X de Y" + bug fix tratamentos 3 seções (Ativos/Pausados/Encerrados via effectiveStatus) + lista doses paciente DoseCard reuso filter 24h/Todas + reorder layout. v2: collapse opcional TODAS 4 seções + Doses dentro Card peach destaque + count badge + chevron rotate. v2.1: dark mode adaptive (peach-100 var ao invés gradient fixo). +**#161 NOVO P1** Alerts dismiss refinement — ending date-based 1×/dia (LS_ENDING_SEEN_DATE YYYY-MM-DD), reaparece automático próximo dia. v2: useState mirror localStorage pra feedback visual immediate (bug v1 não dismissava UI). +**Mounjaro data fix SQL** (operacional sem código) — paciente lhenrique.pda durationDays=4→28 + status active + 3 doses pendentes (06/05 13/05 20/05 14:30 BRT). UX root cause parqueado novo #162. Counter: 114 fechados / 43 abertos + 2 BLOQUEADOS Google review.
 
-**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6 v2** — items fechados redistribuídos **inline na posição correta** (categoria + prioridade certa, ordem # ascendente) marcados ✅; abertos ⏳; bloqueados 🚨; cancelados 🚫. §6.8 antiga (lista cronológica fechados) eliminada — release log cronológico mantido em §3 + §6.3. Legenda visual global movida pro topo do doc. +**#026 followup Sentry whitelist** via Chrome MCP — user reportou Sentry issues em Spam + dúvida sobre TESTE 02 contato@dosymed.app. Investigação: TESTE 02 chegou normal (~7min delay forward chain, SPF/DKIM/DMARC PASS); Sentry sender direto pra dosy.med@gmail.com bypass ImprovMX. Fix: 9º filter Gmail `from:(getsentry.com OR sentry.io)` Never Spam + Mark important + 5 emails Sentry resgatados Spam→Inbox manual. +**Plano egress otimização escala** — investigação Supabase Dashboard cycle 8.74 GB / 250 GB Pro com 4 MAU (=3.75 GB/user/mês ≈ 30× padrão SaaS healthcare). Storm pré-#157 dominou (7.2 GB May 5 → 0.5 GB May 6, redução 14×). Items NOVOS P1 MELHORIAS: **#163** RPC consolidado Dashboard `get_dashboard_payload` (-40% a -60% Dashboard); **#164** Realtime broadcast vez postgres_changes streaming (combinado retomar #157, -80% a -90% Realtime); **#165** Delta sync doses + TanStack persist IndexedDB offline-first (-70% a -90% reads steady state). Items NOVOS P2: **#166** MessagePack Edge functions payload + compression headers (50-70% menor payload); **#167** Cursor pagination + DOSE_COLS_LIST aggressive (status int code) + Supavisor transaction mode pooler; **#168** CDN cache strategy — Vercel CDN bundle/assets + Supabase Storage cache headers + Edge function `cache-control` (aproveitar Cached Egress 250 GB Pro separado, atualmente 0/250). Combined target: 5-10× redução DB egress = preparar Open Testing/Production scale. Counter: 115 fechados / 47 abertos + 2 BLOQUEADOS (6 NOVOS P1+P2 escala).
+**Δ 2026-05-06 v0.2.1.4 (em andamento):** +**#162 NOVO P2 BUG** TreatmentForm UX warning intervalHours/24 > durationDays (gerou Mounjaro silent fail). +**Refactor §6 v2** — items fechados redistribuídos **inline na posição correta** (categoria + prioridade certa, ordem # ascendente) marcados ✅; abertos ⏳; bloqueados 🚨; cancelados 🚫. §6.8 antiga (lista cronológica fechados) eliminada — release log cronológico mantido em §3 + §6.3. Legenda visual global movida pro topo do doc. +**#026 followup Sentry whitelist** via Chrome MCP — user reportou Sentry issues em Spam + dúvida sobre TESTE 02 contato@dosymed.app. Investigação: TESTE 02 chegou normal (~7min delay forward chain, SPF/DKIM/DMARC PASS); Sentry sender direto pra dosy.med@gmail.com bypass ImprovMX. Fix: 9º filter Gmail `from:(getsentry.com OR sentry.io)` Never Spam + Mark important + 5 emails Sentry resgatados Spam→Inbox manual. +**Plano egress otimização escala** — investigação Supabase Dashboard cycle 8.74 GB / 250 GB Pro com 4 MAU (=3.75 GB/user/mês ≈ 30× padrão SaaS healthcare). Storm pré-#157 dominou (7.2 GB May 5 → 0.5 GB May 6, redução 14×). Items NOVOS P1 MELHORIAS: **#163** RPC consolidado Dashboard `get_dashboard_payload` (-40% a -60% Dashboard); **#164** Realtime broadcast vez postgres_changes streaming (combinado retomar #157, -80% a -90% Realtime); **#165** Delta sync doses + TanStack persist IndexedDB offline-first (-70% a -90% reads steady state). Items NOVOS P2: **#166** MessagePack Edge functions payload + compression headers (50-70% menor payload); **#167** Cursor pagination + DOSE_COLS_LIST aggressive (status int code) + Supavisor transaction mode pooler; **#168** CDN cache strategy — Vercel CDN bundle/assets + Supabase Storage cache headers + Edge function `cache-control` (aproveitar Cached Egress 250 GB Pro separado, atualmente 0/250). Combined target: 5-10× redução DB egress = preparar Open Testing/Production scale. +**Plano marketing/ASO/growth** — análise concorrentes BR (Medisafe/MyTherapy/Pílula Certa) + forecast realista solo dev sem marketing 1.5K-3K MAU Year 1. Items NOVOS P1 IMPLEMENTAÇÃO: **#169** ASO Play Store keywords+listing+screenshots+A/B test (6-8h); **#170** Reviews strategy In-App Review API + reply playbook (4-5h); **#171** Marketing orgânico Reddit+Instagram+LinkedIn+TikTok playbook BR (8-10h setup); **#173** Healthcare differentiators moat (promove #064 P3→P1 interações med + #065 P3→P1 estoque + #066 P3→P1 lembrete consulta, posicionamento "ÚNICO app brasileiro com..." vs Medisafe/MyTherapy). NOVO P2: **#172** Landing page dosymed.app + blog SEO healthcare BR 12 artigos longtail keywords (12-16h initial + 24h conteúdo). Combined target: alcançar 5K-10K MAU Year 1 (vs 1.5K passive). Counter: 115 fechados / 52 abertos + 2 BLOQUEADOS (6 escala #163-#168 + 5 growth #169-#173 = 11 NOVOS).
 
 ---
 
@@ -541,6 +541,14 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 - ⏳ **#018** [P1, Plan FASE 4.3 — escopo expandido 2026-05-05] **AdMob Android prod + AdSense web.** AdMob: App ID `ca-app-pub-2350865861527931~5445284437` + Banner ad unit JÁ configurados AndroidManifest + .env. Pendente: (a) flip `VITE_ADMOB_USE_TEST=true → false` em `.env.production`; (b) AdMob Console: "Requer revisão" desbloqueia auto pós-Play Store linking via Production track (#133). AdSense web (secundário): index.html ainda placeholder. AdBanner.jsx silently retorna null se vazio. Foco mobile.
 - ⏳ **#021** [P1, Plan FASE 18.3] **Backup keystore 3 locais seguros.**
+
+> **Plano marketing/ASO/growth (2026-05-07):** análise concorrentes BR (Medisafe/MyTherapy/Pílula Certa) revelou Dosy precisa ataque ofensivo: forecast realista solo dev sem marketing = 1.5K-3K MAU Year 1 (mercado satura ~50K MAU top apps). Items #169-#173 visam crescimento orgânico Year 1 alcançar 5K-10K MAU (vs 1.5K passive). Receita realista ano 1: R$ 5-15K bruto sem ataque marketing; R$ 30-60K com playbook executado.
+
+- ⏳ **#169** [P1 growth v0.2.1.4 NOVO] **ASO Play Store completo — keywords + listing copy + screenshots strategy + A/B test.** (a) Keywords research BR healthcare (target: "lembrete remédio", "alarme medicação", "controle medicamentos idosos", "cuidador medicação", "diabetes lembrete dose"); (b) Listing copy otimizado (título 30 chars com keyword primária + short desc 80 chars + full desc 4000 chars com 5-8 keywords distribuídas sem keyword stuffing); (c) Screenshots strategy — primeiros 3 são 80% conversão (destaque alarme nativo crítico + multi-paciente + compartilhamento cuidadores), 8 total Console (#025 base + 2 novos #155); (d) Vídeo preview Play Console 30s (gravação device real S25 Ultra walkthrough); (e) Localized FAQ pre-launch teasing #064 #065 #066; (f) A/B test screenshots via Play Console experiment (50/50 split, 2 semanas). Esforço 6-8h. Detalhe completo CHECKLIST §#169.
+- ⏳ **#170** [P1 growth v0.2.1.4 NOVO] **Reviews Play Store strategy — In-App Review API + reply playbook.** Plugin `@capacitor-community/in-app-review` API. Trigger inteligente: pós 3 doses tomadas + alarme disparou OK + 7 dias uso ativo (não show no boot). Response template Console (3 categorias: positive thanks/negative apology+fix promise/feature request acknowledge). Reply playbook turnaround <24h (canonical responses + escalation pra bugs reais ROADMAP novos). Meta launch: 4.3+ rating + 50+ reviews mês 6 + reply rate >90%. Esforço 4-5h. Detalhe completo CHECKLIST §#170.
+- ⏳ **#171** [P1 growth v0.2.1.4 NOVO] **Marketing orgânico playbook BR — Reddit + Instagram + LinkedIn + TikTok.** (a) Reddit BR target subs: r/saude, r/idosos, r/cuidadores, r/diabetes, r/tdah, r/bipolar, r/depressao, r/brasil (post útil + signature dosymed.app, evitar spam ban); (b) Instagram strategy: hashtags BR healthcare (#cuidadosaude #cuidadoidoso #saudemental #medicacao), parcerias 5-10 microinfluencers cuidadores (10K-50K followers, R$ 100-300/post permuta); (c) LinkedIn healthcare BR (médicos/farmacêuticos/cuidadores profissionais — content B2B trust); (d) TikTok healthcare BR (POV cuidadora 30s vídeos UX); (e) Content calendar 3 posts/semana 6 meses (90 posts initial). Esforço 8-10h setup + 2-3h/semana ongoing. Detalhe completo CHECKLIST §#171.
+- ⏳ **#173** [P1 growth v0.2.1.4 NOVO] **Healthcare differentiators moat — promover #064 + #065 + #066 P3→P1.** Análise concorrentes: Medisafe/MyTherapy faltam features healthcare deep BR. Dosy pode criar moat real: (a) **#064 promovido P1**: verificação interações medicamentosas + alergias (parceria FDA OpenFDA API ou DataBase Brasil ANVISA); (b) **#065 promovido P1**: estoque medicação + alerta "está acabando" (input quantidade restante + cálculo dias até zero baseado em interval); (c) **#066 promovido P1**: lembrete consulta médica + integração Calendar (.ics export). Posicionamento marketing: "Dosy = ÚNICO app brasileiro com verificação interações + estoque + agenda médica integrada". Esforço cada: #064 8-12h (mais complexo), #065 4-6h, #066 3-4h. Total 15-22h. Detalhe completo CHECKLIST §#173 + atualização entries §6.5 P3 #064/#065/#066.
+
 - ✅ **#024** [Plan, fechado v0.2.0.5 — parte de #126] Pre-commit hooks. Antes só eslint via lint-staged. Agora gitleaks `protect --staged` (block secrets) + lint-staged (block lint). Husky 9.1.7 + gitleaks 8.30.1 + GitHub Action gitleaks/gitleaks-action@v2.
 - ✅ **#026** [Plan — fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Emails oficiais @dosymed.app via **ImprovMX free**. DNS Hostinger 2 MX + SPF TXT. Domain VERIFIED. 7 aliases ativos forward → `dosy.med@gmail.com`: catch-all + contato + privacidade + suporte + legal + dpo + security + hello. Não conflita Resend SMTP #154 (subdomain `send.`). + 8º filtro Gmail catch-all `to:(dosymed.app)` Never Spam. Plan FASE 18.5
 - 🚫 **#027** [Plan — superseded v0.2.0.12] Substituído por #129-#133 (estratégia Reddit + Google Group público em vez de pessoas conhecidas). Item original "Closed Testing + 12 testers via amigos" não-aplicável.
@@ -552,6 +560,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ✅ **#074** [P2 fechado v0.2.0.2] Habilitar upload debug symbols (`ndk.debugSymbolLevel 'FULL'`). Resolve aviso recorrente Play Console + melhora Sentry NDK stack traces (necessário pra #110 native crashes).
 - ⏳ **#047** [P2, Plan FASE 23 backlog] **Google Play Integrity API.**
 - ⏳ **#155** [P2 launch polish] **Adicionar 2 screenshots Console pós-v0.2.0.12:** "Alterar senha" Ajustes (#152) + "Recuperar senha código 6 dígitos" Login (#153). Capturar S25 Ultra real prod pós-merge master.
+- ⏳ **#172** [P2 growth v0.2.1.4 NOVO] **Landing page dosymed.app marketing + blog SEO healthcare BR.** Hoje dosymed.app só serve PWA + /privacidade + /termos. Adicionar: (a) landing pages /sobre, /pacientes, /cuidadores, /precos com SEO; (b) blog SEO 12 artigos initial 1500+ palavras BR target longtail keywords ("como organizar medicação idoso Alzheimer", "alarme dose esquecida diabético tipo 2", "compartilhar lembrete remédio família WhatsApp", "lembrete medicação ansiedade depressão"); (c) Schema.org `SoftwareApplication` + `MedicalApplication` markup; (d) OG tags + Twitter cards; (e) sitemap.xml + robots.txt + canonical URLs. Esforço 12-16h initial + 2h/artigo (24h total 12 artigos). Detalhe completo CHECKLIST §#172.
 
 ---
 
@@ -678,11 +687,11 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#062** Anexar comprovantes/imagens (PRO).
 - ⏳ **#063** Avaliar remoção `mockStore.js`.
 
-**Healthcare-specific (diferenciadores) [Auditoria]:**
+**Healthcare-specific (diferenciadores) [Auditoria — todos promovidos P1 via #173 healthcare differentiators moat]:**
 
-- ⏳ **#064** Verificação interações medicamentosas + alergia. → [01 §11](auditoria/01-relatorio-completo.md#11--funcionalidades-específicas-de-medicação--score-6510)
-- ⏳ **#065** Estoque + alerta "está acabando".
-- ⏳ **#066** Lembrete de consulta médica.
+- ⏳ **#064** [promovido P1 via #173] Verificação interações medicamentosas + alergia. OpenFDA API ou ANVISA scraping. → [01 §11](auditoria/01-relatorio-completo.md#11--funcionalidades-específicas-de-medicação--score-6510)
+- ⏳ **#065** [promovido P1 via #173] Estoque + alerta "está acabando". Input quantidade + cálculo dias até zero.
+- ⏳ **#066** [promovido P1 via #173] Lembrete de consulta médica + Calendar .ics export.
 
 **Expansão (Plan FASE 23.6):**
 
@@ -853,22 +862,25 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~168 itens
+- **Total:** ~173 itens
   - ✅ 115 fechados
-  - ⏳ 47 abertos
+  - ⏳ 52 abertos
   - 🚨 2 BLOQUEADOS Google review
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (49 total ⏳/🚨):**
-  - 🚀 IMPLEMENTAÇÃO: 10 (6 P0 + 2 P1 + 2 P2)
+- **Distribuição por categoria abertos (54 total ⏳/🚨):**
+  - 🚀 IMPLEMENTAÇÃO: 15 (6 P0 + 6 P1 + 3 P2)
   - ✨ MELHORIAS: 36 (3 P1 + 9 P2 + 24 P3)
   - 🐛 BUGS: 3 (P2)
   - 🔄 TURNAROUND: 0
 - **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
+- **P1 growth/marketing/ASO:** #169 ASO Play Store + #170 Reviews strategy + #171 Marketing orgânico playbook + #173 Healthcare differentiators moat
 - **P2 escala egress:** #166 MessagePack + #167 Cursor/cols/Supavisor + #168 CDN cache strategy
+- **P2 growth:** #172 Landing page + blog SEO healthcare BR
 - **Esforço P0 restante até Production:** ~3-5 dias manual user (recrutamento + 14d gate testers) + variável (Google review #158 1-3 semanas)
 - **Esforço escala egress:** ~14-21h código (#163-#168 distribuído próximas releases)
-- **Wallclock até Open Testing pública:** ~5-7 semanas (rejection #158 fix → Closed Testing 14d gate → ramp → estabilização) — egress otimização em paralelo
+- **Esforço growth/marketing:** ~50-65h initial (#169-#173) + 2-3h/semana ongoing (#171 content calendar)
+- **Wallclock até Open Testing pública:** ~5-7 semanas (rejection #158 fix → Closed Testing 14d gate → ramp → estabilização) — egress + growth em paralelo
 
 ---
 

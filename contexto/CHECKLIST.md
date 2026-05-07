@@ -3502,3 +3502,673 @@ self.addEventListener('fetch', (event) => {
 - ROI menor que #163-#165 (que atacam DB queries diretamente) MAS quase grátis (config files apenas, low risk)
 - Aproveita quota Cached Egress 250 GB ociosa do Pro plan
 - Combinado com #166 (compression headers) cobre todo bullet 7 da análise original
+
+---
+
+## Plano marketing/ASO/growth (preparar Open Testing/Production launch)
+
+> **Contexto análise concorrentes 2026-05-07:** Forecast realista solo dev sem marketing budget = 1.5K-3K MAU Year 1 (vs Medisafe ~200K MAU BR, MyTherapy ~100K, Pílula Certa ~500K — todos com anos brand recognition + parcerias). Solo dev BR healthcare apps típicos demoram 2-3 anos pra 50K MAU sem investimento. Dosy diferenciadores técnicos forte (alarme nativo crítico, compartilhamento, LGPD healthcare) MAS sem ataque marketing = stagnation. Items #169-#173 visam Year 1 5K-10K MAU + Year 3 50K MAU realista executando playbook.
+>
+> **Sequência sugerida** (ordem dependência + gating launch):
+> 1. **#169** ASO Play Store completo (6-8h) — pre-Production launch obrigatório
+> 2. **#170** Reviews strategy + In-App Review (4-5h) — ativar dia 1 Production
+> 3. **#173** Healthcare differentiators moat (15-22h, promove #064/#065/#066) — diferencial vs competitors
+> 4. **#171** Marketing orgânico playbook BR (8-10h setup + ongoing) — paralelo Production
+> 5. **#172** Landing page + blog SEO (12-16h initial + 24h conteúdo) — SEO leva 6-12 meses indexar
+>
+> Total esforço: **~50-65h initial** + 2-3h/semana ongoing (#171 content + #170 reviews reply).
+
+### #169 — ASO Play Store completo: keywords + listing copy + screenshots strategy + A/B test
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — pre-Production launch)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 6-8h
+- **Release sugerida:** v0.2.2.0+ (antes Production #133)
+
+**Problema:**
+
+Listing Play Store atual tem categoria "Saúde e fitness" + descrição básica + 8 screenshots (#025) + ícone + feature graphic. Falta otimização ASO real:
+- Keywords não pesquisadas (qual termo BR converte?)
+- Título 30 chars sem keyword primária forte
+- Short description 80 chars genérica
+- Full description 4000 chars sem distribuição estratégica keywords
+- Screenshots ordem não testada (primeiros 3 = 80% conversão)
+- Sem vídeo preview (boost conversão 25-35%)
+- Zero A/B test rodando
+
+**Abordagem:**
+
+(a) **Keywords research BR healthcare** (use Google Play Console Keyword Planner + Sensor Tower free tier + AppTweak trial):
+
+Tier 1 (alta intent, médio volume):
+- "lembrete remédio" (~10K searches/mês BR)
+- "alarme medicação" (~5K)
+- "controle medicamentos" (~3K)
+- "lembrete dose" (~2K)
+
+Tier 2 (long-tail, alta conversão):
+- "lembrete remédio idoso"
+- "controle medicamentos diabetes"
+- "alarme medicação Alzheimer"
+- "cuidador dose remédio"
+- "compartilhar medicação família"
+
+(b) **Listing copy otimizado:**
+
+**Título** (30 chars max):
+- Atual: "Dosy" (subutilizado)
+- Proposto: "Dosy: Lembrete de Remédios" (28 chars, keyword primária)
+
+**Short description** (80 chars):
+- "Alarme inteligente p/ medicação. Multi-paciente. Cuidadores. 100% PT-BR." (78 chars)
+
+**Full description** (4000 chars) estrutura:
+
+```
+[Hook 1ª linha — 1ª impressão Play Store]
+Nunca mais esqueça uma dose. O Dosy te avisa na hora certa, com alarme que toca alto até no modo silencioso.
+
+[Problema/dor — 2-3 linhas]
+Quem cuida de pais idosos, controla medicação para diabetes, ansiedade ou tratamento contínuo sabe: esquecer uma dose pode comprometer todo o tratamento.
+
+[Solução — features primárias com keywords]
+✅ ALARME CRÍTICO que toca alto + tela cheia (mesmo no silencioso)
+✅ MULTI-PACIENTE: gerencie remédios de pais, filhos, marido/esposa
+✅ COMPARTILHAR com cuidadores e familiares
+✅ HISTÓRICO completo de doses tomadas
+✅ TRATAMENTOS contínuos (controle hipertensão, diabetes, depressão)
+
+[Diferencial vs concorrentes]
+Diferente de outros apps de lembrete de remédio, o Dosy:
+- Toca alarme REAL (não só notificação que some)
+- 100% em português BR (não tradução)
+- Funciona offline (não precisa internet)
+- LGPD: seus dados ficam só com você
+
+[Use cases]
+Perfeito para: idosos com Alzheimer, diabéticos tipo 2, controle de TDAH, ansiedade, depressão, tratamento de tireoide, cuidadores profissionais e familiares.
+
+[CTA + planos]
+GRATUITO: 1 paciente + lembretes ilimitados
+PRO R$ 14,90/mês: pacientes ilimitados + compartilhamento + sem anúncios
+
+[Trust signals]
+🏥 Conformidade LGPD healthcare
+🔒 Dados criptografados (Android Keystore)
+📱 Funciona em qualquer Android 7+
+⭐ Avaliação 4.X (X reviews)
+
+[Footer keywords secundárias]
+lembrete remédio | alarme medicação | controle medicamentos | dose remédio | cuidador idoso | diabetes hipertensão | tratamento contínuo
+```
+
+(c) **Screenshots strategy** (primeiros 3 = 80% conversão):
+1. **Screenshot 1**: Tela alarme nativo fullscreen disparado (visual impact + keyword "alarme tela cheia")
+2. **Screenshot 2**: Dashboard com 3-4 pacientes + "Doses Hoje 5/8" (multi-paciente USP)
+3. **Screenshot 3**: Modal compartilhar paciente com família (cuidadores diferencial)
+4. Screenshots 4-8: features secundárias (#160 PatientDetail, #161 alerts, histórico, paywall, ajustes)
+
+Cada screenshot com **caption text overlay** keyword-rich (lib `screenshots-pro` ou Photoshop): "Alarme que TOCA ALTO" / "Multi-paciente" / "Compartilhe com família".
+
+(d) **Vídeo preview Play Console** (30s):
+- 0-3s: Hook (paciente idoso esquece remédio cena)
+- 4-10s: Solução (Dosy alarme dispara, acorda paciente)
+- 11-20s: Features carousel (multi-paciente + compartilhar + histórico)
+- 21-27s: Use cases (diabetes/Alzheimer/cuidador)
+- 28-30s: CTA "Baixe Dosy grátis" + logo
+
+Gravação device real S25 Ultra Studio captura. Trilha sonora upbeat 30s (Epidemic Sound free tier).
+
+(e) **A/B test Play Console experiment**:
+- Variant A: screenshots ordem #1-#8 atual
+- Variant B: screenshots reordem (alarme primeiro vs multi-paciente primeiro)
+- 50/50 split 2 semanas
+- Métrica: install conversion rate
+- Vencedor → manter
+
+**Dependências:**
+- Console acesso (já tem)
+- Vídeo gravação device real (need user manual ~1h)
+- Screenshots regerar com text overlay (#155 + novos)
+
+**Critério de aceitação:**
+- ✅ Listing copy publicado Console com keywords distribuídas
+- ✅ 8 screenshots com text overlay keyword-rich
+- ✅ Vídeo preview 30s uploaded (YouTube unlisted + linked Console)
+- ✅ A/B test experiment ativo Console
+- ✅ Métricas baseline capturadas (install rate, store visit rate, conversion rate)
+
+**Métrica esperada:**
+- +30-50% Play Store conversion rate (visit → install)
+- +20-40% organic install volume via keyword ranking
+
+---
+
+### #170 — Reviews Play Store strategy: In-App Review API + reply playbook
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — ativar dia 1 Production)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 4-5h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Reviews Play Store são **trust signal crítico** + **ranking factor algoritmo**:
+- Apps com 4.3+ rating + 50+ reviews convertem 3-5× mais que apps sem reviews
+- Algoritmo ASO penaliza apps <4.0 rating (cai pra trás em searches)
+- Negative reviews sem reply parecem app abandonado
+- Solo dev sem reply rate alto = signal ruim pra Google
+
+**Abordagem:**
+
+(a) **In-App Review API integração**:
+
+Plugin Capacitor: `@capacitor-community/in-app-review`
+
+```bash
+npm i @capacitor-community/in-app-review
+npx cap sync android
+```
+
+```js
+// src/services/inAppReview.js
+import { InAppReview } from '@capacitor-community/in-app-review'
+import { Capacitor } from '@capacitor/core'
+
+const REVIEW_LS_KEY = 'dosy_review_prompt_seen'
+const REVIEW_DEFER_DAYS = 90 // Re-prompt se user já viu há 90+ dias
+
+export async function maybePromptReview() {
+  if (Capacitor.getPlatform() !== 'android') return
+
+  const seen = localStorage.getItem(REVIEW_LS_KEY)
+  if (seen) {
+    const seenDate = new Date(seen)
+    const daysAgo = (Date.now() - seenDate.getTime()) / 86400000
+    if (daysAgo < REVIEW_DEFER_DAYS) return
+  }
+
+  try {
+    await InAppReview.requestReview()
+    localStorage.setItem(REVIEW_LS_KEY, new Date().toISOString())
+  } catch (e) {
+    console.warn('In-app review failed:', e)
+  }
+}
+```
+
+(b) **Trigger inteligente** (não show no boot — happy path moments):
+
+```js
+// src/hooks/useReviewPrompt.js
+import { useEffect } from 'react'
+import { useAuth } from './useAuth'
+import { maybePromptReview } from '../services/inAppReview'
+
+const TRIGGER_LS = 'dosy_review_trigger_state' // {dosesTaken, alarmsFired, daysActive, lastTrigger}
+
+export function useReviewPrompt() {
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user) return
+    const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+    const eligible =
+      (state.dosesTaken || 0) >= 3 &&
+      (state.alarmsFired || 0) >= 1 &&
+      (state.daysActive || 0) >= 7
+    if (eligible) maybePromptReview()
+  }, [user])
+}
+
+// Increment counters quando user faz ação positiva:
+export function trackDoseTaken() {
+  const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+  state.dosesTaken = (state.dosesTaken || 0) + 1
+  localStorage.setItem(TRIGGER_LS, JSON.stringify(state))
+}
+
+export function trackAlarmFired() {
+  const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+  state.alarmsFired = (state.alarmsFired || 0) + 1
+  localStorage.setItem(TRIGGER_LS, JSON.stringify(state))
+}
+```
+
+Wire em DoseModal (mark taken) + AlarmService (alarm fired) + App.jsx daysActive tracker.
+
+(c) **Response template Play Console** (3 categorias):
+
+**Positive (4-5 stars):**
+```
+Olá [Nome]! Obrigado pela avaliação 5 estrelas! Ficamos muito felizes que o Dosy está te ajudando a cuidar da sua [família/saúde]. Se tiver sugestões de novas features, me escreve em contato@dosymed.app! 💜
+```
+
+**Negative (1-2 stars):**
+```
+Olá [Nome], desculpe pela experiência ruim. Pode me contar exatamente o que aconteceu pra eu corrigir? Manda detalhes pra contato@dosymed.app que vou priorizar o fix. Quero muito que o Dosy funcione bem pra você.
+```
+
+**Feature request (3-4 stars + sugestão):**
+```
+Oi [Nome]! Boa sugestão sobre [feature]. Vou adicionar no roadmap. Algumas features parecidas estão em desenvolvimento: [feature relacionada]. Se quiser acompanhar updates, segue @dosymed no Instagram!
+```
+
+(d) **Reply playbook** (turnaround <24h):
+- Verificar Play Console reviews diariamente (calendar reminder 9h)
+- Responder TODAS reviews em <24h (inclusive 5 stars sem texto = "Obrigado!")
+- Negative reviews: criar item ROADMAP novo + reply mencionando ETA fix
+- Feature requests: agradecer + adicionar tag `[user-requested]` em ROADMAP CHECKLIST origem
+
+(e) **Métricas tracking PostHog**:
+```js
+// Após maybePromptReview:
+posthog.capture('review_prompted', { source: 'in_app' })
+// User feedback (não temos visibilidade real review action mas trackeamos prompt)
+```
+
+**Dependências:**
+- Plugin install + cap sync
+- Hooks integration DoseModal + AlarmService + App.jsx
+- Console reviews monitoring habit user
+
+**Critério de aceitação:**
+- ✅ Plugin instalado + funcional Android device real
+- ✅ Trigger fires APENAS após 3 doses + 1 alarm + 7 days active
+- ✅ Re-prompt 90 dias se user dismissed
+- ✅ Console reply rate >90% reviews <24h turnaround
+- ✅ Validado device real S25 Ultra (eligibility logic + native dialog)
+
+**Métrica esperada:**
+- 30-40% prompted users deixam review
+- Review rate: 1 review per 50 MAU típico (Dosy: 10-30 reviews mês 6 com 1K MAU)
+- Rating mantém 4.3+ se app funciona + replies acontecem
+
+---
+
+### #171 — Marketing orgânico playbook BR: Reddit + Instagram + LinkedIn + TikTok
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — paralelo Production launch)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 8-10h setup + 2-3h/semana ongoing
+- **Release sugerida:** v0.2.2.0+ ongoing
+
+**Problema:**
+
+Solo dev sem marketing budget depende 100% orgânico. Brasil tem comunidades healthcare ativas em multiple platforms — Dosy precisa presença consistente sem virar spam.
+
+**Abordagem:**
+
+(a) **Reddit BR** target subs:
+
+| Sub | Members | Estratégia |
+|---|---|---|
+| r/saude | 80K | Posts úteis (não-promo) + mention Dosy em comments quando relevante |
+| r/idosos | 5K | Cuidadores idosos = persona PRO target |
+| r/cuidadores | 3K | Direct fit |
+| r/diabetes | 15K | Use case medicação contínua |
+| r/tdah | 60K | Use case medicação psiquiátrica diária |
+| r/bipolar | 8K | Use case adesão tratamento crítica |
+| r/depressao | 25K | Use case medicação contínua + cuidador familiar |
+| r/brasil | 1M | Posts ocasionais virais (não focused healthcare) |
+
+Regras:
+- 90% posts úteis (responder dúvidas + share knowledge)
+- 10% promoção sutil (signature: "Eu uso o Dosy pra isso, é grátis: dosymed.app")
+- Nunca spam direto = ban auto
+- Karma build first (~1 mês posting útil antes de mention Dosy)
+
+(b) **Instagram strategy**:
+
+Hashtags BR healthcare (pesquisa Instagram explore):
+- #cuidadosaude (1.2M posts)
+- #cuidadoidoso (340K)
+- #saudemental (8M)
+- #medicacao (200K)
+- #diabetesbrasil (450K)
+- #cuidadorfamilia (90K)
+
+Conteúdo strategy (3 posts/semana):
+- 1 post educativo (carrossel "5 dicas pra organizar medicação idoso")
+- 1 post UX Dosy (vídeo 30s feature highlight)
+- 1 post user testimony (anônimo, com permissão)
+
+Parcerias microinfluencers (10K-50K followers cuidadores):
+- Lista 50 candidatos via search hashtags + manual review
+- Outreach DM personalizada (não copy-paste)
+- Permuta: PRO grátis 1 ano + R$ 100-300/post (budget total R$ 1-3K mês 1)
+- Meta: 5-10 microinfluencers ativos mês 6
+
+(c) **LinkedIn healthcare BR** (B2B trust):
+
+Conteúdo:
+- Posts sobre LGPD healthcare (autoridade técnica)
+- Cases de cuidadores profissionais usando Dosy
+- Articles long-form Dosy founder ("Por que criamos um app de medicação 100% LGPD compliant")
+
+Network targets:
+- Médicos geriatras BR
+- Farmacêuticos clínicos
+- Cuidadores profissionais
+- Healthcare tech founders BR
+
+(d) **TikTok healthcare BR**:
+
+Formato POV cuidadora 30s:
+- "POV: você cuida da sua mãe e nunca esquece um remédio porque..."
+- "Como organizo os 7 remédios da minha avó"
+- "Minha rotina manhã com app de medicação"
+
+Hashtags: #cuidadoraidosa #saudefamilia #organizacaocuidador
+
+3 vídeos/semana inicial. Algoritmo TikTok BR favorece autenticidade > production value.
+
+(e) **Content calendar 6 meses**:
+
+```
+Semana 1-4 (mês 1):
+- Reddit: 1 post útil/semana cada sub-prioritário (r/saude, r/idosos, r/cuidadores, r/diabetes, r/tdah)
+- Instagram: 3 posts/semana (12 total mês 1)
+- LinkedIn: 1 post/semana
+- TikTok: 3 vídeos/semana
+
+Semana 5-12 (mês 2-3):
+- Outreach 50 microinfluencers Instagram
+- Reddit: continuar útil + começar mention sutil
+- Blog SEO #172 começa publicar (1 artigo/semana)
+
+Semana 13-26 (mês 4-6):
+- Parcerias 5-10 microinfluencers ativas
+- Iterate winning content (double down 80/20)
+- Avaliar metrics: MAU, conversion rate, CAC
+```
+
+**Dependências:**
+- Conta Reddit autenticada (build karma 1 mês antes promo)
+- Conta Instagram @dosymed (criar)
+- Conta LinkedIn dosy.med (já tem? verificar)
+- Conta TikTok @dosymed (criar)
+- Budget R$ 1-3K mês 1 microinfluencer permuta
+
+**Critério de aceitação:**
+- ✅ Contas criadas + first posts publicados (4 platforms)
+- ✅ Calendar 90 dias agendado (Buffer/Hootsuite ou planner manual)
+- ✅ 5 microinfluencers ativos mês 3
+- ✅ 50+ posts orgânicos publicados mês 3
+- ✅ Métricas tracking: followers growth + click-through rate landing dosymed.app + Play Store install attribution UTM
+
+**Métrica esperada:**
+- 100-500 installs/mês orgânicos via Reddit (mês 3)
+- 200-1000 installs/mês via Instagram parcerias (mês 6)
+- Brand awareness BR healthcare niche +200% (mensurável via brand search "dosy app")
+
+---
+
+### #172 — Landing page dosymed.app marketing + blog SEO healthcare BR
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P2 (growth — SEO leva 6-12 meses indexar)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 12-16h initial + 2h/artigo (24h total 12 artigos)
+- **Release sugerida:** v0.2.3.0+ → v0.2.5.0+
+
+**Problema:**
+
+dosymed.app hoje só serve PWA + /privacidade + /termos. Sem SEO BR healthcare = invisible Google searches. Apps medicação BR top ranking (Medisafe, MyTherapy) têm sites com blog SEO + landing pages otimizadas há anos.
+
+**Abordagem:**
+
+(a) **Landing pages** (rotas novas Vite SSG ou client-rendered + meta tags):
+- `/sobre` — Quem somos, missão, LGPD compliance, equipe
+- `/pacientes` — App pra quem? Diabetes/Alzheimer/cuidadores idosos use cases
+- `/cuidadores` — Multi-paciente + compartilhamento family-friendly
+- `/precos` — Free vs PRO comparativa + FAQ pricing
+
+Cada página: H1 com keyword primária + 800-1200 palavras + CTA Play Store + Schema.org markup.
+
+(b) **Blog SEO** 12 artigos initial (1500+ palavras cada):
+
+| Artigo | Keyword primária | Volume mensal BR |
+|---|---|---|
+| Como organizar medicação de idoso com Alzheimer | "organizar medicação idoso Alzheimer" | 1K |
+| Alarme de dose esquecida pra diabetes tipo 2 | "alarme dose diabetes" | 800 |
+| Compartilhar lembrete de remédio com a família via WhatsApp | "compartilhar medicação família" | 600 |
+| Lembrete de medicação para ansiedade e depressão | "lembrete remédio ansiedade" | 1.5K |
+| Top 5 apps de lembrete de remédio no Brasil 2026 | "melhor app lembrete remédio" | 3K |
+| Como funciona o alarme nativo Android para medicação | "alarme medicação Android" | 500 |
+| Cuidador de idosos: 7 dicas pra controlar medicações | "cuidador idoso medicação" | 800 |
+| Tratamento contínuo: como não esquecer doses por meses | "tratamento contínuo medicação" | 400 |
+| LGPD na saúde: dados médicos no app são seguros? | "LGPD saúde dados" | 300 |
+| Diferença entre lembrete e alarme de medicação | "lembrete vs alarme remédio" | 200 |
+| Como ajustar a dose de Mounjaro semanal pelo app | "Mounjaro lembrete semanal" | 1.2K (trending) |
+| Top 10 medicamentos crônicos mais prescritos BR 2026 | "medicamentos mais prescritos BR" | 2K |
+
+Cada artigo: H1+H2 hierarchy + meta description 150-160 chars + internal linking + outbound link autoridade (FDA, ANVISA) + CTA download Dosy.
+
+(c) **Schema.org markup**:
+
+Página inicial:
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Dosy",
+  "operatingSystem": "Android",
+  "applicationCategory": "HealthApplication",
+  "applicationSubCategory": "MedicalApplication",
+  "offers": [
+    {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "BRL",
+      "name": "Free"
+    },
+    {
+      "@type": "Offer",
+      "price": "14.90",
+      "priceCurrency": "BRL",
+      "name": "PRO Mensal"
+    }
+  ],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.5",
+    "ratingCount": "150"
+  }
+}
+</script>
+```
+
+Blog posts:
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "MedicalWebPage",
+  "headline": "Como organizar medicação de idoso com Alzheimer",
+  "datePublished": "2026-08-01",
+  "author": { "@type": "Person", "name": "Luiz Henrique" },
+  "audience": { "@type": "MedicalAudience", "audienceType": "Caregivers" }
+}
+</script>
+```
+
+(d) **OG tags + Twitter cards**:
+```html
+<meta property="og:title" content="Dosy: Lembrete de Remédios com Alarme Inteligente">
+<meta property="og:description" content="Nunca esqueça uma dose. Alarme que toca alto, multi-paciente, compartilhamento com família.">
+<meta property="og:image" content="https://dosymed.app/og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+```
+
+(e) **Sitemap.xml + robots.txt + canonical URLs**:
+```xml
+<!-- /sitemap.xml -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://dosymed.app/</loc><priority>1.0</priority></url>
+  <url><loc>https://dosymed.app/sobre</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/pacientes</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/cuidadores</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/precos</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/blog/organizar-medicacao-alzheimer</loc><priority>0.7</priority></url>
+  <!-- ...11 more articles -->
+</urlset>
+```
+
+**Dependências:**
+- Vite static page rendering OR React Router routes + meta dinâmica via react-helmet
+- Editor blog (markdown files src/content/blog/*.md OR Notion CMS)
+- Domain SEO basics (verify Google Search Console + submit sitemap)
+
+**Critério de aceitação:**
+- ✅ 4 landing pages publicadas com SEO básico
+- ✅ 12 artigos blog publicados (release distribuído ao longo 12 semanas)
+- ✅ Schema.org markup validado Rich Results Test Google
+- ✅ Google Search Console configurado + sitemap indexado
+- ✅ Lighthouse SEO score ≥90 todas páginas
+- ✅ 5+ artigos rankeando top 10 Google BR mês 6 (longtail keywords)
+
+**Métrica esperada:**
+- 500-2000 organic Google search visits/mês (mês 6)
+- 1000-5000 organic visits/mês (mês 12)
+- 5-15% conversion rate visit → install (50-300 installs/mês via SEO mês 12)
+- SEO leva 6-12 meses indexar — investimento longprazo
+
+---
+
+### #173 — Healthcare differentiators moat: promove #064 #065 #066 P3→P1
+
+- **Status:** ⏳ Aberto (umbrella; itens individuais ficam em §6.5 P3 mas com promotion note)
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — diferencial vs Medisafe/MyTherapy/Pílula Certa)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 15-22h total (#064: 8-12h, #065: 4-6h, #066: 3-4h)
+- **Release sugerida:** v0.2.3.0+ → v0.3.0.0+
+
+**Problema:**
+
+Análise competitive: Medisafe, MyTherapy, Pílula Certa são genéricos pra reminder. Faltam features healthcare deep BR que cuidadores REAIS pedem:
+- Verificação interações medicamentosas (ex: warfarin + ibuprofen = sangramento)
+- Verificação alergias (ex: paciente alérgico AAS, medicação nova contém AAS)
+- Estoque medicação (acabar sem aviso = adesão quebrada)
+- Lembrete consulta médica (esquece consulta = receita expira = sem medicação)
+
+Dosy pode criar moat real com essas 3 features + posicionamento marketing forte.
+
+**Abordagem:**
+
+**(a) #064 — Verificação interações medicamentosas + alergias** (8-12h, mais complexo):
+
+Data sources:
+- **OpenFDA Drug API** (US, free): https://open.fda.gov/apis/drug/
+- **DrugBank API** (paid, mais completo)
+- **ANVISA Bulário Eletrônico** (BR, scraping limitado)
+
+Estratégia start: cache local OpenFDA → 1000 medicamentos top BR + interactions matrix:
+
+```sql
+-- Migration: medications + interactions tables
+CREATE TABLE medcontrol.medications_db (
+  id text PRIMARY KEY, -- e.g. "metformina-500mg"
+  name text NOT NULL,
+  active_ingredient text NOT NULL,
+  category text, -- "antidiabetic", "anti-inflammatory"
+  warnings text[]
+);
+
+CREATE TABLE medcontrol.medication_interactions (
+  med_a text REFERENCES medcontrol.medications_db,
+  med_b text REFERENCES medcontrol.medications_db,
+  severity text, -- "minor", "moderate", "severe"
+  description text,
+  PRIMARY KEY (med_a, med_b)
+);
+
+CREATE TABLE medcontrol.patient_allergies (
+  patient_id uuid REFERENCES medcontrol.patients,
+  allergen text NOT NULL,
+  severity text,
+  notes text,
+  PRIMARY KEY (patient_id, allergen)
+);
+```
+
+Frontend: TreatmentForm verifica novo medicamento contra paciente.allergies + paciente.activeTreatments. Warning visual amarelo (interação moderada) ou vermelho (severa) com dialog confirma "ainda quero adicionar".
+
+**(b) #065 — Estoque medicação + alerta acabando** (4-6h):
+
+```sql
+ALTER TABLE medcontrol.treatments
+  ADD COLUMN stock_quantity integer,
+  ADD COLUMN stock_unit text DEFAULT 'comprimidos',
+  ADD COLUMN stock_low_threshold integer DEFAULT 7;
+```
+
+Cálculo dias até zero baseado em interval + dose:
+```js
+function daysUntilEmpty(treatment) {
+  if (!treatment.stock_quantity) return null
+  const dosesPerDay = 24 / treatment.intervalHours
+  const dosesPerStock = treatment.stock_quantity / treatment.dose
+  return Math.floor(dosesPerStock / dosesPerDay)
+}
+```
+
+Alert header novo (#117/#118 padrão): "📦 Mounjaro acabando em 5 dias" → click → opção "Comprar" (Drogaria São Paulo / Drogasil affiliate links).
+
+**(c) #066 — Lembrete consulta médica + Calendar export** (3-4h):
+
+```sql
+CREATE TABLE medcontrol.appointments (
+  id uuid PRIMARY KEY,
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  doctor_name text,
+  specialty text,
+  scheduled_at timestamptz NOT NULL,
+  notes text,
+  reminder_minutes integer DEFAULT 1440 -- 24h before
+);
+```
+
+Frontend: `/consultas` rota nova + AppointmentCard + AppointmentForm. Local notification 24h before via Capacitor LocalNotifications (já temos infra). `.ics` export → user adiciona Google Calendar / Apple Calendar.
+
+**Posicionamento marketing** (use em #169 listing copy + #171 social media):
+
+> "Dosy é o ÚNICO app brasileiro de medicação com:
+> ✅ Verificação automática de interações medicamentosas (alerta antes da dose)
+> ✅ Controle de estoque (avisa antes de acabar)
+> ✅ Agenda de consultas integrada
+>
+> Outros apps só lembram da hora. Dosy cuida do tratamento inteiro."
+
+**Dependências:**
+- #064 → OpenFDA API integration OR ANVISA scraping (8-12h)
+- #065 → migration + UI (4-6h, simpler)
+- #066 → migration + new route + Calendar export (3-4h)
+- Atualização ROADMAP §6.5 P3 entries #064/#065/#066 com note "promovido P1 via #173"
+
+**Critério de aceitação:**
+- ✅ #064: TreatmentForm dispara warning interaction quando adiciona medicação que conflita com active treatment OR allergy paciente
+- ✅ #065: PatientDetail mostra estoque + alert header "acabando" ≤7 dias
+- ✅ #066: /consultas rota com appointment list + form + .ics export funcional
+- ✅ Marketing copy atualizado #169 listing + #171 social
+- ✅ Validação Chrome MCP preview + device real S25 Ultra
+
+**Métrica esperada:**
+- Differential ASO Play Store keyword "interações medicamentosas" (zero competidores BR atualmente)
+- +20-30% conversion rate Free→PRO (features só PRO)
+- Brand positioning "Dosy = sério" vs "Dosy = lembrete genérico"
+
+---
+
+> **Nota promotion #064/#065/#066:** entries originais em §6.5 ✨ MELHORIAS P3 ficam mantidas pra histórico mas com flag `[promovido P1 via #173]`. Quando implementar, mover entries do P3 pra fechado normal (✅).
