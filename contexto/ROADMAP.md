@@ -489,17 +489,19 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~189 itens · ✅ 115 fechados · ⏳ 68 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~190 itens · ✅ 117 fechados · ⏳ 67 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 11 (#018 #021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 20 |
+| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
 | ✨ MELHORIAS | 0 | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 46 |
-| 🐛 BUGS | 0 | 0 | 4 (#101-followup #110 #162 #189) | 0 | 4 |
+| 🐛 BUGS | 0 | 0 | 4 (#101-followup #110 #162-v2 #190) | 0 | 4 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **14** | **21** | **29** | **70** |
+| **Total abertos** | **6** | **13** | **21** | **29** | **69** |
+
+**Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
 **Fechados por categoria** (todos inline na posição correta dentro de §6.4-§6.7):
 
@@ -551,7 +553,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 #### 🟠 P1 — Alta
 
-- ⏳ **#018** [P1, Plan FASE 4.3 — escopo expandido 2026-05-05] **AdMob Android prod + AdSense web.** AdMob: App ID `ca-app-pub-2350865861527931~5445284437` + Banner ad unit JÁ configurados AndroidManifest + .env. Pendente: (a) flip `VITE_ADMOB_USE_TEST=true → false` em `.env.production`; (b) AdMob Console: "Requer revisão" desbloqueia auto pós-Play Store linking via Production track (#133). AdSense web (secundário): index.html ainda placeholder. AdBanner.jsx silently retorna null se vazio. Foco mobile.
+- ✅ **#018** [P1, fechado v0.2.1.3 vc 49 (2026-05-07) — validado device user] AdMob Android prod flag flip `VITE_ADMOB_USE_TEST=true→false` em `.env.production`. Banner real ads ativos pós-AAB build. Validação device real: ad real OR vazio (sem "Test Ad"). AdSense web placeholder mantido (foco mobile). AdMob Console "Veiculação limitada" desbloqueia auto pós Production track (#133).
 - ⏳ **#021** [P1, Plan FASE 18.3] **Backup keystore 3 locais seguros.**
 
 > **Plano marketing/ASO/growth (2026-05-07):** análise concorrentes BR (Medisafe/MyTherapy/Pílula Certa) revelou Dosy precisa ataque ofensivo: forecast realista solo dev sem marketing = 1.5K-3K MAU Year 1 (mercado satura ~50K MAU top apps). Items #169-#173 visam crescimento orgânico Year 1 alcançar 5K-10K MAU (vs 1.5K passive). Receita realista ano 1: R$ 5-15K bruto sem ataque marketing; R$ 30-60K com playbook executado.
@@ -791,7 +793,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ✅ **#123** [P2 UX/security, fechado v0.2.0.3] Sessão não invalida após DELETE auth.users. Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Erro/null força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation.
 - ⏳ **#162** [P2 UX healthcare-adjacent NOVO v0.2.1.4] **TreatmentForm warning `intervalHours/24 > durationDays`.** User lhenrique.pda 2026-05-06 reportou Mounjaro semanal salvo `durationDays=4` ao invés 28 (4 doses × 7d). `effectiveStatus` auto-ended dia 03/05 — alerta "encerrando" silenciou cedo. SQL data fix aplicado v0.2.1.2. **Fix v0.2.2.0+:** validação inline + warning amarelo + sugestão calcular automático. Detalhe completo CHECKLIST §#162.
 - ⏳ **#190** [P0 BUG critical v0.2.1.3 NOVO — 2026-05-07] **BUG-LOGOUT-RESUME: app desloga após idle >5min (extends #159).** User-reported 2026-05-07: "app no celular esta deslogando CONSTANTEMENTE... ja digitei a senha hoje umas 4 vezes... percebi que as vezes o app ta aberto em idle e quando volto pra ele ele pede login e senha DE NOVO". Pattern: idle ≥5min → resume → senha. Root cause: `useAppResume.js:44` `refreshSession()` em long idle pode falhar (network slow, SecureStorage hiccup Android Doze, server clock skew) → erro genérico → `onAuthStateChange` dispara `SIGNED_OUT` → user deslogado. Plus fallback `window.location.reload()` linha 57 agrava: re-mount React → useAuth init() boot → getUser() pode falhar de novo → cascade. #159 v0.2.1.1 cobriu boot path mas não resume path. **Fix v0.2.1.3 vc 50 hotfix:** mesma estratégia #159 em useAppResume — distinguir transient (network/5xx) vs auth real (401/403/refresh-revoked); preservar session em transient; remover reload fallback agressivo em catch. Detalhe completo CHECKLIST §#190.
-- ⏳ **#189** [P2 UX NOVO v0.2.1.4] **UpdateBanner mostra versionCode em vez versionName.** `useAppUpdate.js:90-94` fallback `code ${info.availableVersionCode}` quando Play Core retorna `availableVersion=undefined` (Android < API 31 OR Play Core older). Banner usuário vê "v code 49" em vez "v0.2.1.4". User reportou banner mostra `~44` (versionCode) — quer versionName que usamos no Console release notes. Fix: (a) primary — fetch `version.json` Vercel mesmo em native path quando `info.availableVersion` undefined; (b) fallback secondary — local map `VERSION_CODE_TO_NAME = {46:'0.2.1.0', 47:'0.2.1.1', 48:'0.2.1.2', 49:'0.2.1.4', ...}` mantido em build constant. Esforço 1-2h. Detalhe completo CHECKLIST §#189.
+- ✅ **#189** [P2 UX, fechado v0.2.1.3 vc 49 (2026-05-07) — validado device user] UpdateBanner versionName fix. useAppUpdate.js triple fallback chain: Play Core `availableVersion` → version.json Vercel → local map VERSION_CODE_TO_NAME → "versão N" PT-BR friendly. Promise.allSettled paralelo Play Core + version.json. Banner mostra "v0.2.1.3" (não "v code 49"). User-reported confirmado fix.
 
 ---
 
@@ -900,15 +902,15 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~189 itens
-  - ✅ 115 fechados
-  - ⏳ 68 abertos
+- **Total:** ~190 itens
+  - ✅ 117 fechados
+  - ⏳ 67 abertos
   - 🚨 2 BLOQUEADOS Google review
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (70 total ⏳/🚨):**
-  - 🚀 IMPLEMENTAÇÃO: 20 (6 P0 + 11 P1 + 3 P2)
+- **Distribuição por categoria abertos (69 total ⏳/🚨):**
+  - 🚀 IMPLEMENTAÇÃO: 19 (6 P0 + 10 P1 + 3 P2)
   - ✨ MELHORIAS: 46 (3 P1 + 14 P2 + 29 P3)
-  - 🐛 BUGS: 4 (P2 — #101-followup #110 #162 #189)
+  - 🐛 BUGS: 4 (P2 — #101-followup #110 #162-v2 #190)
   - 🔄 TURNAROUND: 0
 - **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
