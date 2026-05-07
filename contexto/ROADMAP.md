@@ -97,8 +97,8 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 ## 1. Contexto rápido
 
 **App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.1.4` (web/docs only) · master @ tag `v0.2.1.4` (publicada 2026-05-07 — refactor §6 ROADMAP 4 categorias + 27 NOVOS items planejamento #162-#189). **Android Play Store mantém v0.2.1.2 vc 48** (sem AAB build esta release). Versão `0.2.1.3` reservada pra próxima release code work.
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.4 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
+**Versão atual:** `0.2.1.3` · master @ tag `v0.2.1.3` (publicada 2026-05-07 — vc 51 Internal + Closed Alpha promovida). Pre-Reddit hardening: 5 fixes (#018 AdMob real ads · #162 v1+v2 TreatmentForm warning + toggle Dias/Semanas/Meses · #170 In-App Review API · #189 UpdateBanner versionName · #190 BUG-LOGOUT-RESUME). **Android Play Store: vc 51 Internal Testing publicado**, Closed Alpha aguarda Google review (~24-72h).
+**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.3 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
 **Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
 **⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
 **Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
@@ -150,9 +150,26 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Próxima branch:** `release/v0.2.1.3` (reservada pra code work próxima sessão — pulou v0.2.1.3 cronologicamente porque v0.2.1.4 saiu primeiro como docs-only release).
+**Próxima branch:** `release/v0.2.1.5` (cronológico próximo — pulou v0.2.1.4 que foi docs-only anterior).
 
-**Última release publicada:** v0.2.1.4 em 2026-05-07 (Vercel `dosymed.app` + tag git `v0.2.1.4` — sem AAB Play Store, **Android mantém v0.2.1.2 vc 48**) — release **docs-only**: refactor completo §6 ROADMAP em 4 categorias visuais (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) + bolinhas P0/P1/P2/P3 + legenda visual global topo doc + items fechados redistribuídos inline na posição correta + 27 NOVOS items planejamento criados (#162-#189).
+**Última release publicada:** v0.2.1.3 em 2026-05-07 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 51 + tag git `v0.2.1.3`) — pre-Reddit hardening release.
+
+**Items v0.2.1.3 fechados (5):**
+- ✅ #018 AdMob real ads ativados (`VITE_ADMOB_USE_TEST=false` em prod)
+- ✅ #162 v1 (vc 50) + v2 (vc 51) — TreatmentForm warning Mounjaro repro + toggle Dias/Semanas/Meses auto-switch
+- ✅ #170 In-App Review API + reply playbook (validação natural pós 7d uso)
+- ✅ #189 UpdateBanner versionName fix (Promise.allSettled triple fallback chain)
+- ✅ #190 BUG-LOGOUT-RESUME hotfix (extends #159 fix em useAppResume.js refreshSession transient vs auth)
+
+**Sequência AAB Play Store:**
+- vc 49 (publicado 09:47, validou #018 + #189)
+- vc 50 (publicado 10:11, hotfix #190 + #162 v1 + #170)
+- vc 51 (publicado 10:39, atual — adiciona #162 v2 toggle granularidade)
+
+**Items BLOQUEADOS Google review:**
+- 🚨 #130 Closed Testing track aguarda Google re-review pós-promote vc 51 (~24-72h até 7d)
+
+**Release anterior:** v0.2.1.4 em 2026-05-07 (Vercel `dosymed.app` + tag git `v0.2.1.4` — sem AAB Play Store, **Android mantém v0.2.1.2 vc 48**) — release **docs-only**: refactor completo §6 ROADMAP em 4 categorias visuais (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) + bolinhas P0/P1/P2/P3 + legenda visual global topo doc + items fechados redistribuídos inline na posição correta + 27 NOVOS items planejamento criados (#162-#189).
 
 **Items v0.2.1.4 (27 NOVOS items planejamento + 0 código):**
 - ✅ Refactor §6 ROADMAP completo (4 categorias + bolinhas + legenda topo)
@@ -489,7 +506,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~190 itens · ✅ 118 fechados · ⏳ 66 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~190 itens · ✅ 119 fechados · ⏳ 65 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
 
 **Abertos por categoria × prioridade:**
 
@@ -497,9 +514,9 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 |---|---|---|---|---|---|
 | 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
 | ✨ MELHORIAS | 0 | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 46 |
-| 🐛 BUGS | 0 | 0 | 3 (#101-followup #110 #190) | 0 | 3 |
+| 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **13** | **20** | **29** | **68** |
+| **Total abertos** | **6** | **13** | **19** | **29** | **67** |
 
 **Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
@@ -792,7 +809,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#110** [P2 native, Sentry DOSY-3 REGRESSED + DOSY-7] **Android native crashes — `art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown.** DOSY-3: 2 events 2 users. DOSY-7: 1 event Segfault. Investigar: AlarmActivity refactor v0.2.0.0 ValueAnimator + FrameLayout / DosyMessagingService FCM data handler / plugin nativo version mismatch / ProGuard R8 rules / Sentry NDK upload (#074 unblocked).
 - ✅ **#123** [P2 UX/security, fechado v0.2.0.3] Sessão não invalida após DELETE auth.users. Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Erro/null força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation.
 - ✅ **#162** [P2 UX, fechado v0.2.1.3 vc 50+51 (2026-05-07) — validado device user] TreatmentForm Mounjaro repro prevention. **v1 (vc 50):** warning amarelo inline quando intervalHours/24 > durationDays. **v2 (vc 51):** toggle Dias/Semanas/Meses acima campo Duração + auto-switch baseado intervalHours (24h→Dias, 168h/336h→Semanas, 720h→Meses). Internamente persiste durationDays (×1, ×7, ×30 multiplier). Edit mode detecta best unit display (28d→4 Semanas, 30d→1 Mês, 21d→21 Dias). User feedback v1 OK → migrou v2 confirmou OK.
-- ⏳ **#190** [P0 BUG critical v0.2.1.3 NOVO — 2026-05-07] **BUG-LOGOUT-RESUME: app desloga após idle >5min (extends #159).** User-reported 2026-05-07: "app no celular esta deslogando CONSTANTEMENTE... ja digitei a senha hoje umas 4 vezes... percebi que as vezes o app ta aberto em idle e quando volto pra ele ele pede login e senha DE NOVO". Pattern: idle ≥5min → resume → senha. Root cause: `useAppResume.js:44` `refreshSession()` em long idle pode falhar (network slow, SecureStorage hiccup Android Doze, server clock skew) → erro genérico → `onAuthStateChange` dispara `SIGNED_OUT` → user deslogado. Plus fallback `window.location.reload()` linha 57 agrava: re-mount React → useAuth init() boot → getUser() pode falhar de novo → cascade. #159 v0.2.1.1 cobriu boot path mas não resume path. **Fix v0.2.1.3 vc 50 hotfix:** mesma estratégia #159 em useAppResume — distinguir transient (network/5xx) vs auth real (401/403/refresh-revoked); preservar session em transient; remover reload fallback agressivo em catch. Detalhe completo CHECKLIST §#190.
+- ✅ **#190** [P0 BUG critical, fechado v0.2.1.3 vc 50 (2026-05-07) — validado device user] BUG-LOGOUT-RESUME extends #159. User-reported "app deslogando CONSTANTEMENTE em idle". Root cause useAppResume.js:44 `refreshSession()` long idle falha transient (Android Doze, SecureStorage hiccup) → SIGNED_OUT cascade. Fix: mesma estratégia #159 em resume path — distinguir transient vs auth real (401/403/refresh-revoked); preservar session em transient; remover `window.location.reload()` fallback agressivo. Validação device: idle >5min + ciclos repetidos = continua logado. Detalhe completo CHECKLIST §#190.
 - ✅ **#189** [P2 UX, fechado v0.2.1.3 vc 49 (2026-05-07) — validado device user] UpdateBanner versionName fix. useAppUpdate.js triple fallback chain: Play Core `availableVersion` → version.json Vercel → local map VERSION_CODE_TO_NAME → "versão N" PT-BR friendly. Promise.allSettled paralelo Play Core + version.json. Banner mostra "v0.2.1.3" (não "v code 49"). User-reported confirmado fix.
 
 ---
@@ -903,14 +920,14 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
 - **Total:** ~190 itens
-  - ✅ 118 fechados
-  - ⏳ 66 abertos
+  - ✅ 119 fechados
+  - ⏳ 65 abertos
   - 🚨 2 BLOQUEADOS Google review
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (68 total ⏳/🚨):**
+- **Distribuição por categoria abertos (67 total ⏳/🚨):**
   - 🚀 IMPLEMENTAÇÃO: 19 (6 P0 + 10 P1 + 3 P2)
   - ✨ MELHORIAS: 46 (3 P1 + 14 P2 + 29 P3)
-  - 🐛 BUGS: 3 (P2 — #101-followup #110 #190)
+  - 🐛 BUGS: 2 (P2 — #101-followup #110)
   - 🔄 TURNAROUND: 0
 - **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
