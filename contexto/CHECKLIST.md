@@ -1932,7 +1932,7 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 - **Próximo:** #130 importar email group `dosy-testers@googlegroups.com` em Closed Testing track Play Console.
 
 ### #130 — Configurar Closed Testing track no Console com Group como tester list
-- **Status:** 🚨 BLOQUEADO — Google Play **REJEITOU** review pós-submit (2026-05-05 23:30 BRT). Razão: "Política de requisitos do Play Console — Alguns tipos de apps só podem ser distribuídos por organizações". App declara categoria/recursos exigindo conta de **organização (CNPJ)**, conta atual `dosy.med@gmail.com` é pessoal. Resolução demanda decisão estratégica (criar conta org Google Play + transfer app, OU reverter declarações específicas que ativaram org gate). Ver §#158 abaixo.
+- **Status:** ✅ APROVADO Google 2026-05-06 (track ATIVO desde então). Rejeição inicial 2026-05-05 (org account required) resolvida via #158 fixes v0.2.1.2 (Console 13 declarações Apps de saúde desmarcadas Medicina + categoria medical→saude/fitness + manifest categories medical→lifestyle). Google revisou + aprovou Closed Testing track "Alpha". AABs vc 49-51 publicados Internal e promovidos Closed. Desbloqueia #131 #132 #133.
 - **Origem:** Estratégia recrutamento Closed Testing 2026-05-05
 - **Esforço:** 30 min config Console + 1h cross-checks pré-submit
 - **Dependências:** #129 (✅ done) + #156 página privacidade
@@ -2354,7 +2354,7 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 **Detalhe completo:** `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`
 
 ### #158 — Resolver rejection Google Play (org account required) NOVO P0 URGENTE
-- **Status:** 🚨 BLOQUEADO + URGENTE ANTES PRÓXIMO RELEASE — Google Play rejeitou submit Closed Testing 2026-05-05. Plano execução estruturado abaixo (7 passos) deve ser concluído **antes do próximo release v0.2.2.0**.
+- **Status:** ✅ FECHADO 2026-05-06 — Google APROVOU pós-fixes v0.2.1.2. Closed Testing track "Alpha" ativo desde 2026-05-06 mid-day (#130 ✅). **Fix path B aplicado:** reverter declarações Console (Apps de saúde 13 checkboxes Medicina desmarcados + categoria medical→saude/fitness + manifest categories medical→lifestyle). Path A (org account CNPJ + transfer app) NÃO necessário. Desbloqueou #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
 - **Origem:** Console submit #130 release/v0.2.1.0 (2026-05-05 23:14 BRT) → Google review rejeitado em <30 min com mensagem "Violação dos requisitos do Play Console — apps de certas categorias só por organização".
 - **Prioridade:** P0 URGENTE (bloqueador rollout Closed Testing público + Production track futuro)
 - **Esforço total:** 1-3 dias investigação + plano (passos 1-7) + 1-3 semanas execução plano (opção A/B/C escolhida)
@@ -2719,7 +2719,7 @@ const onClickEnding = () => {
 
 ### #162 — TreatmentForm UX warning intervalHours/24 > durationDays + toggle granularidade Dias/Semanas/Meses
 
-- **Status:** 🚧 v1 fechado v0.2.1.3 vc 50, v2 em curso v0.2.1.3 vc 51
+- **Status:** ✅ FECHADO v0.2.1.3 vc 51 (2026-05-07) — v1 (vc 50) warning amarelo + v2 (vc 51) toggle Dias/Semanas/Meses auto-switch. Validado device user (v2 OK).
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P2
 - **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2) + feedback v1 2026-05-07
@@ -5390,7 +5390,7 @@ const checkNative = useCallback(async () => {
 
 ### #190 — BUG-LOGOUT-RESUME: app desloga após idle >5min (extends #159)
 
-- **Status:** 🚧 Em progresso (fix implementado v0.2.1.3 vc 50, validação device pending)
+- **Status:** ✅ FECHADO v0.2.1.3 vc 50 (2026-05-07) — fix em useAppResume.js distinguir transient vs auth real (mesma estratégia #159). Validado device user ("190 ok").
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P0 (trust killer — bloqueador Reddit recrutamento testers)
 - **Origem:** User-reported 2026-05-07

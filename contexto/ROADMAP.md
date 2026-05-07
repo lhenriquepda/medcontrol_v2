@@ -154,20 +154,21 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 **Última release publicada:** v0.2.1.3 em 2026-05-07 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 51 + tag git `v0.2.1.3`) — pre-Reddit hardening release.
 
-**Items v0.2.1.3 fechados (5):**
-- ✅ #018 AdMob real ads ativados (`VITE_ADMOB_USE_TEST=false` em prod)
-- ✅ #162 v1 (vc 50) + v2 (vc 51) — TreatmentForm warning Mounjaro repro + toggle Dias/Semanas/Meses auto-switch
-- ✅ #170 In-App Review API + reply playbook (validação natural pós 7d uso)
-- ✅ #189 UpdateBanner versionName fix (Promise.allSettled triple fallback chain)
-- ✅ #190 BUG-LOGOUT-RESUME hotfix (extends #159 fix em useAppResume.js refreshSession transient vs auth)
+**Items v0.2.1.3 fechados (4 validados + 1 ship-only):**
+- ✅ #018 AdMob real ads ativados (`VITE_ADMOB_USE_TEST=false` em prod) — validado device user
+- ✅ #162 v1 (vc 50) + v2 (vc 51) — TreatmentForm warning Mounjaro + toggle Dias/Semanas/Meses — validado device user (v2 OK)
+- 🚧 #170 In-App Review API + reply playbook — código merged vc 50, **validação natural pendente** (trigger 3 doses + alarme + 7d uso ativo, não dá pra forçar)
+- ✅ #189 UpdateBanner versionName fix (Promise.allSettled triple fallback chain) — validado device user
+- ✅ #190 BUG-LOGOUT-RESUME hotfix (extends #159 em useAppResume.js refreshSession transient vs auth) — validado device user
 
 **Sequência AAB Play Store:**
 - vc 49 (publicado 09:47, validou #018 + #189)
 - vc 50 (publicado 10:11, hotfix #190 + #162 v1 + #170)
 - vc 51 (publicado 10:39, atual — adiciona #162 v2 toggle granularidade)
 
-**Items BLOQUEADOS Google review:**
-- 🚨 #130 Closed Testing track aguarda Google re-review pós-promote vc 51 (~24-72h até 7d)
+**Items DESBLOQUEADOS:**
+- ✅ #130 Closed Testing track APROVADO Google (2026-05-06) — track ATIVO, desbloqueia #131 recrutamento Reddit
+- ✅ #158 fixes Console aceitos (categoria + checkboxes desmarcados) — sem mais rejection
 
 **Release anterior:** v0.2.1.4 em 2026-05-07 (Vercel `dosymed.app` + tag git `v0.2.1.4` — sem AAB Play Store, **Android mantém v0.2.1.2 vc 48**) — release **docs-only**: refactor completo §6 ROADMAP em 4 categorias visuais (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) + bolinhas P0/P1/P2/P3 + legenda visual global topo doc + items fechados redistribuídos inline na posição correta + 27 NOVOS items planejamento criados (#162-#189).
 
@@ -506,17 +507,17 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~190 itens · ✅ 119 fechados · ⏳ 65 abertos · 🚨 2 BLOQUEADOS · 🚫 3 cancelados
+**Total:** ~200 itens · ✅ 128 fechados · ⏳ 68 abertos · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-07)
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (4⏳ + 2🚨) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
-| ✨ MELHORIAS | 0 | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 46 |
+| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
+| ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 48 |
 | 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **6** | **13** | **19** | **29** | **67** |
+| **Total abertos** | **8** | **13** | **19** | **29** | **69** |
 
 **Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
@@ -559,14 +560,14 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ✅ **#084** [INCIDENTE 2026-05-02 22:23 UTC, fechado v0.1.7.5 commit `8b32245`] Migração Supabase legacy JWT → sb_publishable_/sb_secret_ + revoke HS256 signing key + disable JWT-based API keys. Service_role JWT vazado em commit 85d5e61 = inválido server-side. Edge functions migradas pra `SERVICE_ROLE_KEY` custom env. Vercel envs atualizados. Webhook Vercel↔GitHub reconectado.
 - ✅ **#126** [P0 SECURITY, fechado v0.2.0.5] Pre-commit secret scanning + investigação root cause vazamentos. gitleaks 8.30.1 + .gitleaks.toml + .husky/pre-commit + .github/workflows/gitleaks.yml. 27→0 leaks após allowlist. Postgres pwd Dosy `xoeDZAnfn8TvBD5m` + VAPID rotação manual user-action.
 - ✅ **#129** [P0, fechado v0.2.1.0 (2026-05-05) via Chrome MCP] Google Group público `dosy-testers@googlegroups.com` criado. URL https://groups.google.com/g/dosy-testers (HTTP 200 anônimo). Settings: pesquisa "Qualquer pessoa" + auto-aprovação participação + privacy outros campos.
-- 🚨 **#130** [P0 — RASCUNHO SALVO v0.2.1.0 (2026-05-05) via Chrome MCP, BLOQUEADO Google review] Closed Testing track "Alpha" Console — País Brasil + Tester list `dosy-testers@googlegroups.com` + AAB v0.2.0.12 vc 45 + Release notes pt-BR + Feedback URL Google Group. Pendente 14+ mudanças acumuladas + click "Enviar mudanças para revisão". REJEITADO Google org account required.
-- ⏳ **#131** [P0 — bloqueado por #158] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
+- ✅ **#130** [P0 — APROVADO Google 2026-05-06, Closed Testing track "Alpha" ATIVO] Closed Testing track "Alpha" Console — País Brasil + Tester list `dosy-testers@googlegroups.com` + AAB vc 51 + Release notes pt-BR + Feedback URL Google Group. Rejeição inicial 2026-05-05 (org account) resolvida via #158 fixes; Google aprovou pós #158 fixes v0.2.1.2. Track ativo desde 2026-05-06 mid-day. Desbloqueia #131 #132 #133.
+- ⏳ **#131** [P0 — desbloqueado pós #130 aprovação 2026-05-06] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
 - ⏳ **#132** [P0 gate — bloqueado por #131] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados.
 - ⏳ **#133** [P0 — bloqueado por #132] Solicitar Production access Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
 - ✅ **#142** [P0 SECURITY, fechado v0.2.0.9 + cleanup v0.2.0.10 commit `bf45f80`] Legacy JWT secret REVOKED (PostgREST 401). Edge function pública via `verify_jwt: false` autoriza via `SERVICE_ROLE_KEY` env interna. Cleanup cosmético: drop+recreate cron job sem header `Authorization` hardcoded.
 - ✅ **#154** [P0 INFRA, fechado v0.2.0.12] Custom SMTP Resend pra dosymed.app. DNS Hostinger 4 records (DKIM + MX send → feedback-smtp.sa-east-1 + SPF + DMARC). Domain Resend VERIFIED. Supabase Auth SMTP smtp.resend.com:465 sender Dosy <noreply@dosymed.app>. Recovery OTP funcionando real prod. ADR `decisoes/2026-05-05-resend-smtp-setup.md`.
 - ✅ **#156** [P0 BLOQUEADOR #130 — fechado v0.2.1.0 (2026-05-05)] Página `/privacidade` (Privacidade.jsx) v1.3 LGPD healthcare. DPO email `privacidade@dosymed.app` + entidade "Dosy Med LTDA" + terceiros expandidos (Resend SMTP/Firebase FCM/PostHog/Sentry/Supabase São Paulo/AdMob) + dados granular + bases legais art.7-I + art.11-II-f + idade 18+ + Google Play Health Apps Policy. Termos.jsx + FAQ.jsx tb atualizados.
-- 🚨 **#158** [P0 v0.2.1.0 NOVO — BLOQUEADO Google review, fixes em curso v0.2.1.2] **Resolver rejection Google Play Política org account.** Console submit Closed Testing track Alpha rejeitado <30min após "Enviar 14 mudanças" (2026-05-05). Internal Testing intacto; Closed + Production travados. **Plano 7 passos** CHECKLIST §#158: ler email → policies → analisar Console → validar regras → identify trigger → decision matrix opção A/B/C → ADR. **Recomendação default:** A longo prazo (org account CNPJ + transferir app) + B paralelo curto (reverter declaração). **Fixes v0.2.1.2 aplicados:** Console 13 declarações Apps de saúde desmarcadas Medicina + manifest categories medical→lifestyle. Bloqueia: #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
+- ✅ **#158** [P0 fechado v0.2.1.2 (2026-05-06) — Google aprovou pós-fixes] Resolveu rejection Google Play Política org account. Console submit Closed Testing rejeitado 2026-05-05; **fixes aplicados v0.2.1.2:** 13 declarações Console Apps de saúde desmarcadas Medicina + categoria Console medical→saude/fitness + manifest categories medical→lifestyle. Google revisou + APROVOU 2026-05-06. Closed Testing track "Alpha" ATIVO desde então (#130 ✅). Desbloqueou #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
 
 #### 🟠 P1 — Alta
 
@@ -576,7 +577,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 > **Plano marketing/ASO/growth (2026-05-07):** análise concorrentes BR (Medisafe/MyTherapy/Pílula Certa) revelou Dosy precisa ataque ofensivo: forecast realista solo dev sem marketing = 1.5K-3K MAU Year 1 (mercado satura ~50K MAU top apps). Items #169-#173 visam crescimento orgânico Year 1 alcançar 5K-10K MAU (vs 1.5K passive). Receita realista ano 1: R$ 5-15K bruto sem ataque marketing; R$ 30-60K com playbook executado.
 
 - ⏳ **#169** [P1 growth v0.2.1.4 NOVO] **ASO Play Store completo — keywords + listing copy + screenshots strategy + A/B test.** (a) Keywords research BR healthcare (target: "lembrete remédio", "alarme medicação", "controle medicamentos idosos", "cuidador medicação", "diabetes lembrete dose"); (b) Listing copy otimizado (título 30 chars com keyword primária + short desc 80 chars + full desc 4000 chars com 5-8 keywords distribuídas sem keyword stuffing); (c) Screenshots strategy — primeiros 3 são 80% conversão (destaque alarme nativo crítico + multi-paciente + compartilhamento cuidadores), 8 total Console (#025 base + 2 novos #155); (d) Vídeo preview Play Console 30s (gravação device real S25 Ultra walkthrough); (e) Localized FAQ pre-launch teasing #064 #065 #066; (f) A/B test screenshots via Play Console experiment (50/50 split, 2 semanas). Esforço 6-8h. Detalhe completo CHECKLIST §#169.
-- ⏳ **#170** [P1 growth v0.2.1.4 NOVO] **Reviews Play Store strategy — In-App Review API + reply playbook.** Plugin `@capacitor-community/in-app-review` API. Trigger inteligente: pós 3 doses tomadas + alarme disparou OK + 7 dias uso ativo (não show no boot). Response template Console (3 categorias: positive thanks/negative apology+fix promise/feature request acknowledge). Reply playbook turnaround <24h (canonical responses + escalation pra bugs reais ROADMAP novos). Meta launch: 4.3+ rating + 50+ reviews mês 6 + reply rate >90%. Esforço 4-5h. Detalhe completo CHECKLIST §#170.
+- 🚧 **#170** [P1 growth v0.2.1.4 — código merged v0.2.1.3 vc 50, validação device pendente] **Reviews Play Store strategy — In-App Review API + reply playbook.** Plugin `@capacitor-community/in-app-review` integrado em `useInAppReview.js`. Reply playbook `docs/reviews-reply-playbook.md` criado. Trigger inteligente: pós 3 doses tomadas + alarme disparou OK + 7 dias uso ativo (não show no boot). Response templates Console (3 categorias). Meta launch: 4.3+ rating + 50+ reviews mês 6 + reply rate >90%. Validação natural: aguardar tester real bater triggers (não dá pra forçar). Detalhe completo CHECKLIST §#170.
 - ⏳ **#171** [P1 growth v0.2.1.4 NOVO] **Marketing orgânico playbook BR — Reddit + Instagram + LinkedIn + TikTok.** (a) Reddit BR target subs: r/saude, r/idosos, r/cuidadores, r/diabetes, r/tdah, r/bipolar, r/depressao, r/brasil (post útil + signature dosymed.app, evitar spam ban); (b) Instagram strategy: hashtags BR healthcare (#cuidadosaude #cuidadoidoso #saudemental #medicacao), parcerias 5-10 microinfluencers cuidadores (10K-50K followers, R$ 100-300/post permuta); (c) LinkedIn healthcare BR (médicos/farmacêuticos/cuidadores profissionais — content B2B trust); (d) TikTok healthcare BR (POV cuidadora 30s vídeos UX); (e) Content calendar 3 posts/semana 6 meses (90 posts initial). Esforço 8-10h setup + 2-3h/semana ongoing. Detalhe completo CHECKLIST §#171.
 - ⏳ **#173** [P1 growth v0.2.1.4 NOVO] **Healthcare differentiators moat — promover #064 + #065 + #066 P3→P1.** Análise concorrentes: Medisafe/MyTherapy faltam features healthcare deep BR. Dosy pode criar moat real: (a) **#064 promovido P1**: verificação interações medicamentosas + alergias (parceria FDA OpenFDA API ou DataBase Brasil ANVISA); (b) **#065 promovido P1**: estoque medicação + alerta "está acabando" (input quantidade restante + cálculo dias até zero baseado em interval); (c) **#066 promovido P1**: lembrete consulta médica + integração Calendar (.ics export). Posicionamento marketing: "Dosy = ÚNICO app brasileiro com verificação interações + estoque + agenda médica integrada". Esforço cada: #064 8-12h (mais complexo), #065 4-6h, #066 3-4h. Total 15-22h. Detalhe completo CHECKLIST §#173 + atualização entries §6.5 P3 #064/#065/#066.
 
@@ -844,10 +845,10 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ✅ Screenshots retrabalhados (#025)
 
 ### Closed Testing → Produção
-- 🚨 12+ testers ativos por 14 dias (#131 + #132) — **bloqueado por #158 rejection Google**
+- ⏳ 12+ testers ativos por 14 dias (#131 + #132) — Closed Testing track ATIVO desde 2026-05-06 (#158 resolvido), aguarda recrutamento Reddit
 - ⏳ NPS médio ≥7 — sem dashboard medindo formalmente
 - ⏳ Zero crashes nos últimos 7 dias — depende Sentry monitoring durante Closed Testing
-- ⏳ Todos P1 fechados ou justificados — #018 + #021 pendentes
+- ⏳ Todos P1 fechados ou justificados — #018 ✅ fechado v0.2.1.3, #021 (backup keystore) pendente
 - ⏳ Crash-free rate ≥99.5%, ANR <0.5% — sem dashboard medindo formalmente
 - ⏳ Notification delivery rate ≥99% (medido via #007) — telemetria ativa, dashboard PostHog manual pendente
 
@@ -923,17 +924,18 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~190 itens
-  - ✅ 119 fechados
-  - ⏳ 65 abertos
-  - 🚨 2 BLOQUEADOS Google review
+- **Total:** ~200 itens (recount real grep 2026-05-07)
+  - ✅ 128 fechados (+#130 +#158 resolvidos 2026-05-06)
+  - ⏳ 68 abertos
+  - 🚧 1 (#170 valid device pendente, código merged vc 50)
+  - 🚨 0 BLOQUEADOS
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (67 total ⏳/🚨):**
+- **Distribuição por categoria abertos (68 ⏳ + 1 🚧 = 69 total):**
   - 🚀 IMPLEMENTAÇÃO: 19 (6 P0 + 10 P1 + 3 P2)
-  - ✨ MELHORIAS: 46 (3 P1 + 14 P2 + 29 P3)
+  - ✨ MELHORIAS: 48 (2 P0 #191 #194 + 3 P1 + 14 P2 + 29 P3)
   - 🐛 BUGS: 2 (P2 — #101-followup #110)
   - 🔄 TURNAROUND: 0
-- **P0 abertos críticos launch:** #158 🚨 + #130 🚨 + #131 + #132 + #133 + #006
+- **P0 abertos críticos launch:** #131 (recrutar Reddit, agora desbloqueado) + #132 (gate 14d) + #133 (Production access) + #006 (device validation FASE 17) + **#191 #192** (pré-OpenTest revenue path)
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
 - **P1 growth/marketing/ASO:** #169 ASO Play Store + #170 Reviews strategy + #171 Marketing orgânico + #173 Healthcare differentiators moat
 - **P1 features differentiators launch:** #174 OCR med scan + #175 Receita scan auto-import + #176 Adesão report PDF + #177 WhatsApp share + **#188 🔥 Mini IA Chat NLP cadastro (KILLER feature mundial)**
@@ -941,11 +943,11 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 - **P2 growth/features:** #172 Landing+blog SEO + #178 Alzheimer escalada + #179 Wear OS + #180 Health metrics + #181 Voz/TTS + #183 Refill affiliate
 - **P3 backlog features:** #064 #065 #066 (promovidos #173) + #182 mood + #184 Telemedicina + #185 Cuidador B2B + #186 Apple Health/Google Fit + #187 Memed/Nexodata
 - **iOS:** #068 mantém P3 (user confirmou 2026-05-07: NÃO promove antes tração Android — custo dev/validação/infra alto)
-- **Esforço P0 restante até Production:** ~3-5 dias manual user (recrutamento + 14d gate testers) + variável (Google review #158 1-3 semanas)
+- **Esforço P0 restante até Production:** ~14d gate testers (#131 recrutamento Reddit em curso + #132 14d ativos + #133 Production access ~24-72h Google) — Google review #158 RESOLVIDO 2026-05-06
 - **Esforço escala egress:** ~14-21h código (#163-#168 distribuído próximas releases)
 - **Esforço growth/marketing:** ~50-65h initial (#169-#173) + 2-3h/semana ongoing (#171 content calendar)
 - **Esforço features differentiators (#174-#187):** ~110-160h código distribuído v0.2.2.0+ → v1.0.0+
-- **Wallclock até Open Testing pública:** ~5-7 semanas (rejection #158 fix → Closed Testing 14d gate → ramp → estabilização) — egress + growth + features differentiators em paralelo
+- **Wallclock até Open Testing pública:** ~3-5 semanas (Closed Testing ATIVO desde 2026-05-06, recrutamento Reddit em curso → 14d gate ≥12 testers → Production access ~72h → ramp Open Testing 7-14d) — egress + growth + features differentiators em paralelo
 
 ---
 
