@@ -4809,3 +4809,394 @@ UX: alert header novo (#117/#118 padrão) "📦 Mounjaro acabando — Comprar?" 
 **Dependências:** Signup parceria Memed/Nexodata API + RDC ANVISA compliance.
 
 **Critério aceitação:** Import automático batch treatments + paciente nome match + médico CRM linked.
+
+---
+
+### #188 — 🔥 Mini IA Chat: cadastro tratamento via escrita/fala natural (KILLER FEATURE mundial)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (KILLER differentiator launch — único mundial)
+- **Origem:** User feedback 2026-05-07
+- **Esforço:** 12-18h (V1 escrita) + 4-6h (V2 voz future)
+- **Release:** v0.2.2.0+ → v0.2.3.0+
+
+**Problema:**
+
+Onboarding TreatmentForm friction massivo: user navega 6 campos (paciente + medName + dose + unit + intervalHours + durationDays) digitando manualmente. Idosos e cuidadores apressados abandonam. Mesmo com #174 OCR caixa + #175 OCR receita, ainda há fluxo: "tenho receita papel? OCR. Tenho caixa? OCR. Apenas sei o que médico falou? digito manual."
+
+**Solução:**
+
+Floating chat button bottom-right (Dosy primary peach) → Sheet chat UI → user digita frase natural ("Desloratadina 10 dias 5ml 8 em 8 horas pro Rael") → backend NLP parser via Claude API tool use → returna structured fields → app preview parsed → user edita/confirma → salva treatment.
+
+**Exemplos input natural reconhecidos:**
+
+```
+"Desloratadina 10 dias 5ml 8 em 8 horas pro Rael"
+→ {patient:"Rael", med:"Desloratadina", dose:5, unit:"ml", interval:8h, duration:10d}
+
+"Mãe Mounjaro 5mg semanal por 6 meses"
+→ {patient:"Mãe", med:"Mounjaro", dose:5, unit:"mg", interval:168h, duration:180d}
+
+"Dipirona 1 comprimido cada 6 horas até melhorar"
+→ {med:"Dipirona", dose:1, unit:"cp", interval:6h, isContinuous:true}
+
+"Aspirin 100mg uma vez ao dia pro pai começando amanhã às 8h"
+→ {patient:"pai", med:"Aspirin", dose:100, unit:"mg", interval:24h, isContinuous:true, startDate:"tomorrow", startTime:"08:00"}
+
+"Anticoncepcional 21 dias 1cp 24h pra mim"
+→ {patient:"<self>", med:"Anticoncepcional", dose:1, unit:"cp", interval:24h, duration:21d}
+```
+
+**Arquitetura técnica:**
+
+**Decisão arquitetural: Claude API Haiku via Edge function gateway com tool use.**
+
+Rationale:
+- **Haiku** ($0.25/$1.25 1M tokens) suficiente pra task simple parsing
+- **Tool use** garante structured output (zero hallucination JSON)
+- **Edge function gateway** centraliza: API key não exposta cliente + rate limit + audit log + futura migração modelo (Sonnet/Opus se precisar)
+- **Privacy**: user consent antes 1ª vez (envia frase pra Anthropic — disclaimer explícito)
+- **Cost**: ~$0.000375/request × 5000 req/mês 1000 MAU = $1.88/mês ≈ R$10
+
+**Edge function gateway:**
+
+```ts
+// supabase/functions/parse-treatment-nl/index.ts
+import { serve } from 'jsr:@std/http/server'
+import Anthropic from 'npm:@anthropic-ai/sdk'
+
+const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') })
+
+const TREATMENT_TOOL = {
+  name: 'create_treatment',
+  description: 'Extract medication treatment fields from natural language Portuguese-BR text',
+  input_schema: {
+    type: 'object',
+    properties: {
+      patientHint: { type: 'string', description: 'First name or relationship (mãe/pai/eu/<name>)' },
+      medName: { type: 'string', description: 'Medication name capitalized (Mounjaro, Desloratadina)' },
+      dose: { type: 'number', description: 'Numeric dose value (5, 100, 1)' },
+      unit: { type: 'string', enum: ['mg','mcg','g','ml','ui','cp','gota','spray'] },
+      intervalHours: { type: 'number', description: '24=diário, 168=semanal, 8=8/8h, 720=mensal' },
+      durationDays: { type: 'number', description: 'null se contínuo' },
+      isContinuous: { type: 'boolean' },
+      startDate: { type: 'string', description: 'YYYY-MM-DD ou null se hoje. "amanhã"→D+1' },
+      startTime: { type: 'string', description: 'HH:MM ou null' },
+      confidence: { type: 'string', enum: ['high','medium','low'] },
+      missingFields: { type: 'array', items: { type: 'string' }, description: 'Campos não inferidos' },
+    },
+    required: ['medName', 'dose', 'unit', 'intervalHours', 'confidence']
+  }
+}
+
+serve(async (req) => {
+  // CORS + auth
+  const { text, userId } = await req.json()
+
+  // Rate limit (1 req/3s per user via Redis/memory)
+  if (await isRateLimited(userId)) {
+    return new Response(JSON.stringify({ error: 'Rate limited' }), { status: 429 })
+  }
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 500,
+    tools: [TREATMENT_TOOL],
+    tool_choice: { type: 'tool', name: 'create_treatment' },
+    system: `Você é um assistente que extrai dados de tratamento médico de texto em português-BR.
+Reconheça padrões: "8 em 8 horas"=8h, "8/8h"=8h, "uma vez ao dia"=24h, "semanal"=168h, "mensal"=720h.
+Reconheça pacientes: nomes próprios, "mãe/pai/filho/avó", "pra mim"="<self>".
+Reconheça datas: "hoje"=null, "amanhã"=D+1, "começando dia X"=parse.
+Se faltar info crítica, retorne confidence=low + listMissingFields.`,
+    messages: [{ role: 'user', content: text }]
+  })
+
+  const toolUse = response.content.find(c => c.type === 'tool_use')
+  if (!toolUse) {
+    return new Response(JSON.stringify({ error: 'parse_failed', rawText: text }), { status: 400 })
+  }
+
+  // Audit log (não persistir text — privacy)
+  await supabase.from('medcontrol.nl_parse_audit').insert({
+    user_id: userId,
+    confidence: toolUse.input.confidence,
+    missing_fields: toolUse.input.missingFields,
+    parsed_at: new Date()
+  })
+
+  return new Response(JSON.stringify(toolUse.input), { status: 200 })
+})
+```
+
+**Frontend Chat UI:**
+
+```jsx
+// src/components/ChatNLPSheet.jsx
+import { useState } from 'react'
+import { Sheet, Button, Input } from './primitives'
+import { MessageCircle, Send, Mic } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
+import { TreatmentPreviewModal } from './TreatmentPreviewModal'
+
+export function FloatingChatButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          position: 'fixed', bottom: 90, right: 20, // above bottom nav
+          width: 56, height: 56, borderRadius: 9999,
+          background: 'var(--dosy-primary)',
+          color: 'white', border: 'none',
+          boxShadow: 'var(--dosy-shadow-lg)',
+          zIndex: 50, cursor: 'pointer',
+        }}
+        aria-label="Cadastrar tratamento via chat"
+      >
+        <MessageCircle size={24} strokeWidth={2} />
+      </button>
+      <ChatNLPSheet open={open} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
+function ChatNLPSheet({ open, onClose }) {
+  const [input, setInput] = useState('')
+  const [history, setHistory] = useState([])
+  const [parsing, setParsing] = useState(false)
+  const [preview, setPreview] = useState(null)
+
+  const examples = [
+    'Desloratadina 10 dias 5ml 8 em 8 horas pro Rael',
+    'Mãe Mounjaro 5mg semanal por 6 meses',
+    'Dipirona 1cp cada 6h até melhorar',
+    'Anticoncepcional 21 dias 1cp por dia pra mim',
+  ]
+
+  async function send() {
+    if (!input.trim()) return
+    setHistory(h => [...h, { role: 'user', text: input }])
+    setParsing(true)
+
+    const { data, error } = await supabase.functions.invoke('parse-treatment-nl', {
+      body: { text: input }
+    })
+
+    setParsing(false)
+    if (error || data.error) {
+      setHistory(h => [...h, {
+        role: 'assistant',
+        text: 'Não consegui entender. Tenta reformular ou usa o cadastro manual.'
+      }])
+      return
+    }
+
+    if (data.confidence === 'low' || data.missingFields?.length > 0) {
+      setHistory(h => [...h, {
+        role: 'assistant',
+        text: `Entendi parcialmente. Faltam: ${data.missingFields.join(', ')}. Pode completar?`
+      }])
+    }
+
+    setPreview(data)
+    setInput('')
+  }
+
+  return (
+    <>
+      <Sheet open={open} onClose={onClose} title="Cadastrar tratamento">
+        {history.length === 0 && (
+          <div>
+            <p style={{ fontSize: 14, color: 'var(--dosy-fg-secondary)' }}>
+              Escreva naturalmente, ex:
+            </p>
+            {examples.map(ex => (
+              <button
+                key={ex}
+                onClick={() => setInput(ex)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: 10, marginTop: 8, borderRadius: 8,
+                  background: 'var(--dosy-bg-elevated)',
+                  border: '1px solid var(--dosy-border)',
+                  fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                "{ex}"
+              </button>
+            ))}
+          </div>
+        )}
+
+        {history.map((msg, i) => (
+          <div key={i} style={{
+            margin: '12px 0', padding: 10, borderRadius: 12,
+            background: msg.role === 'user' ? 'var(--dosy-primary)' : 'var(--dosy-bg-elevated)',
+            color: msg.role === 'user' ? 'white' : 'var(--dosy-fg)',
+            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '85%',
+          }}>
+            {msg.text}
+          </div>
+        ))}
+
+        {parsing && <div>Pensando...</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ex: Desloratadina 10 dias 5ml 8/8h pro Rael"
+            onKeyDown={e => e.key === 'Enter' && send()}
+          />
+          <Button onClick={send} kind="primary" disabled={parsing}>
+            <Send size={18} />
+          </Button>
+          {/* V2 future: voz */}
+          {/* <Button onClick={startVoice} kind="ghost"><Mic size={18}/></Button> */}
+        </div>
+      </Sheet>
+
+      {preview && (
+        <TreatmentPreviewModal
+          parsed={preview}
+          onConfirm={async (final) => {
+            await createTreatment(final)
+            setPreview(null)
+            onClose()
+            // Reset state
+          }}
+          onCancel={() => setPreview(null)}
+        />
+      )}
+    </>
+  )
+}
+```
+
+**Privacy consent flow** (1ª vez user usa chat):
+
+```jsx
+// PrivacyConsentModal antes 1ª chamada
+<Modal title="Sobre o Chat IA">
+  <p>O chat usa inteligência artificial (Anthropic Claude) pra entender suas frases.</p>
+  <p>O texto que você escrever é enviado pra Anthropic processar. Nenhum dado pessoal seu (nome, email) é incluído.</p>
+  <p>Você pode usar o cadastro manual a qualquer momento.</p>
+  <Button onClick={accept}>Entendi e quero usar</Button>
+  <Button kind="ghost" onClick={cancel}>Prefiro cadastro manual</Button>
+</Modal>
+```
+
+**V2 voz (combinado #181 — release v0.3.0+):**
+
+```jsx
+// Botão mic no chat input
+async function startVoice() {
+  await SpeechRecognition.requestPermission()
+  const result = await SpeechRecognition.start({ language: 'pt-BR' })
+  setInput(result.matches?.[0] || '')
+  send() // auto-send
+}
+
+// TTS opcional ler back parsed
+async function speakConfirmation(parsed) {
+  await TextToSpeech.speak({
+    text: `Entendi: ${parsed.medName} ${parsed.dose}${parsed.unit}, cada ${parsed.intervalHours} horas, por ${parsed.durationDays || 'tempo indeterminado'} dias. Confirma?`,
+    lang: 'pt-BR',
+  })
+}
+```
+
+**Dependências:**
+- Anthropic API key (~R$10/mês 1000 MAU; setup conta + billing)
+- Edge function gateway novo
+- Sheet/Modal primitives (existentes)
+- TreatmentPreviewModal componente novo
+- Privacy consent modal (LGPD compliance)
+- V2 voz: plugins `@capacitor-community/speech-recognition` + `@capacitor-community/text-to-speech` (#181)
+
+**Schema DB audit log:**
+
+```sql
+CREATE TABLE medcontrol.nl_parse_audit (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  confidence text,
+  missing_fields text[],
+  parsed_at timestamptz DEFAULT now()
+  -- NOT persisting input text (privacy)
+);
+ALTER TABLE medcontrol.nl_parse_audit ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users see own audit" ON medcontrol.nl_parse_audit
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+```
+
+**Critério de aceitação:**
+
+V1 (escrita):
+- ✅ Floating button visível em todas telas (não cobre nav)
+- ✅ Sheet chat UI funcional Android + Web
+- ✅ Privacy consent 1ª vez user usa
+- ✅ 5 example phrases clickáveis pre-fill input
+- ✅ Edge function `parse-treatment-nl` deployed + ANTHROPIC_API_KEY configured
+- ✅ 10 frases test set retorna structured correto:
+  - "Desloratadina 10 dias 5ml 8 em 8 horas pro Rael" → all fields parsed
+  - "Mãe Mounjaro 5mg semanal por 6 meses" → patient="Mãe", interval=168, duration=180
+  - "Dipirona 1cp cada 6h até melhorar" → isContinuous=true
+  - "Anticoncepcional 21 dias 1cp por dia pra mim" → patient=<self>
+  - Edge cases: misspell, ordem trocada, unidades pluralizadas
+- ✅ Confidence low → app pede user complete missing fields
+- ✅ TreatmentPreviewModal usuário edita/confirma antes salvar (NUNCA auto-save)
+- ✅ Patient matching: hint "mãe/pai" → procura paciente existente OR sugere criar novo
+- ✅ Audit log entries criadas (sem texto user, só metadata)
+- ✅ Rate limit funcional (1 req/3s per user)
+- ✅ Error handling: parse_failed → fallback cadastro manual
+- ✅ Validação Chrome MCP preview Vercel + device real S25 Ultra
+
+V2 (voz future v0.3.0+):
+- ✅ Botão mic chat input
+- ✅ Speech recognition PT-BR funcional (combinado #181)
+- ✅ Auto-send pós voz reconhecido
+- ✅ TTS opcional confirmação parsed result
+
+**Métrica esperada:**
+- Onboarding cadastro 1 treatment: 5min manual → 30s chat (-90%)
+- Conversion rate primeira sessão: +50-70% (KILLER UX)
+- Retention dia 7: +30% (user que usa chat tende voltar)
+- Brand differentiator MUNDIAL — primeiro app medicação com IA conversacional cadastro
+- Marketing copy: "Cadastre só falando" / "IA entende seu jeito"
+
+**Cost ongoing:**
+
+| Modelo | Cost/request | 1000 MAU × 5/mês | Mensal R$ |
+|---|---|---|---|
+| Haiku 4.5 | $0.000375 | $1.88 | R$ 10 |
+| Sonnet 4 | $0.0045 | $22.50 | R$ 113 |
+
+**Recomendação: Haiku** suficiente pra parser simple. Sonnet só se complexity Real-world demanda upgrade.
+
+**Riscos:**
+- Anthropic API downtime → fallback gracefully cadastro manual com toast "Chat indisponível, use cadastro normal"
+- LLM hallucination unit/interval → tool use mitiga + user confirm antes save
+- Privacy LGPD → consent explícito + sem PII enviado + audit log no-text
+- Rate abuse → rate limit Edge function + cap mensal API spending alert
+
+**Posicionamento marketing** (use #169 listing + #171 social):
+
+> "Cadastre tratamentos só ESCREVENDO o que o médico falou.
+>
+> Diga: 'Mounjaro 5mg semanal por 6 meses pra mãe'
+>
+> O Dosy entende e cadastra automaticamente. Só você confirmar.
+>
+> Único app brasileiro com IA pra te ajudar a cuidar."
+
+**Future iterations (v0.3.0+ → v1.0.0+):**
+- Voz (V2 combinado #181)
+- Multi-turn conversations ("ah, esqueci de falar que começa amanhã" → adiciona startDate)
+- Edit treatment via chat ("aumenta dose Mounjaro pra 10mg")
+- Mark dose taken via chat ("já tomei o Mounjaro")
+- Query history ("quantas doses faltam pra Mounjaro?")
+- LLM personalizado fine-tuned BR healthcare data (longprazo)
