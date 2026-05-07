@@ -589,6 +589,18 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Limitação Gmail conhecida:** filtro NÃO aplica retroativo em Spam/Trash. Resgate manual user para emails antigos lá.
 - **Pendência (opcional):** consolidar filtros 1-7 adicionando "Never Spam"+"Mark important" em cada (catch-all 8 já cobre na prática, mas redundância protege contra Gmail decidir mover apesar do filter 8).
 
+**Fix Sentry whitelist (2026-05-06 sessão v0.2.1.4 via Chrome MCP):**
+- **Problema:** user reportou TESTE 02 enviado contato@dosymed.app não chegou + emails Sentry em Spam.
+- **Investigação:**
+  - TESTE 02 **CHEGOU** Inbox + label "Contato" 11:29 PM (~7min delay forward chain). Headers SPF: PASS / DKIM: PASS / DMARC: PASS / dara=fail (irrelevant). Filter #026 catch-all funcionou. User talvez checou antes de chegar.
+  - 5 emails Sentry achados Spam (May 1-2, errors `postgres_changes` callbacks — issue #093 já fixed mas Sentry envio reverberou). Sender `noreply@md.getsentry.com` envia DIRETO pra `dosy.med@gmail.com` — bypass ImprovMX dosymed.app. Filter #026 catch-all (`to:(dosymed.app)`) NÃO cobre.
+- **Fix:** 9º filter Gmail criado `Matches: from:(getsentry.com OR sentry.io) Do this: Never send it to Spam, Always mark it as important`. Cobre `noreply@md.getsentry.com` (issue alerts), `noreply@sentry.io` (account/billing), e qualquer outro Sentry domain.
+- **Resgate retroativo:** 5 conversations Sentry desmarcadas Spam → Inbox manual via "Not spam" toolbar (filter Gmail não aplica retroativo Spam/Trash). Toast confirmou: "Future messages from these senders will be sent to Inbox".
+- **Estado final 9 filters Gmail:**
+  1-7 — `to:(<alias>@dosymed.app)` → label "<Alias>"
+  8 — `to:(dosymed.app)` → Never Spam + Mark important (catch-all #026)
+  9 — `from:(getsentry.com OR sentry.io)` → Never Spam + Mark important (Sentry whitelist)
+
 **Pendente código v0.2.1.0:**
 - ⏳ Atualizar UI Settings → "Suporte" link mailto: → `mailto:suporte@dosymed.app`
 - ⏳ Termos.jsx + Privacidade.jsx (criando #156) referenciar emails canônicos
@@ -2703,4 +2715,2636 @@ const onClickEnding = () => {
 - **Resultado:** Mounjaro volta pra Tratamentos Ativos + dose hoje aparece no Início (overdue se já passou 14:30) + alarme dispara nos próximos.
 
 **Pendente v0.2.2.0+ (não nesta release):**
-- TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. Item separado a criar próxima release.
+- TreatmentForm.jsx UX improvement: pra `intervalHours >= 24` (tratamentos diários/semanais/mensais), pedir "Número de doses" ao invés "Duração (dias)" + calcular durationDays internamente OR adicionar warning "Com intervalo 168h e duração 4 dias, só 1 dose será agendada" quando `intervalHours/24 > durationDays`. **Item criado: #162 (próxima release).**
+
+### #162 — TreatmentForm UX warning intervalHours/24 > durationDays (Mounjaro repro prevention)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P2
+- **Origem:** User-reported 2026-05-06 (Mounjaro silent fail v0.2.1.2)
+- **Esforço:** 1-2h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Form `TreatmentForm.jsx` aceita `durationDays < intervalHours/24` sem warning visual. Resultado: tratamento semanal (intervalHours=168) com `durationDays=4` gera apenas 1 dose (em vez de 4 doses ao longo de 28 dias). Tratamento auto-encerra cedo (`effectiveStatus → 'auto-ended'` quando `endDate < now`) e user não percebe — alerta "tratamento acabando" silencia precoce, app vai pra "Encerrados" sem aviso óbvio.
+
+**Repro Mounjaro v0.2.1.2 (paciente lhenrique.pda):**
+- Mounjaro: intervalHours=168 (semanal) + durationDays=4 (literal 4 dias) → endDate 03/05 → auto-ended dia 03/05 → user esperava 4 doses × 7d = 28 dias.
+- SQL data fix aplicado v0.2.1.2 (durationDays 4→28 + status active + 3 doses pendentes).
+
+**Causa raiz UX:**
+- Campo "Duração (dias)" no form = ambíguo pra tratamentos com `intervalHours >= 24`. User pensa "4 doses" digita "4" mas semantic correto = "28 dias" (4 doses × 7d intervalo).
+- Sem validação inline, sem hint, sem warning amarelo.
+
+**Abordagem (escolher 1 ou ambos):**
+
+**Opção A — Warning inline (mínimo viável, 30min):**
+```jsx
+// TreatmentForm.jsx — após onChange durationDays/intervalHours
+const dosesPossiveis = Math.floor((durationDays * 24) / intervalHours)
+const warningSilent = intervalHours >= 24 && dosesPossiveis < 2
+{warningSilent && (
+  <div style={{ background: 'var(--dosy-amber-bg)', padding: 12, borderRadius: 8 }}>
+    ⚠️ Com intervalo de {intervalHours/24}d e duração {durationDays}d,
+    apenas {dosesPossiveis} dose{dosesPossiveis !== 1 ? 's serão' : ' será'} agendada
+    {dosesPossiveis > 1 ? 's' : ''}. Tratamento auto-encerra em {durationDays}d.
+    <div style={{ fontSize: 12, marginTop: 6 }}>
+      Esperava mais doses? Aumente "Duração (dias)" pra {Math.ceil((intervalHours/24) * dosesEsperadas)}d
+    </div>
+  </div>
+)}
+```
+
+**Opção B — Refactor campo "Número de doses" (1-2h, melhor UX):**
+- Pra `intervalHours >= 24`, trocar campo "Duração (dias)" por "Número de doses" + calcular `durationDays = numDoses * (intervalHours/24)` internamente
+- Pra `intervalHours < 24` (cada X horas), manter "Duração (dias)" atual
+- Toggle automático baseado em `intervalHours` value
+- Side-effect: schema DB inalterado (durationDays continua persistindo) — só UI muda
+
+**Decisão recomendada:** Opção A primeiro (warning, low risk), Opção B v0.2.3.0+ se feedback usuário continuar mostrando confusão.
+
+**Dependências:**
+- TreatmentForm.jsx atual lê durationDays + intervalHours via state form
+- Tokens design `--dosy-amber-bg` (já existe pra warnings)
+
+**Critério de aceitação:**
+- ✅ Form com intervalHours=168 + durationDays=4 → warning amarelo visível
+- ✅ Form com intervalHours=24 + durationDays=30 → sem warning (30 doses faz sentido)
+- ✅ Form com intervalHours=168 + durationDays=28 → sem warning (4 doses faz sentido)
+- ✅ Texto warning calcula dosesPossiveis correto
+- ✅ Sugestão de "Aumente para Xd" arredonda pra cima
+- ✅ Validado no preview Vercel via Chrome MCP (Regra 9.1)
+
+---
+
+## Plano egress otimização escala (preparar Open Testing/Production)
+
+> **Contexto investigação 2026-05-06:** Supabase Pro cycle (05 May - 05 Jun) consumiu 8.74 GB / 250 GB com 4 MAU = **3.75 GB/user/mês** (~30× padrão SaaS healthcare 50-200 MB/user/mês). Storm pré-#157 dominou cycle (May 5 = 7.2 GB, May 6 pós-fix = 0.5 GB, **redução 14× dia-a-dia**). Steady state estimado pós #157 fix: ~15 GB/mês com user atual. Math escala: 100 users heavy = ~375 GB/mês → ESTOURA Pro 250 GB. Items #163-#167 preparam escala Open Testing/Production (objetivo ≤500 MB/user/mês = 5-10× redução combined).
+>
+> **Sequência sugerida** (ordem dependência + ROI):
+> 1. **#163** RPC consolidado Dashboard (3-4h, -40% a -60% Dashboard egress, low risk)
+> 2. **#165** Delta sync + TanStack persist (3-5h, -70% a -90% reads steady state, médio risk)
+> 3. **#164** Realtime broadcast (4-6h, -80% a -90% Realtime, alto ROI mas requer #157 retomar coordenado)
+> 4. **#166** MessagePack + compression (2-3h, 50-70% payload, low risk)
+> 5. **#168** CDN cache strategy (2-3h, low risk + aproveita Cached Egress 250 GB ociosa)
+> 6. **#167** Cursor pagination + cols aggressive + Supavisor (3-5h, marginal mas estrutural)
+>
+> Total esforço: **~17-26h código distribuído v0.2.2.0+ → v0.2.3.0+**.
+
+### #163 — RPC consolidado Dashboard `get_dashboard_payload`
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — preparar Open Testing)
+- **Origem:** Investigação egress 2026-05-06 (3.75 GB/user/mês = 30× padrão SaaS)
+- **Esforço:** 3-4h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Dashboard atual faz 4 queries paralelas em paralelo no mount:
+- `useDoses(filter)` → listDoses RPC
+- `usePatients()` → listPatients
+- `useTreatments()` → listTreatments
+- `extend_continuous_treatments` rpc
+
+Cada query carrega:
+- Auth context (set_config search_path + auth.uid + JWT decode) ~1-2 KB
+- Response payload (rows + duplicate metadata)
+- HTTP overhead (headers + TLS handshake reuse)
+
+Resultado: 4× round-trip + ~4× auth overhead duplicado. PostgREST + RLS context per request.
+
+**Abordagem:**
+
+Migration: criar SQL function `medcontrol.get_dashboard_payload(p_user_id uuid)` SECURITY DEFINER com `SET search_path = medcontrol, public`:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.get_dashboard_payload(p_user_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = medcontrol, public
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  -- Auth check (caller deve ser user)
+  IF auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT jsonb_build_object(
+    'doses', (
+      SELECT coalesce(jsonb_agg(d ORDER BY "scheduledAt"), '[]'::jsonb)
+      FROM (
+        SELECT id, "patientId", "treatmentId", "medName", dose, unit, "scheduledAt", "takenAt", status
+        FROM medcontrol.doses
+        WHERE "userId" = p_user_id
+          AND "scheduledAt" >= now() - interval '30 days'
+          AND "scheduledAt" <= now() + interval '60 days'
+        ORDER BY "scheduledAt"
+        LIMIT 500
+      ) d
+    ),
+    'patients', (
+      SELECT coalesce(jsonb_agg(p), '[]'::jsonb)
+      FROM (
+        SELECT id, name, "ageMonths", weight, avatar, "photoVersion", "isShared"
+        FROM medcontrol.patients
+        WHERE "ownerId" = p_user_id OR id IN (
+          SELECT "patientId" FROM medcontrol.patient_shares WHERE "sharedWithUserId" = p_user_id
+        )
+      ) p
+    ),
+    'treatments', (
+      SELECT coalesce(jsonb_agg(t), '[]'::jsonb)
+      FROM (
+        SELECT id, "patientId", "medName", dose, unit, "intervalHours", "isContinuous", "durationDays", "startDate", status
+        FROM medcontrol.treatments
+        WHERE "userId" = p_user_id
+      ) t
+    ),
+    'stats', (
+      SELECT jsonb_build_object(
+        'overdue', count(*) FILTER (WHERE status = 'overdue'),
+        'upcoming_24h', count(*) FILTER (WHERE status = 'scheduled' AND "scheduledAt" <= now() + interval '24 hours')
+      )
+      FROM medcontrol.doses
+      WHERE "userId" = p_user_id
+    ),
+    'serverTime', extract(epoch from now())::int
+  ) INTO result;
+
+  RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION medcontrol.get_dashboard_payload(uuid) TO authenticated;
+```
+
+Frontend: novo hook `useDashboardPayload(userId)`:
+
+```js
+// src/hooks/useDashboardPayload.js
+export function useDashboardPayload() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['dashboard', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_dashboard_payload', { p_user_id: user.id })
+      if (error) throw error
+      return data
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+    refetchInterval: 15 * 60_000, // 15min, opt-in só Dashboard
+  })
+}
+```
+
+Dashboard.jsx — substituir 4 hooks por 1:
+
+```js
+// Antes
+const { data: doses } = useDoses(filter)
+const { data: patients } = usePatients()
+const { data: treatments } = useTreatments()
+useEffect(() => extendContinuous(), [])
+
+// Depois
+const { data: payload } = useDashboardPayload()
+const { doses = [], patients = [], treatments = [], stats } = payload || {}
+```
+
+**Dependências:**
+- Migration SQL nova (testar local + apply prod)
+- Hook novo `useDashboardPayload`
+- Refactor Dashboard.jsx (manter compat outras telas que usam useDoses/usePatients separados)
+
+**Critério de aceitação:**
+- ✅ Migration aplica sem erro
+- ✅ RPC retorna payload completo Dashboard render OK
+- ✅ Auth check funciona (caller != p_user_id retorna error)
+- ✅ Validação Chrome MCP preview: Dashboard 1 fetch (vez de 4) + payload size ≤60% original combinado
+- ✅ Sentry sem regressões (DOSY-* events)
+
+**Métrica esperada:**
+- -40% a -60% Dashboard egress
+- -75% Dashboard request count (4 → 1)
+- Round-trip time -300ms (4 paralelas → 1 single)
+
+---
+
+### #164 — Realtime broadcast healthcare alerts (combinado retomar #157)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — combinado retomar #157)
+- **Origem:** Investigação egress 2026-05-06 + plano retomar #157 v0.2.2.0+
+- **Esforço:** 4-6h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+#157 disabled `useRealtime()` em App.jsx (commit `da61b04`) por storm 12 req/s sustained idle. Root cause: publication `supabase_realtime` vazia + reconnect cascade gerava `ChannelRateLimitReached` + refetch loop. Mas **realtime sync é necessário** pra UX multi-device (user marca dose tomada num device → outro device vê instantâneo).
+
+Solução tradicional `postgres_changes` streaming:
+- Cliente subscribe canal `realtime:medcontrol.doses`
+- Cada UPDATE/INSERT no DB → server envia full row pro cliente
+- Cliente recebe row 50KB → invalidate query → refetch full list 200KB
+
+Padrão **broadcast** (Supabase Realtime channels):
+- Edge function envia `supabase.channel('user:<userId>').send({type:'broadcast', event:'dose_update', payload:{id, status, takenAt}})`
+- Cliente subscribe canal user-scoped → recebe payload customizado ~1KB (só campos mudados)
+- Patch cache local diretamente via `qc.setQueryData(['doses'], (old) => old.map(d => d.id === payload.id ? {...d, ...payload} : d))`
+- Bypass refetch network completo
+
+**Abordagem:**
+
+Server side — modificar Edge `dose-trigger-handler` (cron + INSERT trigger):
+
+```ts
+// supabase/functions/dose-trigger-handler/index.ts
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+async function broadcastDoseUpdate(userId: string, doseUpdate: {id, status, takenAt?, scheduledAt?}) {
+  const channel = supabase.channel(`user:${userId}`)
+  await channel.send({
+    type: 'broadcast',
+    event: 'dose_update',
+    payload: doseUpdate
+  })
+}
+
+// Após INSERT/UPDATE dose:
+await broadcastDoseUpdate(userId, { id, status: 'taken', takenAt: new Date().toISOString() })
+```
+
+Client side — novo hook `useUserBroadcast`:
+
+```js
+// src/hooks/useUserBroadcast.js
+import { useEffect } from 'react'
+import { useAuth } from './useAuth'
+import { useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../lib/supabaseClient'
+
+export function useUserBroadcast() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`user:${user.id}`)
+      .on('broadcast', { event: 'dose_update' }, ({ payload }) => {
+        // Patch cache local sem refetch
+        qc.setQueriesData({ queryKey: ['doses'] }, (old) => {
+          if (!Array.isArray(old)) return old
+          return old.map(d => d.id === payload.id ? { ...d, ...payload } : d)
+        })
+        qc.setQueryData(['dashboard', user.id], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            doses: old.doses.map(d => d.id === payload.id ? { ...d, ...payload } : d)
+          }
+        })
+      })
+      .on('broadcast', { event: 'patient_update' }, ({ payload }) => {
+        // Similar pra patients
+      })
+      .on('broadcast', { event: 'treatment_update' }, ({ payload }) => {
+        // Similar pra treatments
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, qc])
+}
+```
+
+App.jsx — re-enable mas usando broadcast:
+
+```js
+// Antes (#157 disabled): // useRealtime()
+// Agora:
+useUserBroadcast()
+```
+
+**Dependências:**
+- Edge functions modificadas (dose-trigger-handler + handler PATCH/DELETE)
+- Hook novo client
+- Manter `useRealtime.js` desabled (postgres_changes stream substituído)
+- Validação multi-device
+
+**Critério de aceitação:**
+- ✅ Marcar dose tomada device A → device B atualiza ≤2s sem refetch
+- ✅ Network tab: payload broadcast event ≤1.5 KB (vs ~50 KB postgres_changes)
+- ✅ Idle 5min sem requests automáticos (broadcast só dispara em events)
+- ✅ Reconnect resiliente (sem cascade storm #157)
+- ✅ Validação Chrome MCP preview Vercel: idle 5min = 0 fetches
+
+**Métrica esperada:**
+- -80% a -90% Realtime egress
+- Latência sync multi-device <2s
+- Zero idle polling
+
+---
+
+### #165 — Delta sync doses + TanStack persist IndexedDB offline-first
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P1 (cost escala — UX offline-first)
+- **Origem:** Investigação egress 2026-05-06 (steady state still high)
+- **Esforço:** 3-5h
+- **Release sugerida:** v0.2.2.0+ ou v0.2.3.0+
+
+**Problema:**
+
+Hoje cliente abre app → 4 queries paralelas full pull (doses 30d + patients all + treatments all). Mesmo com staleTime 15min (#150), navigate entre rotas + refresh manual + open app revisita cache mas não persiste entre sessions (TanStack Query in-memory only).
+
+Ideal: cache persist entre sessions + initial render instant + delta sync background only.
+
+**Abordagem:**
+
+(a) **Server-side delta filter** — adicionar `?since=lastSyncedAt` em listDoses:
+
+```js
+// src/services/dosesService.js
+export async function listDoses({ from, to, status, since }) {
+  let q = supabase.schema('medcontrol').from('doses').select(DOSE_COLS_LIST)
+  if (from) q = q.gte('scheduledAt', from)
+  if (to) q = q.lte('scheduledAt', to)
+  if (status) q = q.eq('status', status)
+  if (since) q = q.gt('updatedAt', since) // ← novo filter delta
+  return q.order('scheduledAt')
+}
+```
+
+useDoses tracks `lastSyncedAt` via localStorage:
+
+```js
+// src/hooks/useDoses.js
+const lastSyncedAt = localStorage.getItem('dosy_doses_last_sync') || '1970-01-01'
+const { data: deltaRows } = useQuery({
+  queryKey: ['doses', 'delta', lastSyncedAt],
+  queryFn: async () => {
+    const rows = await listDoses({ since: lastSyncedAt })
+    if (rows.length > 0) {
+      localStorage.setItem('dosy_doses_last_sync', new Date().toISOString())
+    }
+    return rows
+  },
+  staleTime: 30_000,
+})
+```
+
+Patch cache local com delta rows ao invés de full list refetch.
+
+(b) **TanStack persist plugin** — instalar `@tanstack/query-persist-client` + `@tanstack/query-async-storage-persister`:
+
+```bash
+npm i @tanstack/query-persist-client @tanstack/query-async-storage-persister idb-keyval
+```
+
+```js
+// src/main.jsx
+import { persistQueryClient } from '@tanstack/query-persist-client'
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
+import { get, set, del } from 'idb-keyval'
+
+const persister = createAsyncStoragePersister({
+  storage: { getItem: get, setItem: set, removeItem: del },
+  key: 'dosy-query-cache',
+  throttleTime: 2000,
+})
+
+persistQueryClient({
+  queryClient,
+  persister,
+  maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+  buster: __APP_VERSION__, // invalida cache em deploy novo
+  dehydrateOptions: {
+    shouldDehydrateQuery: (q) => {
+      // Persist só queries safe (não auth, não temp)
+      return ['doses', 'patients', 'treatments', 'dashboard'].includes(q.queryKey[0])
+    },
+  },
+})
+```
+
+(c) **staleTime bump** combinado: 15min → 30min (cache persist garante boot instant + delta sync atualiza background).
+
+**Dependências:**
+- Migration: garantir `updatedAt` index em medcontrol.doses (`CREATE INDEX IF NOT EXISTS idx_doses_updated_at ON medcontrol.doses("userId", "updatedAt") WHERE "updatedAt" IS NOT NULL`)
+- Trigger: garantir `updatedAt` auto-update em todas mutations
+- IndexedDB compat (Capacitor WebView OK; older Android <7.0 sem fallback)
+
+**Critério de aceitação:**
+- ✅ App restart → render Dashboard ≤500ms (cache local instant)
+- ✅ Cache persist sobrevive force stop + reabrir
+- ✅ Delta sync 1 request retorna só rows mudadas (verificar payload size)
+- ✅ Cache invalida em deploy novo (buster __APP_VERSION__)
+- ✅ Validação Chrome MCP: idle 5min sem app aberto + reabrir = boot rápido + 1 delta fetch ≤5KB
+
+**Métrica esperada:**
+- -70% a -90% reads steady state (após initial pull pesado)
+- Boot time -800ms (cache local vs network round-trip)
+- UX offline-first (modo avião funcional read-only)
+
+---
+
+### #166 — MessagePack Edge functions payload + compression headers
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — payload size optimization)
+- **Origem:** Investigação egress 2026-05-06
+- **Esforço:** 2-3h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+Edge functions atuais (`dose-trigger-handler`, `schedule-alarms-fcm`, `notify-doses`, `send-test-push`) retornam JSON. JSON tem overhead significativo: keys repetidos em arrays, strings numbers, null verbose. MessagePack binary ~50-70% menor pra mesmo payload.
+
+Compression: Supabase serve gzip por default. Verificar headers cliente `Accept-Encoding: br, gzip` (Brotli melhor que gzip — verificar Vercel CDN pass-through).
+
+**Abordagem:**
+
+(a) **MessagePack** Edge functions:
+
+```ts
+// supabase/functions/dose-trigger-handler/index.ts
+import { encode } from 'jsr:@msgpack/msgpack'
+
+return new Response(encode(payload), {
+  headers: {
+    'Content-Type': 'application/x-msgpack',
+    'Cache-Control': 'no-store',
+  },
+})
+```
+
+Cliente decode no fetch wrapper:
+
+```js
+// src/lib/supabaseClient.js fetch interceptor
+import { decode } from '@msgpack/msgpack'
+
+const origFetch = window.fetch
+window.fetch = async (...args) => {
+  const resp = await origFetch(...args)
+  if (resp.headers.get('content-type')?.includes('application/x-msgpack')) {
+    const buf = await resp.arrayBuffer()
+    const data = decode(buf)
+    return new Response(JSON.stringify(data), {
+      status: resp.status,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  return resp
+}
+```
+
+(b) **Compression headers** verify:
+
+```js
+// Adicionar Accept-Encoding em todos fetches
+fetch(url, {
+  headers: {
+    'Accept-Encoding': 'br, gzip, deflate',
+  },
+})
+```
+
+Verificar Vercel `vercel.json` headers config:
+
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Accept-CH", "value": "Save-Data" }
+      ]
+    }
+  ]
+}
+```
+
+**Dependências:**
+- `@msgpack/msgpack` deno port (server) + npm pkg (client)
+- Fetch wrapper compat (não quebrar JSON endpoints PostgREST)
+
+**Critério de aceitação:**
+- ✅ Edge function retorna application/x-msgpack
+- ✅ Cliente decode + render OK
+- ✅ Network tab: payload binary ≤50% size original JSON
+- ✅ Brotli compression aplicado pelo Vercel CDN (verificar `content-encoding: br`)
+- ✅ Sentry sem regressões parsing
+
+**Métrica esperada:**
+- -50% a -70% Edge function payload size
+- -10% a -20% adicional via Brotli vs Gzip
+
+---
+
+### #167 — Cursor pagination + selective columns aggressive + Supavisor pooler
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — estrutural)
+- **Origem:** Investigação egress 2026-05-06
+- **Esforço:** 3-5h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+(a) **Offset pagination** atual (`?from=N&to=M`) força server re-scan rows skipped. Cursor pagination (`?after=last_id`) usa index seek direto.
+
+(b) **DOSE_COLS_LIST** já reduzido (#138 sem observation). Pode ir mais aggressive: status string `'scheduled' | 'taken' | 'skipped' | 'overdue'` → int code `0 | 1 | 2 | 3` (1 byte vs 8-9 bytes). Drop campos read-rare (`updatedBy`, `createdBy` em listas).
+
+(c) **Supavisor transaction mode** — Supabase Pro inclui pooler. Trocar direct conn por `aws-0-sa-east-1.pooler.supabase.com:6543` pra reduzir handshake overhead 200-400 bytes/request (PG handshake + RLS context setup mais leve em pooled conn).
+
+**Abordagem:**
+
+(a) **Cursor pagination**:
+
+```js
+// src/services/dosesService.js
+export async function listDosesCursor({ after, limit = 100 }) {
+  let q = supabase.schema('medcontrol').from('doses').select(DOSE_COLS_LIST)
+    .order('scheduledAt')
+    .order('id') // tiebreaker
+    .limit(limit)
+  if (after) {
+    const [scheduledAt, id] = after.split('|')
+    q = q.or(`scheduledAt.gt.${scheduledAt},and(scheduledAt.eq.${scheduledAt},id.gt.${id})`)
+  }
+  const { data } = await q
+  const lastRow = data[data.length - 1]
+  const nextCursor = lastRow ? `${lastRow.scheduledAt}|${lastRow.id}` : null
+  return { rows: data, nextCursor }
+}
+```
+
+(b) **Status int code** — migration:
+
+```sql
+ALTER TABLE medcontrol.doses
+  ADD COLUMN status_code smallint;
+
+UPDATE medcontrol.doses SET status_code = CASE status
+  WHEN 'scheduled' THEN 0
+  WHEN 'taken' THEN 1
+  WHEN 'skipped' THEN 2
+  WHEN 'overdue' THEN 3
+END;
+
+CREATE INDEX idx_doses_status_code ON medcontrol.doses("userId", status_code);
+```
+
+DOSE_COLS_LIST drop string `status` da lista, usar `status_code`. Frontend decode:
+
+```js
+const STATUS_DECODE = { 0: 'scheduled', 1: 'taken', 2: 'skipped', 3: 'overdue' }
+const STATUS_ENCODE = Object.fromEntries(Object.entries(STATUS_DECODE).map(([k, v]) => [v, +k]))
+```
+
+(c) **Supavisor pooler** — trocar URL `.env`:
+
+```env
+# Antes
+VITE_SUPABASE_URL=https://guefraaqbkcehofchnrc.supabase.co
+
+# Depois (transaction mode pooler)
+VITE_SUPABASE_URL=https://guefraaqbkcehofchnrc.supabase.co  # API gateway mantém
+# Direct DB conn (SSR/Edge) usa pooler
+DATABASE_URL=postgres://postgres.guefraaqbkcehofchnrc:[pwd]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+```
+
+Edge functions usar `DATABASE_URL` pooler.
+
+**Dependências:**
+- Migration status_code + index
+- Refactor frontend status display (manter compat string display)
+- Pool conn URL Edge functions
+
+**Critério de aceitação:**
+- ✅ Cursor pagination retorna rows consistentes (sem duplicate/skip em concurrent INSERT)
+- ✅ Status int code: payload list -8 bytes/row (1500 doses = -12 KB save)
+- ✅ Supavisor pooler conn estável (Edge function logs sem timeout/disconnect)
+- ✅ Sentry sem regressões
+
+**Métrica esperada:**
+- Marginal -5% a -10% por item, mas cumulativo estrutural longprazo
+- Permite scale 1000+ users sem re-arq major
+
+---
+
+### #168 — CDN cache strategy: bundle + assets via Vercel CDN + Supabase Storage cache headers
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (cost escala — aproveitar Cached Egress separado)
+- **Origem:** Investigação egress 2026-05-06 (Pro Cached Egress 250 GB separado, 0/250 atualmente)
+- **Esforço:** 2-3h
+- **Release sugerida:** v0.2.3.0+
+
+**Problema:**
+
+Pro plan tem **2 quotas separadas**:
+- **Database Egress 250 GB** — traffic PostgREST + Edge functions (consumido 8.74 GB / 250 atualmente)
+- **Cached Egress 250 GB** — traffic via CDN cache hits (Storage, Edge function cached responses, static assets) — atualmente **0 / 250 GB**
+
+Quota Cached Egress está completamente ociosa. Otimização: deslocar traffic do DB Egress para Cached Egress quando possível, aproveitando 250 GB extras gratuitos no Pro.
+
+Exemplos de oportunidades:
+- Bundle JS Dosy serve de Vercel CDN (não Supabase) — verificar HIT rate `cache-control` headers
+- Imagens estáticas (logo, splash, ícones) servem Vercel CDN
+- Fotos pacientes (Supabase Storage `patient-photos`): hoje sem `cache-control` → cliente re-baixa toda vez. Setar `cache-control: public, max-age=31536000, immutable` (foto path versioned via `photo_version` #115, então safe immutable)
+- Edge functions retornando dados estáticos-ish (FAQ, Termos, Privacidade conteúdo) com `cache-control: public, max-age=3600 s-maxage=86400` → CDN cache hit em vez de re-execute
+- PostgREST `etag` headers permitem 304 Not Modified em refetch idempotente (cliente reusa cache local)
+
+**Abordagem:**
+
+(a) **Verificar Vercel CDN cache hit rate atual:**
+
+```bash
+# Curl Vercel asset com headers
+curl -I https://dosymed.app/assets/index-Cmc-tujf.js
+# Esperar: cache-control: public, max-age=31536000, immutable
+# x-vercel-cache: HIT (após 1ª request)
+```
+
+Vercel default cobre `/assets/*` immutable (Vite hash filenames). Verificar `index.html` cache curto (max-age=0 must-revalidate) pra deploys novos serem detectados.
+
+`vercel.json` (criar se não existir):
+
+```json
+{
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/icon-(.*).png",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/(.*\\.svg|.*\\.woff2)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}
+```
+
+(b) **Supabase Storage `patient-photos` cache headers** — atualizar upload service:
+
+```js
+// src/services/patientService.js (upload photo path)
+async function uploadPatientPhoto(patientId, file, version) {
+  const path = `${patientId}/${version}.jpg`
+  const { error } = await supabase.storage
+    .from('patient-photos')
+    .upload(path, file, {
+      cacheControl: '31536000, immutable', // 1 year, version garante busting
+      upsert: true,
+      contentType: 'image/jpeg',
+    })
+  if (error) throw error
+  return path
+}
+```
+
+Nota: `photo_version` #115 já garante busting — quando user troca foto, version++ → new path → cache miss legítimo. Files antigos viram garbage collected (Supabase Storage não auto-deleta — pode adicionar pg_cron pra cleanup `photo_version < current` rows, mas low priority).
+
+(c) **Edge functions cache-control** — endpoints estáticos-ish:
+
+```ts
+// Hipotético: edge function retornando FAQ.md content (se mover pra DB futuro)
+return new Response(content, {
+  headers: {
+    'Content-Type': 'text/markdown',
+    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+  },
+})
+```
+
+(d) **PostgREST etag verify** — Supabase já envia `etag` em responses GET; cliente HTTP cache automático respeita 304. Verificar Network tab Chrome MCP: requests duplicadas idempotentes retornam 304 Not Modified em vez de 200 + payload.
+
+(e) **Service Worker cache strategy** — atualizar `public/sw.js` (atualmente v6 #078) com strategy mais agressiva:
+
+```js
+// Cache First pra assets imutáveis
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+
+  // Assets versioned (Vite hash) → cache forever
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => cached || fetch(event.request).then(resp => {
+        const cloned = resp.clone()
+        caches.open('dosy-assets-v6').then(c => c.put(event.request, cloned))
+        return resp
+      }))
+    )
+    return
+  }
+
+  // index.html → network first (deploys novos)
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    )
+    return
+  }
+})
+```
+
+**Dependências:**
+- `vercel.json` config commit
+- patientService upload path com cacheControl
+- Service worker bump v6 → v7 (#078 pattern)
+- Validar Network tab Chrome MCP HIT/MISS rate
+
+**Critério de aceitação:**
+- ✅ Curl Vercel asset retorna `cache-control: max-age=31536000, immutable`
+- ✅ 2ª visita Dosy (mesmo browser) → assets retornam `x-vercel-cache: HIT`
+- ✅ Supabase Storage upload setou `cache-control` 1 year
+- ✅ Foto paciente carrega 1× por device por version (cache hit local + CDN)
+- ✅ Service worker v7 deployed + cache strategy assets-first funcional offline
+- ✅ Validação Chrome MCP: visita repetida Dosy → assets bytes ≤10% original (cache hit)
+- ✅ Cached Egress dashboard começa subir (sinal traffic deslocado pra cache quota)
+
+**Métrica esperada:**
+- Bundle JS + assets: 100% CDN cache (já parcialmente)
+- Fotos pacientes: 1 download por version por device (vs every refetch)
+- Cached Egress quota usage: 0 → ~30-50 GB/mês com 100 users (ainda dentro 250 GB)
+- DB Egress save: -10% a -15% (asset traffic pequeno em relação DB queries, ROI moderado)
+
+**Notas:**
+- ROI menor que #163-#165 (que atacam DB queries diretamente) MAS quase grátis (config files apenas, low risk)
+- Aproveita quota Cached Egress 250 GB ociosa do Pro plan
+- Combinado com #166 (compression headers) cobre todo bullet 7 da análise original
+
+---
+
+## Plano marketing/ASO/growth (preparar Open Testing/Production launch)
+
+> **Contexto análise concorrentes 2026-05-07:** Forecast realista solo dev sem marketing budget = 1.5K-3K MAU Year 1 (vs Medisafe ~200K MAU BR, MyTherapy ~100K, Pílula Certa ~500K — todos com anos brand recognition + parcerias). Solo dev BR healthcare apps típicos demoram 2-3 anos pra 50K MAU sem investimento. Dosy diferenciadores técnicos forte (alarme nativo crítico, compartilhamento, LGPD healthcare) MAS sem ataque marketing = stagnation. Items #169-#173 visam Year 1 5K-10K MAU + Year 3 50K MAU realista executando playbook.
+>
+> **Sequência sugerida** (ordem dependência + gating launch):
+> 1. **#169** ASO Play Store completo (6-8h) — pre-Production launch obrigatório
+> 2. **#170** Reviews strategy + In-App Review (4-5h) — ativar dia 1 Production
+> 3. **#173** Healthcare differentiators moat (15-22h, promove #064/#065/#066) — diferencial vs competitors
+> 4. **#171** Marketing orgânico playbook BR (8-10h setup + ongoing) — paralelo Production
+> 5. **#172** Landing page + blog SEO (12-16h initial + 24h conteúdo) — SEO leva 6-12 meses indexar
+>
+> Total esforço: **~50-65h initial** + 2-3h/semana ongoing (#171 content + #170 reviews reply).
+
+### #169 — ASO Play Store completo: keywords + listing copy + screenshots strategy + A/B test
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — pre-Production launch)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 6-8h
+- **Release sugerida:** v0.2.2.0+ (antes Production #133)
+
+**Problema:**
+
+Listing Play Store atual tem categoria "Saúde e fitness" + descrição básica + 8 screenshots (#025) + ícone + feature graphic. Falta otimização ASO real:
+- Keywords não pesquisadas (qual termo BR converte?)
+- Título 30 chars sem keyword primária forte
+- Short description 80 chars genérica
+- Full description 4000 chars sem distribuição estratégica keywords
+- Screenshots ordem não testada (primeiros 3 = 80% conversão)
+- Sem vídeo preview (boost conversão 25-35%)
+- Zero A/B test rodando
+
+**Abordagem:**
+
+(a) **Keywords research BR healthcare** (use Google Play Console Keyword Planner + Sensor Tower free tier + AppTweak trial):
+
+Tier 1 (alta intent, médio volume):
+- "lembrete remédio" (~10K searches/mês BR)
+- "alarme medicação" (~5K)
+- "controle medicamentos" (~3K)
+- "lembrete dose" (~2K)
+
+Tier 2 (long-tail, alta conversão):
+- "lembrete remédio idoso"
+- "controle medicamentos diabetes"
+- "alarme medicação Alzheimer"
+- "cuidador dose remédio"
+- "compartilhar medicação família"
+
+(b) **Listing copy otimizado:**
+
+**Título** (30 chars max):
+- Atual: "Dosy" (subutilizado)
+- Proposto: "Dosy: Lembrete de Remédios" (28 chars, keyword primária)
+
+**Short description** (80 chars):
+- "Alarme inteligente p/ medicação. Multi-paciente. Cuidadores. 100% PT-BR." (78 chars)
+
+**Full description** (4000 chars) estrutura:
+
+```
+[Hook 1ª linha — 1ª impressão Play Store]
+Nunca mais esqueça uma dose. O Dosy te avisa na hora certa, com alarme que toca alto até no modo silencioso.
+
+[Problema/dor — 2-3 linhas]
+Quem cuida de pais idosos, controla medicação para diabetes, ansiedade ou tratamento contínuo sabe: esquecer uma dose pode comprometer todo o tratamento.
+
+[Solução — features primárias com keywords]
+✅ ALARME CRÍTICO que toca alto + tela cheia (mesmo no silencioso)
+✅ MULTI-PACIENTE: gerencie remédios de pais, filhos, marido/esposa
+✅ COMPARTILHAR com cuidadores e familiares
+✅ HISTÓRICO completo de doses tomadas
+✅ TRATAMENTOS contínuos (controle hipertensão, diabetes, depressão)
+
+[Diferencial vs concorrentes]
+Diferente de outros apps de lembrete de remédio, o Dosy:
+- Toca alarme REAL (não só notificação que some)
+- 100% em português BR (não tradução)
+- Funciona offline (não precisa internet)
+- LGPD: seus dados ficam só com você
+
+[Use cases]
+Perfeito para: idosos com Alzheimer, diabéticos tipo 2, controle de TDAH, ansiedade, depressão, tratamento de tireoide, cuidadores profissionais e familiares.
+
+[CTA + planos]
+GRATUITO: 1 paciente + lembretes ilimitados
+PRO R$ 14,90/mês: pacientes ilimitados + compartilhamento + sem anúncios
+
+[Trust signals]
+🏥 Conformidade LGPD healthcare
+🔒 Dados criptografados (Android Keystore)
+📱 Funciona em qualquer Android 7+
+⭐ Avaliação 4.X (X reviews)
+
+[Footer keywords secundárias]
+lembrete remédio | alarme medicação | controle medicamentos | dose remédio | cuidador idoso | diabetes hipertensão | tratamento contínuo
+```
+
+(c) **Screenshots strategy** (primeiros 3 = 80% conversão):
+1. **Screenshot 1**: Tela alarme nativo fullscreen disparado (visual impact + keyword "alarme tela cheia")
+2. **Screenshot 2**: Dashboard com 3-4 pacientes + "Doses Hoje 5/8" (multi-paciente USP)
+3. **Screenshot 3**: Modal compartilhar paciente com família (cuidadores diferencial)
+4. Screenshots 4-8: features secundárias (#160 PatientDetail, #161 alerts, histórico, paywall, ajustes)
+
+Cada screenshot com **caption text overlay** keyword-rich (lib `screenshots-pro` ou Photoshop): "Alarme que TOCA ALTO" / "Multi-paciente" / "Compartilhe com família".
+
+(d) **Vídeo preview Play Console** (30s):
+- 0-3s: Hook (paciente idoso esquece remédio cena)
+- 4-10s: Solução (Dosy alarme dispara, acorda paciente)
+- 11-20s: Features carousel (multi-paciente + compartilhar + histórico)
+- 21-27s: Use cases (diabetes/Alzheimer/cuidador)
+- 28-30s: CTA "Baixe Dosy grátis" + logo
+
+Gravação device real S25 Ultra Studio captura. Trilha sonora upbeat 30s (Epidemic Sound free tier).
+
+(e) **A/B test Play Console experiment**:
+- Variant A: screenshots ordem #1-#8 atual
+- Variant B: screenshots reordem (alarme primeiro vs multi-paciente primeiro)
+- 50/50 split 2 semanas
+- Métrica: install conversion rate
+- Vencedor → manter
+
+**Dependências:**
+- Console acesso (já tem)
+- Vídeo gravação device real (need user manual ~1h)
+- Screenshots regerar com text overlay (#155 + novos)
+
+**Critério de aceitação:**
+- ✅ Listing copy publicado Console com keywords distribuídas
+- ✅ 8 screenshots com text overlay keyword-rich
+- ✅ Vídeo preview 30s uploaded (YouTube unlisted + linked Console)
+- ✅ A/B test experiment ativo Console
+- ✅ Métricas baseline capturadas (install rate, store visit rate, conversion rate)
+
+**Métrica esperada:**
+- +30-50% Play Store conversion rate (visit → install)
+- +20-40% organic install volume via keyword ranking
+
+---
+
+### #170 — Reviews Play Store strategy: In-App Review API + reply playbook
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — ativar dia 1 Production)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 4-5h
+- **Release sugerida:** v0.2.2.0+
+
+**Problema:**
+
+Reviews Play Store são **trust signal crítico** + **ranking factor algoritmo**:
+- Apps com 4.3+ rating + 50+ reviews convertem 3-5× mais que apps sem reviews
+- Algoritmo ASO penaliza apps <4.0 rating (cai pra trás em searches)
+- Negative reviews sem reply parecem app abandonado
+- Solo dev sem reply rate alto = signal ruim pra Google
+
+**Abordagem:**
+
+(a) **In-App Review API integração**:
+
+Plugin Capacitor: `@capacitor-community/in-app-review`
+
+```bash
+npm i @capacitor-community/in-app-review
+npx cap sync android
+```
+
+```js
+// src/services/inAppReview.js
+import { InAppReview } from '@capacitor-community/in-app-review'
+import { Capacitor } from '@capacitor/core'
+
+const REVIEW_LS_KEY = 'dosy_review_prompt_seen'
+const REVIEW_DEFER_DAYS = 90 // Re-prompt se user já viu há 90+ dias
+
+export async function maybePromptReview() {
+  if (Capacitor.getPlatform() !== 'android') return
+
+  const seen = localStorage.getItem(REVIEW_LS_KEY)
+  if (seen) {
+    const seenDate = new Date(seen)
+    const daysAgo = (Date.now() - seenDate.getTime()) / 86400000
+    if (daysAgo < REVIEW_DEFER_DAYS) return
+  }
+
+  try {
+    await InAppReview.requestReview()
+    localStorage.setItem(REVIEW_LS_KEY, new Date().toISOString())
+  } catch (e) {
+    console.warn('In-app review failed:', e)
+  }
+}
+```
+
+(b) **Trigger inteligente** (não show no boot — happy path moments):
+
+```js
+// src/hooks/useReviewPrompt.js
+import { useEffect } from 'react'
+import { useAuth } from './useAuth'
+import { maybePromptReview } from '../services/inAppReview'
+
+const TRIGGER_LS = 'dosy_review_trigger_state' // {dosesTaken, alarmsFired, daysActive, lastTrigger}
+
+export function useReviewPrompt() {
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user) return
+    const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+    const eligible =
+      (state.dosesTaken || 0) >= 3 &&
+      (state.alarmsFired || 0) >= 1 &&
+      (state.daysActive || 0) >= 7
+    if (eligible) maybePromptReview()
+  }, [user])
+}
+
+// Increment counters quando user faz ação positiva:
+export function trackDoseTaken() {
+  const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+  state.dosesTaken = (state.dosesTaken || 0) + 1
+  localStorage.setItem(TRIGGER_LS, JSON.stringify(state))
+}
+
+export function trackAlarmFired() {
+  const state = JSON.parse(localStorage.getItem(TRIGGER_LS) || '{}')
+  state.alarmsFired = (state.alarmsFired || 0) + 1
+  localStorage.setItem(TRIGGER_LS, JSON.stringify(state))
+}
+```
+
+Wire em DoseModal (mark taken) + AlarmService (alarm fired) + App.jsx daysActive tracker.
+
+(c) **Response template Play Console** (3 categorias):
+
+**Positive (4-5 stars):**
+```
+Olá [Nome]! Obrigado pela avaliação 5 estrelas! Ficamos muito felizes que o Dosy está te ajudando a cuidar da sua [família/saúde]. Se tiver sugestões de novas features, me escreve em contato@dosymed.app! 💜
+```
+
+**Negative (1-2 stars):**
+```
+Olá [Nome], desculpe pela experiência ruim. Pode me contar exatamente o que aconteceu pra eu corrigir? Manda detalhes pra contato@dosymed.app que vou priorizar o fix. Quero muito que o Dosy funcione bem pra você.
+```
+
+**Feature request (3-4 stars + sugestão):**
+```
+Oi [Nome]! Boa sugestão sobre [feature]. Vou adicionar no roadmap. Algumas features parecidas estão em desenvolvimento: [feature relacionada]. Se quiser acompanhar updates, segue @dosymed no Instagram!
+```
+
+(d) **Reply playbook** (turnaround <24h):
+- Verificar Play Console reviews diariamente (calendar reminder 9h)
+- Responder TODAS reviews em <24h (inclusive 5 stars sem texto = "Obrigado!")
+- Negative reviews: criar item ROADMAP novo + reply mencionando ETA fix
+- Feature requests: agradecer + adicionar tag `[user-requested]` em ROADMAP CHECKLIST origem
+
+(e) **Métricas tracking PostHog**:
+```js
+// Após maybePromptReview:
+posthog.capture('review_prompted', { source: 'in_app' })
+// User feedback (não temos visibilidade real review action mas trackeamos prompt)
+```
+
+**Dependências:**
+- Plugin install + cap sync
+- Hooks integration DoseModal + AlarmService + App.jsx
+- Console reviews monitoring habit user
+
+**Critério de aceitação:**
+- ✅ Plugin instalado + funcional Android device real
+- ✅ Trigger fires APENAS após 3 doses + 1 alarm + 7 days active
+- ✅ Re-prompt 90 dias se user dismissed
+- ✅ Console reply rate >90% reviews <24h turnaround
+- ✅ Validado device real S25 Ultra (eligibility logic + native dialog)
+
+**Métrica esperada:**
+- 30-40% prompted users deixam review
+- Review rate: 1 review per 50 MAU típico (Dosy: 10-30 reviews mês 6 com 1K MAU)
+- Rating mantém 4.3+ se app funciona + replies acontecem
+
+---
+
+### #171 — Marketing orgânico playbook BR: Reddit + Instagram + LinkedIn + TikTok
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — paralelo Production launch)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 8-10h setup + 2-3h/semana ongoing
+- **Release sugerida:** v0.2.2.0+ ongoing
+
+**Problema:**
+
+Solo dev sem marketing budget depende 100% orgânico. Brasil tem comunidades healthcare ativas em multiple platforms — Dosy precisa presença consistente sem virar spam.
+
+**Abordagem:**
+
+(a) **Reddit BR** target subs:
+
+| Sub | Members | Estratégia |
+|---|---|---|
+| r/saude | 80K | Posts úteis (não-promo) + mention Dosy em comments quando relevante |
+| r/idosos | 5K | Cuidadores idosos = persona PRO target |
+| r/cuidadores | 3K | Direct fit |
+| r/diabetes | 15K | Use case medicação contínua |
+| r/tdah | 60K | Use case medicação psiquiátrica diária |
+| r/bipolar | 8K | Use case adesão tratamento crítica |
+| r/depressao | 25K | Use case medicação contínua + cuidador familiar |
+| r/brasil | 1M | Posts ocasionais virais (não focused healthcare) |
+
+Regras:
+- 90% posts úteis (responder dúvidas + share knowledge)
+- 10% promoção sutil (signature: "Eu uso o Dosy pra isso, é grátis: dosymed.app")
+- Nunca spam direto = ban auto
+- Karma build first (~1 mês posting útil antes de mention Dosy)
+
+(b) **Instagram strategy**:
+
+Hashtags BR healthcare (pesquisa Instagram explore):
+- #cuidadosaude (1.2M posts)
+- #cuidadoidoso (340K)
+- #saudemental (8M)
+- #medicacao (200K)
+- #diabetesbrasil (450K)
+- #cuidadorfamilia (90K)
+
+Conteúdo strategy (3 posts/semana):
+- 1 post educativo (carrossel "5 dicas pra organizar medicação idoso")
+- 1 post UX Dosy (vídeo 30s feature highlight)
+- 1 post user testimony (anônimo, com permissão)
+
+Parcerias microinfluencers (10K-50K followers cuidadores):
+- Lista 50 candidatos via search hashtags + manual review
+- Outreach DM personalizada (não copy-paste)
+- Permuta: PRO grátis 1 ano + R$ 100-300/post (budget total R$ 1-3K mês 1)
+- Meta: 5-10 microinfluencers ativos mês 6
+
+(c) **LinkedIn healthcare BR** (B2B trust):
+
+Conteúdo:
+- Posts sobre LGPD healthcare (autoridade técnica)
+- Cases de cuidadores profissionais usando Dosy
+- Articles long-form Dosy founder ("Por que criamos um app de medicação 100% LGPD compliant")
+
+Network targets:
+- Médicos geriatras BR
+- Farmacêuticos clínicos
+- Cuidadores profissionais
+- Healthcare tech founders BR
+
+(d) **TikTok healthcare BR**:
+
+Formato POV cuidadora 30s:
+- "POV: você cuida da sua mãe e nunca esquece um remédio porque..."
+- "Como organizo os 7 remédios da minha avó"
+- "Minha rotina manhã com app de medicação"
+
+Hashtags: #cuidadoraidosa #saudefamilia #organizacaocuidador
+
+3 vídeos/semana inicial. Algoritmo TikTok BR favorece autenticidade > production value.
+
+(e) **Content calendar 6 meses**:
+
+```
+Semana 1-4 (mês 1):
+- Reddit: 1 post útil/semana cada sub-prioritário (r/saude, r/idosos, r/cuidadores, r/diabetes, r/tdah)
+- Instagram: 3 posts/semana (12 total mês 1)
+- LinkedIn: 1 post/semana
+- TikTok: 3 vídeos/semana
+
+Semana 5-12 (mês 2-3):
+- Outreach 50 microinfluencers Instagram
+- Reddit: continuar útil + começar mention sutil
+- Blog SEO #172 começa publicar (1 artigo/semana)
+
+Semana 13-26 (mês 4-6):
+- Parcerias 5-10 microinfluencers ativas
+- Iterate winning content (double down 80/20)
+- Avaliar metrics: MAU, conversion rate, CAC
+```
+
+**Dependências:**
+- Conta Reddit autenticada (build karma 1 mês antes promo)
+- Conta Instagram @dosymed (criar)
+- Conta LinkedIn dosy.med (já tem? verificar)
+- Conta TikTok @dosymed (criar)
+- Budget R$ 1-3K mês 1 microinfluencer permuta
+
+**Critério de aceitação:**
+- ✅ Contas criadas + first posts publicados (4 platforms)
+- ✅ Calendar 90 dias agendado (Buffer/Hootsuite ou planner manual)
+- ✅ 5 microinfluencers ativos mês 3
+- ✅ 50+ posts orgânicos publicados mês 3
+- ✅ Métricas tracking: followers growth + click-through rate landing dosymed.app + Play Store install attribution UTM
+
+**Métrica esperada:**
+- 100-500 installs/mês orgânicos via Reddit (mês 3)
+- 200-1000 installs/mês via Instagram parcerias (mês 6)
+- Brand awareness BR healthcare niche +200% (mensurável via brand search "dosy app")
+
+---
+
+### #172 — Landing page dosymed.app marketing + blog SEO healthcare BR
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P2 (growth — SEO leva 6-12 meses indexar)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 12-16h initial + 2h/artigo (24h total 12 artigos)
+- **Release sugerida:** v0.2.3.0+ → v0.2.5.0+
+
+**Problema:**
+
+dosymed.app hoje só serve PWA + /privacidade + /termos. Sem SEO BR healthcare = invisible Google searches. Apps medicação BR top ranking (Medisafe, MyTherapy) têm sites com blog SEO + landing pages otimizadas há anos.
+
+**Abordagem:**
+
+(a) **Landing pages** (rotas novas Vite SSG ou client-rendered + meta tags):
+- `/sobre` — Quem somos, missão, LGPD compliance, equipe
+- `/pacientes` — App pra quem? Diabetes/Alzheimer/cuidadores idosos use cases
+- `/cuidadores` — Multi-paciente + compartilhamento family-friendly
+- `/precos` — Free vs PRO comparativa + FAQ pricing
+
+Cada página: H1 com keyword primária + 800-1200 palavras + CTA Play Store + Schema.org markup.
+
+(b) **Blog SEO** 12 artigos initial (1500+ palavras cada):
+
+| Artigo | Keyword primária | Volume mensal BR |
+|---|---|---|
+| Como organizar medicação de idoso com Alzheimer | "organizar medicação idoso Alzheimer" | 1K |
+| Alarme de dose esquecida pra diabetes tipo 2 | "alarme dose diabetes" | 800 |
+| Compartilhar lembrete de remédio com a família via WhatsApp | "compartilhar medicação família" | 600 |
+| Lembrete de medicação para ansiedade e depressão | "lembrete remédio ansiedade" | 1.5K |
+| Top 5 apps de lembrete de remédio no Brasil 2026 | "melhor app lembrete remédio" | 3K |
+| Como funciona o alarme nativo Android para medicação | "alarme medicação Android" | 500 |
+| Cuidador de idosos: 7 dicas pra controlar medicações | "cuidador idoso medicação" | 800 |
+| Tratamento contínuo: como não esquecer doses por meses | "tratamento contínuo medicação" | 400 |
+| LGPD na saúde: dados médicos no app são seguros? | "LGPD saúde dados" | 300 |
+| Diferença entre lembrete e alarme de medicação | "lembrete vs alarme remédio" | 200 |
+| Como ajustar a dose de Mounjaro semanal pelo app | "Mounjaro lembrete semanal" | 1.2K (trending) |
+| Top 10 medicamentos crônicos mais prescritos BR 2026 | "medicamentos mais prescritos BR" | 2K |
+
+Cada artigo: H1+H2 hierarchy + meta description 150-160 chars + internal linking + outbound link autoridade (FDA, ANVISA) + CTA download Dosy.
+
+(c) **Schema.org markup**:
+
+Página inicial:
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Dosy",
+  "operatingSystem": "Android",
+  "applicationCategory": "HealthApplication",
+  "applicationSubCategory": "MedicalApplication",
+  "offers": [
+    {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "BRL",
+      "name": "Free"
+    },
+    {
+      "@type": "Offer",
+      "price": "14.90",
+      "priceCurrency": "BRL",
+      "name": "PRO Mensal"
+    }
+  ],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.5",
+    "ratingCount": "150"
+  }
+}
+</script>
+```
+
+Blog posts:
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "MedicalWebPage",
+  "headline": "Como organizar medicação de idoso com Alzheimer",
+  "datePublished": "2026-08-01",
+  "author": { "@type": "Person", "name": "Luiz Henrique" },
+  "audience": { "@type": "MedicalAudience", "audienceType": "Caregivers" }
+}
+</script>
+```
+
+(d) **OG tags + Twitter cards**:
+```html
+<meta property="og:title" content="Dosy: Lembrete de Remédios com Alarme Inteligente">
+<meta property="og:description" content="Nunca esqueça uma dose. Alarme que toca alto, multi-paciente, compartilhamento com família.">
+<meta property="og:image" content="https://dosymed.app/og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+```
+
+(e) **Sitemap.xml + robots.txt + canonical URLs**:
+```xml
+<!-- /sitemap.xml -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://dosymed.app/</loc><priority>1.0</priority></url>
+  <url><loc>https://dosymed.app/sobre</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/pacientes</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/cuidadores</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/precos</loc><priority>0.8</priority></url>
+  <url><loc>https://dosymed.app/blog/organizar-medicacao-alzheimer</loc><priority>0.7</priority></url>
+  <!-- ...11 more articles -->
+</urlset>
+```
+
+**Dependências:**
+- Vite static page rendering OR React Router routes + meta dinâmica via react-helmet
+- Editor blog (markdown files src/content/blog/*.md OR Notion CMS)
+- Domain SEO basics (verify Google Search Console + submit sitemap)
+
+**Critério de aceitação:**
+- ✅ 4 landing pages publicadas com SEO básico
+- ✅ 12 artigos blog publicados (release distribuído ao longo 12 semanas)
+- ✅ Schema.org markup validado Rich Results Test Google
+- ✅ Google Search Console configurado + sitemap indexado
+- ✅ Lighthouse SEO score ≥90 todas páginas
+- ✅ 5+ artigos rankeando top 10 Google BR mês 6 (longtail keywords)
+
+**Métrica esperada:**
+- 500-2000 organic Google search visits/mês (mês 6)
+- 1000-5000 organic visits/mês (mês 12)
+- 5-15% conversion rate visit → install (50-300 installs/mês via SEO mês 12)
+- SEO leva 6-12 meses indexar — investimento longprazo
+
+---
+
+### #173 — Healthcare differentiators moat: promove #064 #065 #066 P3→P1
+
+- **Status:** ⏳ Aberto (umbrella; itens individuais ficam em §6.5 P3 mas com promotion note)
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth — diferencial vs Medisafe/MyTherapy/Pílula Certa)
+- **Origem:** Análise concorrentes BR 2026-05-07
+- **Esforço:** 15-22h total (#064: 8-12h, #065: 4-6h, #066: 3-4h)
+- **Release sugerida:** v0.2.3.0+ → v0.3.0.0+
+
+**Problema:**
+
+Análise competitive: Medisafe, MyTherapy, Pílula Certa são genéricos pra reminder. Faltam features healthcare deep BR que cuidadores REAIS pedem:
+- Verificação interações medicamentosas (ex: warfarin + ibuprofen = sangramento)
+- Verificação alergias (ex: paciente alérgico AAS, medicação nova contém AAS)
+- Estoque medicação (acabar sem aviso = adesão quebrada)
+- Lembrete consulta médica (esquece consulta = receita expira = sem medicação)
+
+Dosy pode criar moat real com essas 3 features + posicionamento marketing forte.
+
+**Abordagem:**
+
+**(a) #064 — Verificação interações medicamentosas + alergias** (8-12h, mais complexo):
+
+Data sources:
+- **OpenFDA Drug API** (US, free): https://open.fda.gov/apis/drug/
+- **DrugBank API** (paid, mais completo)
+- **ANVISA Bulário Eletrônico** (BR, scraping limitado)
+
+Estratégia start: cache local OpenFDA → 1000 medicamentos top BR + interactions matrix:
+
+```sql
+-- Migration: medications + interactions tables
+CREATE TABLE medcontrol.medications_db (
+  id text PRIMARY KEY, -- e.g. "metformina-500mg"
+  name text NOT NULL,
+  active_ingredient text NOT NULL,
+  category text, -- "antidiabetic", "anti-inflammatory"
+  warnings text[]
+);
+
+CREATE TABLE medcontrol.medication_interactions (
+  med_a text REFERENCES medcontrol.medications_db,
+  med_b text REFERENCES medcontrol.medications_db,
+  severity text, -- "minor", "moderate", "severe"
+  description text,
+  PRIMARY KEY (med_a, med_b)
+);
+
+CREATE TABLE medcontrol.patient_allergies (
+  patient_id uuid REFERENCES medcontrol.patients,
+  allergen text NOT NULL,
+  severity text,
+  notes text,
+  PRIMARY KEY (patient_id, allergen)
+);
+```
+
+Frontend: TreatmentForm verifica novo medicamento contra paciente.allergies + paciente.activeTreatments. Warning visual amarelo (interação moderada) ou vermelho (severa) com dialog confirma "ainda quero adicionar".
+
+**(b) #065 — Estoque medicação + alerta acabando** (4-6h):
+
+```sql
+ALTER TABLE medcontrol.treatments
+  ADD COLUMN stock_quantity integer,
+  ADD COLUMN stock_unit text DEFAULT 'comprimidos',
+  ADD COLUMN stock_low_threshold integer DEFAULT 7;
+```
+
+Cálculo dias até zero baseado em interval + dose:
+```js
+function daysUntilEmpty(treatment) {
+  if (!treatment.stock_quantity) return null
+  const dosesPerDay = 24 / treatment.intervalHours
+  const dosesPerStock = treatment.stock_quantity / treatment.dose
+  return Math.floor(dosesPerStock / dosesPerDay)
+}
+```
+
+Alert header novo (#117/#118 padrão): "📦 Mounjaro acabando em 5 dias" → click → opção "Comprar" (Drogaria São Paulo / Drogasil affiliate links).
+
+**(c) #066 — Lembrete consulta médica + Calendar export** (3-4h):
+
+```sql
+CREATE TABLE medcontrol.appointments (
+  id uuid PRIMARY KEY,
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  doctor_name text,
+  specialty text,
+  scheduled_at timestamptz NOT NULL,
+  notes text,
+  reminder_minutes integer DEFAULT 1440 -- 24h before
+);
+```
+
+Frontend: `/consultas` rota nova + AppointmentCard + AppointmentForm. Local notification 24h before via Capacitor LocalNotifications (já temos infra). `.ics` export → user adiciona Google Calendar / Apple Calendar.
+
+**Posicionamento marketing** (use em #169 listing copy + #171 social media):
+
+> "Dosy é o ÚNICO app brasileiro de medicação com:
+> ✅ Verificação automática de interações medicamentosas (alerta antes da dose)
+> ✅ Controle de estoque (avisa antes de acabar)
+> ✅ Agenda de consultas integrada
+>
+> Outros apps só lembram da hora. Dosy cuida do tratamento inteiro."
+
+**Dependências:**
+- #064 → OpenFDA API integration OR ANVISA scraping (8-12h)
+- #065 → migration + UI (4-6h, simpler)
+- #066 → migration + new route + Calendar export (3-4h)
+- Atualização ROADMAP §6.5 P3 entries #064/#065/#066 com note "promovido P1 via #173"
+
+**Critério de aceitação:**
+- ✅ #064: TreatmentForm dispara warning interaction quando adiciona medicação que conflita com active treatment OR allergy paciente
+- ✅ #065: PatientDetail mostra estoque + alert header "acabando" ≤7 dias
+- ✅ #066: /consultas rota com appointment list + form + .ics export funcional
+- ✅ Marketing copy atualizado #169 listing + #171 social
+- ✅ Validação Chrome MCP preview + device real S25 Ultra
+
+**Métrica esperada:**
+- Differential ASO Play Store keyword "interações medicamentosas" (zero competidores BR atualmente)
+- +20-30% conversion rate Free→PRO (features só PRO)
+- Brand positioning "Dosy = sério" vs "Dosy = lembrete genérico"
+
+---
+
+> **Nota promotion #064/#065/#066:** entries originais em §6.5 ✨ MELHORIAS P3 ficam mantidas pra histórico mas com flag `[promovido P1 via #173]`. Quando implementar, mover entries do P3 pra fechado normal (✅).
+
+---
+
+## Plano features differentiators concorrentes (análise gap 2026-05-07)
+
+> **Análise concorrentes BR/global:** Medisafe (~200K MAU BR) tem drug interactions parcial, sem OCR forte; MyTherapy (~100K BR) tem mood tracking + medições simples; Pílula Certa (~500K BR) só nicho contraceptivos; Cuidador.io (~50K) B2B fragmento. Gaps Dosy pode atacar:
+> - **Onboarding friction**: nenhum BR tem OCR forte caixa+receita auto-import (#174 #175)
+> - **B2B trust healthcare**: report PDF visual robusto pra médico nenhum tem (#176)
+> - **Cultural BR**: WhatsApp dominância 90% smartphones — feature share dose status nenhum BR tem (#177)
+> - **Acessibilidade**: Wear OS BR Galaxy Watch crescendo (#179) + voz/TTS idosos baixa visão (#181)
+> - **Healthcare deep**: health metrics correlação dose-outcome (#180) + mood tracking psiquiátrica (#182)
+> - **Niche profundo**: modo Alzheimer escalada nenhum tem (#178)
+> - **Monetização extra**: refill affiliate (#183) + telemedicina integration (#184)
+> - **B2B mode profissional**: Cuidador.io fragmento, espaço pra Dosy (#185)
+> - **Ecosystem**: Apple Health/Google Fit (#186) + receita digital BR Memed/Nexodata (#187)
+>
+> Decisão user 2026-05-07: iOS (#068) **NÃO promove** antes tração Android — custo dev/validação/infra alto. Foca Android-first 100%.
+
+### #174 — OCR camera medication scan (foto caixa → auto-cadastro)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth differentiator launch)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.2.2.0+
+
+**Problema:** Onboarding TreatmentForm friction — user digita manualmente nome med + dose + interval (5min cadastro 1 medicamento). Idosos abandonam.
+
+**Abordagem:** Plugin `@capacitor-mlkit/text-recognition` (Google ML Kit on-device, free, offline-capable):
+
+```bash
+npm i @capacitor-mlkit/text-recognition
+npx cap sync
+```
+
+```js
+// src/services/ocrMedication.js
+import { TextRecognition, TextRecognitionLanguage } from '@capacitor-mlkit/text-recognition'
+
+export async function scanMedicationBox(photoUri) {
+  const { text } = await TextRecognition.recognizeText({
+    path: photoUri,
+    language: TextRecognitionLanguage.Latin
+  })
+  return parseMedicationLabel(text)
+}
+
+function parseMedicationLabel(rawText) {
+  // Regex BR med labels: "METFORMINA 500mg" / "Mounjaro 5mg/0.5ml" / "Aspirin 100mg"
+  const lines = rawText.split('\n')
+  const medMatch = lines.find(l => /[A-Z]{4,}\s+\d+\s*(mg|mcg|g|ml|ui)/i.test(l))
+  const doseMatch = medMatch?.match(/(\d+)\s*(mg|mcg|g|ml|ui)/i)
+
+  // ANVISA RDC bulário scraping (futuro): match medName → known interval
+  return {
+    medName: medMatch?.replace(doseMatch?.[0], '').trim() || '',
+    dose: doseMatch?.[1] || '',
+    unit: doseMatch?.[2] || 'mg',
+    rawText, // user pode editar
+  }
+}
+```
+
+UX TreatmentForm: botão "📷 Escanear caixa" → Camera plugin → ML Kit OCR → preview parsed fields user edita confirma → salva treatment.
+
+**Critério aceitação:**
+- ✅ Plugin instalado + funcional Android device real
+- ✅ OCR retorna text bruto + parsed structured fields confidence scoring
+- ✅ User edita campos antes salvar (não auto-save sem review)
+- ✅ Suporta offline (ML Kit on-device)
+- ✅ 80%+ accuracy em 20 caixas BR test set (Mounjaro/Metformina/Pantoprazol/Losartana/etc)
+
+**Métrica esperada:**
+- Onboarding cadastro 1 med: 5min → 30s (-90%)
+- Conversion rate primeira sessão: +30-40%
+
+---
+
+### #175 — Receita médica scan OCR auto-import (foto receita → batch treatments)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (growth differentiator launch — único BR)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-16h
+- **Release:** v0.2.2.0+ → v0.2.3.0+
+
+**Problema:** User chega Dosy com receita médica papel/PDF → cadastrar 5 medicamentos manualmente = 25min friction. Receita médica BR estruturada (RDC ANVISA): nome paciente + médico CRM + medicamentos + posologia.
+
+**Abordagem:** Mesmo ML Kit OCR (#174) + parser regex robusto receita BR + UX confirmação batch:
+
+```js
+// src/services/ocrPrescription.js
+export async function scanPrescription(photoUri) {
+  const { text } = await TextRecognition.recognizeText({ path: photoUri })
+  return parsePrescriptionBR(text)
+}
+
+function parsePrescriptionBR(rawText) {
+  const lines = rawText.split('\n')
+
+  // Extrai paciente (após "Paciente:" ou "Nome:")
+  const patientLine = lines.find(l => /paciente|nome:/i.test(l))
+  const patientName = patientLine?.replace(/^.*?:/, '').trim()
+
+  // Extrai medicamentos (linhas estruturadas: "1. METFORMINA 500mg - tomar 1cp 2x ao dia")
+  const medRegex = /^\d+[\.\)]\s*([A-Z\s]+)\s+(\d+\s*(?:mg|mcg|g|ml|ui))[\s\-]+(.+)/gim
+  const meds = []
+  let match
+  while ((match = medRegex.exec(rawText)) !== null) {
+    const [, medName, dose, posology] = match
+    const intervalHours = parsePosology(posology) // "2x ao dia" → 12; "8/8h" → 8
+    meds.push({ medName: medName.trim(), dose, intervalHours, posology })
+  }
+
+  // Médico CRM (rodapé)
+  const crmLine = lines.find(l => /CRM[\s\-:]/i.test(l))
+
+  return { patientName, meds, doctor: crmLine, rawText }
+}
+
+function parsePosology(text) {
+  const lower = text.toLowerCase()
+  if (/\b(\d+)x?\s*(?:ao dia|por dia|\/dia)\b/.test(lower)) {
+    const n = parseInt(RegExp.$1)
+    return Math.round(24 / n)
+  }
+  if (/\b(\d+)\/(\d+)h\b/.test(lower)) return parseInt(RegExp.$1)
+  if (/\bcada\s+(\d+)\s*horas?\b/.test(lower)) return parseInt(RegExp.$1)
+  if (/\bsemanal|1x?\s*por semana\b/.test(lower)) return 168
+  if (/\bmensal|1x?\s*por m[eê]s\b/.test(lower)) return 720
+  return 24 // default diário
+}
+```
+
+UX: PatientDetail → botão "📋 Importar receita" → Camera → ML Kit OCR → preview list parsed meds → user edita/confirma cada → salva batch treatments.
+
+**Critério aceitação:**
+- ✅ OCR receita 1 página retorna 5+ medicamentos estruturados
+- ✅ Posology parser cobre 80%+ formatos BR ("2x ao dia", "8/8h", "1cp cada 12h", "semanal")
+- ✅ User edita lista antes batch save (não auto-save)
+- ✅ Validado 10 receitas reais BR (acumular dataset progressivo)
+- ✅ Patient name auto-fill se já existe paciente (matching nome similar)
+
+**Métrica esperada:**
+- Onboarding 5 medicamentos receita: 25min → 2min (-92%)
+- Único concorrente BR com feature → ASO listing differentiator forte
+
+---
+
+### #176 — Adesão report PDF/email pra médico 30/60/90d
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (B2B trust healthcare professional)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.2.0+
+
+**Problema:** Médico precisa saber adesão tratamento. User leva consulta sem dados → médico ajusta cego. App pode gerar report visual robusto.
+
+**Abordagem:** Edge function Puppeteer ou client `jsPDF` + email Resend SMTP (#154):
+
+```js
+// src/services/adesaoReport.js
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+
+export async function generateAdherenceReport(patientId, periodDays = 30) {
+  const doses = await listDosesRange({ patientId, days: periodDays })
+  const taken = doses.filter(d => d.status === 'taken').length
+  const skipped = doses.filter(d => d.status === 'skipped').length
+  const overdue = doses.filter(d => d.status === 'overdue').length
+  const adherenceRate = (taken / doses.length * 100).toFixed(1)
+
+  const doc = new jsPDF()
+  doc.setFontSize(20)
+  doc.text(`Relatório de Adesão — Dosy`, 14, 20)
+  doc.setFontSize(12)
+  doc.text(`Paciente: ${patient.name}`, 14, 35)
+  doc.text(`Período: ${periodDays} dias`, 14, 42)
+  doc.text(`Adesão: ${adherenceRate}%`, 14, 49)
+
+  // Stats summary
+  doc.autoTable({
+    startY: 60,
+    head: [['Status', 'Doses']],
+    body: [
+      ['Tomadas', taken],
+      ['Puladas', skipped],
+      ['Atrasadas', overdue],
+    ],
+  })
+
+  // Detalhe por medicamento
+  const byMed = groupBy(doses, 'medName')
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 10,
+    head: [['Medicamento', 'Dose', 'Adesão %', 'Tomadas/Total']],
+    body: Object.entries(byMed).map(([med, list]) => {
+      const t = list.filter(d => d.status === 'taken').length
+      return [med, list[0].dose, `${(t/list.length*100).toFixed(0)}%`, `${t}/${list.length}`]
+    }),
+  })
+
+  return doc.output('blob')
+}
+
+export async function emailAdherenceReport(patientId, doctorEmail, periodDays = 30) {
+  const pdfBlob = await generateAdherenceReport(patientId, periodDays)
+  // Edge function envia email via Resend com PDF attachment
+  await supabase.functions.invoke('send-adherence-report', {
+    body: { patientId, doctorEmail, periodDays, pdfBase64: await blobToBase64(pdfBlob) }
+  })
+}
+```
+
+UX PatientDetail → botão "📊 Relatório pra médico" → modal escolhe período (30/60/90d) + email médico → gera PDF + envia via Resend.
+
+**Critério aceitação:**
+- ✅ PDF gerado com header Dosy + stats summary + detalhe por med
+- ✅ Email enviado via Resend SMTP com PDF attachment
+- ✅ User pode também baixar PDF local (sem email)
+- ✅ Período 30/60/90d cobertos
+- ✅ Médico recebe email visual profissional (não plain text)
+
+**Métrica esperada:**
+- B2B trust healthcare professional ↑ (médicos recomendam app pacientes)
+- Differential vs MyTherapy weekly email simples
+
+---
+
+### #177 — WhatsApp share dose status (cuidador remoto cultural BR)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (cultural BR launch)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 3-4h
+- **Release:** v0.2.2.0+
+
+**Problema:** Filha distante quer saber se mãe tomou remédio. Hoje liga/manda mensagem manual. WhatsApp dominante BR (90%+ smartphones).
+
+**Abordagem:** Deep link WhatsApp pre-formatted message:
+
+```js
+// src/components/ShareDoseStatusButton.jsx
+function shareDoseStatus(dose, patient) {
+  const status = dose.status === 'taken' ? '✅ Tomou' : dose.status === 'skipped' ? '⏭️ Pulou' : '⏰ Atrasado'
+  const time = formatTime(dose.takenAt || dose.scheduledAt)
+  const text = `${patient.name} ${status} ${dose.medName} ${dose.dose}${dose.unit} às ${time} 💊\n\nDosy: dosymed.app`
+  const encoded = encodeURIComponent(text)
+
+  // Universal WhatsApp deeplink (works web + app)
+  const url = `https://wa.me/?text=${encoded}`
+  window.open(url, '_blank')
+}
+```
+
+UX: PatientDetail → DoseCard tem botão "📱 Compartilhar" (alongside já existing actions) → click abre WhatsApp picker contato → user escolhe família → mensagem pre-formatted enviada.
+
+Versão PRO: configurar "auto-share doses" → toda dose tomada gera WhatsApp share automático pra contato configurado (filho/cuidador).
+
+**Critério aceitação:**
+- ✅ Botão share funciona Android (WhatsApp app) + Web (WhatsApp Web)
+- ✅ Mensagem pre-formatted clara + signature dosymed.app
+- ✅ Múltiplas linguagens dose status (Tomou/Pulou/Atrasado/Encerrou)
+- ✅ Validado device real Galaxy S25 Ultra + Android emulator
+
+**Métrica esperada:**
+- Word-of-mouth orgânico forte ("nossa, isso ajuda demais!" → instala app)
+- Cultural BR fit: 90% market WhatsApp
+
+---
+
+### #178 — Modo Alzheimer escalada (alarme intensifica + SMS/WhatsApp cuidador)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (healthcare niche profundo)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.3.0+
+
+**Problema:** Paciente Alzheimer/demência não responde alarme normal (esquece, não entende, dorme profundo). Cuidador remoto não sabe.
+
+**Abordagem:** Toggle PatientForm "Cuidados especiais (Alzheimer/demência)" → ativa modo escalada:
+
+```js
+// android/app/src/main/java/com/dosyapp/dosy/AlarmActivity.java extending #083 FCM-driven alarm
+// Após alarm dispara:
+// T+0: Volume normal + vibração padrão
+// T+5min sem dismiss: Volume 2× + vibração contínua
+// T+10min sem dismiss: SMS/WhatsApp cuidador via Edge function
+// T+15min sem dismiss: 2ª chamada cuidador
+
+// supabase/functions/escalate-alarm/index.ts
+serve(async (req) => {
+  const { doseId, patientId, level } = await req.json()
+  const patient = await getPatient(patientId)
+  const caregivers = await getPatientCaregivers(patientId) // patient_shares
+
+  if (level === 'sms') {
+    await sendTwilioSMS(caregivers[0].phone, `⚠️ ${patient.name} não tomou ${dose.medName} (alarme não atendido)`)
+  } else if (level === 'whatsapp') {
+    await sendWhatsAppBusinessAPI(caregivers[0].phone, escalation_template)
+  }
+})
+```
+
+UX:
+- PatientForm: toggle "Cuidados especiais" → ativa modo
+- Settings global: configurar canal escalation (SMS/WhatsApp/Push) + cooldown
+- Cuidador recebe alerta: deep link app cuidador → vê paciente + dose missed
+
+**Dependências:**
+- #117 patient_share (existente — caregivers list)
+- Twilio account ($1/100 SMS BR) ou WhatsApp Business API
+- Phone field paciente_shares (migration adicionar)
+
+**Critério aceitação:**
+- ✅ Toggle Alzheimer mode ativa escalada (default off)
+- ✅ T+5 / T+10 / T+15 escalation triggers funcionais
+- ✅ Cuidador recebe notif + deep link
+- ✅ Validado device real S25 Ultra + emulador
+
+**Métrica esperada:**
+- Niche real-world saver — Alzheimer = 1.2M BR (IBGE)
+- Differentiator único no mercado mundial
+
+---
+
+### #179 — Wear OS / Galaxy Watch support (alarme pulso)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (acessibilidade + diferencial)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.2.3.0+
+
+**Problema:** Idoso dorme profundo, celular longe (cabeceira/sala), perde alarme. Galaxy Watch BR mercado crescendo.
+
+**Abordagem:** Wear OS API native bridge Android (custom Capacitor plugin OR `@capacitor/wear` se existir):
+
+```kotlin
+// android/app/src/main/java/com/dosyapp/dosy/WearAlarmHandler.kt
+class WearAlarmHandler(context: Context) {
+  fun sendAlarmToWear(doseId: String, medName: String) {
+    val dataClient = Wearable.getDataClient(context)
+    val request = PutDataMapRequest.create("/dose-alarm")
+      .apply {
+        dataMap.putString("doseId", doseId)
+        dataMap.putString("medName", medName)
+        dataMap.putLong("timestamp", System.currentTimeMillis())
+      }
+      .asPutDataRequest()
+      .setUrgent()
+
+    dataClient.putDataItem(request)
+  }
+}
+```
+
+Wear app companion separate (Android Studio Wear OS template) — display alarm + buttons "Tomei" / "Adiar".
+
+**Dependências:**
+- Wear OS companion app (separate AAB linked main app)
+- Test em Galaxy Watch real (user precisa hardware)
+
+**Critério aceitação:**
+- ✅ Alarm dispara celular + watch simultaneous
+- ✅ Dismiss via watch button → main app marca dose taken
+- ✅ Vibração watch funcional
+
+**Métrica esperada:**
+- BR Galaxy Watch market crescendo (Samsung dominante)
+- Diferencial vs Medisafe (sem Wear OS)
+
+---
+
+### #180 — Health metrics tracking (PA, glicemia, peso, temperatura)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (healthcare deep)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 10-14h
+- **Release:** v0.2.3.0+
+
+**Problema:** Diabéticos precisam glicemia + medicação link; hipertensos PA + med. Hoje user tem app separado pra metrics.
+
+**Abordagem:** Schema novo + UX integrate dose tomada:
+
+```sql
+CREATE TABLE medcontrol.health_metrics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  metric_type text NOT NULL, -- 'blood_pressure', 'glucose', 'weight', 'temperature'
+  value_numeric numeric, -- 110 (glicemia mg/dL) ou 75 (peso kg)
+  value_systolic integer, value_diastolic integer, -- BP only
+  unit text NOT NULL,
+  measured_at timestamptz DEFAULT now(),
+  related_dose_id uuid REFERENCES medcontrol.doses, -- linked metric
+  notes text
+);
+
+CREATE INDEX idx_health_metrics_patient_time ON medcontrol.health_metrics(patient_id, measured_at DESC);
+```
+
+UX:
+- DoseModal "Tomada" → opcional input metric (ex: "Antes de tomar Mounjaro: glicemia ___")
+- PatientDetail nova section "Saúde": chart trend 30/60/90d (lib `recharts` ou `victory`)
+- Form rápido add metric standalone (sem dose linked)
+
+**Critério aceitação:**
+- ✅ 4 metric types funcionais
+- ✅ Chart trend renderiza patient detail
+- ✅ Linked metric ↔ dose visível (correlação dose-outcome)
+- ✅ Export CSV pra médico
+
+**Métrica esperada:**
+- Diabéticos retention ↑ (glicemia + dose linked = único app)
+- PRO upsell (feature exclusiva PRO?)
+
+---
+
+### #181 — Voz/TTS prompts + comando voz (acessibilidade idosos baixa visão)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (acessibilidade)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.2.3.0+
+
+**Problema:** Idoso baixa visão não vê tela. TalkBack ajuda mas é genérico. App pode ser pro-ativo: alarme dispara → TTS fala "É hora do Mounjaro 14:30".
+
+**Abordagem:**
+
+```js
+// src/services/voice.js
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
+import { SpeechRecognition } from '@capacitor-community/speech-recognition'
+
+export async function speakDoseAlarm(dose) {
+  await TextToSpeech.speak({
+    text: `É hora do ${dose.medName}, ${dose.dose}${dose.unit}, às ${formatTime(dose.scheduledAt)}.`,
+    lang: 'pt-BR',
+    rate: 0.9, // levemente mais lento idosos
+    pitch: 1.0,
+  })
+}
+
+export async function listenForDoseConfirmation() {
+  await SpeechRecognition.requestPermission()
+  const result = await SpeechRecognition.start({
+    language: 'pt-BR',
+    maxResults: 3,
+    prompt: 'Diga "tomei minha dose" ou "pulei"',
+    partialResults: false,
+    popup: false,
+  })
+  const text = result.matches?.[0]?.toLowerCase() || ''
+  if (/tomei|tomado|sim/i.test(text)) return 'taken'
+  if (/pulei|pulou|não/i.test(text)) return 'skipped'
+  return null
+}
+```
+
+UX Settings: toggle "Acessibilidade voz" → ativa TTS em alarmes + comando voz pós alarme. AlarmActivity dispara → TTS fala → após 3s auto-listen 5s → marca dose status.
+
+**Critério aceitação:**
+- ✅ TTS PT-BR clear pronunciation medicamentos
+- ✅ Comando voz reconhece "tomei" / "pulei" / "adiar" 80%+ accuracy
+- ✅ Toggle Settings off por default (opt-in)
+- ✅ Validado device real S25 Ultra + idoso real test (user pai/mãe?)
+
+**Métrica esperada:**
+- Acessibilidade demographic +30% (idosos baixa visão são target heavy)
+
+---
+
+### #182 — Symptom diary + mood tracking (antes/depois dose)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (backlog futuro)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 6-8h
+- **Release:** v0.3.0.0+
+
+**Problema:** Medicação psiquiátrica (ansiedade/depressão/bipolar) requer ajuste fino baseado em sintomas/humor. App pode capturar.
+
+**Abordagem:**
+
+```sql
+CREATE TABLE medcontrol.symptom_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  patient_id uuid REFERENCES medcontrol.patients,
+  related_dose_id uuid REFERENCES medcontrol.doses,
+  mood_score integer CHECK (mood_score BETWEEN 1 AND 5), -- 😢😞😐🙂😊
+  symptoms text[], -- ['ansiedade', 'fadiga', 'dor cabeça']
+  notes text,
+  logged_at timestamptz DEFAULT now()
+);
+```
+
+UX DoseModal "Tomada" → após mark taken, opcional "Como se sente?" emoji 5-scale + sintomas checkbox + observation. Trend chart PatientDetail seção "Saúde".
+
+**Critério aceitação:**
+- ✅ Mood tracking 5-emoji scale
+- ✅ Symptoms common BR list (psiquiátrica + crônica)
+- ✅ Trend chart 30d/60d
+- ✅ Export combined dose+mood (correlação)
+
+---
+
+### #183 — Refill affiliate links Drogasil/Drogaria SP/Pague Menos
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2 (monetização extra — combinado #065 estoque)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 4-6h (incluindo signup affiliate)
+- **Release:** v0.2.3.0+ (depende #065 implementado primeiro)
+
+**Problema:** User estoque acabando precisa comprar. App pode oferecer atalho + ganhar comissão.
+
+**Abordagem:**
+
+Signup affiliate programs:
+- Drogasil afiliados (via Lomadee ou direto)
+- Drogaria São Paulo afiliados
+- Pague Menos afiliados
+- Raia afiliados
+
+Deeplinks com tracking ID afiliado:
+
+```js
+// src/services/refillLinks.js
+const AFFILIATE_LINKS = {
+  drogasil: (medName) => `https://www.drogasil.com.br/search?q=${encodeURIComponent(medName)}&utm_source=dosy&utm_medium=affiliate&utm_id=DOSY123`,
+  drogaria_sp: (medName) => `https://www.drogariasaopaulo.com.br/search?...`,
+  paguemenos: (medName) => `https://www.paguemenos.com.br/search?...`,
+  raia: (medName) => `https://www.drogaraia.com.br/search?...`,
+}
+
+export function getRefillOptions(medName) {
+  return Object.entries(AFFILIATE_LINKS).map(([store, fn]) => ({
+    store,
+    url: fn(medName),
+    name: STORE_NAMES[store],
+  }))
+}
+```
+
+UX: alert header novo (#117/#118 padrão) "📦 Mounjaro acabando — Comprar?" → click → bottom sheet 4 drogarias → click drogaria → abre app/web com search pre-filled medicamento.
+
+**Dependências:**
+- #065 estoque implementado (#173)
+- Affiliate programs signup (1-2 semanas approval cada)
+
+**Critério aceitação:**
+- ✅ 4 drogarias deeplinks funcionais
+- ✅ Tracking ID afiliado validado (clicks tracked)
+- ✅ Sheet UX consistent Dosy primitives
+- ✅ Settings toggle off (user opt-out se não quer)
+
+**Métrica esperada:**
+- 2-5% comissão venda (R$ 50 venda Mounjaro = R$ 1-2.50)
+- Volume escala 1000 MAU = ~100 refill clicks/mês = R$ 100-250/mês adicional
+
+---
+
+### #184 — Telemedicina integration (Doctoralia/Conexa Saúde/Drogasil Telemedicina)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (backlog futuro — depende parcerias)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 8-12h
+- **Release:** v0.3.0.0+
+
+**Abordagem:** Botão "Agendar consulta" PatientDetail → opções providers parceiros affiliate. Doctoralia API (limited public) ou deeplinks.
+
+**Critério aceitação:** Deeplinks 3 providers funcionais + tracking affiliate + UX consent privacy.
+
+---
+
+### #185 — Cuidador profissional B2B mode (1 cuidador 5+ idosos diferentes residências)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (B2B mercado nicho)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 16-24h (UX redesign + RLS expansion)
+- **Release:** v0.4.0.0+ (mais futuro)
+
+**Abordagem:** Toggle Settings "Modo cuidadora profissional" → habilita gerenciar 5+ pacientes residências distintas + reports separados + cobranças por hora cuidado (futuro).
+
+**Dependências:** #117 patient_share expansion + RLS rework + UX redesign navegação multi-residência.
+
+---
+
+### #186 — Apple Health / Google Fit / Samsung Health bidirectional sync
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (ecosystem integration)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-16h
+- **Release:** v0.3.0.0+ (depende #180 health metrics)
+
+**Abordagem:** Plugin `@capacitor-community/health` (ou Health Connect Android API). Doses Dosy → Health platforms; metrics #180 → Health platforms.
+
+**Critério aceitação:** Bidirectional sync funcional + user consent + privacy controls granulares.
+
+---
+
+### #187 — Receita digital prescription import (Memed, Nexodata BR)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P3 (BR-specific future-proof)
+- **Origem:** Análise gap concorrentes 2026-05-07
+- **Esforço:** 12-20h
+- **Release:** v0.3.0.0+
+
+**Abordagem:** Memed (1ª receita digital BR) + Nexodata API integração. User receba receita digital → app importa automático criando treatments. Diferente #175 OCR scan — esse é integração nativa receita digital pre-formatted.
+
+**Dependências:** Signup parceria Memed/Nexodata API + RDC ANVISA compliance.
+
+**Critério aceitação:** Import automático batch treatments + paciente nome match + médico CRM linked.
+
+---
+
+### #188 — 🔥 Mini IA Chat: cadastro tratamento via escrita/fala natural (KILLER FEATURE mundial)
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (KILLER differentiator launch — único mundial)
+- **Origem:** User feedback 2026-05-07
+- **Esforço:** 12-18h (V1 escrita) + 4-6h (V2 voz future)
+- **Release:** v0.2.2.0+ → v0.2.3.0+
+
+**Problema:**
+
+Onboarding TreatmentForm friction massivo: user navega 6 campos (paciente + medName + dose + unit + intervalHours + durationDays) digitando manualmente. Idosos e cuidadores apressados abandonam. Mesmo com #174 OCR caixa + #175 OCR receita, ainda há fluxo: "tenho receita papel? OCR. Tenho caixa? OCR. Apenas sei o que médico falou? digito manual."
+
+**Solução:**
+
+Floating chat button bottom-right (Dosy primary peach) → Sheet chat UI → user digita frase natural ("Desloratadina 10 dias 5ml 8 em 8 horas pro Rael") → backend NLP parser via Claude API tool use → returna structured fields → app preview parsed → user edita/confirma → salva treatment.
+
+**Exemplos input natural reconhecidos:**
+
+```
+"Desloratadina 10 dias 5ml 8 em 8 horas pro Rael"
+→ {patient:"Rael", med:"Desloratadina", dose:5, unit:"ml", interval:8h, duration:10d}
+
+"Mãe Mounjaro 5mg semanal por 6 meses"
+→ {patient:"Mãe", med:"Mounjaro", dose:5, unit:"mg", interval:168h, duration:180d}
+
+"Dipirona 1 comprimido cada 6 horas até melhorar"
+→ {med:"Dipirona", dose:1, unit:"cp", interval:6h, isContinuous:true}
+
+"Aspirin 100mg uma vez ao dia pro pai começando amanhã às 8h"
+→ {patient:"pai", med:"Aspirin", dose:100, unit:"mg", interval:24h, isContinuous:true, startDate:"tomorrow", startTime:"08:00"}
+
+"Anticoncepcional 21 dias 1cp 24h pra mim"
+→ {patient:"<self>", med:"Anticoncepcional", dose:1, unit:"cp", interval:24h, duration:21d}
+```
+
+**Arquitetura técnica:**
+
+**Decisão arquitetural: Claude API Haiku via Edge function gateway com tool use.**
+
+Rationale:
+- **Haiku** ($0.25/$1.25 1M tokens) suficiente pra task simple parsing
+- **Tool use** garante structured output (zero hallucination JSON)
+- **Edge function gateway** centraliza: API key não exposta cliente + rate limit + audit log + futura migração modelo (Sonnet/Opus se precisar)
+- **Privacy**: user consent antes 1ª vez (envia frase pra Anthropic — disclaimer explícito)
+- **Cost**: ~$0.000375/request × 5000 req/mês 1000 MAU = $1.88/mês ≈ R$10
+
+**Edge function gateway:**
+
+```ts
+// supabase/functions/parse-treatment-nl/index.ts
+import { serve } from 'jsr:@std/http/server'
+import Anthropic from 'npm:@anthropic-ai/sdk'
+
+const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') })
+
+const TREATMENT_TOOL = {
+  name: 'create_treatment',
+  description: 'Extract medication treatment fields from natural language Portuguese-BR text',
+  input_schema: {
+    type: 'object',
+    properties: {
+      patientHint: { type: 'string', description: 'First name or relationship (mãe/pai/eu/<name>)' },
+      medName: { type: 'string', description: 'Medication name capitalized (Mounjaro, Desloratadina)' },
+      dose: { type: 'number', description: 'Numeric dose value (5, 100, 1)' },
+      unit: { type: 'string', enum: ['mg','mcg','g','ml','ui','cp','gota','spray'] },
+      intervalHours: { type: 'number', description: '24=diário, 168=semanal, 8=8/8h, 720=mensal' },
+      durationDays: { type: 'number', description: 'null se contínuo' },
+      isContinuous: { type: 'boolean' },
+      startDate: { type: 'string', description: 'YYYY-MM-DD ou null se hoje. "amanhã"→D+1' },
+      startTime: { type: 'string', description: 'HH:MM ou null' },
+      confidence: { type: 'string', enum: ['high','medium','low'] },
+      missingFields: { type: 'array', items: { type: 'string' }, description: 'Campos não inferidos' },
+    },
+    required: ['medName', 'dose', 'unit', 'intervalHours', 'confidence']
+  }
+}
+
+serve(async (req) => {
+  // CORS + auth
+  const { text, userId } = await req.json()
+
+  // Rate limit (1 req/3s per user via Redis/memory)
+  if (await isRateLimited(userId)) {
+    return new Response(JSON.stringify({ error: 'Rate limited' }), { status: 429 })
+  }
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 500,
+    tools: [TREATMENT_TOOL],
+    tool_choice: { type: 'tool', name: 'create_treatment' },
+    system: `Você é um assistente que extrai dados de tratamento médico de texto em português-BR.
+Reconheça padrões: "8 em 8 horas"=8h, "8/8h"=8h, "uma vez ao dia"=24h, "semanal"=168h, "mensal"=720h.
+Reconheça pacientes: nomes próprios, "mãe/pai/filho/avó", "pra mim"="<self>".
+Reconheça datas: "hoje"=null, "amanhã"=D+1, "começando dia X"=parse.
+Se faltar info crítica, retorne confidence=low + listMissingFields.`,
+    messages: [{ role: 'user', content: text }]
+  })
+
+  const toolUse = response.content.find(c => c.type === 'tool_use')
+  if (!toolUse) {
+    return new Response(JSON.stringify({ error: 'parse_failed', rawText: text }), { status: 400 })
+  }
+
+  // Audit log (não persistir text — privacy)
+  await supabase.from('medcontrol.nl_parse_audit').insert({
+    user_id: userId,
+    confidence: toolUse.input.confidence,
+    missing_fields: toolUse.input.missingFields,
+    parsed_at: new Date()
+  })
+
+  return new Response(JSON.stringify(toolUse.input), { status: 200 })
+})
+```
+
+**Frontend Chat UI:**
+
+```jsx
+// src/components/ChatNLPSheet.jsx
+import { useState } from 'react'
+import { Sheet, Button, Input } from './primitives'
+import { MessageCircle, Send, Mic } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
+import { TreatmentPreviewModal } from './TreatmentPreviewModal'
+
+export function FloatingChatButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          position: 'fixed', bottom: 90, right: 20, // above bottom nav
+          width: 56, height: 56, borderRadius: 9999,
+          background: 'var(--dosy-primary)',
+          color: 'white', border: 'none',
+          boxShadow: 'var(--dosy-shadow-lg)',
+          zIndex: 50, cursor: 'pointer',
+        }}
+        aria-label="Cadastrar tratamento via chat"
+      >
+        <MessageCircle size={24} strokeWidth={2} />
+      </button>
+      <ChatNLPSheet open={open} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
+function ChatNLPSheet({ open, onClose }) {
+  const [input, setInput] = useState('')
+  const [history, setHistory] = useState([])
+  const [parsing, setParsing] = useState(false)
+  const [preview, setPreview] = useState(null)
+
+  const examples = [
+    'Desloratadina 10 dias 5ml 8 em 8 horas pro Rael',
+    'Mãe Mounjaro 5mg semanal por 6 meses',
+    'Dipirona 1cp cada 6h até melhorar',
+    'Anticoncepcional 21 dias 1cp por dia pra mim',
+  ]
+
+  async function send() {
+    if (!input.trim()) return
+    setHistory(h => [...h, { role: 'user', text: input }])
+    setParsing(true)
+
+    const { data, error } = await supabase.functions.invoke('parse-treatment-nl', {
+      body: { text: input }
+    })
+
+    setParsing(false)
+    if (error || data.error) {
+      setHistory(h => [...h, {
+        role: 'assistant',
+        text: 'Não consegui entender. Tenta reformular ou usa o cadastro manual.'
+      }])
+      return
+    }
+
+    if (data.confidence === 'low' || data.missingFields?.length > 0) {
+      setHistory(h => [...h, {
+        role: 'assistant',
+        text: `Entendi parcialmente. Faltam: ${data.missingFields.join(', ')}. Pode completar?`
+      }])
+    }
+
+    setPreview(data)
+    setInput('')
+  }
+
+  return (
+    <>
+      <Sheet open={open} onClose={onClose} title="Cadastrar tratamento">
+        {history.length === 0 && (
+          <div>
+            <p style={{ fontSize: 14, color: 'var(--dosy-fg-secondary)' }}>
+              Escreva naturalmente, ex:
+            </p>
+            {examples.map(ex => (
+              <button
+                key={ex}
+                onClick={() => setInput(ex)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: 10, marginTop: 8, borderRadius: 8,
+                  background: 'var(--dosy-bg-elevated)',
+                  border: '1px solid var(--dosy-border)',
+                  fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                "{ex}"
+              </button>
+            ))}
+          </div>
+        )}
+
+        {history.map((msg, i) => (
+          <div key={i} style={{
+            margin: '12px 0', padding: 10, borderRadius: 12,
+            background: msg.role === 'user' ? 'var(--dosy-primary)' : 'var(--dosy-bg-elevated)',
+            color: msg.role === 'user' ? 'white' : 'var(--dosy-fg)',
+            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '85%',
+          }}>
+            {msg.text}
+          </div>
+        ))}
+
+        {parsing && <div>Pensando...</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ex: Desloratadina 10 dias 5ml 8/8h pro Rael"
+            onKeyDown={e => e.key === 'Enter' && send()}
+          />
+          <Button onClick={send} kind="primary" disabled={parsing}>
+            <Send size={18} />
+          </Button>
+          {/* V2 future: voz */}
+          {/* <Button onClick={startVoice} kind="ghost"><Mic size={18}/></Button> */}
+        </div>
+      </Sheet>
+
+      {preview && (
+        <TreatmentPreviewModal
+          parsed={preview}
+          onConfirm={async (final) => {
+            await createTreatment(final)
+            setPreview(null)
+            onClose()
+            // Reset state
+          }}
+          onCancel={() => setPreview(null)}
+        />
+      )}
+    </>
+  )
+}
+```
+
+**Privacy consent flow** (1ª vez user usa chat):
+
+```jsx
+// PrivacyConsentModal antes 1ª chamada
+<Modal title="Sobre o Chat IA">
+  <p>O chat usa inteligência artificial (Anthropic Claude) pra entender suas frases.</p>
+  <p>O texto que você escrever é enviado pra Anthropic processar. Nenhum dado pessoal seu (nome, email) é incluído.</p>
+  <p>Você pode usar o cadastro manual a qualquer momento.</p>
+  <Button onClick={accept}>Entendi e quero usar</Button>
+  <Button kind="ghost" onClick={cancel}>Prefiro cadastro manual</Button>
+</Modal>
+```
+
+**V2 voz (combinado #181 — release v0.3.0+):**
+
+```jsx
+// Botão mic no chat input
+async function startVoice() {
+  await SpeechRecognition.requestPermission()
+  const result = await SpeechRecognition.start({ language: 'pt-BR' })
+  setInput(result.matches?.[0] || '')
+  send() // auto-send
+}
+
+// TTS opcional ler back parsed
+async function speakConfirmation(parsed) {
+  await TextToSpeech.speak({
+    text: `Entendi: ${parsed.medName} ${parsed.dose}${parsed.unit}, cada ${parsed.intervalHours} horas, por ${parsed.durationDays || 'tempo indeterminado'} dias. Confirma?`,
+    lang: 'pt-BR',
+  })
+}
+```
+
+**Dependências:**
+- Anthropic API key (~R$10/mês 1000 MAU; setup conta + billing)
+- Edge function gateway novo
+- Sheet/Modal primitives (existentes)
+- TreatmentPreviewModal componente novo
+- Privacy consent modal (LGPD compliance)
+- V2 voz: plugins `@capacitor-community/speech-recognition` + `@capacitor-community/text-to-speech` (#181)
+
+**Schema DB audit log:**
+
+```sql
+CREATE TABLE medcontrol.nl_parse_audit (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users,
+  confidence text,
+  missing_fields text[],
+  parsed_at timestamptz DEFAULT now()
+  -- NOT persisting input text (privacy)
+);
+ALTER TABLE medcontrol.nl_parse_audit ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users see own audit" ON medcontrol.nl_parse_audit
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+```
+
+**Critério de aceitação:**
+
+V1 (escrita):
+- ✅ Floating button visível em todas telas (não cobre nav)
+- ✅ Sheet chat UI funcional Android + Web
+- ✅ Privacy consent 1ª vez user usa
+- ✅ 5 example phrases clickáveis pre-fill input
+- ✅ Edge function `parse-treatment-nl` deployed + ANTHROPIC_API_KEY configured
+- ✅ 10 frases test set retorna structured correto:
+  - "Desloratadina 10 dias 5ml 8 em 8 horas pro Rael" → all fields parsed
+  - "Mãe Mounjaro 5mg semanal por 6 meses" → patient="Mãe", interval=168, duration=180
+  - "Dipirona 1cp cada 6h até melhorar" → isContinuous=true
+  - "Anticoncepcional 21 dias 1cp por dia pra mim" → patient=<self>
+  - Edge cases: misspell, ordem trocada, unidades pluralizadas
+- ✅ Confidence low → app pede user complete missing fields
+- ✅ TreatmentPreviewModal usuário edita/confirma antes salvar (NUNCA auto-save)
+- ✅ Patient matching: hint "mãe/pai" → procura paciente existente OR sugere criar novo
+- ✅ Audit log entries criadas (sem texto user, só metadata)
+- ✅ Rate limit funcional (1 req/3s per user)
+- ✅ Error handling: parse_failed → fallback cadastro manual
+- ✅ Validação Chrome MCP preview Vercel + device real S25 Ultra
+
+V2 (voz future v0.3.0+):
+- ✅ Botão mic chat input
+- ✅ Speech recognition PT-BR funcional (combinado #181)
+- ✅ Auto-send pós voz reconhecido
+- ✅ TTS opcional confirmação parsed result
+
+**Métrica esperada:**
+- Onboarding cadastro 1 treatment: 5min manual → 30s chat (-90%)
+- Conversion rate primeira sessão: +50-70% (KILLER UX)
+- Retention dia 7: +30% (user que usa chat tende voltar)
+- Brand differentiator MUNDIAL — primeiro app medicação com IA conversacional cadastro
+- Marketing copy: "Cadastre só falando" / "IA entende seu jeito"
+
+**Cost ongoing:**
+
+| Modelo | Cost/request | 1000 MAU × 5/mês | Mensal R$ |
+|---|---|---|---|
+| Haiku 4.5 | $0.000375 | $1.88 | R$ 10 |
+| Sonnet 4 | $0.0045 | $22.50 | R$ 113 |
+
+**Recomendação: Haiku** suficiente pra parser simple. Sonnet só se complexity Real-world demanda upgrade.
+
+**Riscos:**
+- Anthropic API downtime → fallback gracefully cadastro manual com toast "Chat indisponível, use cadastro normal"
+- LLM hallucination unit/interval → tool use mitiga + user confirm antes save
+- Privacy LGPD → consent explícito + sem PII enviado + audit log no-text
+- Rate abuse → rate limit Edge function + cap mensal API spending alert
+
+**Posicionamento marketing** (use #169 listing + #171 social):
+
+> "Cadastre tratamentos só ESCREVENDO o que o médico falou.
+>
+> Diga: 'Mounjaro 5mg semanal por 6 meses pra mãe'
+>
+> O Dosy entende e cadastra automaticamente. Só você confirmar.
+>
+> Único app brasileiro com IA pra te ajudar a cuidar."
+
+**Future iterations (v0.3.0+ → v1.0.0+):**
+- Voz (V2 combinado #181)
+- Multi-turn conversations ("ah, esqueci de falar que começa amanhã" → adiciona startDate)
+- Edit treatment via chat ("aumenta dose Mounjaro pra 10mg")
+- Mark dose taken via chat ("já tomei o Mounjaro")
+- Query history ("quantas doses faltam pra Mounjaro?")
+- LLM personalizado fine-tuned BR healthcare data (longprazo)
+
+---
+
+### #189 — UpdateBanner mostra versionCode em vez de versionName
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P2 (UX bug não-blocker)
+- **Origem:** User-reported 2026-05-07
+- **Esforço:** 1-2h
+- **Release:** v0.2.1.5+ (próxima code release)
+
+**Problema:**
+
+UpdateBanner mostra `v code 49` (versionCode) ao invés `v0.2.1.4` (versionName) que user vê em Console release notes.
+
+User quote: "no banner de update que aparece, ele mostra o v code do console, atualmente ta em ~44 eu acho. Eu gostaria que aparecesse o versionamento correto do app... no caso, o que colocamos entre ( ) no console na hora que subimos aab".
+
+**Root cause:**
+
+`src/hooks/useAppUpdate.js:90-94` Native check Play Core API:
+
+```js
+if (info.updateAvailability === 2 && info.flexibleUpdateAllowed) {
+  setLatest({
+    version: info.availableVersion ?? `code ${info.availableVersionCode}`,
+    source: 'play'
+  })
+}
+```
+
+Plugin `@capawesome/capacitor-app-update` `getAppUpdateInfo()` Android Play Core API:
+- `availableVersionCode` — sempre populated (integer ex: 49)
+- `availableVersion` (versionName) — populated em SOME Android versions / SOME Play Core versions. Frequently undefined em older devices OR Play Core SDK older.
+
+Quando `availableVersion === undefined` → fallback `code ${info.availableVersionCode}` mostra "code 49" feio.
+
+UpdateBanner.jsx:67-71 usa esse `latest.version` direto:
+```jsx
+} else if (latest?.version) {
+  subtitle = isNative
+    ? `v${latest.version} · toque para baixar`
+    : `v${latest.version} · toque para recarregar`
+}
+```
+
+Resultado visível user: "v code 49 · toque para baixar" em vez de "v0.2.1.4 · toque para baixar".
+
+**Abordagem:**
+
+Fix dual fallback strategy useAppUpdate.js:
+
+```js
+// Local map mantido em build constant (atualiza a cada release)
+const VERSION_CODE_TO_NAME = {
+  46: '0.2.1.0',
+  47: '0.2.1.1',
+  48: '0.2.1.2',
+  49: '0.2.1.4',
+  // adicionar próximas releases aqui
+}
+
+const checkNative = useCallback(async () => {
+  try {
+    const { AppUpdate } = await import('@capawesome/capacitor-app-update')
+    const info = await AppUpdate.getAppUpdateInfo()
+    if (info.updateAvailability === 2 && info.flexibleUpdateAllowed) {
+      // Primary: availableVersion (versionName) from Play Core
+      let version = info.availableVersion
+
+      // Fallback 1: local map versionCode → versionName
+      if (!version && info.availableVersionCode) {
+        version = VERSION_CODE_TO_NAME[info.availableVersionCode]
+      }
+
+      // Fallback 2: fetch version.json Vercel (web fallback in native path)
+      if (!version) {
+        try {
+          const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' })
+          if (res.ok) {
+            const data = await res.json()
+            version = data.version
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Fallback 3: ainda undefined → use versionCode mas com label clearer
+      if (!version) {
+        version = `versão ${info.availableVersionCode}` // PT-BR friendly vs "code 49"
+      }
+
+      setLatest({ version, source: 'play' })
+    }
+    // ... resto
+  } catch (e) {
+    console.log('[useAppUpdate] native check skipped:', e?.message)
+  }
+}, [])
+```
+
+Alternative simpler: SEMPRE fetch version.json no native path (paralelo Play Core). version.json é fonte canônica versionName (já updated a cada release v0.2.1.0 #103 BUG-032 fix URL origin runtime).
+
+**Approach recomendada:** Sempre fetch version.json em paralelo com Play Core check. version.json define versionName; Play Core define availability + downloadable. Combina informações.
+
+```js
+const checkNative = useCallback(async () => {
+  try {
+    const { AppUpdate } = await import('@capawesome/capacitor-app-update')
+    const [info, webData] = await Promise.allSettled([
+      AppUpdate.getAppUpdateInfo(),
+      fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+    ])
+
+    const playInfo = info.status === 'fulfilled' ? info.value : null
+    const versionData = webData.status === 'fulfilled' ? webData.value : null
+
+    if (playInfo?.updateAvailability === 2 && playInfo.flexibleUpdateAllowed) {
+      const version = playInfo.availableVersion
+        ?? versionData?.version
+        ?? `versão ${playInfo.availableVersionCode}`
+
+      setLatest({ version, source: 'play' })
+    } else {
+      setLatest(null)
+    }
+    if (playInfo?.installStatus === 11) setDownloaded(true)
+  } catch (e) {
+    console.log('[useAppUpdate] native check skipped:', e?.message)
+  }
+}, [])
+```
+
+**Dependências:**
+- `public/version.json` deploy Vercel auto-update a cada build (verify Vite plugin)
+- VERSION_URL constant em `src/lib/constants.js` ou similar
+
+**Critério de aceitação:**
+
+- ✅ Banner mostra `v0.2.1.4 · toque para baixar` (versionName) em vez de `v code 49`
+- ✅ Fallback gracefully se Play Core retorna availableVersion undefined
+- ✅ Fallback secondary version.json Vercel funcional
+- ✅ Última fallback `versão N` PT-BR friendly (não "code N")
+- ✅ Validação device real S25 Ultra: instalar versão antiga → publish nova versão Console → banner aparece com versionName correto
+- ✅ Validação web (Vercel preview): banner mostra versionName de version.json
+
+**Métrica esperada:**
+- UX consistency — user vê mesma string em Console release notes + banner update
+- Trust trust — "code 49" parece error message; "v0.2.1.4" parece release oficial

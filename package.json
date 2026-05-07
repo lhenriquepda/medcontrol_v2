@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "0.2.1.2",
+  "version": "0.2.1.4",
   "type": "module",
   "scripts": {
     "start": "vite",
