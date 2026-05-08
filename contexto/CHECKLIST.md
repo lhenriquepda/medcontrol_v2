@@ -5613,3 +5613,241 @@ Com RTDN: Google Pub/Sub → Edge Function `play-billing-webhook` recebe notific
 - ✅ Painel admin `/analytics` mostra funnel `manage_plan_opened → plan_card_clicked → upgrade_complete`
 - ✅ Drop-off rate visível por etapa
 - ✅ Sentry sem PII em eventos
+
+---
+
+### #195 — Não deletar push_subscription em SIGNED_OUT automático
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (trust killer combinado com #196 — quebra reagendamento de alarmes)
+- **Origem:** Investigação user-reported 2026-05-07 ("alarme não disparou às 20h, app continua deslogando")
+- **Esforço:** 1-2h
+
+**Root cause identificado:**
+
+`src/hooks/useAuth.jsx:127-143` quando `onAuthStateChange` captura evento `SIGNED_OUT`, executa um `DELETE FROM medcontrol.push_subscriptions WHERE deviceToken = cachedToken`. Esse cleanup foi pensado pra logout explícito (botão "Sair" → user real saiu).
+
+```js
+} else if (event === 'SIGNED_OUT') {
+  clearSyncCredentials().catch(...)
+  try {
+    const cachedToken = localStorage.getItem('dosy_fcm_token')
+    if (cachedToken) {
+      supabase.schema('medcontrol').from('push_subscriptions')
+        .delete().eq('deviceToken', cachedToken)  // ← problema aqui
+        ...
+    }
+  }
+}
+```
+
+**Problema:** Supabase JS dispara `SIGNED_OUT` em cenários transient/automáticos (não só logout explícito):
+- Boot `getUser()` retornou erro classificado como auth failure (#159 já cobre, mas SDK interno pode disparar mesmo assim)
+- Internal token refresh loop falhou
+- WebSocket auth disconnect
+- `supabase.auth.signOut()` chamado em algum cleanup hook
+
+Em qualquer um desses casos, push_subscription do device é deletado. Próximo cron `schedule-alarms-fcm-6h` lê push_subs filtrando por `deviceToken IS NOT NULL` → device atual não aparece → FCM data message não enviado → AlarmScheduler local não reagenda.
+
+Resultado: usuário fica sem alarmes até abrir o app de novo (rescheduleAll re-cria push_subscription via `subscribe()`).
+
+**Fix proposto:**
+
+Separar logout explícito de SIGNED_OUT automático.
+
+Opção A (preferida): adicionar flag `localStorage.dosy_explicit_logout = '1'` antes de chamar `supabase.auth.signOut()` no `signOut()` da `useAuth`. Em `onAuthStateChange` SIGNED_OUT, ler flag — se presente, deletar push_sub (logout real); se ausente, preservar (transient).
+
+Opção B: marcar push_subscription como `pending_cleanup` (boolean) ao invés de DELETE. Cron limpa quem fica `pending_cleanup` há > 7d. Permite recovery se user re-loga.
+
+**Critério aceitação:**
+- ✅ Botão "Sair" → push_subscription deletada como hoje
+- ✅ Network glitch / boot transient SIGNED_OUT → push_subscription preservada
+- ✅ App recupera login (token refresh) → cron próximo envia FCM normalmente
+- ✅ Validar device real: deslogar manual + verificar DELETE acontece; idle longo + verificar DELETE NÃO acontece
+
+---
+
+### #196 — useAuth onAuthStateChange ignorar SIGNED_OUT spurious
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (trust killer — extends #159 + #190)
+- **Origem:** Investigação user-reported 2026-05-07
+- **Esforço:** 2-3h
+
+**Background:**
+
+#159 fixou logout transient no boot do `getUser()`. #190 fixou logout transient no `useAppResume.refreshSession()`. Mas `onAuthStateChange` (linha 76-89 useAuth.jsx) ainda captura QUALQUER `SIGNED_OUT` event do Supabase JS e dispara `setUser(null)` + `qc.clear()`.
+
+Supabase JS dispara SIGNED_OUT em vários cenários internos não cobertos pelos fixes #159/#190 (refresh loops, WebSocket disconnects, internal cleanup). User vê tela de login mesmo session local válida.
+
+**Fix proposto:**
+
+Em `onAuthStateChange`, distinguir SIGNED_OUT real vs spurious:
+- Verificar se `dosy_explicit_logout` flag setado (do #195) — se sim, processar normal
+- Se NÃO setado, validar com `supabase.auth.getSession()` — se ainda tem session válida, ignorar SIGNED_OUT (log warning + preservar user state)
+- Se session de fato gone, processar normal
+
+Trade-off: 1 round-trip extra `getSession` (lightweight, sem network — lê localStorage). Aceitável.
+
+**Critério aceitação:**
+- ✅ Logout explícito → `setUser(null)` + UI vai pra Login
+- ✅ Network glitch dispara SIGNED_OUT spurious → user state preservado, próximo refresh recupera
+- ✅ Validar device real: idle 30min + retorna foreground = continua logado
+- ✅ Sentry sem regressão (DOSY-* events)
+
+---
+
+### #197 — Restaurar caminho 2 (notify-doses cron) como fallback push tray
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1 (defense-in-depth — sem isso, falha caminho 1 (FCM data) = silêncio total)
+- **Origem:** Investigação 2026-05-07 (cron `schedule-alarms-fcm-6h` é o único caminho hoje)
+- **Esforço:** 1-2h
+
+**Estado atual:**
+
+Edge Function `notify-doses` existe deployed (id `5a9616a5...`), mas SEM cron job no Postgres. Função foi descontinuada em algum refactor passado (provável v0.1.7.x quando #083 introduziu `schedule-alarms-fcm`).
+
+Hoje só existe **caminho 1**: `schedule-alarms-fcm-6h` envia FCM data message → app local agenda AlarmManager. Se FCM data falhar (rede, token expirado, MessagingService crash), usuário não recebe NADA.
+
+**Fix proposto:**
+
+Restaurar `notify-doses` como caminho 2 (push tray simples, redundância):
+1. Verificar código atual da Edge Function `notify-doses` (pode estar stale)
+2. Atualizar pra: query doses pending nos próximos 5min → enviar FCM **notification** (não data) tray simples ("Hora do remédio: <medName>")
+3. Adicionar cron `*/5 * * * *` (a cada 5min) chamando Edge Function
+4. Custo egress: 1 query pequena + 1 FCM por dose ativa cada 5min — aceitável (<0.1MB/dia/user típico)
+
+Isso garante que mesmo se AlarmManager local falhar, user recebe push tray simples. Push tray não é tão chamativa quanto AlarmActivity full-screen, mas é última linha defesa.
+
+**Critério aceitação:**
+- ✅ `notify-doses` cron rodando `*/5 * * * *`
+- ✅ Dose pending dentro 5min → push tray entregue
+- ✅ Idempotente (não envia mesma dose 2× em 5min subsequentes — usa flag DB ou hash dedup)
+- ✅ Egress aumento <5% medido em production após 7d
+- ✅ Validar device: AlarmManager desabilitado manualmente (settings) + dose vence = push tray chega
+
+---
+
+### #198 — Reagendar alarmes no boot do app após instalação fresca/upgrade
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P1 (sombra de até 6h após reinstall = tester perde alarmes)
+- **Origem:** Investigação 2026-05-07 (user instalou 3 versões hoje, perdeu alarmes 16h e 20h)
+- **Esforço:** 1-2h
+
+**Problema:**
+
+Reinstalação ou upgrade do APK (Internal Testing → Closed Testing release) limpa o `AlarmManager` pending alarms (comportamento Android nativo). Próximo agendamento depende do cron `schedule-alarms-fcm-6h` rodar — pode demorar até 6h.
+
+**Fix proposto:**
+
+Em `App.jsx` boot, detectar instalação fresca/upgrade comparando build version armazenada em SharedPreferences com a atual:
+- Se `last_known_vc !== current_vc` (primeira execução pós-install/upgrade), forçar `rescheduleAll()` imediato
+- Salvar `current_vc` em SharedPreferences
+- Custo: 1 query doses 24h horizon + N AlarmManager.setAlarmClock — barato, sem network round-trip extra (já tem doses cache local TanStack)
+
+**Critério aceitação:**
+- ✅ Reinstalar APK + abrir app = alarmes reagendados imediato (sem aguardar cron 6h)
+- ✅ Boot subsequente (mesma vc) = sem reschedule extra (preserva otimização atual)
+- ✅ Validar device: instalar vc N+1 + verificar dose < 6h tem alarme local agendado dentro de 30s
+
+---
+
+### #199 — Cleanup automático push_subscriptions stale (deviceToken NULL > 30d)
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P2 (housekeeping — não bloqueia mas evita debt)
+- **Origem:** Investigação 2026-05-07 (user tem 6 push_subs stale)
+- **Esforço:** 1h
+
+**Problema:**
+
+Quando user reinstala app, novo push_subscription é criado mas o anterior fica no DB com `deviceToken=NULL` (cleared via algum cleanup parcial). Stale rows acumulam ao longo dos meses.
+
+User do bug 2026-05-07 tem **8 push_subscriptions** das quais 6 com `deviceToken=NULL`. Cron de schedule já filtra `NOT NULL`, então não é problema funcional, mas é debt.
+
+**Fix proposto:**
+
+Cron diário `0 5 * * *` (5am UTC = 02am BRT, low traffic):
+```sql
+DELETE FROM medcontrol.push_subscriptions
+WHERE "deviceToken" IS NULL
+  AND "createdAt" < NOW() - INTERVAL '30 days';
+```
+
+**Critério aceitação:**
+- ✅ Cron criado + ativo
+- ✅ Run diário sem erro
+- ✅ Logs mostram count de rows deletadas
+- ✅ Validar: rows com deviceToken populated NÃO afetadas
+
+---
+
+### #200 — Análise + fix sombras de agendamento de alarme (egress-aware)
+
+- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P1 (afeta confiabilidade healthcare crítico)
+- **Origem:** User-flagged 2026-05-07 ("existem períodos de sombra no desenvolvimento? quando adiciono dose, ela pode não ir pro alarme?")
+- **Esforço:** 4-6h investigação + impl
+
+**Sombras identificadas na arquitetura atual:**
+
+1. **Sombra A — Dose criada por OUTRO device do mesmo user:**
+   - Device A (web ou tablet) cria dose
+   - Device B (celular) com app fechado
+   - DB trigger `dose-trigger-handler` envia FCM data, mas device B com FCM token expirado/UNREGISTERED não recebe
+   - Cron 6h pode demorar até 6h pra reagendar
+   - **Window real de sombra: até 6h se trigger DB falhou no device B**
+
+2. **Sombra B — Dose com `scheduledAt > 6h` future:**
+   - DB trigger skip `beyond-cron-horizon` (otimização #139)
+   - Esperando cron 6h pegar quando entrar em janela 24h
+   - **Não é sombra real** — design intencional, dose entra na janela cedo o suficiente
+
+3. **Sombra C — Cron `schedule-alarms-fcm-6h` last run + dose criada entre crons:**
+   - Cron 18:00 UTC. Dose criada 20:00 UTC com `scheduledAt = 21:30 UTC`.
+   - DB trigger: 1h30 < 6h → trigger dispara FCM data → device agenda local
+   - **Sem sombra** se DB trigger funciona
+
+4. **Sombra D — Reinstalação de app (coberto por #198)**
+
+5. **Sombra E — Device offline quando FCM enviado:**
+   - FCM tem retry 28 dias mas pode atrasar
+   - Worst case: alarme atrasa horas após device voltar online
+   - Mitigado por `rescheduleAll()` quando app abre
+   - **Sombra: até user abrir app**
+
+6. **Sombra F — Trigger DB webhook falhou (rede flap, function down):**
+   - Sem retry automático
+   - Próximo cron 6h pega
+   - **Sombra: até 6h**
+
+**Fix proposto (escolher 1-2 itens, mantendo egress baixo):**
+
+| Opção | Impacto sombra | Custo egress | Recomendação |
+|-------|----------------|--------------|--------------|
+| Aumentar HORIZON cron de 24h para 12h reduzido + cron 3h | Reduz C/F | -50% reach + 2× FCM rate = +0% | ❌ pior |
+| Aumentar HORIZON cron de 24h para 30h, mantendo 6h | Reduz C/F parcial | +25% payload por device, mesma freq | ✅ pequeno overhead |
+| Trigger DB elevar limite de 6h → 12h ou 24h | Reduz B trivial | +40-60% FCM em INSERT batch (cron extend cria 100s/dia) | ❌ ferra egress |
+| Cron `notify-doses` *5min push tray fallback (#197) | Reduz E/F substancial | +5% (1 query+FCM/5min) | ✅ defense-in-depth |
+| `rescheduleAll` no boot (#198) | Reduz D | 0 (já fazemos no useEffect) | ✅ obrigatório |
+| Dose UI cria → app chama AlarmScheduler local IMEDIATO (não espera FCM round-trip) | Reduz A/F localmente | 0 (lógica local) | ✅ ideal |
+
+**Recomendação combinada:**
+- Implementar #197 (notify-doses fallback)
+- Implementar #198 (rescheduleAll fresh install)
+- Garantir `App.jsx` useEffect já reagenda localmente em INSERT/UPDATE de dose (parece que já faz — validar)
+- Aumentar HORIZON cron 24h → 30h (mudança 1 linha, pequeno overhead)
+
+**Critério aceitação:**
+- ✅ Documento `docs/alarm-scheduling-shadows.md` enumera todas sombras + cobertura
+- ✅ Cada sombra tem mitigação ativa
+- ✅ Egress total prod monitorado pós-deploy: aumento aceitável (<10%)
+- ✅ Test em device: criar dose 30min future + app fechado = alarme toca

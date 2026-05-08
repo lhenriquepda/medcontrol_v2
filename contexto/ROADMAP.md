@@ -507,17 +507,17 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~200 itens · ✅ 128 fechados · ⏳ 68 abertos · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-07)
+**Total:** ~206 itens · ✅ 128 fechados · ⏳ 74 abertos (+#195-#200 NOVOS bugs alarme/logout v0.2.1.5) · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount 2026-05-07 noite)
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
+| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 11 (#021 #169-#171 #173-#177 #188 #197) | 4 (#047 #155 #172 #199) | 0 | 21 |
 | ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 48 |
-| 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
+| 🐛 BUGS | 2 (#195 #196) | 2 (#198 #200) | 2 (#101-followup #110) | 0 | 6 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **8** | **13** | **19** | **29** | **69** |
+| **Total abertos** | **10** | **16** | **20** | **29** | **75** |
 
 **Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
@@ -816,6 +816,12 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#192** [P0 pré-OpenTest 🚀 IMPLEMENTAÇÃO — promove plan-original FASE 16.4] Validar pagamento E2E (sandbox + License Tester). Cobre Free→Plus, Free→Pro, Plus→Pro, Cancel, Restore Purchases, edge cases (network fail, conta troca, multi-device). BLOQUEADOR launch OpenTest. Esforço 1-2 dias. Detalhe CHECKLIST §#192.
 - ⏳ **#193** [P1 🚀 IMPLEMENTAÇÃO — promove plan-original FASE 16.2 reformulado] Webhook Google Play RTDN (Real-Time Developer Notifications). Plan original era RevenueCat→Supabase; reformulado direto Pub/Sub→Edge Function `play-billing-webhook` (evita custo+complexity RevenueCat). Atualiza tier table imediatamente sem precisar app abrir. Cobre SUBSCRIPTION_CANCELED/EXPIRED/RECOVERED/RESTARTED/GRACE_PERIOD. Esforço 1-2 dias. Detalhe CHECKLIST §#193.
 - ⏳ **#194** [P1 pré-OpenTest ✨ MELHORIAS] Analytics flow upgrade — eventos PostHog completos (`manage_plan_opened`, `plan_card_clicked`, `upgrade_complete` com from/to_tier, `cancel_detected` via RTDN). Permite funnel conversion no painel admin /analytics. Detalhe CHECKLIST §#194.
+- ⏳ **#195** [P0 v0.2.1.5 NOVO 🐛 BUGS] Não DELETAR push_subscription em `SIGNED_OUT` automático. `useAuth.jsx:127-143` deleta push_sub em qualquer SIGNED_OUT — incluindo transient/spurious — quebrando reagendamento próximo cron FCM. Fix: distinguir logout explícito (botão Sair) vs SIGNED_OUT automático via flag localStorage. Origem: investigação user-reported 2026-05-07 (alarme 20h não tocou + app deslogou). Detalhe CHECKLIST §#195.
+- ⏳ **#196** [P0 v0.2.1.5 NOVO 🐛 BUGS] useAuth `onAuthStateChange` ignorar SIGNED_OUT spurious. Extends #159 + #190. Listener captura QUALQUER SIGNED_OUT do Supabase JS (refresh loops, WebSocket disconnects, internal cleanups) e dispara setUser(null). Fix: validar com `getSession()` antes de processar SIGNED_OUT — se session local válida, ignorar como transient. Detalhe CHECKLIST §#196.
+- ⏳ **#197** [P1 v0.2.1.5 NOVO 🚀 IMPL] Restaurar caminho 2 (`notify-doses` cron) como fallback push tray. Edge function existe deployed mas SEM cron job. Hoje só caminho 1 (FCM data → AlarmScheduler local) — falha ele = silêncio total. Fix: cron `*/5 * * * *` chama notify-doses pra push tray simples. Defense-in-depth healthcare crítico. Detalhe CHECKLIST §#197.
+- ⏳ **#198** [P1 v0.2.1.5 NOVO 🐛 BUGS] Reagendar alarmes no boot após install/upgrade APK. Reinstall limpa AlarmManager pending; sombra até 6h até próximo cron. Fix: comparar `last_known_vc` SharedPreferences com atual; se diff, forçar `rescheduleAll()` imediato. Origem: investigação user-reported 2026-05-07 (3 reinstalações hoje). Detalhe CHECKLIST §#198.
+- ⏳ **#199** [P2 v0.2.1.5 NOVO 🚀 IMPL] Cleanup automático push_subscriptions stale. User típico tem 6+ rows com deviceToken=NULL acumulados. Cron diário `0 5 * * *` deleta rows NULL > 30d. Detalhe CHECKLIST §#199.
+- ⏳ **#200** [P1 v0.2.1.5 NOVO 🐛 BUGS] Análise + fix sombras agendamento alarme (egress-aware). 6 sombras identificadas: dose outro device com FCM token expirado, dose >6h trigger skip, cron last run window, reinstall, device offline FCM, trigger DB fail. Recomendação: #197 + #198 + aumentar HORIZON cron 24h→30h + doc `docs/alarm-scheduling-shadows.md`. Origem: user-flagged 2026-05-07 ("existem períodos de sombra?"). Detalhe CHECKLIST §#200.
 
 ---
 
