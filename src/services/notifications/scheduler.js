@@ -21,7 +21,7 @@ import {
   filterUpcoming,
   enrichDose
 } from './prefs'
-import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState } from './channels'
+import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
 
 // Item #200.1 (release v0.2.1.5) — guard pra primeira execução após boot.
 // Garante que rescheduleAll roda full cancelAll + reschedule from scratch
@@ -253,6 +253,11 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     }
   } catch (e) {
     console.error('[Notif] LocalNotifications.schedule FAILED:', e?.message || e)
+    // Item #200.1 — schedule batch falhou. State pode estar inconsistente
+    // (alarmes críticos agendados mas tray notifs não). Limpar state força
+    // próximo rescheduleAll fazer full reset (safe fallback).
+    clearScheduledState()
+    return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true }
   }
 
   // Item #200.1 — persistir state final pro próximo diff
