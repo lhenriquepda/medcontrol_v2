@@ -138,12 +138,48 @@ export default function App() {
     const future = new Date(now); future.setDate(future.getDate() + 14)
     return { from: past.toISOString(), to: future.toISOString() }
   }, [hourTick])
-  const { data: allDoses = [] } = useDoses(alarmWindow)
-  const { data: allPatients = [] } = usePatients()
+  const { data: allDoses = [], isSuccess: dosesLoaded } = useDoses(alarmWindow)
+  const { data: allPatients = [], isSuccess: patientsLoaded } = usePatients()
+
+  // Item #198 (release v0.2.1.5) — detectar install/upgrade fresco. AlarmManager
+  // é limpo a cada reinstalação Android, alarmes locais agendados perdidos.
+  // Se versionCode mudou desde último boot, log warning + força rescheduleAll
+  // assim que doses carregarem (evita janela 6h até cron schedule-alarms-fcm).
+  //
+  // Comparado a localStorage.dosy_last_known_vc — diff = upgrade detectado.
+  // Reschedule é coberto pelo useEffect abaixo (que dispara em allDoses change),
+  // este efeito só faz logging + atualiza flag pra próximo boot.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const info = await CapacitorApp.getInfo()
+        if (cancelled) return
+        const currentVc = String(info?.build || '')
+        const lastVc = localStorage.getItem('dosy_last_known_vc') || null
+        if (lastVc !== currentVc) {
+          console.warn('[App #198] install/upgrade detectado:', lastVc || '(primeira execução)', '→', currentVc, '— rescheduleAll será forçado quando doses carregarem')
+          try { localStorage.setItem('dosy_last_known_vc', currentVc) } catch { /* ignore */ }
+        }
+      } catch (e) {
+        console.warn('[App #198] App.getInfo falhou:', e?.message)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     if (!user) return
+    // Item #198 (release v0.2.1.5) — só agendar quando doses + patients
+    // realmente carregaram do server (TanStack isSuccess). Antes, useEffect
+    // disparava com array vazio durante login/boot → rescheduleAll.cancelAll()
+    // zerava AlarmManager, depois reagendava 200-2000ms depois quando query
+    // terminava. Window vazio + risco AlarmManager fica zerado se app fecha
+    // entre cancel e reschedule.
+    if (!dosesLoaded || !patientsLoaded) return
     scheduleDoses(allDoses, { patients: allPatients })
-  }, [user, allDoses, allPatients, scheduleDoses])
+  }, [user, allDoses, allPatients, dosesLoaded, patientsLoaded, scheduleDoses])
 
   // ─── Notification tap handlers (LocalNotifications + FCM) ─────────────
   useEffect(() => {
