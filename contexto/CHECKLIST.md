@@ -6024,3 +6024,181 @@ if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_AL
 - ✅ Tray notification posted by AlarmReceiver → mostra som custom (canal v2 ativo)
 
 Commits: `4c9a588` (sound + channel + bump vc 54).
+
+---
+
+### #204 — Mutation queue offline (React Query nativa) — Fase 1 offline-first
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P0 (bloqueador antes Closed Testing público)
+- **Origem:** Auditoria offline-first 2026-05-08 (pré-Teste Fechado, pergunta crítica do usuário sobre comportamento offline em app de medicação)
+- **Esforço estimado:** 6-10h
+- **Release sugerida:** v0.2.1.7
+
+**Problema:**
+
+App de medicação não tolera perda de ação crítica. Auditoria revelou:
+
+1. **Leitura offline OK** — `PersistQueryClientProvider` (src/main.jsx:66-89) com `createSyncStoragePersister` localStorage `maxAge: 24h`. Mobile abre offline, renderiza doses cacheadas, UI funciona.
+
+2. **Escrita offline BROKEN** — mutations (confirmar dose, pular, undo, criar paciente, registrar SOS) hoje em `src/hooks/useDoses.js:82-131` configuradas com `retry: 3` + `retryDelay: Math.min(1000 * 2^attempt, 30000)`. Após 3 retries em ~30s, React Query descarta a mutation. Não há queue, não há fallback, não há resync ao reconectar. O `optimistic update` faz a UI mostrar como se tivesse confirmado, mas o servidor nunca recebeu.
+
+3. **Cenário real Closed Testing** — tester confirma dose 14:30 enquanto no metrô (offline). UI marca como tomada. 30s depois, mutation falha + descarta. Tester volta online, banco diz dose ainda pendente, próximo refetch sobrescreve cache local → UI muda pra "esquecida". Pior: cálculo da próxima dose (continuous treatment) usa horário errado. Healthcare data corrupted silently.
+
+**Padrão de mercado escolhido:**
+
+TanStack Query feature oficial **Offline Mutations** (https://tanstack.com/query/latest/docs/react/guides/mutations#persisting-offline-mutations). Combina:
+- `onlineManager.setOnline(false/true)` — pausa/resume execução
+- `mutationCache` — serializável via persister existente
+- `defaultOptions.mutations.networkMode: 'offlineFirst'` — não falha imediato em offline, espera reconexão
+
+Zero deps novas (todas já em package.json). Zero schema change. Compatível com optimistic updates atuais.
+
+**Abordagem (sem código final):**
+
+(a) **Bridge `useOnlineStatus` ↔ `onlineManager`** em `src/main.jsx`:
+
+```js
+import { onlineManager } from '@tanstack/react-query'
+import { Network } from '@capacitor/network'
+
+// Sync onlineManager with Capacitor Network
+Network.addListener('networkStatusChange', (status) => {
+  onlineManager.setOnline(status.connected)
+})
+Network.getStatus().then((status) => onlineManager.setOnline(status.connected))
+```
+
+(b) **Configurar `networkMode` global** em `QueryClient` defaults:
+
+```js
+new QueryClient({
+  defaultOptions: {
+    queries: {
+      networkMode: 'offlineFirst',  // serve cache mesmo offline
+      // ... staleTime/retry existentes
+    },
+    mutations: {
+      networkMode: 'offlineFirst',  // pausa em offline ao invés falhar
+      retry: 3,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
+    },
+  },
+})
+```
+
+(c) **Persister cobrir mutations** — atualmente `PersistQueryClientProvider` persiste só queries. Adicionar `dehydrateOptions.shouldDehydrateMutation: () => true` pra serializar mutations pendentes:
+
+```js
+<PersistQueryClientProvider
+  client={queryClient}
+  persistOptions={{
+    persister,
+    dehydrateOptions: {
+      shouldDehydrateQuery: (q) => q.state.status === 'success',
+      shouldDehydrateMutation: () => true,  // ← novo
+    },
+  }}
+  onSuccess={() => {
+    // resume mutations pausadas após hydrate
+    queryClient.resumePausedMutations()
+  }}
+>
+```
+
+(d) **`mutationDefaults` em hooks críticos** — registrar mutationFn por chave pra resume funcionar (TanStack precisa da função pra re-executar pós-hydrate):
+
+```js
+// src/services/mutationRegistry.js (novo)
+export function registerMutations(queryClient) {
+  queryClient.setMutationDefaults(['confirmDose'], {
+    mutationFn: confirmDose,
+    onMutate: optimisticConfirmDose,
+    onError: rollbackConfirmDose,
+  })
+  // ... idem skipDose, undoDose, createPatient, registerSosDose
+}
+```
+
+useDoses.js + usePatients.js + useSos.js refatorar `useMutation` pra usar `mutationKey: ['confirmDose']` (lookup nos defaults).
+
+(e) **UX feedback offline** — quando mutation paused, mostrar toast PT-BR:
+
+```jsx
+// src/components/OfflineBanner.jsx (novo)
+const isOnline = useOnlineStatus()
+const pendingMutations = useIsMutating()
+
+if (!isOnline && pendingMutations > 0) {
+  return <Banner>{pendingMutations} ação(ões) salva(s) — sincronizando ao reconectar</Banner>
+}
+```
+
+**Mutations a cobrir (lista completa):**
+
+| Hook/Service | Mutation | Criticidade |
+|---|---|---|
+| `useDoses.confirmDose` | confirmar dose tomada | 🔴 crítica (cálculo próxima dose continuous) |
+| `useDoses.skipDose` | pular dose | 🔴 crítica (audit trail) |
+| `useDoses.undoDose` | desfazer confirm/skip | 🟠 alta (correção user) |
+| `useSos.registerSos` | registrar dose SOS extra | 🔴 crítica (anti-duplicação) |
+| `usePatients.create/update/delete` | CRUD paciente | 🟠 alta |
+| `useTreatments.create/update/pause/resume` | CRUD tratamento | 🟠 alta |
+| `useUserPrefs.update` | preferências user | 🟡 média (não-crítico) |
+| `usePushSubscription.register` | re-register FCM token | 🟢 baixa (fallback existe) |
+
+**Dependências:**
+- TanStack Query v5.51+ (já em `package.json` ✓)
+- `@capacitor/network` v8.0.1 (já ✓)
+- `@tanstack/query-sync-storage-persister` (já ✓)
+- Sem migration DB
+
+**Critério de aceitação:**
+
+- ✅ Avião mode + confirmar dose → toast "1 ação salva — sincronizando ao reconectar"
+- ✅ Avião mode + criar paciente + confirmar dose + registrar SOS → 3 mutations queued
+- ✅ Voltar online → toast "Sincronizado" + queue drena em ordem FIFO
+- ✅ Force kill app offline com mutations pending → reabrir → mutations persisted, drenam ao reconectar
+- ✅ Conflict caso: mutation offline confirma dose, server-side cron já marcou skipped (race) → server response wins (refetch invalida cache otimista)
+- ✅ Logout durante queue pendente → flush queue antes signOut (evita orphan mutations próxima sessão)
+- ✅ Telemetria PostHog `mutation_queued_offline` + `mutation_drained_online` pra observability
+- ✅ E2E manual: 5 confirm doses offline + reabrir online + verificar SQL `medcontrol.doses` reflete todas
+
+**Risco / mitigações:**
+
+| Risco | Mitigação |
+|---|---|
+| Conflict mutation offline + Realtime online (Plus user multi-device) | TanStack default: server response sobrescreve cache otimista. OK. |
+| Mutation duplicada se app crash entre execute + ack | Idempotência server-side via `client_request_id` UUID — backlog item ([futuro #205?]) ou aceitar risco baixo no teste fechado |
+| Queue cresce indefinidamente offline 24h+ | Persister maxAge 24h drop queue antigo. UX: toast warning "X ações pendentes há mais de 24h — verifique conexão" |
+| User logout offline com queue cheia | Bloquear signOut até queue drenar OU dropar queue + warn user |
+| Drift: mutation success local, server 5xx silencioso | onError callback marca como failed pós-retry exhaust + toast "Falhou ao salvar — tente novamente" |
+
+**Não-escopo (Fase 2/3 cobertas por #165):**
+
+- Delta sync via `updated_at` server-side filter
+- TanStack persist trocado pra IndexedDB (Dexie/idb-keyval)
+- staleTime bump 15min → 30min combinado
+- Cobertura web frontend (Service Worker / vite-plugin-pwa)
+
+**Métrica esperada:**
+
+- Mutation loss rate offline: **100% → ~0%** (zero perda observável em testes manuais)
+- UX: ações respondem instant (optimistic) + sincronizam transparente quando online volta
+- Egress: zero impacto (drain ao reconectar = mesmo número de requests, só timing diferente)
+- Esforço dev: 6-10h (4-6h código + 2-4h testes manuais avião mode)
+
+**Validação device pré-merge:**
+
+- [ ] Internal Testing AAB v0.2.1.7 instalado S25 Ultra
+- [ ] Modo avião + confirm 3 doses + skip 1 + criar 1 paciente
+- [ ] Reabrir wifi → todas 5 ações sincronizam
+- [ ] SQL `SELECT * FROM medcontrol.doses WHERE userId = '...' AND status IN ('taken','skipped') ORDER BY updatedAt DESC LIMIT 5` confirma
+- [ ] Painel admin `/auth-log` ou criar log dedicado mutations offline (opcional)
+
+**Pós-Teste Fechado (não bloqueia merge):**
+
+- Promover #165 (delta sync + IndexedDB) pra v0.2.2.0
+- Considerar `client_request_id` idempotência (item novo backlog)
+- Considerar PWA Service Worker se web frontend ganhar tração

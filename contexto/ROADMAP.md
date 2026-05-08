@@ -518,19 +518,21 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~210 itens · ✅ 138 fechados · ⏳ 68 abertos · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-08, +10 fechados v0.2.1.5/v0.2.1.6)
+**Total:** ~211 itens · ✅ 138 fechados · ⏳ 69 abertos · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-08, +10 fechados v0.2.1.5/v0.2.1.6, +1 NOVO #204 v0.2.1.7)
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
+| 🚀 IMPLEMENTAÇÃO | 7 (#006 #131 #132 #133 #192 #193 #204) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 20 |
 | ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 48 |
 | 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **8** | **13** | **19** | **29** | **69** |
+| **Total abertos** | **9** | **13** | **19** | **29** | **70** |
 
 **Δ 2026-05-08 v0.2.1.5/v0.2.1.6 fechados:** +9 v0.2.1.5 (#195 #196 #197 #198 #199 #200 #200.1 #201 #202) + 1 v0.2.1.6 (#203 som alarme custom). Total fechados +10.
+
+**Δ 2026-05-08 v0.2.1.7 (em andamento):** +**#204 NOVO P0 🚀 IMPLEMENTAÇÃO** — Mutation queue offline pré-Teste Fechado. Auditoria offline-first revelou gap crítico healthcare: app abre offline (cache 24h via PersistQueryClientProvider) e mostra dados, mas escritas (confirmar dose, SOS, criar paciente) falham silenciosamente após 3 retries. Fix com React Query nativa (`onlineManager` + `mutationCache` persister) — zero deps novas, zero schema change, drena queue ao reconectar. Bloqueador antes Closed Testing público. Fases 2 (delta sync) + 3 (IndexedDB) já cobertas por #165 P1 (mantém release v0.2.2.0+). Counter: 138 fechados / 70 abertos + 0 BLOQUEADOS.
 
 **Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
@@ -577,6 +579,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#131** [P0 — desbloqueado pós #130 aprovação 2026-05-06] Recrutar 15-20 testers externos via Reddit (r/AlphaAndBetausers + r/SideProject + r/brasil + r/medicina/r/saude/r/tdah/r/diabetes) + Twitter + LinkedIn + Discord. Meta: 12+ ativos.
 - ⏳ **#132** [P0 gate — bloqueado por #131] Aguardar 14 dias rodando com ≥12 testers ativos + iterar bugs reportados.
 - ⏳ **#133** [P0 — bloqueado por #132] Solicitar Production access Console pós-gate. Aprovação Google ~24-72h. Decidir Open Testing 7-14d OU Production rollout direto.
+- ⏳ **#204** [P0 pré-Teste Fechado v0.2.1.7 NOVO 🚀 IMPLEMENTAÇÃO] **Mutation queue offline (React Query nativa) — Fase 1 offline-first.** Hoje mutations (confirmar dose, pular, undo, criar paciente, registrar SOS) tentam 3 retries com backoff até 30s e descartam silenciosamente quando offline. App de medicação não pode perder ação crítica do usuário. Fix sem libs novas: usar `onlineManager` + `mutationCache` do TanStack Query com persister localStorage existente (#main.jsx já tem PersistQueryClientProvider). Quando `useOnlineStatus` reporta offline → React Query pausa mutations + serializa no persister; quando volta online → drena queue automaticamente (feature oficial [Offline Mutations](https://tanstack.com/query/latest/docs/react/guides/mutations#persisting-offline-mutations)). UI mostra toast "Ação salva — sincronizando ao reconectar". Bloqueador antes Closed Testing público — testers reais podem perder confirmações offline = dados médicos comprometidos. Esforço 6-10h. Fase 2/3 cobertas por #165 (delta sync + IndexedDB persist). Detalhe completo CHECKLIST §#204.
 - ✅ **#142** [P0 SECURITY, fechado v0.2.0.9 + cleanup v0.2.0.10 commit `bf45f80`] Legacy JWT secret REVOKED (PostgREST 401). Edge function pública via `verify_jwt: false` autoriza via `SERVICE_ROLE_KEY` env interna. Cleanup cosmético: drop+recreate cron job sem header `Authorization` hardcoded.
 - ✅ **#154** [P0 INFRA, fechado v0.2.0.12] Custom SMTP Resend pra dosymed.app. DNS Hostinger 4 records (DKIM + MX send → feedback-smtp.sa-east-1 + SPF + DMARC). Domain Resend VERIFIED. Supabase Auth SMTP smtp.resend.com:465 sender Dosy <noreply@dosymed.app>. Recovery OTP funcionando real prod. ADR `decisoes/2026-05-05-resend-smtp-setup.md`.
 - ✅ **#156** [P0 BLOQUEADOR #130 — fechado v0.2.1.0 (2026-05-05)] Página `/privacidade` (Privacidade.jsx) v1.3 LGPD healthcare. DPO email `privacidade@dosymed.app` + entidade "Dosy Med LTDA" + terceiros expandidos (Resend SMTP/Firebase FCM/PostHog/Sentry/Supabase São Paulo/AdMob) + dados granular + bases legais art.7-I + art.11-II-f + idade 18+ + Google Play Health Apps Policy. Termos.jsx + FAQ.jsx tb atualizados.
@@ -947,18 +950,18 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~210 itens (recount real grep 2026-05-08)
+- **Total:** ~211 itens (recount real grep 2026-05-08, +1 #204 v0.2.1.7)
   - ✅ 138 fechados (+10 em v0.2.1.5/v0.2.1.6)
-  - ⏳ 68 abertos
+  - ⏳ 69 abertos (+1 #204 v0.2.1.7)
   - 🚧 1 (#170 valid device pendente, código merged vc 50)
   - 🚨 0 BLOQUEADOS
   - 🚫 3 cancelados
-- **Distribuição por categoria abertos (68 ⏳ + 1 🚧 = 69 total):**
-  - 🚀 IMPLEMENTAÇÃO: 19 (6 P0 + 10 P1 + 3 P2)
+- **Distribuição por categoria abertos (69 ⏳ + 1 🚧 = 70 total):**
+  - 🚀 IMPLEMENTAÇÃO: 20 (7 P0 + 10 P1 + 3 P2)
   - ✨ MELHORIAS: 48 (2 P0 #191 #194 + 3 P1 + 14 P2 + 29 P3)
   - 🐛 BUGS: 2 (P2 — #101-followup #110)
   - 🔄 TURNAROUND: 0
-- **P0 abertos críticos launch:** #131 (recrutar Reddit, agora desbloqueado) + #132 (gate 14d) + #133 (Production access) + #006 (device validation FASE 17) + **#191 #192** (pré-OpenTest revenue path)
+- **P0 abertos críticos launch:** #131 (recrutar Reddit, agora desbloqueado) + #132 (gate 14d) + #133 (Production access) + #006 (device validation FASE 17) + **#191 #192** (pré-OpenTest revenue path) + **#204** (mutation queue offline pré-Teste Fechado)
 - **P1 escala egress (preparar Open Testing):** #163 RPC consolidado + #164 Realtime broadcast + #165 Delta sync + persist
 - **P1 growth/marketing/ASO:** #169 ASO Play Store + #170 Reviews strategy + #171 Marketing orgânico + #173 Healthcare differentiators moat
 - **P1 features differentiators launch:** #174 OCR med scan + #175 Receita scan auto-import + #176 Adesão report PDF + #177 WhatsApp share + **#188 🔥 Mini IA Chat NLP cadastro (KILLER feature mundial)**
