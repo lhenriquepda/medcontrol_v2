@@ -27,17 +27,45 @@ import { supabase } from '../services/supabase'
  */
 const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5min
 
+// Item #202 (release v0.2.1.5+) — mutex + debounce pra prevenir refresh storm.
+// Bug observado em prod 2026-05-08 09:00 BRT: 5 tokens rotacionados em 1.48s
+// → Supabase detectou reuse → revogou refresh chain → user deslogado.
+// Causa: visibilitychange + window focus + Capacitor appStateChange podem
+// disparar onResume() em paralelo, cada um chamando refreshSession() →
+// múltiplas rotações concorrentes do mesmo refresh_token.
+// Solução: mutex module-level + debounce 1s.
+let refreshInProgress = false
+let lastResumeAt = 0
+const RESUME_DEBOUNCE_MS = 1000
+
 export function useAppResume() {
   const qc = useQueryClient()
   const lastActiveRef = useRef(Date.now())
 
   useEffect(() => {
     const onResume = async () => {
+      // Item #202 — debounce: ignora resume events <1s após o último.
+      // visibilitychange + focus + appStateChange disparam quase simultâneos
+      // ao retomar app. Sem debounce, múltiplos refreshSession() concorrentes.
+      const now = Date.now()
+      if (now - lastResumeAt < RESUME_DEBOUNCE_MS) {
+        console.log('[useAppResume] debounced (last resume', now - lastResumeAt, 'ms ago)')
+        return
+      }
+      lastResumeAt = now
+
       const inactiveMs = Date.now() - lastActiveRef.current
       lastActiveRef.current = Date.now()
 
       if (inactiveMs >= SOFT_RECOVER_THRESHOLD_MS) {
         console.log('[useAppResume] long idle', Math.round(inactiveMs / 1000), 's → soft recover')
+        // Item #202 — mutex: se outro refresh em curso, skip pra evitar
+        // token storm. Próximo onResume natural vai cobrir.
+        if (refreshInProgress) {
+          console.warn('[useAppResume] refresh já em curso, skip pra evitar storm')
+          return
+        }
+        refreshInProgress = true
         try {
           // 1. Renovar JWT — Supabase rotaciona refresh token automaticamente.
           //
@@ -81,6 +109,9 @@ export function useAppResume() {
           // vai re-validar OR onAuthStateChange dispara SIGNED_OUT se token
           // realmente revogado.
           console.warn('[useAppResume] soft recover network exception (keeping session):', err?.message || err)
+        } finally {
+          // Item #202 — sempre liberar mutex
+          refreshInProgress = false
         }
       }
       // Item #134 (egress-audit-2026-05-05 F1): short idle (<5min) NÃO invalida
