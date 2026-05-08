@@ -73,9 +73,47 @@ export function AuthProvider({ children }) {
             console.warn('[useAuth] getUser network exception (keeping session):', e?.message)
           }
         }
-        const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+        const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
           const u = s?.user || null
           const prevUserId = user?.id
+
+          // Item #196 (release v0.2.1.5) — SIGNED_OUT spurious detection.
+          // Extends #159 (boot getUser) + #190 (useAppResume.refreshSession):
+          // listener captura QUALQUER SIGNED_OUT do Supabase JS — incluindo
+          // transient/spurious (refresh loops, WebSocket disconnects, internal
+          // cleanups). Sem esse check, network glitch dispara setUser(null) →
+          // user vê tela de login mesmo session local ainda válida.
+          //
+          // Estratégia: se SIGNED_OUT NÃO foi disparado por logout explícito
+          // (botão Sair seta flag `dosy_explicit_logout`), valida com getSession()
+          // se session local ainda existe. Se sim, é spurious — ignora event
+          // completo (sem setUser(null), sem qc.clear, sem DELETE push_sub).
+          if (event === 'SIGNED_OUT') {
+            const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
+            if (!explicitLogout) {
+              try {
+                const { data: { session: stillValid } } = await supabase.auth.getSession()
+                if (stillValid?.user) {
+                  console.warn('[useAuth] SIGNED_OUT spurious — session still valid locally, ignoring')
+                  return
+                }
+              } catch (e) {
+                console.warn('[useAuth] SIGNED_OUT getSession check exception:', e?.message)
+                // Fail-open: se getSession falha, processa como real signOut
+                // (não trava user em loop bloqueado).
+              }
+            }
+          }
+
+          // Item #195 (release v0.2.1.5) — limpar flag stale em SIGNED_IN.
+          // Edge case: signOut() seta flag mas listener nunca processou SIGNED_OUT
+          // (rare). Flag persiste em localStorage. Próximo login com flag stale
+          // deixaria SIGNED_OUT spurious futuro ser tratado como real → DELETE
+          // push_sub indevido. Limpar em SIGNED_IN garante state fresco.
+          if (event === 'SIGNED_IN') {
+            try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
+          }
+
           setUser(u)
           if (u?.id) identifyUser(u.id)
           else resetUser()
@@ -125,21 +163,34 @@ export function AuthProvider({ children }) {
               } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }
             }
           } else if (event === 'SIGNED_OUT') {
-            clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
+            // Item #195 (release v0.2.1.5) — só DELETAR push_subscription se
+            // logout foi explícito (botão Sair). Antes deletava em qualquer
+            // SIGNED_OUT — quebrava reagendamento próximo cron schedule-alarms-fcm
+            // quando bug logout transient/spurious acontecia (combinado com #196
+            // protection acima, esse caminho só roda em logout REAL).
+            const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
+            if (explicitLogout) {
+              clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
-            // Item #098 — limpar push_subscription deste device do user que saiu
-            // (precisa rodar ANTES do auth.signOut completar o cache clear).
-            // Best-effort: se token cached + user atual disponível, delete sub.
-            try {
-              const cachedToken = localStorage.getItem('dosy_fcm_token')
-              if (cachedToken) {
-                supabase.schema('medcontrol').from('push_subscriptions')
-                  .delete().eq('deviceToken', cachedToken)
-                  .then(({ error }) => {
-                    if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
-                  })
-              }
-            } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+              // Item #098 — limpar push_subscription deste device do user que saiu
+              // (precisa rodar ANTES do auth.signOut completar o cache clear).
+              // Best-effort: se token cached + user atual disponível, delete sub.
+              try {
+                const cachedToken = localStorage.getItem('dosy_fcm_token')
+                if (cachedToken) {
+                  supabase.schema('medcontrol').from('push_subscriptions')
+                    .delete().eq('deviceToken', cachedToken)
+                    .then(({ error }) => {
+                      if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
+                    })
+                }
+              } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+
+              // Limpa flag pra próximos eventos serem avaliados frescos
+              try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
+            } else {
+              console.warn('[useAuth] SIGNED_OUT without explicit logout flag — preserving push_subscription + sync credentials (extends #195)')
+            }
           }
         })
         unsub = () => sub.subscription.unsubscribe()
@@ -286,6 +337,14 @@ export function AuthProvider({ children }) {
   async function signInDemo() { await mock.signInDemo() }
 
   async function signOut() {
+    // Item #195 (release v0.2.1.5) — marcar logout como explícito ANTES
+    // de chamar supabase.auth.signOut(). Isso permite ao listener
+    // onAuthStateChange (acima) distinguir SIGNED_OUT real (botão Sair) de
+    // SIGNED_OUT transient/spurious (network glitch, refresh loop interno).
+    // Em logout real, push_subscription é deletada + sync credentials limpas.
+    // Em transient, tudo é preservado pra reagendar alarme corretamente.
+    try { localStorage.setItem('dosy_explicit_logout', '1') } catch { /* ignore */ }
+
     if (hasSupabase) await supabase.auth.signOut()
     else await mock.signOut()
     // Limpar dados locais sensíveis ao sair
