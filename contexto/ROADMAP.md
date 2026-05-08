@@ -150,7 +150,7 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `master` (release/v0.2.1.5 já mergeada). Próxima release **v0.2.1.7**.
+**Branch ativa:** `release/v0.2.1.7` (versionCode 55, versionName 0.2.1.7 — bumpado, escopo a definir).
 
 **Última release publicada:** v0.2.1.6 em 2026-05-08 (vc 54 Internal Testing) — som customizado de alarme.
 
