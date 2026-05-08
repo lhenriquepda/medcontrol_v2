@@ -27,7 +27,17 @@ export function AuthProvider({ children }) {
         const { data } = await supabase.auth.getSession()
         const initialUser = data.session?.user || null
         setUser(initialUser)
-        if (initialUser?.id) identifyUser(initialUser.id)
+        if (initialUser?.id) {
+          identifyUser(initialUser.id)
+          // Item #201 (release v0.2.1.5) — registra "abriu app com sessão salva".
+          // User não digitou nada; sessão veio do cache local. Distingue de login real.
+          logAuthEvent('sign_in', {
+            details: {
+              tipo: 'sessao_restaurada',
+              descricao: 'Abriu o app e a sessão já estava salva (não digitou senha)'
+            }
+          }).catch(() => { /* fail-safe */ })
+        }
         // Item #123 (release v0.2.0.3): valida session no boot. JWT pode ter
         // sido invalidado server-side (user deletado, banned, etc) sem evento
         // local. supabase.auth.getUser() bate na API e retorna erro se token
@@ -116,9 +126,11 @@ export function AuthProvider({ children }) {
           // push_sub indevido. Limpar em SIGNED_IN garante state fresco.
           if (event === 'SIGNED_IN') {
             try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
-            // Item #201 — registra login no telemetria pra análise admin
-            logAuthEvent('sign_in').catch(() => { /* fail-safe */ })
           }
+          // Item #201 (release v0.2.1.5) — telemetria sign_in foi MOVIDA do listener
+          // pra signInEmail()/signInOAuth(). Listener SIGNED_IN também fire em session
+          // restore de cache (abrir app fechado), gerando false positive. Logar só em
+          // login real com credenciais.
 
           setUser(u)
           if (u?.id) identifyUser(u.id)
@@ -225,6 +237,14 @@ export function AuthProvider({ children }) {
     if (hasSupabase) {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw new Error(traduzirErro(error))
+      // Item #201 — registra login real (digitou email + senha e clicou Entrar).
+      // Aqui auth.uid() já está disponível pois signInWithPassword retornou OK.
+      logAuthEvent('sign_in', {
+        details: {
+          tipo: 'login_email_senha',
+          descricao: 'Digitou email e senha e clicou em Entrar'
+        }
+      }).catch(() => { /* fail-safe */ })
       return
     }
     await mock.signInLocal(email, password)
@@ -248,6 +268,13 @@ export function AuthProvider({ children }) {
         const { error: e2 } = await supabase.auth.signInWithPassword({ email, password })
         if (e2) throw new Error(traduzirErro(e2))
       }
+      // Item #201 — registra criação de conta + login automático
+      logAuthEvent('sign_in', {
+        details: {
+          tipo: 'criou_conta_nova',
+          descricao: 'Criou conta nova e entrou pela primeira vez'
+        }
+      }).catch(() => { /* fail-safe */ })
       return
     }
     await mock.signUpLocal(email, password, name)
@@ -335,6 +362,13 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(traduzirErro(error))
     // Flag pra forçar troca senha pós-recovery (consumido por AppShell)
     try { localStorage.setItem('dosy_force_password_change', '1') } catch { /* ignore */ }
+    // Item #201 — registra recuperação de senha bem-sucedida
+    logAuthEvent('sign_in', {
+      details: {
+        tipo: 'recuperacao_senha',
+        descricao: 'Recuperou a senha pelo código enviado por email'
+      }
+    }).catch(() => { /* fail-safe */ })
     return data
   }
 
@@ -370,7 +404,10 @@ export function AuthProvider({ children }) {
       await Promise.race([
         logAuthEvent('sign_out', {
           logoutKind: 'explicit',
-          details: { source: 'signOut_function' }
+          details: {
+            tipo: 'clicou_sair',
+            descricao: 'Clicou no botão Sair'
+          }
         }),
         new Promise((resolve) => setTimeout(resolve, 2000))  // timeout 2s
       ])
