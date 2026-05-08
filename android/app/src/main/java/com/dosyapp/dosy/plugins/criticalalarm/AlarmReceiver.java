@@ -30,7 +30,11 @@ import org.json.JSONObject;
  */
 public class AlarmReceiver extends BroadcastReceiver {
 
-    private static final String CHANNEL_ID = "doses_critical";
+    // Item #203 (release v0.2.1.5+) — bumped v2 pra forçar Android recriar
+    // canal com novo som customizado. Channel sound é immutable após criação,
+    // então update do som requer novo CHANNEL_ID. Antigo `doses_critical` fica
+    // órfão no device do user (pode ser limpo manualmente Settings → App).
+    private static final String CHANNEL_ID = "doses_critical_v2";
     private static final int FS_NOTIF_OFFSET = 200_000_000;
 
     @Override
@@ -160,7 +164,15 @@ public class AlarmReceiver extends BroadcastReceiver {
         ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
         ch.setBypassDnd(true);
 
-        Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        // Item #203 (release v0.2.1.5+) — som customizado dosy_alarm.mp3 em res/raw/.
+        // Se ausente fallback ringtone padrão. Channel + AlarmService usam o mesmo
+        // arquivo pra som consistente entre notification tray e fullscreen alarm.
+        Uri sound = null;
+        int rawId = context.getResources().getIdentifier("dosy_alarm", "raw", context.getPackageName());
+        if (rawId != 0) {
+            sound = Uri.parse("android.resource://" + context.getPackageName() + "/" + rawId);
+        }
+        if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
         if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         AudioAttributes attrs = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
