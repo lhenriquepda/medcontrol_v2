@@ -175,11 +175,16 @@ export function AuthProvider({ children }) {
             // quando bug logout transient/spurious acontecia (combinado com #196
             // protection acima, esse caminho só roda em logout REAL).
             const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
-            // Item #201 — registra logout (real) no telemetria
-            logAuthEvent('sign_out', {
-              logoutKind: explicitLogout ? 'explicit' : 'real_invalid_token',
-              details: { source: 'onAuthStateChange' }
-            }).catch(() => { /* fail-safe */ })
+            // Item #201 — telemetria de logout REAL feita aqui (caminho
+            // SIGNED_OUT não-explícito = token revogado/inválido). Logout
+            // explícito é registrado dentro de signOut() ANTES de chamar
+            // supabase.auth.signOut(), pois aqui auth.uid() já é null e RPC
+            // log_auth_event falharia com AUTH_REQUIRED.
+            // NOTA: real_invalid_token NÃO consegue logar (sessão zerada).
+            // Trade-off aceito — caso raro e debugável via Sentry.
+            if (!explicitLogout) {
+              console.warn('[useAuth] SIGNED_OUT real_invalid_token — telemetria não registrada (auth.uid() null)')
+            }
             if (explicitLogout) {
               clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
@@ -355,6 +360,21 @@ export function AuthProvider({ children }) {
     // Em logout real, push_subscription é deletada + sync credentials limpas.
     // Em transient, tudo é preservado pra reagendar alarme corretamente.
     try { localStorage.setItem('dosy_explicit_logout', '1') } catch { /* ignore */ }
+
+    // Item #201 (release v0.2.1.5) — registra logout ANTES de signOut().
+    // Tem que ser aqui porque após auth.signOut() o auth.uid() vira null
+    // e RPC log_auth_event falha com AUTH_REQUIRED.
+    // Aguarda completar (com timeout pequeno) pra garantir log persiste
+    // antes de cleanup da session.
+    try {
+      await Promise.race([
+        logAuthEvent('sign_out', {
+          logoutKind: 'explicit',
+          details: { source: 'signOut_function' }
+        }),
+        new Promise((resolve) => setTimeout(resolve, 2000))  // timeout 2s
+      ])
+    } catch { /* fail-safe */ }
 
     if (hasSupabase) await supabase.auth.signOut()
     else await mock.signOut()
