@@ -21,11 +21,28 @@ import {
   filterUpcoming,
   enrichDose
 } from './prefs'
-import { ensureChannel, cancelAll } from './channels'
+import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
+
+// Item #200.1 (release v0.2.1.5) — guard pra primeira execução após boot.
+// Garante que rescheduleAll roda full cancelAll + reschedule from scratch
+// no primeiro call (cobre install fresco, app data wipe, dessincronia
+// localStorage vs AlarmManager). Calls subsequentes na mesma sessão usam
+// diff-and-apply pra preservar alarmes inalterados (sem janela vazia).
+let firstResetDoneInSession = false
 
 /**
- * Re-agenda TUDO baseado em doses + prefs atuais.
- * Idempotente: cancela tudo primeiro, então agenda do zero.
+ * Re-agenda baseado em doses + prefs atuais.
+ *
+ * Item #200.1 (release v0.2.1.5) — diff-and-apply (idempotente sem janela vazia).
+ * Antes: cancelAll() + reschedule from scratch → window 200-2000ms vazio +
+ * risco AlarmManager ficar zerado se exception mid-reschedule.
+ * Agora: localStorage tracker `dosy_scheduled_groups_v1` permite calcular
+ * diff (toRemove/toUpdate/toAdd) e aplicar só o necessário, preservando
+ * alarmes não-modificados.
+ *
+ * Primeira execução por sessão (firstResetDoneInSession=false): força
+ * cancelAll completo pra cobrir install fresco + dessincronia eventual
+ * localStorage vs AlarmManager. Subsequentes: diff-only.
  *
  * @param {Object} params
  * @param {Array} params.doses — todas doses do user (filtra interna por status+window)
@@ -43,13 +60,20 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
   const criticalOn = prefs.criticalAlarm !== false  // default true
   const summaryOn = prefs.dailySummary === true
 
-  // 1. Cancelar tudo (sempre, antes de qualquer agendamento)
-  await cancelAll()
+  // Item #200.1: primeira execução por sessão força cancelAll (cobre install
+  // fresco + dessincronia localStorage vs AlarmManager). Subsequentes na mesma
+  // sessão usam diff-and-apply.
+  const isFirstSessionRun = !firstResetDoneInSession
+  if (isFirstSessionRun) {
+    console.log('[Notif] reschedule first session run — full cancelAll for safety')
+    await cancelAll()
+    firstResetDoneInSession = true
+  }
 
-  // 2. Setup channel
+  // Setup channel (idempotent, OK chamar sempre)
   await ensureChannel()
 
-  // 3. Verificar capability de exact alarm (Android 12+)
+  // Verificar capability de exact alarm (Android 12+)
   let canExact = true
   try {
     const en = await checkCriticalAlarmEnabled()
@@ -57,92 +81,127 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
   } catch (e) { console.warn('[Notif] checkExact:', e?.message) }
   const canRingAlarm = criticalOn && isCriticalAlarmAvailable() && canExact
 
-  console.log('[Notif] reschedule START — push:', pushOn, 'critical:', criticalOn, 'dnd:', !!prefs.dndEnabled, 'summary:', summaryOn)
+  console.log('[Notif] reschedule START — push:', pushOn, 'critical:', criticalOn, 'dnd:', !!prefs.dndEnabled, 'summary:', summaryOn, 'firstSessionRun:', isFirstSessionRun)
 
   const patientsMap = new Map((patients || []).map(p => [p.id, p]))
   const enriched = (doses || []).map(d => enrichDose(d, patientsMap))
   const upcoming = filterUpcoming(enriched)
   const groups = groupByMinute(upcoming)
 
-  const localNotifs = []
-  let alarmsScheduled = 0
-  let dndSkipped = 0
-
-  // ─── DOSE NOTIFS + ALARMS (apenas se push master ON) ────────────────────────
+  // Item #200.1 — calcula desired state com hash por grupo
+  const desired = new Map() // groupId → { hash, group, at, isDndWin, shouldRing, doseIdsCsv }
   if (pushOn) {
-    for (const [key, group] of groups) {
+    for (const [, group] of groups) {
       const at = new Date(new Date(group[0].scheduledAt).getTime() - adv * 60000)
       if (at.getTime() <= Date.now()) continue
-
       const groupKey = group.map(d => d.id).sort().join('|')
       const groupId = doseIdToNumber(groupKey)
       const doseIdsCsv = group.map(d => d.id).join(',')
       const isDndWin = inDnd(group[0].scheduledAt, prefs)
       const shouldRing = canRingAlarm && !isDndWin
+      // Hash inclui scheduledAt + doseIds + flag shouldRing (mudanças nesses
+      // params requerem re-agendar). Ignora `at` derivado de adv pois adv mesmo).
+      const hash = `${at.toISOString()}|${groupKey}|${shouldRing ? 'r' : 't'}|${group[0].scheduledAt}`
+      desired.set(groupId, { hash, group, at, isDndWin, shouldRing, doseIdsCsv })
+    }
+  }
 
-      // Critical alarm (fullscreen + som loop) — só se pode tocar
-      if (shouldRing) {
+  // Item #200.1 — current state (vazio se firstSessionRun ou primeira instalação)
+  const current = isFirstSessionRun ? {} : loadScheduledState()
+  const currentIds = new Set(Object.keys(current).map(k => Number(k)))
+  const desiredIds = new Set(desired.keys())
+
+  const toRemove = [...currentIds].filter(id => !desiredIds.has(id))
+  const toAddOrUpdate = [...desiredIds].filter(id => {
+    const d = desired.get(id)
+    return current[id] !== d.hash // novo OU hash diferente
+  })
+  const toKeep = [...desiredIds].filter(id => current[id] === desired.get(id).hash)
+
+  console.log('[Notif] diff — keep:', toKeep.length, 'add/update:', toAddOrUpdate.length, 'remove:', toRemove.length)
+
+  // Cancelar removidos + alterados
+  for (const groupId of toRemove) {
+    await cancelGroup(groupId)
+  }
+  for (const groupId of toAddOrUpdate) {
+    // toUpdate precisa cancelar antes de re-agendar (caso mudou scheduledAt)
+    if (current[groupId]) await cancelGroup(groupId)
+  }
+
+  const localNotifs = []
+  let alarmsScheduled = 0
+  let dndSkipped = 0
+  const newState = {}
+
+  // Preserva entradas de toKeep no novo state
+  for (const id of toKeep) newState[id] = current[id]
+
+  // Schedule novos/alterados
+  for (const groupId of toAddOrUpdate) {
+    const d = desired.get(groupId)
+    const { group, at, isDndWin, shouldRing, doseIdsCsv, hash } = d
+
+    if (shouldRing) {
+      try {
+        await scheduleCriticalAlarmGroup({
+          id: groupId,
+          at: at.toISOString(),
+          doses: group.map(dose => ({
+            doseId: dose.id,
+            medName: dose.medName,
+            unit: dose.unit,
+            patientName: dose.patientName || '',
+            scheduledAt: dose.scheduledAt
+          }))
+        })
+        alarmsScheduled += group.length
+        newState[groupId] = hash
+
+        // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
         try {
-          await scheduleCriticalAlarmGroup({
-            id: groupId,
-            at: at.toISOString(),
-            doses: group.map(d => ({
-              doseId: d.id,
-              medName: d.medName,
-              unit: d.unit,
-              patientName: d.patientName || '',
-              scheduledAt: d.scheduledAt
+          const deviceId = await getDeviceId()
+          if (deviceId && hasSupabase) {
+            const rows = group.map(dose => ({
+              doseId: dose.id,
+              userId: dose.userId,
+              deviceId,
+              via: 'app-foreground'
             }))
-          })
-          alarmsScheduled += group.length
-
-          // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
-          // permitindo notify-doses cron skip push tray (alarme nativo cobre).
-          // Best-effort: falha aqui não rollback alarme.
-          try {
-            const deviceId = await getDeviceId()
-            if (deviceId && hasSupabase) {
-              const rows = group.map(d => ({
-                doseId: d.id,
-                userId: d.userId,
-                deviceId,
-                via: 'app-foreground'
-              }))
-              const { error } = await supabase
-                .from('dose_alarms_scheduled')
-                .upsert(rows, { onConflict: 'doseId,deviceId', ignoreDuplicates: true })
-              if (error) console.warn('[Notif] dose_alarms_scheduled upsert:', error.message)
-            }
-          } catch (e) {
-            console.warn('[Notif] report alarm scheduled fail:', e?.message)
+            const { error } = await supabase
+              .from('dose_alarms_scheduled')
+              .upsert(rows, { onConflict: 'doseId,deviceId', ignoreDuplicates: true })
+            if (error) console.warn('[Notif] dose_alarms_scheduled upsert:', error.message)
           }
         } catch (e) {
-          console.error('[Notif] alarm schedule fail at', key, ':', e?.message || e)
+          console.warn('[Notif] report alarm scheduled fail:', e?.message)
         }
-      } else if (isDndWin && criticalOn) {
-        dndSkipped += group.length
+      } catch (e) {
+        console.error('[Notif] alarm schedule fail at groupId', groupId, ':', e?.message || e)
       }
+    } else if (isDndWin && criticalOn) {
+      dndSkipped += group.length
+      newState[groupId] = hash
+    }
 
-      // Push notif (tray) — só se NÃO vai tocar alarme crítico.
-      // Quando alarme toca, AlarmService já posta FG notif com 3 actions —
-      // local notif duplicaria (user vê 2 notifs iguais).
-      if (!shouldRing) {
-        const title = group.length === 1 ? 'Dosy 💊' : `💊 ${group.length} doses agora`
-        const body = group.length === 1
-          ? `${group[0].medName} — ${group[0].unit}`
-          : group.map(d => `${d.medName} (${d.unit})`).join(' · ')
-        localNotifs.push({
-          id: groupId,
-          title,
-          body,
-          largeBody: body,
-          summaryText: group.length === 1 ? undefined : `${group.length} doses`,
-          schedule: { at, allowWhileIdle: true },
-          extra: { type: 'dose', doseIds: doseIdsCsv, scheduledAt: group[0].scheduledAt, dnd: isDndWin },
-          channelId: CHANNEL_ID,
-          autoCancel: true
-        })
-      }
+    // Push notif (tray) — só se NÃO vai tocar alarme crítico.
+    if (!shouldRing) {
+      const title = group.length === 1 ? 'Dosy 💊' : `💊 ${group.length} doses agora`
+      const body = group.length === 1
+        ? `${group[0].medName} — ${group[0].unit}`
+        : group.map(dose => `${dose.medName} (${dose.unit})`).join(' · ')
+      localNotifs.push({
+        id: groupId,
+        title,
+        body,
+        largeBody: body,
+        summaryText: group.length === 1 ? undefined : `${group.length} doses`,
+        schedule: { at, allowWhileIdle: true },
+        extra: { type: 'dose', doseIds: doseIdsCsv, scheduledAt: group[0].scheduledAt, dnd: isDndWin },
+        channelId: CHANNEL_ID,
+        autoCancel: true
+      })
+      newState[groupId] = hash
     }
   }
 
@@ -176,18 +235,33 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
   }
 
   // ─── COMMIT LOCAL NOTIFS ────────────────────────────────────────────────────
-  if (localNotifs.length === 0) {
-    console.log('[Notif] reschedule END — nothing scheduled')
-    return { alarms: 0, dndSkipped: 0, localNotifs: 0, summary: false }
+  if (localNotifs.length === 0 && !summaryOn) {
+    // Item #200.1 — persistir state mesmo sem schedule novo (cobre caso
+    // toRemove sem toAdd, que precisa zerar localStorage state correspondente).
+    saveScheduledState(newState)
+    console.log('[Notif] reschedule END — nothing new to schedule (state persisted)')
+    return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: false }
   }
 
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    const result = await LocalNotifications.schedule({ notifications: localNotifs })
-    console.log('[Notif] reschedule END — alarms:', alarmsScheduled, '/ dnd-skipped:', dndSkipped, '/ local:', result?.notifications?.length, '/ summary:', summaryOn)
+    if (localNotifs.length > 0) {
+      const result = await LocalNotifications.schedule({ notifications: localNotifs })
+      console.log('[Notif] reschedule END — alarms:', alarmsScheduled, '/ dnd-skipped:', dndSkipped, '/ local:', result?.notifications?.length, '/ summary:', summaryOn)
+    } else {
+      console.log('[Notif] reschedule END — alarms:', alarmsScheduled, '/ dnd-skipped:', dndSkipped, '/ local: 0 / summary:', summaryOn)
+    }
   } catch (e) {
     console.error('[Notif] LocalNotifications.schedule FAILED:', e?.message || e)
+    // Item #200.1 — schedule batch falhou. State pode estar inconsistente
+    // (alarmes críticos agendados mas tray notifs não). Limpar state força
+    // próximo rescheduleAll fazer full reset (safe fallback).
+    clearScheduledState()
+    return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true }
   }
+
+  // Item #200.1 — persistir state final pro próximo diff
+  saveScheduledState(newState)
 
   return { alarms: alarmsScheduled, dndSkipped, localNotifs: localNotifs.length, summary: summaryOn }
 }

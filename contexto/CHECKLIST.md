@@ -5845,9 +5845,75 @@ WHERE "deviceToken" IS NULL
 - Implementar #198 (rescheduleAll fresh install)
 - Garantir `App.jsx` useEffect já reagenda localmente em INSERT/UPDATE de dose (parece que já faz — validar)
 - Aumentar HORIZON cron 24h → 30h (mudança 1 linha, pequeno overhead)
+- **Refatorar `rescheduleAll` pra ser idempotente** (ver sub-item §#200.1 abaixo)
 
 **Critério aceitação:**
 - ✅ Documento `docs/alarm-scheduling-shadows.md` enumera todas sombras + cobertura
 - ✅ Cada sombra tem mitigação ativa
 - ✅ Egress total prod monitorado pós-deploy: aumento aceitável (<10%)
 - ✅ Test em device: criar dose 30min future + app fechado = alarme toca
+
+#### Sub-item #200.1 — `rescheduleAll` idempotente (não cancelAll antes) ✅ FECHADO v0.2.1.5
+
+**Implementação JS-only (sem mudança em plugin nativo) — 2026-05-07:**
+
+Em vez de Option A (plugin expor `listScheduled()` lendo SharedPreferences), foi usado Option B (track em localStorage `dosy_scheduled_groups_v1`). Resultado equivalente sem precisar tocar Kotlin.
+
+Mudanças em `src/services/notifications/`:
+- `channels.js`: `cancelGroup(groupId)` cancela 1 grupo específico (CriticalAlarm + LocalNotifications). `loadScheduledState`/`saveScheduledState`/`clearScheduledState` helpers localStorage.
+- `scheduler.js`: `rescheduleAll` agora calcula desired vs current via hash por grupo. `toRemove` cancelados, `toAddOrUpdate` re-agendados, `toKeep` preservados intactos. State persistido em localStorage no fim. Primeira execução por sessão (`firstResetDoneInSession=false`) força `cancelAll()` pra cobrir install fresco e desync.
+
+Hash por grupo: `${at.toISOString()}|${doseIds.sort().join(',')}|${shouldRing ? 'r' : 't'}|${scheduledAt}`. Mudou qualquer coisa relevante → hash diferente → re-agenda.
+
+**Resultado:**
+- Janela vazia 200-2000ms eliminada (alarmes não mudados ficam intactos)
+- Resilência contra crash mid-reschedule (state previsível)
+- Performance melhor (não cancela+reagenda alarmes que não mudaram)
+
+
+
+**Problema atual em `src/services/notifications/scheduler.js:46-48`:**
+
+```js
+// 1. Cancelar tudo (sempre, antes de qualquer agendamento)
+await cancelAll()
+
+// 2. Setup channel
+await ensureChannel()
+
+// 3. ... resto do código que agenda novamente
+```
+
+**Sombra do pattern destrutivo:**
+
+Toda execução do `rescheduleAll` chama `cancelAll()` PRIMEIRO. Se algo entre o cancel e o reschedule falhar (exception JS, AlarmScheduler nativo retorna erro, network slow durante busca de prefs, OOM kill do app), o AlarmManager fica **VAZIO** e alarmes previamente agendados são perdidos. Próxima recuperação só no cron 6h.
+
+Caso real onde isso bate:
+- User loga → useEffect dispara `scheduleDoses([])` enquanto query carrega → `rescheduleAll([])` chama `cancelAll()` + agenda nada → AlarmManager zerado por 200-2000ms até query terminar
+- Se algo crashar nesse window, alarmes não voltam até cron
+
+**Fix proposto (idempotente):**
+
+Padrão "diff and apply":
+1. Buscar `existingAlarmIds = AlarmManager.listScheduled()` (precisa expor essa API no plugin nativo — adicionar método novo)
+2. Calcular `desiredAlarmIds` baseado nas doses do parâmetro
+3. `toAdd = desiredAlarmIds - existingAlarmIds` → agendar só esses
+4. `toRemove = existingAlarmIds - desiredAlarmIds` → cancelar só esses
+5. `toUpdate` (mesmo doseId mas scheduledAt mudou) → cancel + reschedule só esses
+
+**Custo:**
+- Plugin nativo: adicionar método `listScheduled()` retornando `{id, scheduledAt}[]` lendo SharedPreferences (onde já persiste alarms)
+- JS: lógica de diff, ~30 linhas
+- Egress: zero (operação 100% local)
+
+**Benefício:**
+- Window vazio eliminado
+- Resilência contra crashes mid-reschedule (state previsível)
+- Performance: não cancela+reagenda alarmes que não mudaram (menor IPC plugin)
+
+**Critério aceitação sub-item:**
+- ✅ `CriticalAlarm.listScheduled()` plugin retorna alarmes pending atuais
+- ✅ `rescheduleAll` calcula diff e aplica só toAdd/toUpdate/toRemove
+- ✅ Test: chamar `rescheduleAll([])` quando havia 5 alarmes → cancela os 5; chamar `rescheduleAll(mesmas5)` → noop, AlarmManager preserva os 5
+- ✅ Test: chamar `rescheduleAll(novas3)` quando havia 5 alarmes → cancela 5, agenda 3 (set diff completo)
+- ✅ Test simulado crash mid-reschedule → AlarmManager NÃO fica vazio (alarmes do estado anterior preservados até diff completo)
