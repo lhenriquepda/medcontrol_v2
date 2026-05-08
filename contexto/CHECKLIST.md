@@ -5853,7 +5853,24 @@ WHERE "deviceToken" IS NULL
 - ✅ Egress total prod monitorado pós-deploy: aumento aceitável (<10%)
 - ✅ Test em device: criar dose 30min future + app fechado = alarme toca
 
-#### Sub-item #200.1 — `rescheduleAll` idempotente (não cancelAll antes)
+#### Sub-item #200.1 — `rescheduleAll` idempotente (não cancelAll antes) ✅ FECHADO v0.2.1.5
+
+**Implementação JS-only (sem mudança em plugin nativo) — 2026-05-07:**
+
+Em vez de Option A (plugin expor `listScheduled()` lendo SharedPreferences), foi usado Option B (track em localStorage `dosy_scheduled_groups_v1`). Resultado equivalente sem precisar tocar Kotlin.
+
+Mudanças em `src/services/notifications/`:
+- `channels.js`: `cancelGroup(groupId)` cancela 1 grupo específico (CriticalAlarm + LocalNotifications). `loadScheduledState`/`saveScheduledState`/`clearScheduledState` helpers localStorage.
+- `scheduler.js`: `rescheduleAll` agora calcula desired vs current via hash por grupo. `toRemove` cancelados, `toAddOrUpdate` re-agendados, `toKeep` preservados intactos. State persistido em localStorage no fim. Primeira execução por sessão (`firstResetDoneInSession=false`) força `cancelAll()` pra cobrir install fresco e desync.
+
+Hash por grupo: `${at.toISOString()}|${doseIds.sort().join(',')}|${shouldRing ? 'r' : 't'}|${scheduledAt}`. Mudou qualquer coisa relevante → hash diferente → re-agenda.
+
+**Resultado:**
+- Janela vazia 200-2000ms eliminada (alarmes não mudados ficam intactos)
+- Resilência contra crash mid-reschedule (state previsível)
+- Performance melhor (não cancela+reagenda alarmes que não mudaram)
+
+
 
 **Problema atual em `src/services/notifications/scheduler.js:46-48`:**
 
