@@ -1,7 +1,7 @@
 # Dosy — Contexto Completo do Projeto
 
 > Documento para onboarding de IA. Leia do início ao fim antes de tocar em qualquer código.
-> **Última revisão:** 2026-05-07 — master @ tag v0.2.1.3 (versionCode 51 Internal Testing publicado) — pre-Reddit hardening release. 5 fixes: #018 AdMob real ads + #162 v1+v2 TreatmentForm warning + toggle Dias/Semanas/Meses + #170 In-App Review API smart trigger + reply playbook + #189 UpdateBanner versionName triple fallback chain + #190 BUG-LOGOUT-RESUME (extends #159 fix em useAppResume.js refreshSession transient vs auth). Validados device user 2026-05-07. Closed Testing track aguarda Google review pós-promote vc 51 (~24-72h). v0.2.1.4 docs-only anterior pulada cronologicamente (versionamento Opção A 2026-05-07).
+> **Última revisão:** 2026-05-08 — master @ v0.2.1.6 (versionCode 54 Internal Testing publicado 12:33 BRT) — som alarme custom + bugs logout/alarme/telemetria. 10 itens fechados v0.2.1.5/v0.2.1.6: #195+#196 logout cascade fix (SIGNED_OUT spurious detection + push_sub preservada) + #197 cron notify-doses 1min fallback + #198 install/upgrade detection + skip scheduleDoses durante loading + #199 cleanup push_subs stale > 30d + #200+#200.1 HORIZON cron 30h + rescheduleAll idempotente + doc shadows + #201 telemetria auth events PT-BR + painel admin /auth-log + #202 mutex/debounce useAppResume previne refresh storm + #203 som alarme `dosy_alarm.mp3` 96kbps mono. Próxima release v0.2.1.7. Closed Testing track ATIVO desde 2026-05-06 (#130 #158 resolvidos).
 
 ---
 
