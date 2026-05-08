@@ -5,6 +5,7 @@ import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
 import { setSyncCredentials, clearSyncCredentials } from '../services/criticalAlarm'
+import { logAuthEvent } from '../services/authTelemetry'
 
 const isNative = Capacitor.isNativePlatform()
 // Deep link Capacitor (manifest dosy:// already configured) OR https web origin
@@ -95,12 +96,15 @@ export function AuthProvider({ children }) {
                 const { data: { session: stillValid } } = await supabase.auth.getSession()
                 if (stillValid?.user) {
                   console.warn('[useAuth] SIGNED_OUT spurious — session still valid locally, ignoring')
+                  // Item #201 — registra evento spurious pra análise no painel admin
+                  logAuthEvent('sign_out_spurious_ignored', {
+                    logoutKind: 'transient_ignored',
+                    details: { source: 'onAuthStateChange' }
+                  }).catch(() => { /* fail-safe */ })
                   return
                 }
               } catch (e) {
                 console.warn('[useAuth] SIGNED_OUT getSession check exception:', e?.message)
-                // Fail-open: se getSession falha, processa como real signOut
-                // (não trava user em loop bloqueado).
               }
             }
           }
@@ -112,6 +116,8 @@ export function AuthProvider({ children }) {
           // push_sub indevido. Limpar em SIGNED_IN garante state fresco.
           if (event === 'SIGNED_IN') {
             try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
+            // Item #201 — registra login no telemetria pra análise admin
+            logAuthEvent('sign_in').catch(() => { /* fail-safe */ })
           }
 
           setUser(u)
@@ -169,6 +175,11 @@ export function AuthProvider({ children }) {
             // quando bug logout transient/spurious acontecia (combinado com #196
             // protection acima, esse caminho só roda em logout REAL).
             const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
+            // Item #201 — registra logout (real) no telemetria
+            logAuthEvent('sign_out', {
+              logoutKind: explicitLogout ? 'explicit' : 'real_invalid_token',
+              details: { source: 'onAuthStateChange' }
+            }).catch(() => { /* fail-safe */ })
             if (explicitLogout) {
               clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
