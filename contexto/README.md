@@ -25,6 +25,30 @@
 
 ---
 
+## 🔗 Recursos externos (não-código)
+
+Coisas que não cabem em arquivo dentro do repo, mas são consultadas com frequência:
+
+| Recurso | URL | Uso |
+|---------|-----|-----|
+| **Painel admin Dosy** | https://admin.dosymed.app | Listar usuários, mudar tier, marcar tester grade, ver Sentry/PostHog/egress, feature flags, **histórico de login** |
+| ↳ Histórico de login | https://admin.dosymed.app/auth-log | #201 — eventos auth com descrições PT-BR (login real / sessão restaurada / logout / etc) |
+| **Notion · Growth Hub** | https://www.notion.so/359e3c80936f81f09a2cf7e4ecd63523 | Hub central recrutamento + marketing + canais BR |
+| ↳ Reddit Recruitment | https://www.notion.so/359e3c80936f8166ba8af7f6e6699512 | Subreddits BR + 4 templates de post + calendário anti-ban |
+| ↳ Canais Gratuitos BR | https://www.notion.so/359e3c80936f819cae17e7ba34571831 | Facebook Groups + WhatsApp + Telegram + Instagram + LinkedIn + fóruns BR |
+| ↳ Métricas Recrutamento | https://www.notion.so/359e3c80936f8120a7edcdb1683e6eaf | Funil conversão por canal + integração PostHog/Admin |
+| ↳ Tester Onboarding | https://www.notion.so/359e3c80936f819ea0d7ed23d006b4ff | Mensagens copy-paste pra cada situação tester |
+| **Site público** | https://dosymed.app | Landing + privacidade + termos + FAQ |
+| **Google Group testers** | https://groups.google.com/g/dosy-testers | Auto-aprovação tester onboarding |
+| **PostHog** | https://us.posthog.com/project/401835 | Analytics events (DAU/WAU/MAU + custom) |
+| **Sentry** | https://lhp-tech.sentry.io/projects/dosy/ | Issues / crash reports |
+| **Supabase** | https://supabase.com/dashboard/project/guefraaqbkcehofchnrc | DB + Edge Functions + Auth + Egress dashboard |
+| **Play Console** | https://play.google.com/console/u/1/developers/6887515170724268248 | AAB upload + Closed Testing + Internal track (conta dosy.med@gmail.com) |
+| **Vercel** | https://vercel.com/lhenriquepdas-projects | Deploys dosymed.app + admin.dosymed.app |
+| **Repo dosy-admin** | https://github.com/lhenriquepda/dosy-admin | Painel admin (separado do repo principal) |
+
+---
+
 ## 🗺️ Mapa da pasta
 
 ```

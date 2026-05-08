@@ -5618,7 +5618,7 @@ Com RTDN: Google Pub/Sub → Edge Function `play-billing-webhook` recebe notific
 
 ### #195 — Não deletar push_subscription em SIGNED_OUT automático
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — fix em `useAuth.jsx:127-143` + flag `dosy_explicit_logout` em `signOut()`. Deploy commit `cd7d5bb`.
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P0 (trust killer combinado com #196 — quebra reagendamento de alarmes)
 - **Origem:** Investigação user-reported 2026-05-07 ("alarme não disparou às 20h, app continua deslogando")
@@ -5670,7 +5670,7 @@ Opção B: marcar push_subscription como `pending_cleanup` (boolean) ao invés d
 
 ### #196 — useAuth onAuthStateChange ignorar SIGNED_OUT spurious
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — listener async + valida `getSession()` antes de processar SIGNED_OUT sem flag explícita. Commit `cd7d5bb`.
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P0 (trust killer — extends #159 + #190)
 - **Origem:** Investigação user-reported 2026-05-07
@@ -5701,7 +5701,7 @@ Trade-off: 1 round-trip extra `getSession` (lightweight, sem network — lê loc
 
 ### #197 — Restaurar caminho 2 (notify-doses cron) como fallback push tray
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — cron `notify-doses-1min` ativo (`* * * * *`) + Edge Function redeploy `verify_jwt: false`. Migration `20260507230000_notify_doses_cron_1min.sql`. Commit `f19c985`.
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P1 (defense-in-depth — sem isso, falha caminho 1 (FCM data) = silêncio total)
 - **Origem:** Investigação 2026-05-07 (cron `schedule-alarms-fcm-6h` é o único caminho hoje)
@@ -5734,7 +5734,7 @@ Isso garante que mesmo se AlarmManager local falhar, user recebe push tray simpl
 
 ### #198 — Reagendar alarmes no boot do app após instalação fresca/upgrade
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — App.jsx useEffect detecta install/upgrade via `localStorage.dosy_last_known_vc` + skip scheduleDoses durante TanStack loading (guard `dosesLoaded && patientsLoaded`). Commit `f9f100c`.
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P1 (sombra de até 6h após reinstall = tester perde alarmes)
 - **Origem:** Investigação 2026-05-07 (user instalou 3 versões hoje, perdeu alarmes 16h e 20h)
@@ -5760,7 +5760,7 @@ Em `App.jsx` boot, detectar instalação fresca/upgrade comparando build version
 
 ### #199 — Cleanup automático push_subscriptions stale (deviceToken NULL > 30d)
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — cron `cleanup-stale-push-subs-daily` (`0 5 * * *`) + RPC `medcontrol.cleanup_stale_push_subscriptions()`. Migration `20260507230500_cleanup_stale_push_subs_cron.sql`. Commit `34904a5`.
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P2 (housekeeping — não bloqueia mas evita debt)
 - **Origem:** Investigação 2026-05-07 (user tem 6 push_subs stale)
@@ -5791,7 +5791,7 @@ WHERE "deviceToken" IS NULL
 
 ### #200 — Análise + fix sombras de agendamento de alarme (egress-aware)
 
-- **Status:** ⏳ Pendente — release v0.2.1.5
+- **Status:** ✅ FECHADO v0.2.1.5 vc 52 (2026-05-08) — HORIZON cron 24h→30h + doc `docs/alarm-scheduling-shadows.md` (7 sombras A-G + matrix cobertura). Sub-item #200.1 idempotente também fechado (commit `54b00d1`). Commit principal `b0a6ee5`.
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** P1 (afeta confiabilidade healthcare crítico)
 - **Origem:** User-flagged 2026-05-07 ("existem períodos de sombra no desenvolvimento? quando adiciono dose, ela pode não ir pro alarme?")
@@ -5917,3 +5917,110 @@ Padrão "diff and apply":
 - ✅ Test: chamar `rescheduleAll([])` quando havia 5 alarmes → cancela os 5; chamar `rescheduleAll(mesmas5)` → noop, AlarmManager preserva os 5
 - ✅ Test: chamar `rescheduleAll(novas3)` quando havia 5 alarmes → cancela 5, agenda 3 (set diff completo)
 - ✅ Test simulado crash mid-reschedule → AlarmManager NÃO fica vazio (alarmes do estado anterior preservados até diff completo)
+
+---
+
+### #201 — Telemetria auth events (login/logout tracking)
+
+- **Status:** ✅ FECHADO v0.2.1.5 vc 53 (2026-05-08) — backend + frontend + admin panel.
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P1
+- **Origem:** User pediu pra debugar bugs logout em produção 2026-05-08
+- **Esforço real:** ~3h
+
+**Implementação:**
+
+Backend (Supabase):
+- Migration `20260507231500_auth_events_telemetry.sql` cria tabela `medcontrol.auth_events` com colunas event_type/app_version/app_build/platform/user_agent/device_id/logout_kind/details(jsonb)/createdAt
+- RPC `log_auth_event(p_event_type, p_app_version, p_app_build, p_platform, p_user_agent, p_device_id, p_logout_kind, p_details)` — cliente registra próprios events
+- RPC `admin_list_auth_events(p_user_id, p_event_type, p_app_version, p_since, p_limit)` — admin lista com filtros
+- RLS: user lê próprios + admin lê todos. INSERT só via RPC.
+
+Frontend (App):
+- Service `src/services/authTelemetry.js` encapsula `logAuthEvent(type, extra)` com cache `App.getInfo()` + `getDeviceId()`
+- `useAuth.jsx` integra:
+  - `signInEmail()` → `tipo: 'login_email_senha'` / "Digitou email e senha e clicou em Entrar"
+  - `signUpEmail()` → `tipo: 'criou_conta_nova'` / "Criou conta nova e entrou pela primeira vez"
+  - `verifyRecoveryOtp()` → `tipo: 'recuperacao_senha'` / "Recuperou a senha pelo código enviado por email"
+  - init() session restore → `tipo: 'sessao_restaurada'` / "Abriu o app e a sessão já estava salva (não digitou senha)"
+  - `signOut()` → `tipo: 'clicou_sair'` / "Clicou no botão Sair"
+
+Admin panel (dosy-admin):
+- Página `/auth-log` "Histórico de login" 🔐
+- Filtros: userId, tipo evento, versão app, limit
+- Renderiza `details.descricao` em PT-BR + slug técnico abaixo
+
+Commits: `6aad8f2`, `f0da129`, `cd9dc7c`. Master + Vercel deploy auto.
+
+---
+
+### #202 — Mutex + debounce em useAppResume previne refresh storm
+
+- **Status:** ✅ FECHADO v0.2.1.5 vc 53 (2026-05-08) — implementação direta no useAppResume.js
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (trust killer healthcare crítico — user reportou "deslogando de novo")
+- **Origem:** Investigação 2026-05-08 user reportou logout persistente. Query SQL revelou refresh storm.
+
+**Bug observado em prod:**
+
+User `lhenrique.pda@gmail.com` 2026-05-08 12:00:02-12:00:04 UTC (09:00 BRT) — refresh tokens criados+revogados:
+- 12:00:02.76 → token 1072 (criado)
+- 12:00:03.28 → token 1073 (rotacionou 1072) — 1072 revogado em 281ms
+- 12:00:03.58 → token 1074 (rotacionou 1073)
+- 12:00:03.95 → token 1075 (rotacionou 1074)
+- 12:00:04.23 → token 1076 (rotacionou 1075)
+
+5 tokens em 1.48s — Supabase detectou token reuse → revogou refresh chain inteira → user deslogado em cascade.
+
+**Causa raiz:**
+
+`visibilitychange` + `window.focus` + Capacitor `appStateChange` disparam `onResume()` quase-simultâneos ao retomar app. Cada um chamava `supabase.auth.refreshSession()` em paralelo → rotações concorrentes do mesmo refresh_token.
+
+**Fix em `src/hooks/useAppResume.js`:**
+
+1. Mutex module-level `refreshInProgress = false`. Se outro refresh em curso, skip.
+2. Debounce 1s (`RESUME_DEBOUNCE_MS = 1000`) ignora resume events <1s após o último.
+3. Liberar mutex em `finally` block (mesmo em exception).
+
+Commit: `8948004`.
+
+**Critério aceitação validado:**
+- ✅ Build sem regressão
+- ✅ Logs em prod não devem mostrar mais bursts de refresh tokens
+- ✅ Hard refresh device + alternar tabs/apps rápido — sem deslogar
+
+---
+
+### #203 — Som de alarme customizado (dosy_alarm.mp3)
+
+- **Status:** ✅ FECHADO v0.2.1.6 vc 54 (2026-05-08)
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** P2
+- **Origem:** User pediu pra usar mp3 próprio "Instante de Pausa" como som de alarme
+- **Esforço real:** ~30min
+
+**Implementação:**
+
+1. **Otimização do mp3:** ffmpeg re-encode 192kbps stereo → 96kbps mono 44.1kHz. Original 1.66MB → 811KB (50% redução). Suficiente pra alarme healthcare em alto-falante de celular sem perder clareza.
+
+2. **Coloca em `android/app/src/main/res/raw/dosy_alarm.mp3`** (resource id auto-gerado pelo Android build).
+
+3. **`AlarmService.java`** já tinha fallback raw (linha 255-263): `getResources().getIdentifier("dosy_alarm", "raw", ...)` → URI `android.resource://...`. Sem mudança.
+
+4. **`AlarmReceiver.java`** atualizado pra usar mesmo raw em channel sound (linhas 163-172):
+```java
+int rawId = context.getResources().getIdentifier("dosy_alarm", "raw", context.getPackageName());
+if (rawId != 0) {
+    sound = Uri.parse("android.resource://" + context.getPackageName() + "/" + rawId);
+}
+if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+```
+
+5. **CHANNEL_ID bumped** `doses_critical` → `doses_critical_v2`. Channel sound é immutable após `createNotificationChannel()`. Devices que tinham canal antigo (com som default) recebem novo canal `_v2` com som custom no upgrade. Antigo fica órfão (limpável via Settings → App).
+
+**Critério aceitação:**
+- ✅ Reinstalar APK em device + criar dose 5min future → alarme toca com som custom
+- ✅ Lock screen + dose dispara → fullscreen AlarmActivity com som custom
+- ✅ Tray notification posted by AlarmReceiver → mostra som custom (canal v2 ativo)
+
+Commits: `4c9a588` (sound + channel + bump vc 54).

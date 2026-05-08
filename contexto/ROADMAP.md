@@ -150,27 +150,38 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Próxima branch:** `release/v0.2.1.5` (cronológico próximo — pulou v0.2.1.4 que foi docs-only anterior).
+**Branch ativa:** `master` (release/v0.2.1.5 já mergeada). Próxima release **v0.2.1.7**.
 
-**Última release publicada:** v0.2.1.3 em 2026-05-07 (Vercel `dosymed.app` + Play Store Internal Testing AAB versionCode 51 + tag git `v0.2.1.3`) — pre-Reddit hardening release.
+**Última release publicada:** v0.2.1.6 em 2026-05-08 (vc 54 Internal Testing) — som customizado de alarme.
 
-**Items v0.2.1.3 fechados (4 validados + 1 ship-only):**
-- ✅ #018 AdMob real ads ativados (`VITE_ADMOB_USE_TEST=false` em prod) — validado device user
-- ✅ #162 v1 (vc 50) + v2 (vc 51) — TreatmentForm warning Mounjaro + toggle Dias/Semanas/Meses — validado device user (v2 OK)
-- 🚧 #170 In-App Review API + reply playbook — código merged vc 50, **validação natural pendente** (trigger 3 doses + alarme + 7d uso ativo, não dá pra forçar)
-- ✅ #189 UpdateBanner versionName fix (Promise.allSettled triple fallback chain) — validado device user
-- ✅ #190 BUG-LOGOUT-RESUME hotfix (extends #159 em useAppResume.js refreshSession transient vs auth) — validado device user
+**Items v0.2.1.6 fechados (1):**
+- ✅ #203 Som de alarme customizado `dosy_alarm.mp3` (96kbps mono, 811KB, 50% redução) — `res/raw/` + `AlarmService` já tinha fallback raw; `AlarmReceiver` channel atualizado pra usar raw + bump `CHANNEL_ID` `doses_critical_v2` pra forçar Android recriar canal. Esforço 30min.
+
+**Release anterior:** v0.2.1.5 em 2026-05-08 (vc 52 + 53 Internal Testing) — bugs alarme/logout + telemetria auth.
+
+**Items v0.2.1.5 fechados (9):**
+- ✅ #195 Não DELETAR push_subscription em SIGNED_OUT auto (flag `dosy_explicit_logout`) — vc 52
+- ✅ #196 useAuth onAuthStateChange ignora SIGNED_OUT spurious (valida com `getSession()`) — vc 52
+- ✅ #197 Cron `notify-doses-1min` fallback push tray (Edge Function `verify_jwt: false`) — vc 52
+- ✅ #198 Detectar install/upgrade APK + skip scheduleDoses durante loading (TanStack `isSuccess` guard) — vc 52
+- ✅ #199 Cron diário cleanup push_subscriptions stale > 30d — vc 52
+- ✅ #200 HORIZON cron 24h→30h + doc `docs/alarm-scheduling-shadows.md` (6 sombras documentadas + matrix cobertura) — vc 52
+- ✅ #200.1 `rescheduleAll` idempotente (diff-and-apply JS-only via localStorage `dosy_scheduled_groups_v1`) — vc 52
+- ✅ #201 Telemetria auth events com descrições PT-BR (signInEmail/signUp/recovery/sessionRestore/signOut) + painel admin `/auth-log` — vc 53
+- ✅ #202 Mutex + debounce em useAppResume previne refresh storm (race condition observada prod 2026-05-08 09:00 BRT: 5 tokens rotacionados em 1.48s → Supabase revogou chain) — vc 53
 
 **Sequência AAB Play Store:**
-- vc 49 (publicado 09:47, validou #018 + #189)
-- vc 50 (publicado 10:11, hotfix #190 + #162 v1 + #170)
-- vc 51 (publicado 10:39, atual — adiciona #162 v2 toggle granularidade)
+- vc 52 (publicado 7/mai 23:50, vn 0.2.1.5 — bugs logout + alarme + telemetria inicial)
+- vc 53 (publicado 8/mai 11:48, vn 0.2.1.5 — fix #202 refresh storm + telemetria PT-BR)
+- vc 54 (publicado 8/mai TBD, vn 0.2.1.6 — som alarme custom #203)
+
+**Release anterior:** v0.2.1.3 em 2026-05-07 (vc 49-51 Internal/Closed Testing) — pre-Reddit hardening (#018 #162 #170 #189 #190).
 
 **Items DESBLOQUEADOS:**
 - ✅ #130 Closed Testing track APROVADO Google (2026-05-06) — track ATIVO, desbloqueia #131 recrutamento Reddit
 - ✅ #158 fixes Console aceitos (categoria + checkboxes desmarcados) — sem mais rejection
 
-**Release anterior:** v0.2.1.4 em 2026-05-07 (Vercel `dosymed.app` + tag git `v0.2.1.4` — sem AAB Play Store, **Android mantém v0.2.1.2 vc 48**) — release **docs-only**: refactor completo §6 ROADMAP em 4 categorias visuais (🚀 IMPLEMENTAÇÃO · ✨ MELHORIAS · 🐛 BUGS · 🔄 TURNAROUND) + bolinhas P0/P1/P2/P3 + legenda visual global topo doc + items fechados redistribuídos inline na posição correta + 27 NOVOS items planejamento criados (#162-#189).
+**Release docs-only:** v0.2.1.4 em 2026-05-07 (Vercel apenas + tag git `v0.2.1.4` — sem AAB Play Store) — refactor §6 ROADMAP em 4 categorias visuais + 27 NOVOS items planejamento (#162-#189).
 
 **Items v0.2.1.4 (27 NOVOS items planejamento + 0 código):**
 - ✅ Refactor §6 ROADMAP completo (4 categorias + bolinhas + legenda topo)
@@ -507,17 +518,19 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~206 itens · ✅ 128 fechados · ⏳ 74 abertos (+#195-#200 NOVOS bugs alarme/logout v0.2.1.5) · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount 2026-05-07 noite)
+**Total:** ~210 itens · ✅ 138 fechados · ⏳ 68 abertos · 🚧 1 (#170 valid pendente) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-08, +10 fechados v0.2.1.5/v0.2.1.6)
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 11 (#021 #169-#171 #173-#177 #188 #197) | 4 (#047 #155 #172 #199) | 0 | 21 |
+| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
 | ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 48 |
-| 🐛 BUGS | 2 (#195 #196) | 2 (#198 #200) | 2 (#101-followup #110) | 0 | 6 |
+| 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |
-| **Total abertos** | **10** | **16** | **20** | **29** | **75** |
+| **Total abertos** | **8** | **13** | **19** | **29** | **69** |
+
+**Δ 2026-05-08 v0.2.1.5/v0.2.1.6 fechados:** +9 v0.2.1.5 (#195 #196 #197 #198 #199 #200 #200.1 #201 #202) + 1 v0.2.1.6 (#203 som alarme custom). Total fechados +10.
 
 **Δ 2026-05-07 v0.2.1.3 vc 49-51 (em curso):** ✅ #018 fechado validado device + ✅ #189 fechado validado device + #162 v1 fechado vc 50 / v2 em curso vc 51 (toggle Dias/Semanas/Meses) + #190 NOVO P0 BUG-LOGOUT-RESUME (extends #159, fix vc 50 aguarda validação device pós-install) + #170 In-App Review API + reply playbook code merged (validação natural pós 7d uso ativo).
 
@@ -816,12 +829,16 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 - ⏳ **#192** [P0 pré-OpenTest 🚀 IMPLEMENTAÇÃO — promove plan-original FASE 16.4] Validar pagamento E2E (sandbox + License Tester). Cobre Free→Plus, Free→Pro, Plus→Pro, Cancel, Restore Purchases, edge cases (network fail, conta troca, multi-device). BLOQUEADOR launch OpenTest. Esforço 1-2 dias. Detalhe CHECKLIST §#192.
 - ⏳ **#193** [P1 🚀 IMPLEMENTAÇÃO — promove plan-original FASE 16.2 reformulado] Webhook Google Play RTDN (Real-Time Developer Notifications). Plan original era RevenueCat→Supabase; reformulado direto Pub/Sub→Edge Function `play-billing-webhook` (evita custo+complexity RevenueCat). Atualiza tier table imediatamente sem precisar app abrir. Cobre SUBSCRIPTION_CANCELED/EXPIRED/RECOVERED/RESTARTED/GRACE_PERIOD. Esforço 1-2 dias. Detalhe CHECKLIST §#193.
 - ⏳ **#194** [P1 pré-OpenTest ✨ MELHORIAS] Analytics flow upgrade — eventos PostHog completos (`manage_plan_opened`, `plan_card_clicked`, `upgrade_complete` com from/to_tier, `cancel_detected` via RTDN). Permite funnel conversion no painel admin /analytics. Detalhe CHECKLIST §#194.
-- ⏳ **#195** [P0 v0.2.1.5 NOVO 🐛 BUGS] Não DELETAR push_subscription em `SIGNED_OUT` automático. `useAuth.jsx:127-143` deleta push_sub em qualquer SIGNED_OUT — incluindo transient/spurious — quebrando reagendamento próximo cron FCM. Fix: distinguir logout explícito (botão Sair) vs SIGNED_OUT automático via flag localStorage. Origem: investigação user-reported 2026-05-07 (alarme 20h não tocou + app deslogou). Detalhe CHECKLIST §#195.
-- ⏳ **#196** [P0 v0.2.1.5 NOVO 🐛 BUGS] useAuth `onAuthStateChange` ignorar SIGNED_OUT spurious. Extends #159 + #190. Listener captura QUALQUER SIGNED_OUT do Supabase JS (refresh loops, WebSocket disconnects, internal cleanups) e dispara setUser(null). Fix: validar com `getSession()` antes de processar SIGNED_OUT — se session local válida, ignorar como transient. Detalhe CHECKLIST §#196.
-- ⏳ **#197** [P1 v0.2.1.5 NOVO 🚀 IMPL] Restaurar caminho 2 (`notify-doses` cron) como fallback push tray. Edge function existe deployed mas SEM cron job. Hoje só caminho 1 (FCM data → AlarmScheduler local) — falha ele = silêncio total. Fix: cron `*/5 * * * *` chama notify-doses pra push tray simples. Defense-in-depth healthcare crítico. Detalhe CHECKLIST §#197.
-- ⏳ **#198** [P1 v0.2.1.5 NOVO 🐛 BUGS] Reagendar alarmes no boot após install/upgrade APK. Reinstall limpa AlarmManager pending; sombra até 6h até próximo cron. Fix: comparar `last_known_vc` SharedPreferences com atual; se diff, forçar `rescheduleAll()` imediato. Origem: investigação user-reported 2026-05-07 (3 reinstalações hoje). Detalhe CHECKLIST §#198.
-- ⏳ **#199** [P2 v0.2.1.5 NOVO 🚀 IMPL] Cleanup automático push_subscriptions stale. User típico tem 6+ rows com deviceToken=NULL acumulados. Cron diário `0 5 * * *` deleta rows NULL > 30d. Detalhe CHECKLIST §#199.
-- ⏳ **#200** [P1 v0.2.1.5 NOVO 🐛 BUGS] Análise + fix sombras agendamento alarme (egress-aware). 6 sombras identificadas: dose outro device com FCM token expirado, dose >6h trigger skip, cron last run window, reinstall, device offline FCM, trigger DB fail. Recomendação: #197 + #198 + aumentar HORIZON cron 24h→30h + doc `docs/alarm-scheduling-shadows.md` + **sub-item #200.1 `rescheduleAll` idempotente** (não `cancelAll()` antes — diff and apply preservando state em crash mid-reschedule). Origem: user-flagged 2026-05-07 ("existem períodos de sombra?"). Detalhe CHECKLIST §#200 + §#200.1.
+- ✅ **#195** [P0 fechado v0.2.1.5 vc 52 (2026-05-08) 🐛 BUGS] Não DELETAR push_subscription em `SIGNED_OUT` automático — flag `dosy_explicit_logout` em signOut() distingue logout real (botão Sair) de SIGNED_OUT spurious. Fix em `useAuth.jsx:127-143`. Origem: investigação user-reported 2026-05-07 (alarme 20h não tocou + app deslogou).
+- ✅ **#196** [P0 fechado v0.2.1.5 vc 52 (2026-05-08) 🐛 BUGS] useAuth `onAuthStateChange` ignora SIGNED_OUT spurious validando `getSession()` antes de processar. Extends #159 + #190. Listener antes capturava QUALQUER SIGNED_OUT do Supabase JS — agora se session local válida, ignora como transient.
+- ✅ **#197** [P1 fechado v0.2.1.5 vc 52 (2026-05-08) 🚀 IMPL] Cron `notify-doses-1min` (`* * * * *`) restaurado como fallback push tray. Edge Function `notify-doses` redeployed `verify_jwt: false`. Defense-in-depth: caminho 1 (FCM data → AlarmScheduler) + caminho 2 (push tray cron 1min) garantem entrega.
+- ✅ **#198** [P1 fechado v0.2.1.5 vc 52 (2026-05-08) 🐛 BUGS] Detectar install/upgrade APK via `localStorage.dosy_last_known_vc` + skip `scheduleDoses` quando `dosesLoaded && patientsLoaded` é false (evita window vazio durante login). App.jsx useEffect refactor.
+- ✅ **#199** [P2 fechado v0.2.1.5 vc 52 (2026-05-08) 🚀 IMPL] Cron diário `0 5 * * *` cleanup push_subscriptions stale > 30d (deviceToken=NULL). Migration `20260507230500_cleanup_stale_push_subs_cron.sql`.
+- ✅ **#200** [P1 fechado v0.2.1.5 vc 52 (2026-05-08) 🐛 BUGS] HORIZON cron `schedule-alarms-fcm` 24h → 30h + doc `docs/alarm-scheduling-shadows.md` enumera 7 sombras (A-G) + matrix cobertura por caminho. Sombra G (SIGNED_OUT spurious) resolvida via #195+#196.
+- ✅ **#200.1** [P1 fechado v0.2.1.5 vc 52 (2026-05-08) 🐛 BUGS] `rescheduleAll` idempotente diff-and-apply via localStorage `dosy_scheduled_groups_v1`. Calcula `toRemove`/`toAddOrUpdate`/`toKeep`. Primeira execução por sessão força `cancelAll()` (cobre install fresco). Janela vazia 200-2000ms eliminada.
+- ✅ **#201** [P1 fechado v0.2.1.5 vc 53 (2026-05-08) 🚀 IMPL] Telemetria auth events em `medcontrol.auth_events` (RPC `log_auth_event` + `admin_list_auth_events`). 5 tipos: login_email_senha / criou_conta_nova / recuperacao_senha / sessao_restaurada / clicou_sair. Descrições PT-BR amigáveis em `details.descricao`. Painel admin `/auth-log` renderiza em PT-BR + filtros user/tipo/versão.
+- ✅ **#202** [P0 fechado v0.2.1.5 vc 53 (2026-05-08) 🐛 BUGS] Mutex `refreshInProgress` + debounce 1s em `useAppResume` previne refresh storm. Bug observado prod 2026-05-08 09:00 BRT user lhenrique.pda: 5 refresh tokens rotacionados em 1.48s → Supabase detectou reuse → revogou chain inteira. Causa: visibilitychange + window focus + Capacitor appStateChange disparam onResume() quase-simultâneos.
+- ✅ **#203** [P2 fechado v0.2.1.6 vc 54 (2026-05-08) ✨ MELHORIAS] Som de alarme customizado `dosy_alarm.mp3` em `res/raw/` (96kbps mono, 811KB, 50% redução do original 1.66MB). `AlarmService` já tinha fallback raw; `AlarmReceiver` channel atualizado pra usar raw + bump `CHANNEL_ID` `doses_critical_v2` (sound immutable após channel criado).
 
 ---
 
@@ -930,8 +947,8 @@ A base é genuinamente sólida — alarme nativo, RLS defense-in-depth, LGPD cob
 
 > Snapshot v0.2.1.4 (2026-05-06). Counter detalhado em §6.2 com sub-distribuição por categoria × prioridade.
 
-- **Total:** ~200 itens (recount real grep 2026-05-07)
-  - ✅ 128 fechados (+#130 +#158 resolvidos 2026-05-06)
+- **Total:** ~210 itens (recount real grep 2026-05-08)
+  - ✅ 138 fechados (+10 em v0.2.1.5/v0.2.1.6)
   - ⏳ 68 abertos
   - 🚧 1 (#170 valid device pendente, código merged vc 50)
   - 🚨 0 BLOQUEADOS
