@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, onlineManager } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { Capacitor } from '@capacitor/core'
@@ -13,6 +13,7 @@ import { ToastProvider } from './hooks/useToast.jsx'
 import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
 import { initAnalytics } from './services/analytics'
+import { registerMutationDefaults } from './services/mutationRegistry'
 import './index.css'
 
 // Aud 4.5.7 G4 — PostHog analytics. No-op se VITE_POSTHOG_KEY ausente ou modo dev.
@@ -63,9 +64,17 @@ if (SENTRY_DSN && import.meta.env.PROD) {
 // Agora: staleTime 30s + refetchOnMount: true (só se stale) — refetch só quando necessário.
 // refetchOnWindowFocus mantido (útil pós-idle curto sem reload).
 // Hooks individuais (ex.: useDoses) podem override se precisarem janela menor/maior.
+//
+// Item #204 (release v0.2.1.7) — networkMode: 'offlineFirst' nos defaults.
+//   queries.networkMode='offlineFirst' → serve cache mesmo offline (já era comportamento
+//   c/ PersistQueryClientProvider, agora explícito).
+//   mutations.networkMode='offlineFirst' → pausa mutation enquanto onlineManager.isOnline()
+//   retorna false (em vez de falhar imediato após retry exhaust). resumePausedMutations
+//   drena fila quando onlineManager flipa pra true (bridge Capacitor Network abaixo).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      networkMode: 'offlineFirst',
       staleTime: 30_000,
       refetchOnMount: true,
       refetchOnWindowFocus: true,
@@ -74,11 +83,41 @@ const queryClient = new QueryClient({
       gcTime: 1000 * 60 * 60 * 24 // 24h — survives offline reconnect
     },
     mutations: {
+      networkMode: 'offlineFirst',
       retry: 3,
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000)
     }
   }
 })
+
+// Item #204 — registra mutationFn + callbacks por chave (mutationRegistry).
+// Crítico: precisa rodar ANTES da hydrate do PersistQueryClientProvider, senão
+// resumePausedMutations não acha mutationFn e descarta mutations persistidas.
+registerMutationDefaults(queryClient)
+
+// Item #204 — bridge connectivity real → TanStack onlineManager.
+// Native (Capacitor): @capacitor/network detecta wifi-sem-internet, avião mode etc
+//   (mais preciso que navigator.onLine no WebView, que costuma reportar true sempre).
+// Web: navigator.onLine + window online/offline events (já é o default do TanStack,
+//   mas explicitamos pra consistency cross-platform).
+;(async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { Network } = await import('@capacitor/network')
+      const status = await Network.getStatus()
+      onlineManager.setOnline(status.connected)
+      Network.addListener('networkStatusChange', (s) => {
+        onlineManager.setOnline(s.connected)
+      })
+    } catch (e) {
+      console.warn('[onlineManager bridge] Capacitor Network indisponível:', e?.message)
+    }
+  } else if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+    onlineManager.setOnline(navigator.onLine)
+    window.addEventListener('online', () => onlineManager.setOnline(true))
+    window.addEventListener('offline', () => onlineManager.setOnline(false))
+  }
+})()
 
 // Persist React Query cache → fast re-open + offline last-known data.
 // Native: localStorage (Capacitor WebView storage); Web: localStorage.
@@ -125,7 +164,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         persistOptions={{
           persister,
           maxAge: 1000 * 60 * 60 * 24, // 24h
-          buster: 'v1' // bump to invalidate persisted cache on schema change
+          // Item #204: NÃO bumpar buster pra adicionar persist de mutations.
+          // TanStack hydrate é tolerante a campo extra `mutations` (legacy v1 sem
+          // mutations carrega normal, cache antigo continua válido). Bumpar
+          // invalidaria caches de TODOS users existentes 1x na atualização →
+          // pico egress global desnecessário (doses+patients+treatments refetch
+          // simultâneo). Mantém v1.
+          buster: 'v1',
+          dehydrateOptions: {
+            // Persist mutations pausadas (offline) pra sobreviver a force-kill / reboot.
+            // Sem isso, queue offline é perdida quando user fecha app antes reconectar.
+            shouldDehydrateMutation: () => true,
+          }
+        }}
+        onSuccess={() => {
+          // Hydrate completo — drena fila de mutations pausadas. No-op se nada persistido
+          // ou se ainda offline (TanStack mantém pause até onlineManager.isOnline()).
+          queryClient.resumePausedMutations()
         }}
       >
         <ThemeProvider>

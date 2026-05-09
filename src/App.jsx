@@ -38,6 +38,7 @@ import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
 import UpdateBanner from './components/UpdateBanner'
+import OfflineBanner from './components/OfflineBanner'
 import LockScreen from './components/LockScreen'
 import ForceNewPasswordModal from './components/ForceNewPasswordModal'
 import { useAppLock } from './hooks/useAppLock'
@@ -444,6 +445,8 @@ export default function App() {
       open={forcePassword}
       onComplete={() => setForcePassword(false)}
     />
+    {/* #204 (v0.2.1.7) — feedback visual fila offline + drain pós-reconexão */}
+    <OfflineBanner />
     </>
   )
 }

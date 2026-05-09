@@ -1269,30 +1269,29 @@ Template:
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
 **Público-alvo:** amplo — pais com crianças em tratamento, pessoas organizadas com múltiplos medicamentos diários, cuidadores formais/informais, clínicas/consultórios, hospitais/instituições, idosos auto-gerindo medicação. **NÃO é app exclusivo de idosos.** Decisões UX seguem design universal — fluxos simples e legíveis servem todas personas.
-**Versão atual:** `0.1.7.5` (tag `v0.1.7.5`) · branch `master`
-**Vercel prod:** `https://dosy-app.vercel.app/` (master = v0.1.7.5)
-**Vercel dev:** `https://dosy-dev.vercel.app/` (release branch ativa — atualmente espelha master)
+**Versão atual:** master @ `v0.2.1.6` (vc 54, publicado Internal Testing 2026-05-08 12:33 BRT) · branch ativa `release/v0.2.1.7` (vc 55, em curso)
+**Vercel prod:** `https://dosymed.app/` (custom domain — master)
 **Contas teste:** `teste-free@teste.com / 123456` (tier free) + `teste-plus@teste.com / 123456` (tier plus). Antiga `teste03@teste.com` deletada.
-**Play Store Internal Testing:** AAB versionCode 30 / versionName 0.1.7.5.
+**Play Store:** Internal Testing vc 54 publicado · Closed Testing track ATIVO desde 2026-05-06 (#130 #158 resolvidos)
 
-**Última release publicada:** v0.1.7.5 em 2026-05-03 — fechou #084 (JWT rotation) / #092 (egress) / #093 (Realtime race) / #094 (paywall race) / #095 (versão real).
+**Última release publicada:** v0.2.1.6 em 2026-05-08 (vc 54) — som customizado de alarme (#203 `dosy_alarm.mp3` 96kbps mono). v0.2.1.5 (vc 52-53) fechou 9 itens — logout cascade fix (#195+#196), cron notify-doses 1min fallback (#197), install/upgrade detection (#198), cleanup push_subs stale (#199), HORIZON cron 30h + rescheduleAll idempotente (#200+#200.1), telemetria auth events PT-BR + painel /auth-log (#201), mutex/debounce useAppResume previne refresh storm (#202).
 
-**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões. BUG-016 + #085 + #087 Fase A resolvidos.
+**Release em curso (`release/v0.2.1.7`):**
+- 🚧 **#204 Mutation queue offline (Fase 1 offline-first)** — código mergeado (TanStack Query `networkMode: 'offlineFirst'` + `setMutationDefaults` por chave em 12 mutations críticas + bridge `Capacitor.Network` ↔ `onlineManager` + persist mutations + `resumePausedMutations` no hydrate + `OfflineBanner` PT-BR). Build verde. Auditoria egress documentada (buster mantido v1, sem refetch storm global). **Validação device S25 Ultra modo avião pendente.**
+- 🚧 **#207 Defesa em profundidade alarme crítico (5 fixes)** — código mergeado. Root causes user-reported 2026-05-08: alarme inconsistente apesar push FCM funcionar. Investigação encontrou: (1) scheduler agendava 15min antes do horário por fallback `advanceMins ?? 15` desalinhado com DEFAULT_PREFS=0; (2) janela JS 48h + Worker 72h não cobria user que não abria app por dias (Samsung mata Worker); (3) cache idempotência `firstResetDoneInSession` causava drift quando OEM matava AlarmManager mas localStorage dizia "agendado"; (4) `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` ausente — Samsung One UI 7 colocava Dosy em bucket "rare" matando background. Fixes: advanceMins `?? 0` + janela 7d + drop diff-and-apply (sempre full reschedule) + permission/UX battery + Sentry breadcrumbs. Build verde 21.11s. **Validação device S25 Ultra pendente.**
 
-**Bloqueadores P0 ativos:** 4 itens (#084 fechado v0.1.7.5).
-- #003 rotação senha postgres + revogar PAT (~30min, manual user)
-- #004 vídeo demo FGS Play Console (~2-3h, manual user)
+**Veredito da última auditoria:** ⚠️ **PRONTO COM RESSALVAS** · Score 7.0/10 médio em 25 dimensões.
+
+**Bloqueadores P0 ativos pra Closed Testing público:**
 - #006 device validation 3 devices físicos (1-2 dias, manual user)
-- #007 PostHog telemetria (depende #018 manual)
-- #008 Sentry GitHub Secrets (~15min, manual user)
-- #009 PITR + DR drill (depende upgrade Pro plan)
+- #131 recrutamento Reddit testers (desbloqueado pós #130 aprovado)
+- #132 gate 14d com ≥12 testers ativos (depende #131)
+- #133 solicitar Production access Console pós-gate (depende #132)
+- #191 #192 revenue path (RevenueCat + Play Billing — Fase 3 pendente)
+- #193 (release-specific TBD)
+- #204 mutation queue offline (código pronto, validação device pendente)
 
-**Bugs novos pra v0.1.8.0:**
-- #086 Resumo Diário fix completo (migration + Edge cron + timezone)
-- #088 Dose não aparece em Início sem refresh (TanStack Query invalidate)
-- #089 Layout AdSense + header truncamento Pixel 7
-
-**Próximo passo concreto:** validação 24h pós-release v0.1.7.5 (Sentry crash spike, Console crashes/ANRs, Supabase egress trend). Depois v0.2.0.0 redesign (user vai escrever prompt detalhado quando começar) ou v0.1.8.0 minor (#086 Resumo Diário fix + #089 Pixel 7 layout + P1 batch).
+**Próximo passo concreto:** validação device S25 Ultra modo avião do #204 (5 doses confirm/skip + criar paciente + reabrir wifi + SQL check) → fechar #204 → publicar AAB vc 55 Internal Testing → seguir #131 recrutamento Reddit + #006 device validation.
 
 ---
 
@@ -1335,4 +1334,4 @@ Esta pasta foi desenhada pra que **qualquer agente IA novo** consiga retomar o t
 
 ---
 
-🚀 **Próximo passo concreto:** abrir [`CHECKLIST.md` §#001](CHECKLIST.md#001--adicionar-auth-check-de-admin-em-send-test-push-edge-function).
+🚀 **Próximo passo concreto:** validação device #204 (S25 Ultra modo avião) → publicar AAB vc 55 → release/v0.2.1.7. Detalhe em [`CHECKLIST.md` §#204](CHECKLIST.md).

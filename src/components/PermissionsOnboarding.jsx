@@ -10,6 +10,7 @@ import {
   openFullScreenIntentSettings,
   openOverlaySettings,
   openAppNotificationSettings,
+  requestIgnoreBatteryOptimizations,
 } from '../services/criticalAlarm'
 
 const isNative = Capacitor.isNativePlatform()
@@ -111,6 +112,13 @@ export default function PermissionsOnboarding({ onComplete, onClose }) {
       desc: 'Permite o alarme abrir mesmo com você usando outro app.',
       action: openOverlaySettings,
       granted: perms.canDrawOverlay,
+    },
+    {
+      key: 'ignoringBatteryOpt',
+      title: 'Ignorar otimização de bateria',
+      desc: 'Crítico em Samsung/Xiaomi: sem isso o sistema pode cancelar alarmes pra economizar bateria.',
+      action: requestIgnoreBatteryOptimizations,
+      granted: perms.ignoringBatteryOpt,
     },
   ]
 

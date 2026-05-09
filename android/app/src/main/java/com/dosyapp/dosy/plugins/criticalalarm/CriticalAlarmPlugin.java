@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 import androidx.core.content.ContextCompat;
 
@@ -360,6 +361,55 @@ public class CriticalAlarmPlugin extends Plugin {
     }
 
     /**
+     * Item #207 (release v0.2.1.7) — battery optimization status.
+     * isIgnoringBatteryOptimizations() retorna true se app está whitelist (alarmes garantidos).
+     */
+    @PluginMethod
+    public void isIgnoringBatteryOptimizations(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean ignoring = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                ignoring = pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+            }
+        }
+        ret.put("ignoring", ignoring);
+        call.resolve(ret);
+    }
+
+    /**
+     * Item #207 — solicita ao user adicionar Dosy à whitelist de battery optimization.
+     * ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS abre dialog system com Sim/Não.
+     * Play Store policy: permitido pra apps de medicação ("medication reminder").
+     * User pode negar — caller deve checar isIgnoringBatteryOptimizations depois.
+     */
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            call.resolve();
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            // Fallback: abre tela de configurações genérica de battery optimization
+            try {
+                Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                fallback.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(fallback);
+                call.resolve();
+            } catch (Exception e2) {
+                call.reject("cannot open battery optimization settings: " + e2.getMessage());
+            }
+        }
+    }
+
+    /**
      * Returns full permission status used by JS onboarding screen.
      * Each flag tells whether a critical-alarm-related permission is granted.
      */
@@ -408,10 +458,21 @@ public class CriticalAlarmPlugin extends Plugin {
         } catch (Exception ignored) {}
         ret.put("notifsEnabled", notifsEnabled);
 
-        // All required = ready
+        // Item #207 — battery optimization whitelist (CRÍTICO Samsung One UI 7).
+        // Sem isso OEM coloca app em bucket "rare/restricted" → alarms cancelados.
+        boolean ignoringBatteryOpt = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                ignoringBatteryOpt = pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
+            }
+        }
+        ret.put("ignoringBatteryOpt", ignoringBatteryOpt);
+
+        // All required = ready (inclui battery optimization).
         ret.put("allGranted",
             canPostNotifications && canScheduleExact && canFullScreenIntent &&
-            canDrawOverlay && notifsEnabled
+            canDrawOverlay && notifsEnabled && ignoringBatteryOpt
         );
 
         call.resolve(ret);

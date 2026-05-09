@@ -140,4 +140,11 @@
 
     <!-- BAL exemption: permite startActivity de background quando granted -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Item #207 (release v0.2.1.7) — bypass battery optimization Doze/App Standby.
+         CRÍTICO Samsung One UI 7 + Xiaomi MIUI: sem isso OEM coloca app em bucket
+         "rare/restricted" → kills WorkManager periodic + cancela alarms agendados.
+         Play Store policy permite pra apps de medicação ("alarm clock or medication
+         reminder" em Use of REQUEST_IGNORE_BATTERY_OPTIMIZATIONS exception). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

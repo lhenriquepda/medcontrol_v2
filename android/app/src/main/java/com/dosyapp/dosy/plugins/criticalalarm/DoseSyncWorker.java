@@ -50,7 +50,9 @@ import java.util.TreeMap;
 public class DoseSyncWorker extends Worker {
     private static final String TAG = "DoseSyncWorker";
     private static final String SYNC_PREFS = "dosy_sync_credentials";
-    private static final long HORIZON_HOURS = 72L;
+    // Item #207 (release v0.2.1.7) — 72h → 168h (7d) alinhado com SCHEDULE_WINDOW_MS JS.
+    // WorkManager 6h periodic cobre janela inteira mesmo se app fechado vários dias.
+    private static final long HORIZON_HOURS = 168L;
 
     public DoseSyncWorker(@NonNull Context ctx, @NonNull WorkerParameters params) {
         super(ctx, params);

@@ -76,14 +76,14 @@ export async function checkCriticalAlarmEnabled() {
  * Full permission audit for the critical alarm subsystem.
  * Returns:
  *   { canPostNotifications, canScheduleExact, canFullScreenIntent,
- *     canDrawOverlay, notifsEnabled, allGranted }
+ *     canDrawOverlay, notifsEnabled, ignoringBatteryOpt, allGranted }
  */
 export async function checkAllPermissions() {
   if (!isCriticalAlarmAvailable()) {
     return {
       canPostNotifications: false, canScheduleExact: false,
       canFullScreenIntent: false, canDrawOverlay: false,
-      notifsEnabled: false, allGranted: false
+      notifsEnabled: false, ignoringBatteryOpt: false, allGranted: false
     }
   }
   return CriticalAlarm.checkPermissions()
@@ -107,6 +107,25 @@ export async function openOverlaySettings() {
 export async function openAppNotificationSettings() {
   if (!isCriticalAlarmAvailable()) return
   return CriticalAlarm.openAppNotificationSettings()
+}
+
+/**
+ * Item #207 (release v0.2.1.7) — battery optimization whitelist check.
+ * Retorna { ignoring: boolean }. true = app na whitelist (alarmes garantidos
+ * mesmo em deep sleep). false = OEM pode matar background activity.
+ */
+export async function isIgnoringBatteryOptimizations() {
+  if (!isCriticalAlarmAvailable()) return { ignoring: false }
+  return CriticalAlarm.isIgnoringBatteryOptimizations()
+}
+
+/**
+ * Item #207 — solicita user adicionar Dosy à whitelist battery optimization.
+ * Abre dialog system Sim/Não. Crítico Samsung One UI 7 + Xiaomi MIUI.
+ */
+export async function requestIgnoreBatteryOptimizations() {
+  if (!isCriticalAlarmAvailable()) return
+  return CriticalAlarm.requestIgnoreBatteryOptimizations()
 }
 
 /**

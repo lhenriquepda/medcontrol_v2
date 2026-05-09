@@ -7,7 +7,11 @@ import { Capacitor } from '@capacitor/core'
 
 export const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 export const PREFS_LOCAL_KEY = 'medcontrol_notif'
-export const SCHEDULE_WINDOW_MS = 48 * 3600 * 1000 // 48h cobre noite + reabrir dia seguinte
+// Item #207 (release v0.2.1.7) — janela 48h → 168h (7 dias).
+// Cobre user que não abre app por dias (Samsung One UI 7 mata WorkManager
+// background → DoseSyncWorker pode não rodar 6h periodic). 28 alarmes/user
+// típico (4 doses/dia × 7d) está bem dentro do limit AlarmManager Android (~500/app).
+export const SCHEDULE_WINDOW_MS = 168 * 3600 * 1000 // 7 dias
 export const CHANNEL_ID = 'doses_v2'
 export const DAILY_SUMMARY_NOTIF_ID = 999000001
 export const isNative = Capacitor.isNativePlatform()

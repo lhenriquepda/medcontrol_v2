@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listTreatments, getTreatment, createTreatmentWithDoses, updateTreatment, deleteTreatment, listTemplates, createTemplate, pauseTreatment, resumeTreatment, endTreatment } from '../services/treatmentsService'
-import { track, EVENTS } from '../services/analytics'
+import { listTreatments, getTreatment, listTemplates, createTemplate } from '../services/treatmentsService'
 
 export function useTreatments(filter = {}) {
   return useQuery({
@@ -15,75 +14,28 @@ export function useTreatments(filter = {}) {
 export function useTreatment(id) {
   return useQuery({ queryKey: ['treatments', id], queryFn: () => getTreatment(id), enabled: !!id })
 }
+
+// Item #204 (release v0.2.1.7) — Mutation queue offline. Defaults em mutationRegistry.
 export function useCreateTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: createTreatmentWithDoses,
-    onSuccess: () => {
-      track(EVENTS.TREATMENT_CREATED)
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-      qc.invalidateQueries({ queryKey: ['user_medications'] })
-    }
-  })
+  return useMutation({ mutationKey: ['createTreatment'] })
 }
 export function useUpdateTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, patch }) => updateTreatment(id, patch),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['user_medications'] })
-    }
-  })
+  return useMutation({ mutationKey: ['updateTreatment'] })
 }
 export function useDeleteTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: deleteTreatment,
-    onSuccess: () => {
-      track(EVENTS.TREATMENT_DELETED)
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-    }
-  })
+  return useMutation({ mutationKey: ['deleteTreatment'] })
 }
 export function usePauseTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: pauseTreatment,
-    onSuccess: () => {
-      track(EVENTS.TREATMENT_PAUSED || 'treatment_paused')
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-      qc.invalidateQueries({ queryKey: ['user_medications'] })
-    },
-  })
+  return useMutation({ mutationKey: ['pauseTreatment'] })
 }
 export function useResumeTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: resumeTreatment,
-    onSuccess: () => {
-      track(EVENTS.TREATMENT_RESUMED || 'treatment_resumed')
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-      qc.invalidateQueries({ queryKey: ['user_medications'] })
-    },
-  })
+  return useMutation({ mutationKey: ['resumeTreatment'] })
 }
 export function useEndTreatment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: endTreatment,
-    onSuccess: () => {
-      track(EVENTS.TREATMENT_ENDED || 'treatment_ended')
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-      qc.invalidateQueries({ queryKey: ['user_medications'] })
-    },
-  })
+  return useMutation({ mutationKey: ['endTreatment'] })
 }
+
+// Templates: baixa criticidade, não entram na queue offline (mantém useMutation local).
 export function useTemplates() {
   return useQuery({ queryKey: ['templates'], queryFn: listTemplates })
 }

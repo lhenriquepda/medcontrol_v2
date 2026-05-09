@@ -1,8 +1,10 @@
 /**
  * notifications/scheduler.js — rescheduleAll + path web legacy.
  * #030 (release v0.2.0.11): split de notifications.js.
+ * #207 (release v0.2.1.7): drop diff-and-apply, sempre full reschedule + Sentry breadcrumbs.
  */
 
+import * as Sentry from '@sentry/react'
 import { supabase, hasSupabase } from '../supabase'
 import {
   scheduleCriticalAlarmGroup,
@@ -23,26 +25,25 @@ import {
 } from './prefs'
 import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
 
-// Item #200.1 (release v0.2.1.5) — guard pra primeira execução após boot.
-// Garante que rescheduleAll roda full cancelAll + reschedule from scratch
-// no primeiro call (cobre install fresco, app data wipe, dessincronia
-// localStorage vs AlarmManager). Calls subsequentes na mesma sessão usam
-// diff-and-apply pra preservar alarmes inalterados (sem janela vazia).
-let firstResetDoneInSession = false
-
 /**
  * Re-agenda baseado em doses + prefs atuais.
  *
- * Item #200.1 (release v0.2.1.5) — diff-and-apply (idempotente sem janela vazia).
- * Antes: cancelAll() + reschedule from scratch → window 200-2000ms vazio +
- * risco AlarmManager ficar zerado se exception mid-reschedule.
- * Agora: localStorage tracker `dosy_scheduled_groups_v1` permite calcular
- * diff (toRemove/toUpdate/toAdd) e aplicar só o necessário, preservando
- * alarmes não-modificados.
+ * Item #207 (release v0.2.1.7) — REVERTE diff-and-apply de #200.1.
+ * Reasoning: idempotência via localStorage `dosy_scheduled_groups_v1` causa
+ * drift silencioso quando OEM agressivo (Samsung One UI 7) mata AlarmManager
+ * mas localStorage cache continua dizendo "agendado". Diff vazio → não re-agenda
+ * → AlarmManager fica vazio → alarme NÃO TOCA. App de medicação não pode
+ * tolerar essa janela de incerteza.
  *
- * Primeira execução por sessão (firstResetDoneInSession=false): força
- * cancelAll completo pra cobrir install fresco + dessincronia eventual
- * localStorage vs AlarmManager. Subsequentes: diff-only.
+ * Agora: SEMPRE full cancelAll + reschedule from scratch. Custo: ~200-2000ms
+ * janela curta sem alarmes (mitigação: roda async em background event loop,
+ * usuário não percebe). Garantia: AlarmManager state SEMPRE bate com doses
+ * pendentes do DB no momento da execução.
+ *
+ * Item #207 — `advanceMins ?? 0` (alinha DEFAULT_PREFS useUserPrefs.js).
+ * Antes: `?? 15` agendava alarme 15min ANTES do horário da dose se prefs
+ * locais não tinham campo explícito. Causava alarmes prematuros + confusão
+ * user. DEFAULT_PREFS sempre declara 0 (alarme exato no horário).
  *
  * @param {Object} params
  * @param {Array} params.doses — todas doses do user (filtra interna por status+window)
@@ -55,20 +56,21 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
   }
 
   const prefs = prefsOverride || loadPrefs()
-  const adv = prefs.advanceMins ?? 15
+  const adv = prefs.advanceMins ?? 0  // #207: alinha DEFAULT_PREFS (alarme exato)
   const pushOn = prefs.push === true
   const criticalOn = prefs.criticalAlarm !== false  // default true
   const summaryOn = prefs.dailySummary === true
 
-  // Item #200.1: primeira execução por sessão força cancelAll (cobre install
-  // fresco + dessincronia localStorage vs AlarmManager). Subsequentes na mesma
-  // sessão usam diff-and-apply.
-  const isFirstSessionRun = !firstResetDoneInSession
-  if (isFirstSessionRun) {
-    console.log('[Notif] reschedule first session run — full cancelAll for safety')
-    await cancelAll()
-    firstResetDoneInSession = true
-  }
+  // Item #207 — força full cancelAll SEMPRE (drop idempotência diff-and-apply
+  // de #200.1). Garante AlarmManager limpa state real antes re-agendar todos.
+  Sentry.addBreadcrumb({
+    category: 'alarm',
+    message: 'rescheduleAll START',
+    level: 'info',
+    data: { dosesCount: doses.length, patientsCount: patients.length }
+  })
+  console.log('[Notif] reschedule START — full cancelAll')
+  await cancelAll()
 
   // Setup channel (idempotent, OK chamar sempre)
   await ensureChannel()
@@ -81,15 +83,17 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
   } catch (e) { console.warn('[Notif] checkExact:', e?.message) }
   const canRingAlarm = criticalOn && isCriticalAlarmAvailable() && canExact
 
-  console.log('[Notif] reschedule START — push:', pushOn, 'critical:', criticalOn, 'dnd:', !!prefs.dndEnabled, 'summary:', summaryOn, 'firstSessionRun:', isFirstSessionRun)
+  console.log('[Notif] reschedule — push:', pushOn, 'critical:', criticalOn, 'dnd:', !!prefs.dndEnabled, 'summary:', summaryOn, 'advanceMins:', adv)
 
   const patientsMap = new Map((patients || []).map(p => [p.id, p]))
   const enriched = (doses || []).map(d => enrichDose(d, patientsMap))
   const upcoming = filterUpcoming(enriched)
   const groups = groupByMinute(upcoming)
 
-  // Item #200.1 — calcula desired state com hash por grupo
-  const desired = new Map() // groupId → { hash, group, at, isDndWin, shouldRing, doseIdsCsv }
+  // Item #207 — full reschedule (sem diff-and-apply). Calcula state desejado
+  // e agenda do zero. Estado persistido em localStorage só pra observabilidade
+  // (debug + telemetria), não pra controle de fluxo.
+  const desired = new Map() // groupId → { group, at, isDndWin, shouldRing, doseIdsCsv, hash }
   if (pushOn) {
     for (const [, group] of groups) {
       const at = new Date(new Date(group[0].scheduledAt).getTime() - adv * 60000)
@@ -99,47 +103,20 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
       const doseIdsCsv = group.map(d => d.id).join(',')
       const isDndWin = inDnd(group[0].scheduledAt, prefs)
       const shouldRing = canRingAlarm && !isDndWin
-      // Hash inclui scheduledAt + doseIds + flag shouldRing (mudanças nesses
-      // params requerem re-agendar). Ignora `at` derivado de adv pois adv mesmo).
       const hash = `${at.toISOString()}|${groupKey}|${shouldRing ? 'r' : 't'}|${group[0].scheduledAt}`
       desired.set(groupId, { hash, group, at, isDndWin, shouldRing, doseIdsCsv })
     }
   }
 
-  // Item #200.1 — current state (vazio se firstSessionRun ou primeira instalação)
-  const current = isFirstSessionRun ? {} : loadScheduledState()
-  const currentIds = new Set(Object.keys(current).map(k => Number(k)))
-  const desiredIds = new Set(desired.keys())
-
-  const toRemove = [...currentIds].filter(id => !desiredIds.has(id))
-  const toAddOrUpdate = [...desiredIds].filter(id => {
-    const d = desired.get(id)
-    return current[id] !== d.hash // novo OU hash diferente
-  })
-  const toKeep = [...desiredIds].filter(id => current[id] === desired.get(id).hash)
-
-  console.log('[Notif] diff — keep:', toKeep.length, 'add/update:', toAddOrUpdate.length, 'remove:', toRemove.length)
-
-  // Cancelar removidos + alterados
-  for (const groupId of toRemove) {
-    await cancelGroup(groupId)
-  }
-  for (const groupId of toAddOrUpdate) {
-    // toUpdate precisa cancelar antes de re-agendar (caso mudou scheduledAt)
-    if (current[groupId]) await cancelGroup(groupId)
-  }
+  console.log('[Notif] groups to schedule:', desired.size)
 
   const localNotifs = []
   let alarmsScheduled = 0
   let dndSkipped = 0
   const newState = {}
 
-  // Preserva entradas de toKeep no novo state
-  for (const id of toKeep) newState[id] = current[id]
-
-  // Schedule novos/alterados
-  for (const groupId of toAddOrUpdate) {
-    const d = desired.get(groupId)
+  // Schedule todos
+  for (const [groupId, d] of desired) {
     const { group, at, isDndWin, shouldRing, doseIdsCsv, hash } = d
 
     if (shouldRing) {
@@ -236,10 +213,9 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
 
   // ─── COMMIT LOCAL NOTIFS ────────────────────────────────────────────────────
   if (localNotifs.length === 0 && !summaryOn) {
-    // Item #200.1 — persistir state mesmo sem schedule novo (cobre caso
-    // toRemove sem toAdd, que precisa zerar localStorage state correspondente).
+    // Item #207 — persiste state pra observabilidade (debug + getScheduledIds futuro).
     saveScheduledState(newState)
-    console.log('[Notif] reschedule END — nothing new to schedule (state persisted)')
+    console.log('[Notif] reschedule END — nothing to schedule')
     return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: false }
   }
 
@@ -253,15 +229,28 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     }
   } catch (e) {
     console.error('[Notif] LocalNotifications.schedule FAILED:', e?.message || e)
-    // Item #200.1 — schedule batch falhou. State pode estar inconsistente
-    // (alarmes críticos agendados mas tray notifs não). Limpar state força
-    // próximo rescheduleAll fazer full reset (safe fallback).
+    // Schedule batch falhou. Alarmes críticos podem estar agendados mas tray notifs não.
+    // Limpar state força próximo rescheduleAll fazer reset completo (safe fallback).
     clearScheduledState()
     return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true }
   }
 
-  // Item #200.1 — persistir state final pro próximo diff
+  // Persist state pra observabilidade.
   saveScheduledState(newState)
+
+  Sentry.addBreadcrumb({
+    category: 'alarm',
+    message: 'rescheduleAll END',
+    level: 'info',
+    data: {
+      alarmsScheduled,
+      dndSkipped,
+      localNotifs: localNotifs.length,
+      summary: summaryOn,
+      advanceMins: adv,
+      groupsCount: desired.size
+    }
+  })
 
   return { alarms: alarmsScheduled, dndSkipped, localNotifs: localNotifs.length, summary: summaryOn }
 }
@@ -272,7 +261,7 @@ export async function rescheduleAllWeb(doses, patients, prefsOverride) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
   if (Notification.permission !== 'granted') return
   const prefs = prefsOverride || loadPrefs()
-  const adv = prefs.advanceMins ?? 15
+  const adv = prefs.advanceMins ?? 0  // #207: alinha DEFAULT_PREFS
   const upcoming = filterUpcoming(doses)
   const reg = await navigator.serviceWorker.ready
   const sw = reg.active || reg.waiting || reg.installing

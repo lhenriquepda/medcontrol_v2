@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listPatients, createPatient, updatePatient, deletePatient, getPatient } from '../services/patientsService'
-import { track, EVENTS } from '../services/analytics'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { listPatients, getPatient } from '../services/patientsService'
 
 export function usePatients() {
   return useQuery({
@@ -18,32 +17,14 @@ export function usePatients() {
 export function usePatient(id) {
   return useQuery({ queryKey: ['patients', id], queryFn: () => getPatient(id), enabled: !!id })
 }
+
+// Item #204 (release v0.2.1.7) — Mutation queue offline. Defaults em mutationRegistry.
 export function useCreatePatient() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: createPatient,
-    onSuccess: () => {
-      track(EVENTS.PATIENT_CREATED)
-      qc.invalidateQueries({ queryKey: ['patients'] })
-    }
-  })
+  return useMutation({ mutationKey: ['createPatient'] })
 }
 export function useUpdatePatient() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, patch }) => updatePatient(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['patients'] })
-  })
+  return useMutation({ mutationKey: ['updatePatient'] })
 }
 export function useDeletePatient() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: deletePatient,
-    onSuccess: () => {
-      track(EVENTS.PATIENT_DELETED)
-      qc.invalidateQueries({ queryKey: ['patients'] })
-      qc.invalidateQueries({ queryKey: ['treatments'] })
-      qc.invalidateQueries({ queryKey: ['doses'] })
-    }
-  })
+  return useMutation({ mutationKey: ['deletePatient'] })
 }

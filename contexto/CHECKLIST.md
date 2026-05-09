@@ -6029,12 +6029,40 @@ Commits: `4c9a588` (sound + channel + bump vc 54).
 
 ### #204 — Mutation queue offline (React Query nativa) — Fase 1 offline-first
 
-- **Status:** ⏳ Aberto
+- **Status:** 🚧 Em progresso — código mergeado v0.2.1.7 (vc 55), validação device pendente
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 (bloqueador antes Closed Testing público)
 - **Origem:** Auditoria offline-first 2026-05-08 (pré-Teste Fechado, pergunta crítica do usuário sobre comportamento offline em app de medicação)
-- **Esforço estimado:** 6-10h
+- **Esforço estimado:** 6-10h (código real ~3h)
 - **Release sugerida:** v0.2.1.7
+
+**Implementação fechada (código):**
+
+- ✅ `src/services/mutationRegistry.js` — `setMutationDefaults` por chave (12 mutations: confirmDose/skipDose/undoDose/registerSos/createPatient/updatePatient/deletePatient/createTreatment/updateTreatment/deleteTreatment/pauseTreatment/resumeTreatment/endTreatment) — mutationFn + onMutate/onError/onSuccess/onSettled centralizados.
+- ✅ `src/main.jsx` — `defaultOptions.{queries,mutations}.networkMode='offlineFirst'` + bridge `Capacitor.Network.networkStatusChange` ↔ `onlineManager.setOnline()` (fallback `navigator.onLine`+events na web) + `registerMutationDefaults(queryClient)` chamado ANTES `<PersistQueryClientProvider>` hydrate + `persistOptions.dehydrateOptions.shouldDehydrateMutation: () => true` + `onSuccess: queryClient.resumePausedMutations()`. **Buster mantido `v1`** (NÃO bumpar — evita pico egress 1x todos users na atualização; TanStack hydrate é tolerante a campo `mutations` extra).
+- ✅ Hooks refatorados (`useDoses.js`/`usePatients.js`/`useTreatments.js`) — `useMutation({ mutationKey: ['confirmDose'] })` formato, defaults aplicados via lookup. Helpers `patchDoseInCache`/`rollback`/`refetchDoses` migrados pra registry.
+- ✅ `src/components/OfflineBanner.jsx` — banner fixed bottom-center acima BottomNav. Estados: amber `N ação(ões) salva(s) offline — sincroniza ao reconectar` (offline+pending>0) ou emerald `Sincronizando N ação(ões)…` (online+drain ≤3s pós-reconnect). Hook `useIsMutating()` + `useOnlineStatus()` + transição offline→online via state local.
+- ✅ `src/App.jsx` — `<OfflineBanner />` integrado pós `<ForceNewPasswordModal>`.
+- ✅ Build smoke-test: `npm run build` verde 28.53s.
+
+**Pendente (não bloqueia merge mas alvo desta release):**
+
+- [ ] Telemetria PostHog `mutation_queued_offline` + `mutation_drained_online` (Fase 1.5, separar)
+- [ ] Validação device S25 Ultra modo avião (vide checklist abaixo)
+- [ ] Considerar `client_request_id` UUID idempotência server-side (item novo backlog #205?)
+
+**Auditoria egress #204 (importante — projeto sensível a custo Supabase):**
+
+| Risco | Severidade | Decisão |
+|---|---|---|
+| `buster v1→v2` invalidaria cache de TODOS users 1x na atualização → pico simultâneo refetch (doses ~5KB + patients ~1KB + treatments ~2KB) × N users | 🔴 Alto 1x | **Mantido `v1`** — TanStack hydrate tolerante a campo extra `mutations` (legacy carrega normal). Schema delta backward-compat. |
+| `refetchOnReconnect: true` (default herdado) + bridge `onlineManager` Capacitor passa a detectar avião mode real (antes navigator.onLine WebView reportava sempre `true`) → mais transições online↔offline = mais refetches | 🟡 Médio | **Aceito** — `staleTime` longo cobre janelas curtas (5min patients/treatments + 2min doses + 10min prefs). Refetch só se realmente stale. Monitorar pós Closed Testing. |
+| Drain de N mutations enfileiradas → N RPCs server-side em rajada | 🟢 Baixo | **Inevitável** — cada mutation = 1 RPC obrigatório. `refetchDoses` debounce 2s consolida invalidações pós-drain. |
+| `resumePausedMutations()` em todo hydrate | 🟢 Zero | **No-op** se `mutationCache` vazio. |
+| Persist mutations no localStorage | 🟢 Zero | **Local apenas** — nenhum egress. |
+| `useIsMutating()` em OfflineBanner | 🟢 Zero | **Cache local** — sem fetch. |
+
+Net egress incremental esperado: ~zero pra usuários online normais. Pico real só em cenário offline → drain (que é o objetivo da feature). Aceitável.
 
 **Problema:**
 
@@ -6202,3 +6230,67 @@ if (!isOnline && pendingMutations > 0) {
 - Promover #165 (delta sync + IndexedDB) pra v0.2.2.0
 - Considerar `client_request_id` idempotência (item novo backlog)
 - Considerar PWA Service Worker se web frontend ganhar tração
+
+---
+
+### #207 — Defesa em profundidade alarme crítico (5 fixes)
+
+- **Status:** 🚧 Em progresso — código mergeado v0.2.1.7 (vc 55), validação device pendente
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P0 (alarme é CRÍTICO em app de medicação — falha = paciente perde dose)
+- **Origem:** User reportou 2026-05-08 19:48 — push FCM 6min antes funcionou mas alarme não disparou. Histórico de inconsistência ("cada hora funciona de um jeito").
+- **Esforço real:** ~1.5h código
+
+**Root causes identificados:**
+
+| # | Bug | Local | Impacto |
+|---|---|---|---|
+| 🔴 1 | `advanceMins ?? 15` fallback no scheduler agendava alarme 15min antes do horário se localStorage prefs incompletos. DEFAULT_PREFS declara 0 — desalinhado. | `scheduler.js:58` + `scheduler.js:244` (web) | Alarme tocava 15min antes ou não tocava no horário esperado |
+| 🟡 2 | `SCHEDULE_WINDOW_MS = 48h` (JS) + `HORIZON_HOURS = 72L` (DoseSyncWorker) cobriam só 2-3 dias futuros. User que não abria app por 49h+ não tinha alarmes locais — dependia FCM cron + Worker (que Samsung One UI 7 mata). | `prefs.js:10` + `DoseSyncWorker.java:53` | Doses futuras > janela não agendadas localmente |
+| 🟡 3 | `firstResetDoneInSession` cache idempotência diff-and-apply (#200.1). Após primeira execução da sessão, lê `dosy_scheduled_groups_v1` localStorage. Se OEM matou AlarmManager mas localStorage diz "agendado" → diff vazio → não re-agenda. AlarmManager continua vazio. Drift silencioso. | `scheduler.js:31,66-71` + diff logic em `scheduler.js:91-145` | Cache vs SO desincronizado, alarme não toca apesar UI dizer "agendado" |
+| 🔴 4 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` ausente no manifest + sem UX. Samsung One UI 7 default coloca apps em bucket "rare/restricted" → kills WorkManager + cancela alarms. | `AndroidManifest.xml` + `PermissionsOnboarding.jsx` | Samsung mata todo background activity, alarmes desaparecem |
+| 🟢 5 | Zero observabilidade prod sobre quando rescheduleAll roda + quantos alarmes agenda. Bug invisível Sentry. | `scheduler.js` | Impossível diagnosticar prod issues remotamente |
+
+**Implementação fechada (código):**
+
+- ✅ `scheduler.js:58` — `prefs.advanceMins ?? 15` → `?? 0` (alinha DEFAULT_PREFS useUserPrefs.js)
+- ✅ `scheduler.js:244` (rescheduleAllWeb) — mesma correção
+- ✅ `prefs.js:10` — `SCHEDULE_WINDOW_MS = 48h` → `168h (7d)` + comentário razão
+- ✅ `DoseSyncWorker.java:53` — `HORIZON_HOURS = 72L` → `168L` alinhado JS
+- ✅ `scheduler.js` — drop `firstResetDoneInSession` flag + drop `loadScheduledState()` diff logic + drop `toRemove/toUpdate/toKeep` calc + drop `cancelGroup` por-groupId. Substituído por `cancelAll()` SEMPRE no início + agenda todos do desired set. Estado persistido apenas pra observabilidade.
+- ✅ `AndroidManifest.xml` — adicionado `<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />` com comentário razão Samsung One UI 7 + Play Store policy compliance (medication reminder exception)
+- ✅ `CriticalAlarmPlugin.java` — 3 métodos novos: `isIgnoringBatteryOptimizations()` retorna `{ignoring: bool}`, `requestIgnoreBatteryOptimizations()` abre dialog system + fallback `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` + `checkPermissions()` enriquecido com `ignoringBatteryOpt` field e `allGranted` agora inclui essa flag
+- ✅ `criticalAlarm.js` — bridge JS expondo 2 métodos novos
+- ✅ `PermissionsOnboarding.jsx` — 5º item "Ignorar otimização de bateria" com action requestIgnoreBatteryOptimizations + descrição explicativa Samsung/Xiaomi
+- ✅ `scheduler.js` — `Sentry.addBreadcrumb` em `rescheduleAll START` (com dosesCount + patientsCount) e `END` (com alarmsScheduled + dndSkipped + localNotifs + summary + advanceMins + groupsCount). Crashes futuros virão com trail completo do scheduling state.
+- ✅ Build verde: `npm run build` 21.11s
+
+**Trade-off egress / performance:**
+
+| Mudança | Custo | Justificativa |
+|---|---|---|
+| Drop diff-and-apply | +200-2000ms janela cancelAll vazia por sessão (mitigada: roda async background, user não percebe) | App de medicação não pode tolerar drift cache vs SO. Custo aceito pra garantia 100%. |
+| SCHEDULE_WINDOW_MS 48h → 168h | ~3x mais alarmes registrados (5 → 28 typical user) | AlarmManager limit ~500/app — folga 20x. Custo Android desprezível. |
+| HORIZON_HOURS Worker 72 → 168 | Worker fetch query retorna 2-3x mais rows | Doses são pequenas (~250 bytes), diferença 10KB/Worker run. Worker roda 4x/dia max — desprezível. |
+| Sentry breadcrumbs | ~2 breadcrumbs por rescheduleAll (~50/dia user típico) | Sentry quota: ~1M breadcrumbs/mês plano grátis. 50 × 30d × 100 users = 150k/mês — bem dentro. |
+
+**Validação device (S25 Ultra) — alinhada com testes #204:**
+
+- [ ] Instalar AAB v0.2.1.7 vc 55 Internal Testing
+- [ ] PermissionsOnboarding aparece pós-login → 5º item "battery optimization" listado e bloqueante
+- [ ] Toca em "Abrir configurações" → dialog system Android pede whitelist → aceitar → recheck mostra granted
+- [ ] Logcat `adb logcat -s "AlarmScheduler" "AlarmReceiver" "DoseSyncWorker" "Notif"` durante 24h cobertura:
+  - `[Notif] reschedule START — full cancelAll` aparece
+  - `[Notif] reschedule END — alarms: N` confirma N agendados
+  - `AlarmScheduler: scheduled id=XXX at=YYY count=Z` por dose
+- [ ] Configurar dose pra **2 horas no futuro** + fechar app + esperar alarme tocar (simula app em background longo)
+- [ ] Configurar dose pra **3 dias no futuro** + reinstalar app + verificar Worker re-agenda quando rodar
+- [ ] Sentry dashboard: confirmar breadcrumbs `alarm: rescheduleAll START/END` aparecem em qualquer crash report
+- [ ] Bateria S25 Ultra Settings → Otimização de bateria → Dosy: confirma "Sem restrições" pós onboarding
+
+**Pendente Fase 1.5 (não bloqueia merge):**
+
+- [ ] Telemetria PostHog `alarm_scheduling_drift_detected` (Worker detecta AlarmManager < expected)
+- [ ] `CriticalAlarm.getActiveAlarms()` JS-side probe pra detectar mismatch real-time + force reschedule
+- [ ] Painel admin /alarm-debug por user (lista alarmes agendados ↔ DoseSyncWorker last-run + ignoringBatteryOpt status)
+- [ ] Fallback emergencial via In-app Foreground Service "Dosy Monitor" sempre ON (DosyMonitorService) — promover #23.7 backlog
