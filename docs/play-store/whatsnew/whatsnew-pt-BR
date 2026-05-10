@@ -1,9 +1,7 @@
-v1.0.0 — Lançamento inicial
+v0.2.1.7 — Alarme mais confiável + funciona offline
 
-• Cadastro de pacientes e tratamentos
-• Alarmes estilo despertador (ignoram silencioso/DND)
-• Doses SOS com regras de segurança
-• Histórico e estatísticas de adesão
-• Relatórios PDF/CSV (PRO)
-• Modo offline com sincronização automática
-• Conformidade com a LGPD
+• Alarme dispara no horário exato (corrigido offset de 15 min)
+• Cobertura ampliada para 7 dias mesmo sem abrir o app
+• Nova permissão "Ignorar otimização de bateria" garante que o Android (especialmente Samsung) não cancele alarmes
+• Ações offline (confirmar/pular dose, criar paciente) ficam salvas e sincronizam automaticamente quando a internet volta
+• Banner avisa quando há ações aguardando sincronização
