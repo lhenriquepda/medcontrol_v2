@@ -93,7 +93,7 @@ Claude Code auto-injeta o índice de memória project-scoped no system reminder 
 
 **Antes de tocar código**, reporte em até 5 bullets:
 
-- **Versão atual:** master @ vX.Y.Z (vc N) · branch ativa `release/vX.Y.Z+1`
+- **Versão atual:** master @ vX.Y.Z (vc N) · branch ativa: `master` (sem release em curso) **OU** `release/vX.Y.Z+1` (em curso)
 - **Último item fechado:** #XXX — descrição curta + commit hash
 - **P0 abertos top 3:** #aaa, #bbb, #ccc
 - **Próximo passo proposto:** ler CHECKLIST §#XXX e seguir
@@ -101,11 +101,34 @@ Claude Code auto-injeta o índice de memória project-scoped no system reminder 
 
 **ESPERAR comando explícito do user. NÃO COMEÇAR a codar.**
 
+> 🛑 **Quando user retornar com diretiva ("vamos fazer X"):** ANTES de QUALQUER ação (mesmo leitura ampla de arquivos, git log, etc), ativar **Passo 5b OBRIGATÓRIO**. Não inicie investigação ampla sem reportar branch + esperar OK.
+
 ---
 
 ## ⚡ PASSO 5b — Classificar trabalho proposto
 
 Ativa **logo após o user dizer o que quer fazer**. IA não pergunta categoria ao user — analisa o pedido sozinha e propõe.
+
+### 🛑 STOP imperativo
+
+**Antes de QUALQUER ação além do mínimo pra classificar, IA OBRIGATORIAMENTE:**
+1. Lê o pedido do user
+2. Se o pedido **JÁ É O TRABALHO** (ex: "analisa 10 commits e ROADMAP", "lê arquivo X", "investiga bug Y") → o trabalho é a investigação. **Continua precisando classificar branch ANTES de começar.**
+3. Reporta classificação + branch + bump (se release) + ESPERA OK
+
+**Permitido pra classificar (leitura mínima):**
+- ✅ 1-3 linhas stack trace Sentry pra identificar origem
+- ✅ Olhar 1 arquivo específico que user mencionou
+- ✅ `Glob` pra confirmar escopo arquivos prováveis
+
+**Proibido antes OK do user:**
+- ❌ `git log -10` ou `git log` extenso pra "analisar histórico"
+- ❌ Read completo de ROADMAP, CHECKLIST, ou docs grandes
+- ❌ Executar análises / scripts / tools
+- ❌ Tocar / editar / criar arquivos
+- ❌ Iniciar tasks investigation que JÁ SÃO o trabalho pedido
+
+> **Princípio:** se o pedido em si é "investigar/analisar/auditar X", o branch DEVE ser criado primeiro (geralmente `docs/<slug>` ou `chore/<slug>`), porque o output (relatório, doc atualizado, sumário) é commit em algum lugar.
 
 ### Pergunta única decisória
 
