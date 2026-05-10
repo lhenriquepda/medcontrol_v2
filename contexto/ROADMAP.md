@@ -150,11 +150,14 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.1.7` (versionCode 55, versionName 0.2.1.7 — em curso). Escopo confirmado: **#204 Mutation queue offline** + **#207 Defesa em profundidade alarme crítico** (ambos P0).
+**Branch ativa:** `master` @ `v0.2.1.7` (vc 55, fechada 2026-05-10).
 
-**Items v0.2.1.7 em progresso (2):**
-- 🚧 #204 Mutation queue offline (TanStack Query `networkMode: 'offlineFirst'` + `setMutationDefaults` por chave + bridge `Capacitor.Network` ↔ `onlineManager` + persist mutations + `resumePausedMutations` + OfflineBanner PT-BR) — código mergeado, validação device S25 Ultra modo avião pendente. Detalhe em [CHECKLIST.md #204](CHECKLIST.md). Esforço real ~3h código + 2-4h validação.
-- 🚧 #207 Defesa em profundidade alarme crítico (5 fixes: `advanceMins ?? 0` corrige fallback que agendava 15min antes; `SCHEDULE_WINDOW_MS` 48h→168h + Worker HORIZON 72h→168h cobre 7d; drop `firstResetDoneInSession` idempotência cache eliminando drift cache vs SO; `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest + plugin methods + UX onboarding crítico Samsung One UI 7; Sentry breadcrumbs rescheduleAll). Bug user-reported 2026-05-08: alarme inconsistente. Investigação root cause achou 4 falhas silenciosas + 1 observabilidade. Esforço real ~1.5h código. Detalhe em [CHECKLIST.md #207](CHECKLIST.md).
+**Última release fechada — v0.2.1.7 (2026-05-10):**
+- ✅ #204 Mutation queue offline — TanStack `networkMode: 'offlineFirst'` + `setMutationDefaults` por chave 12 mutations + bridge `Capacitor.Network` ↔ `onlineManager` + persist mutations + `resumePausedMutations` + OfflineBanner PT-BR. Esforço real ~3h código.
+- ✅ #207 Defesa em profundidade alarme crítico (5 fixes) — `advanceMins ?? 0`; `SCHEDULE_WINDOW_MS` 48h→168h + Worker HORIZON 72h→168h; drop `firstResetDoneInSession`; `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` manifest + plugin + UX; Sentry breadcrumbs. Esforço real ~1.5h código.
+- ✅ Reestruturação `contexto/` V2 — README entry point Passos 0-14 + `Validar.md` checklist validações manuais + memory project-scoped reorganizada.
+- AAB vc 55 publicado Internal Testing 2026-05-09 23:08. Vercel prod deployed 2026-05-10 03:31 UTC. Tag `v0.2.1.7` aponta commit `0edc6b3`.
+- **10 checks device-only S25 Ultra pendentes** em [`Validar.md`](Validar.md) — acumular validação com tempo.
 
 **Última release publicada:** v0.2.1.6 em 2026-05-08 (vc 54 Internal Testing) — som customizado de alarme.
 
@@ -522,13 +525,13 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~212 itens · ✅ 138 fechados · ⏳ 68 abertos · 🚧 3 (#170 valid pendente · #204 código mergeado v0.2.1.7 · #207 código mergeado v0.2.1.7 — defesa profundidade alarme) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-08, +10 fechados v0.2.1.5/v0.2.1.6, +2 NOVOS #204 #207 v0.2.1.7 código fechado)
+**Total:** ~213 itens · ✅ **140 fechados** · ⏳ 68 abertos · 🚧 1 (#170 valid pendente; #204+#207 fechados código + Vercel prod, validação device acumulada em `Validar.md`) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount real grep 2026-05-10, +12 fechados v0.2.1.5/v0.2.1.6/v0.2.1.7)
 
 **Abertos por categoria × prioridade:**
 
 | Categoria | 🔴 P0 | 🟠 P1 | 🟡 P2 | 🟢 P3 | Total abertos |
 |---|---|---|---|---|---|
-| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) + 2 🚧 (#204 #207) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 21 |
+| 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
 | ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 14 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183) | 29 (P3 originais + #182 #184-#187) | 48 |
 | 🐛 BUGS | 0 | 0 | 2 (#101-followup #110) | 0 | 2 |
 | 🔄 TURNAROUND | 0 | 0 | 0 | 0 | 0 |

@@ -6029,7 +6029,7 @@ Commits: `4c9a588` (sound + channel + bump vc 54).
 
 ### #204 — Mutation queue offline (React Query nativa) — Fase 1 offline-first
 
-- **Status:** 🚧 Em progresso — código mergeado v0.2.1.7 (vc 55), validação device pendente
+- **Status:** ✅ Fechado v0.2.1.7 (vc 55, Vercel prod 2026-05-10) — validação device acumulada em [`Validar.md`](Validar.md)
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 (bloqueador antes Closed Testing público)
 - **Origem:** Auditoria offline-first 2026-05-08 (pré-Teste Fechado, pergunta crítica do usuário sobre comportamento offline em app de medicação)
@@ -6235,7 +6235,7 @@ if (!isOnline && pendingMutations > 0) {
 
 ### #207 — Defesa em profundidade alarme crítico (5 fixes)
 
-- **Status:** 🚧 Em progresso — código mergeado v0.2.1.7 (vc 55), validação device pendente
+- **Status:** ✅ Fechado v0.2.1.7 (vc 55, Vercel prod 2026-05-10) — validação device acumulada em [`Validar.md`](Validar.md)
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 (alarme é CRÍTICO em app de medicação — falha = paciente perde dose)
 - **Origem:** User reportou 2026-05-08 19:48 — push FCM 6min antes funcionou mas alarme não disparou. Histórico de inconsistência ("cada hora funciona de um jeito").

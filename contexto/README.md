@@ -319,13 +319,14 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** master @ `v0.2.1.6` (vc 54 Internal Testing) · branch ativa `release/v0.2.1.7` (vc 55 publicado Internal Testing 2026-05-09 23:08)
-**Vercel prod:** `https://dosymed.app/`
+**Versão atual:** master @ `v0.2.1.7` (vc 55 Internal Testing publicado 2026-05-09 23:08, Vercel prod deployed 2026-05-10 03:31 UTC)
+**Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
-**Release em curso `release/v0.2.1.7`:**
-- 🚧 #204 Mutation queue offline (TanStack networkMode 'offlineFirst' + persist mutations + bridge Capacitor.Network ↔ onlineManager + OfflineBanner) — código mergeado, validação device pendente
-- 🚧 #207 Defesa em profundidade alarme crítico (5 fixes — advanceMins fallback, janela 7d, drop diff-and-apply, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Sentry breadcrumbs) — código mergeado + AAB vc 55 publicado, validação device pendente
+**Última release fechada:**
+- ✅ v0.2.1.7 (2026-05-10) — #204 Mutation queue offline + #207 Defesa em profundidade alarme + reestruturação contexto/ V2 (entry point Passos 0-14 + Validar.md). Commit `0edc6b3`. Tag `v0.2.1.7`.
+
+**Validações pendentes:** ver [`Validar.md`](Validar.md) — 10 checks device-only S25 Ultra (#204 + #207).
 
 **P0 abertos pra Closed Testing público:**
 - #006 device validation 3 devices físicos (manual user)
