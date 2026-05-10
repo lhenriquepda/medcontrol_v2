@@ -151,13 +151,44 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 - Telemetria PostHog/Sentry events firing (em PROD only — verificar no painel admin)
 - Conteúdo estático (privacidade, termos, FAQ)
 
-**Receita validação web:**
-1. Chrome MCP `navigate` para preview Vercel da branch ativa
-2. `read_page` ou `find` para localizar componente alvo
-3. `javascript_tool` ou `computer` simula interação user
-4. `read_console_messages` (filter pattern) verifica logs/erros
-5. `read_network_requests` ou interceptor JS valida fetch/persist behavior
-6. Screenshot final como evidência
+**Receita validação web (lifecycle completo):**
+
+1. **Subir dev server localhost** se não rodar:
+   ```bash
+   npm run dev   # background — aguardar "VITE ready" no output
+   ```
+   Verificar `http://localhost:5173/` responde antes navegar.
+
+2. **Navegar via Chrome MCP** para o alvo (localhost > preview Vercel > dosymed.app conforme prioridade):
+   ```
+   mcp__Claude_in_Chrome__tabs_context_mcp(createIfEmpty: true) → tabId
+   navigate(url, tabId)
+   screenshot — confirma carregou (sem ErrorBoundary)
+   ```
+
+3. **Entrar (login)** com conta teste — memory [`reference_test_accounts`](C:\Users\lhenrique\.claude\projects\G--00-Trabalho-01-Pessoal-Apps-medcontrol-v2\memory\reference_test_accounts.md):
+   - `teste-plus@teste.com / 123456` — tier **plus** (sem ads, todas features). Default pra maioria validações.
+   - `teste-free@teste.com / 123456` — tier **free** (paywall ativo, 1 paciente máx). Use quando item afetar gating Free/Plus.
+   - Pular `OnboardingTour` clicando "Pular" canto superior direito.
+
+4. **Identificar quais itens da release são web-validáveis** (vs device-only) — listar antes começar pra reportar status no fim.
+
+5. **Iterar validações** por item:
+   - `find` ou `read_page` localiza componente alvo
+   - `javascript_tool` ou `computer` simula interação user (click, type, scroll)
+   - `read_console_messages` (filter pattern) verifica logs/erros
+   - `javascript_tool` inspeciona estado runtime (`localStorage`, `window.__dosyNetMonitor`, fiber walk pra QueryClient)
+   - Screenshot como evidência
+
+6. **Reportar:**
+   - ✅ Web-validáveis confirmados (com evidências)
+   - ⚠️ Web-parciais (validáveis em parte, parte exige device — explicar limite)
+   - ⏳ Device-only (lista pra user executar S25 Ultra)
+
+> **Limites conhecidos Chrome MCP web:**
+> - DevTools Network throttling "Offline" não acessível direto. Override `navigator.onLine = false` ativa `useOnlineStatus` mas NÃO bloqueia fetch real → mutations não pausam de verdade. Drain offline-online ponta-a-ponta exige device físico OR Chrome DevTools Protocol.
+> - Capacitor.Network bridge → onlineManager só ativa em `Capacitor.isNativePlatform()` — fluxo nativo não testável web.
+> - FCM background, AlarmManager, plugin nativo CriticalAlarm — tudo Android-only.
 
 ### 12b — Validação device (somente o que web não cobre)
 
