@@ -123,11 +123,60 @@ git push origin release/v{X.Y.Z}
 - **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
 - Internal Testing track ativa em ~1h
 
-## Passo 12 — Validação device
-- Instalar via link Internal Testing no S25 Ultra (ou device principal)
-- Checklist específico do item (CHECKLIST §#XXX `Validação device`)
-- Capturar Logcat se item envolveu plugin nativo
-- Verificar Sentry breadcrumbs/issues 24h pós-install
+## Passo 12 — Validação (web primeiro, device só pro que web não cobre)
+
+### 12a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
+
+Antes de pedir validação device pro user, verifique se o item pode ser validado via web:
+
+**Validável via web** (IA executa via Chrome MCP em `https://dosymed.app/` ou preview Vercel `https://dosy-git-{branch}-lhenriquepdas-projects.vercel.app`):
+- UI rendering / componentes novos / animações framer-motion
+- Hooks React Query (cache, persist, optimistic updates, invalidate)
+- Fluxos auth (login/logout/reset)
+- CRUD pacientes / tratamentos / doses via UI
+- Banners (Update, Offline, etc) + lógica show/hide condicional
+- Service Worker cache (web only)
+- Egress via Network panel + `window.__dosyNetMonitor` interceptor
+- TanStack mutation queue offline (DevTools Network throttling "Offline")
+- Form validation, modals, tier gating UI
+- LGPD flows (export dados, delete account UI step 1)
+- Telemetria PostHog/Sentry events firing (em PROD only — verificar no painel admin)
+- Conteúdo estático (privacidade, termos, FAQ)
+
+**Receita validação web:**
+1. Chrome MCP `navigate` para preview Vercel da branch ativa
+2. `read_page` ou `find` para localizar componente alvo
+3. `javascript_tool` ou `computer` simula interação user
+4. `read_console_messages` (filter pattern) verifica logs/erros
+5. `read_network_requests` ou interceptor JS valida fetch/persist behavior
+6. Screenshot final como evidência
+
+### 12b — Validação device (somente o que web não cobre)
+
+Apenas pra features Capacitor nativas que não rodam no browser:
+- Plugin `CriticalAlarm` nativo (AlarmManager, lockscreen overlay, full-screen intent, foreground service)
+- `BootReceiver` re-schedule pós reboot
+- `DoseSyncWorker` periodic WorkManager
+- `DosyMessagingService` FCM data handler
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` Samsung One UI 7 / Xiaomi MIUI
+- Push FCM real (background delivery não captura JS)
+- StatusBar overlay native, AdMob banner real, Biometric auth
+- SecureStorage Android KeyStore
+- Capacitor In-App Updates (Google Play flexible)
+- Privacy screen (FLAG_SECURE recents blur)
+- BackButton handler nativo
+
+**Receita validação device:**
+1. User instala via link Internal Testing no S25 Ultra (ou device principal)
+2. Checklist específico do item em `CHECKLIST.md §#XXX` seção "Validação device"
+3. User captura Logcat se item envolveu plugin nativo (`adb logcat -s {tag}`)
+4. IA verifica Sentry breadcrumbs/issues 24h pós-install + painel admin
+
+**Antes de pedir validação device, IA:**
+1. Listar itens da release que precisam device-only (vs web-validável)
+2. Validar TUDO que cabe web via Chrome MCP
+3. Reportar resultado web pro user
+4. Pedir validação manual SOMENTE pros itens device-only restantes
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
