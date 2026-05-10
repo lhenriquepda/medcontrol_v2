@@ -103,9 +103,74 @@ Claude Code auto-injeta o índice de memória project-scoped no system reminder 
 
 ---
 
+## ⚡ PASSO 5b — Classificar trabalho proposto
+
+Ativa **logo após o user dizer o que quer fazer**. IA não pergunta categoria ao user — analisa o pedido sozinha e propõe.
+
+### Pergunta única decisória
+
+**O trabalho vai gerar AAB novo + subir Play Console?**
+
+| Resposta | Branch | Bump versão app |
+|---|---|---|
+| **Sim** | `release/vX.Y.Z.W` | Sim — bumpar último dígito (vc + 1, versionName + 1) em `android/app/build.gradle` + `package.json` |
+| **Não** | Outro tipo (sugestões abaixo) | Não — app stays |
+
+### Sugestões nome branch quando não-release (não exaustivo, IA escolhe)
+
+| Tipo | Quando | Exemplo |
+|---|---|---|
+| `docs/<slug>` | Atualização documentação `contexto/`, ADRs, READMEs, comentários | `docs/passo-5b-classificacao` |
+| `chore/<slug>` | Config CI, husky hooks, settings, gitignore, deps lock | `chore/eslint-bump-rules` |
+| `server/<slug>` | Edge Function / migration / RLS / cron Supabase (sem afetar binário app) | `server/fix-notify-doses-500` |
+| `refactor/<slug>` | Reorganização código sem mudança de behavior runtime | `refactor/split-dashboard-card` |
+| `experiment/<slug>` | POC descartável, não merge master | `experiment/memed-poc` |
+
+> **Se ambíguo:** IA escolhe a categoria mais próxima. User corrige se discordar.
+
+### Princípio geral
+
+IA usa **bom senso** pra:
+- Investigar antes de propor fix (ex: bug Sentry → ler stack trace primeiro pra saber se origem é `src/` vs `supabase/`)
+- Identificar arquivos prováveis com base em PROJETO.md §5 mapa estrutura
+- Escolher tipo branch mais natural
+
+Não há regra micro pra cada caso. Critério único é AAB sim/não. Resto é análise contextual.
+
+### IA reporta antes criar branch
+
+1. **Versões atuais** Internal Testing + Closed Testing (Chrome MCP no Play Console / cache memory).
+2. **Análise resumida:** "trabalho identificado vai mexer em {X} → tipo {Y} sugerido".
+3. **Branch proposto** + bump versão (se release).
+4. **ESPERA OK user.** User pode corrigir tipo, IA acata + re-propõe.
+
+### Após OK
+
+- Criar branch: `git checkout -b {tipo}/{nome}`
+- Se `release/v*`: bump em `android/app/build.gradle` (`versionCode` + `versionName`) + `package.json` (`version`) + commit inicial `chore: abre release/vX.Y.Z.W — bump vc N→N+1`.
+- Outros tipos: branch criada vazia, segue direto pra implementação.
+
+---
+
 # 🔧 PASSOS 6-14 — Fechamento (após codar)
 
-Quando o user confirmar próximo passo e você tiver implementado código, siga esta ordem:
+Quando o user confirmar próximo passo e você tiver implementado código, siga esta ordem.
+
+> **Diferença conforme tipo de branch (Passo 5b):**
+>
+> | Passo | release/hotfix | docs / chore / server / refactor | experiment |
+> |---|---|---|---|
+> | 6 npm build | ✅ se tocou JS | ⚠️ só se tocou JS | ⚠️ opcional |
+> | 7 preview Vercel | ✅ se web tocou | ❌ | ❌ |
+> | 8 commit | ✅ | ✅ | ✅ |
+> | 9 sync 4 docs | ✅ ROADMAP+CHECKLIST+PROJETO+README | ⚠️ só ROADMAP §3 + relevantes | ❌ |
+> | 10 push | ✅ | ✅ | ✅ |
+> | 11 build AAB + upload Play Console | ✅ | ❌ | ❌ |
+> | 12 validação web + device | ✅ ambos | ⚠️ web smoke se relevante | ❌ |
+> | 13 pós-release (tag + merge master + Vercel prod) | ✅ tag canônico | ⚠️ merge master sem tag/AAB, Vercel auto-deploy git push | ❌ não merge |
+> | 14 STOP final | ✅ | ✅ | ✅ |
+>
+> Para `server/<slug>`: substituir Passo 11 por `mcp__...supabase__deploy_edge_function` ou `apply_migration` conforme escopo. Plus Passo 13 sem tag versão app.
 
 ## Passo 6 — Auditoria pré-commit
 - `npm run build` (verde obrigatório, sem warnings novos)
@@ -247,10 +312,12 @@ Apenas pra features Capacitor nativas que não rodam no browser:
 
 ## Passo 14 — STOP final
 Reportar:
-- Commit hash final + tag git criada
-- Play Console status (Internal Testing publicado, vc N+1)
+- Commit hash final + tag git criada (se release)
+- Play Console status (Internal Testing publicado vc N+1, se release)
 - Próximo P0 sugerido pra próxima session
 - **Esperar comando user. Não emendar próximo trabalho automático.**
+
+> **Quando user retornar com nova diretiva:** ativar **Passo 5b** (classificar trabalho proposto) ANTES de tocar qualquer arquivo. Investigar escopo + propor branch + esperar OK.
 
 ---
 
