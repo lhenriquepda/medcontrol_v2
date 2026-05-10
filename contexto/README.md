@@ -1,8 +1,26 @@
 # 🛑 Dosy — Entry Point Obrigatório
 
-> **Você é uma IA recebendo este projeto.** Siga os 5 passos abaixo SEM PULAR. Pare no Passo 5 e espere comando do user antes de tocar código.
+> **Você é uma IA recebendo este projeto.** Siga os passos abaixo SEM PULAR. Pare no Passo 5 e espere comando do user antes de tocar código.
 >
 > **Histórico longo + auditoria + decisões antigas** moveram para [`README_legacy.md`](README_legacy.md). Use como referência apenas quando o user pedir contexto histórico específico.
+
+---
+
+## 🚨 PASSO 0 — Varrer `Validar.md` (validações manuais pendentes)
+
+**Antes de qualquer coisa**, abra [`contexto/Validar.md`](Validar.md) e conte os checkboxes `[ ]` na seção topo (release mais recente).
+
+**Se houver `[ ]` pendentes:**
+
+> ⚠️ **Alerta para o user no início da resposta:**
+>
+> *"Antes de começarmos: você tem **N validações pendentes** da release `vX.Y.Z` em `contexto/Validar.md` (lista resumida abaixo). Quer validar antes de iniciar trabalho novo, ou prefere acumular?"*
+>
+> Listar até 5 itens pendentes resumidos: `[ ] 204.1 — Avião mode + ações offline → banner amber`.
+
+**Se todos `[x]` ou seção vazia:** prosseguir Passo 1 sem alerta.
+
+> O user decide se valida agora, posterga ou pula. **Você não decide por ele** — só alerta.
 
 ---
 
@@ -215,7 +233,8 @@ Apenas pra features Capacitor nativas que não rodam no browser:
 1. Listar itens da release que precisam device-only (vs web-validável)
 2. Validar TUDO que cabe web via Chrome MCP
 3. Reportar resultado web pro user
-4. Pedir validação manual SOMENTE pros itens device-only restantes
+4. **Atualizar [`contexto/Validar.md`](Validar.md)** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo todos os itens device-only pendentes em formato checklist `[ ]`. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**. Ver template em `Validar.md` da release v0.2.1.7.
+5. Pedir validação manual ao user, apontando pra `Validar.md`
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
@@ -340,6 +359,7 @@ Reportar:
 contexto/
 ├── README.md             ← este arquivo · ENTRY POINT
 ├── README_legacy.md      ← versão antiga (1300+ linhas) · referência histórica
+├── Validar.md            ← validações manuais pendentes · varrer no Passo 0
 ├── PROJETO.md            ← briefing técnico canônico (stack, DB, convenções)
 ├── ROADMAP.md            ← onde estamos + onde vamos + processo de release
 ├── CHECKLIST.md          ← detalhe item-a-item (snippets, aceitação, auditoria)
@@ -370,6 +390,7 @@ Resumo essencial:
 
 | Pergunta | Arquivo |
 |---|---|
+| Validações manuais pendentes (alertar user no Passo 0) | [`Validar.md`](Validar.md) |
 | Status / próximo passo | este README §13 + ROADMAP §3 |
 | O que falta fazer macro | ROADMAP §6 |
 | Detalhe técnico de um item `#XXX` | CHECKLIST §#XXX |
