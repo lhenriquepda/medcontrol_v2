@@ -86,6 +86,7 @@ Claude Code auto-injeta o índice de memória project-scoped no system reminder 
 | **11** | Versionamento = **bumpar último dígito** (`0.2.1.6 → 0.2.1.7`). Ignorar semver minor/major. | Convenção do projeto. |
 | **12** | Push `--force` em master = **NUNCA**. Em release branch só com aviso explícito. | Master é canônico. |
 | **13** | `mailer_autoconfirm` = OFF prod. Não trocar pra ON. | Confirmação email obrigatória LGPD. |
+| **14** | **NUNCA executar trabalho em master ou branch errado.** Após Passo 5b OK do user, primeira ação OBRIGATÓRIA = `git checkout -b {tipo}/{nome}` + `git status` confirma. Só então inicia análise/edits/tools. | User disse "segue" significa "crie branch + execute", não "pule branch". Master = canônico, releases ficam fora dela. |
 
 ---
 
@@ -167,11 +168,30 @@ Não há regra micro pra cada caso. Critério único é AAB sim/não. Resto é a
 3. **Branch proposto** + bump versão (se release).
 4. **ESPERA OK user.** User pode corrigir tipo, IA acata + re-propõe.
 
-### Após OK
+### ⚠️ Após user dar OK — sequência OBRIGATÓRIA antes trabalho real
 
-- Criar branch: `git checkout -b {tipo}/{nome}`
-- Se `release/v*`: bump em `android/app/build.gradle` (`versionCode` + `versionName`) + `package.json` (`version`) + commit inicial `chore: abre release/vX.Y.Z.W — bump vc N→N+1`.
-- Outros tipos: branch criada vazia, segue direto pra implementação.
+**IA NÃO inicia trabalho até criar branch + confirmar.** Não importa se user disse "segue", "ok", "vai", "prossegue":
+
+1. **Criar branch IMEDIATAMENTE** (primeira ação após OK):
+   ```bash
+   git checkout -b {tipo}/{nome}
+   ```
+
+2. **Confirmar branch criado** (verificação obrigatória):
+   ```bash
+   git status   # deve mostrar "On branch {tipo}/{nome}"
+   ```
+
+3. **Se `release/v*`:** bump em `android/app/build.gradle` (`versionCode` + `versionName`) + `package.json` (`version`) + commit inicial:
+   ```
+   chore: abre release/vX.Y.Z.W — bump vc N→N+1
+   ```
+
+4. **Outros tipos:** branch fica vazia, sem commit inicial.
+
+5. **SOMENTE AGORA** iniciar trabalho real (análise, leitura ampla, edits, git log extenso, executar tools).
+
+> **Drift detector:** se IA já começou trabalho antes confirmar `git status` em branch nova → drift. PARAR, criar branch, retomar.
 
 ---
 
