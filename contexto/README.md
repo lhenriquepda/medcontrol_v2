@@ -127,9 +127,17 @@ git push origin release/v{X.Y.Z}
 
 ### 12a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
 
-Antes de pedir validação device pro user, verifique se o item pode ser validado via web:
+Antes de pedir validação device pro user, verifique se o item pode ser validado via web.
 
-**Validável via web** (IA executa via Chrome MCP em `https://dosymed.app/` ou preview Vercel `https://dosy-git-{branch}-lhenriquepdas-projects.vercel.app`):
+**Ordem de prioridade do alvo da validação:**
+
+1. **`http://localhost:5173/`** (`npm run dev`) — código local exato, mais rápido, não depende de push. **Default quando branch ainda não foi mergeada / código ainda em desenvolvimento**.
+2. **Preview Vercel da branch** `https://dosy-git-{branch}-lhenriquepdas-projects.vercel.app` — testa build process Vite + envs Vercel. Usar após push da branch quando precisar validar build prod.
+3. **`https://dosymed.app/`** (master prod) — apenas pós-merge master + Vercel deploy. Smoke test pós-deploy.
+
+> Antes de validar: rodar `npm run dev` em background OR confirmar que `Bash` shell tem dev server vivo. Se não, IA inicia via `npm run dev` background.
+
+**Validável via web** (qualquer um dos 3 alvos acima):
 - UI rendering / componentes novos / animações framer-motion
 - Hooks React Query (cache, persist, optimistic updates, invalidate)
 - Fluxos auth (login/logout/reset)
