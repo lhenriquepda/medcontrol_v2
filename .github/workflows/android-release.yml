@@ -74,7 +74,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew bundleRelease
+        run: |
+          # Defensivo: garante execute bit gradlew em runner Linux mesmo se
+          # commit Windows não preservou. Root cause failures v0.2.1.3/v0.2.1.4
+          # (exit 126 "Permission denied"). Bit já fixado via update-index --chmod=+x
+          # no repo, mas mantém defensivo pra cobrir regressões futuras.
+          chmod +x ./gradlew
+          ./gradlew bundleRelease
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
