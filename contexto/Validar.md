@@ -170,7 +170,9 @@
 
 ### #204.v218.7 — Features FORA queue: bloqueio explícito + avisos
 
-#### `[ ]` 218.7.1 — Compartilhar paciente bloqueado offline
+#### `[x]` 218.7.1 — Compartilhar paciente bloqueado offline
+
+✅ **Validado web Chrome MCP 2026-05-10** (localhost:5173): banner amarelo "Você está offline — compartilhamento de pacientes requer internet" + botão Compartilhar desabilitado (visível no Sheet "Compartilhar · Lucas Henrique").
 
 **Como fazer:**
 1. Modo avião ON.
@@ -188,7 +190,9 @@
 
 ---
 
-#### `[ ]` 218.7.2 — SOS regra bloqueada offline
+#### `[x]` 218.7.2 — SOS regra bloqueada offline
+
+✅ **Validado web Chrome MCP 2026-05-10**: toast amarelo "Sem conexão. Salvar regra de segurança requer internet. Reconecte e tente novamente." (paciente Lucas Henrique + medicamento TesteOff + intervalo 6h).
 
 **Como fazer:**
 1. Modo avião ON.
@@ -221,7 +225,9 @@
 
 ---
 
-#### `[ ]` 218.7.4 — LGPD exportar bloqueado offline
+#### `[x]` 218.7.4 — LGPD exportar bloqueado offline
+
+✅ **Validado web Chrome MCP 2026-05-10**: toast amarelo "Sem conexão. Exportar dados LGPD requer internet. Reconecte e tente novamente."
 
 **Como fazer:**
 1. Modo avião ON.
@@ -236,7 +242,9 @@
 
 ---
 
-#### `[ ]` 218.7.5 — LGPD excluir conta bloqueado offline
+#### `[x]` 218.7.5 — LGPD excluir conta bloqueado offline
+
+✅ **Validado web Chrome MCP 2026-05-10**: ConfirmDialog "Excluir conta permanentemente?" aberto + click "Excluir tudo" → toast amarelo "Sem conexão. Excluir conta requer internet. Reconecte e tente novamente." Conta não excluída.
 
 **Como fazer:**
 1. Modo avião ON.
@@ -251,7 +259,9 @@
 
 ---
 
-#### `[ ]` 218.7.6 — Settings banner global offline
+#### `[x]` 218.7.6 — Settings banner global offline
+
+✅ **Validado web Chrome MCP 2026-05-10**: banner amarelo topo Ajustes "Você está offline — exportação de dados, exclusão de conta e algumas configurações requer internet. Reconecte para usar."
 
 **Como fazer:**
 1. Modo avião ON.
