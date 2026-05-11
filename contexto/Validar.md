@@ -14,6 +14,385 @@
 
 ---
 
+## 🆕 Release v0.2.1.8 — versionCode 56 (debug variant Studio — Internal Testing pendente)
+
+**Escopo:** #204 mutation queue offline expandido — fixes A1/A2/B/C identificados via logcat S25 Ultra (sessão 2026-05-10). Mutations CRUD completas com optimistic + alarme offline + bloqueios features fora queue + avisos UX honestos.
+
+**Mudanças código:**
+- `src/main.jsx` — Fix B (pre-mount `Network.getStatus` bloqueante) + Fix C (`onlineManager.setEventListener` Capacitor única fonte, substitui default subscriber TanStack que disparava espúrio em Capacitor WebView)
+- `src/services/mutationRegistry.js` — optimistic onMutate/onError/onSuccess em **TODAS** 12 mutations queue: confirmDose/skipDose/undoDose/registerSos/createPatient/updatePatient/deletePatient/createTreatment/updateTreatment/deleteTreatment/pauseTreatment/resumeTreatment/endTreatment. createTreatment gera doses local via `generateDoses` (dashboard + alarme offline). mutationFn createTreatment resolve `patientId` temp→real via `_tempIdSource` marker (drain pós-reconnect FK fix)
+- `src/pages/PatientForm.jsx` + `src/pages/TreatmentForm.jsx` — detect offline em CREATE + EDIT paths: `mutate` fire-and-forget + toast claro + close modal imediato
+- `src/hooks/useOfflineGuard.js` (novo) — helper `guard.ensure(label)` bloqueia + toast pra features FORA queue
+- `src/components/OfflineNotice.jsx` (novo) — banner contextual reusable
+- `src/components/SharePatientSheet.jsx` — guard share/unshare + button disable + banner
+- `src/pages/SOS.jsx` — guard saveRule (SOS rules fora queue) + queue registerSos offline-aware + banner
+- `src/pages/Settings/index.jsx` — guard exportar LGPD + excluir conta + banner topo
+
+**Conta de teste:** `teste-plus@teste.com / 123456`. Conta admin pessoal pra dados reais.
+
+---
+
+### #204.v218.1 — Boot offline: mutations rehydradas NÃO disparam fetches espúrios
+
+#### `[ ]` 218.1.1 — Pre-mount Network.getStatus bloqueante
+
+**Como fazer:**
+1. App aberto + algumas ações offline pendentes da sessão anterior (mutations no localStorage).
+2. **Settings Android → Modo avião ON.**
+3. Force-kill o Dosy (recents → swipe).
+4. Reabrir Dosy.
+5. Conectar device USB + rodar `adb logcat -s "Capacitor/Console:E"` no PC.
+
+**O que esperar:**
+- Logcat mostra (na ordem):
+  ```
+  [Dosy:net] pre-mount Network.getStatus: {"connected":false,"connectionType":"none"}
+  [Dosy:net] bridge listener registered (Capacitor única fonte)
+  ```
+- Mutations rehydradas mantêm `isPaused=true` (NÃO tentam fetch).
+- Banner amber aparece com count de pendentes.
+
+**Se falhar:**
+- Pre-mount não emite → `boot()` async não está bloqueando React mount.
+- Mutations resumed imediato (isPaused=false ~1s no boot) → bridge Capacitor tarde.
+
+---
+
+### #204.v218.2 — Reconnect: setOnline única fonte (Capacitor bridge)
+
+#### `[ ]` 218.2.1 — Sem flips espúrios `setOnline(true)` por TanStack default subscriber
+
+**Como fazer:**
+1. App offline com mutations pausadas.
+2. **Modo avião OFF.**
+3. Logcat ativo.
+
+**O que esperar:**
+- Logs `[Dosy:net] networkStatusChange event:` aparecem APENAS via Capacitor bridge (caller `Object.callback`).
+- NÃO há `setOnline(true) caller=vendor-data-*` espúrio (default subscriber substituído por `setEventListener`).
+
+**Se falhar:**
+- Caller `vendor-data` aparece → Fix C não aplicou. Default subscriber TanStack ainda ativo.
+
+---
+
+### #204.v218.3 — Modal Cadastrar Paciente fecha imediato offline
+
+#### `[ ]` 218.3.1 — Create offline + UX honesto
+
+**Como fazer:**
+1. Modo avião ON.
+2. Pacientes → ➕ Novo paciente.
+3. Preencher nome "Teste Offline" + idade 30 + salvar.
+
+**O que esperar:**
+- Modal fecha imediato (sem trava em loading).
+- Toast info: **"Paciente salvo offline — sincroniza ao reconectar."**
+- Lista pacientes mostra "Teste Offline" no topo (temp ID local).
+- Banner amber count incrementa.
+
+**Se falhar:**
+- Modal trava em "Cadastrar paciente..." > 2s → `mutate` não foi chamado fire-and-forget.
+- Sem toast → handler não detectou offline.
+
+---
+
+### #204.v218.4 — Modal Editar Paciente fecha imediato offline
+
+#### `[ ]` 218.4.1 — Edit offline + UX honesto
+
+**Como fazer:**
+1. Modo avião ON.
+2. Pacientes → tap paciente existente → Editar.
+3. Mudar nome para "Editado Offline" + salvar.
+
+**O que esperar:**
+- Modal fecha imediato.
+- Toast info: **"Alterações salvas offline — sincronizam ao reconectar."**
+- Lista mostra nome novo "Editado Offline".
+
+**Se falhar:**
+- Modal trava → handler editing offline não foi adicionado.
+
+---
+
+### #204.v218.5 — Tratamento offline aparece no Dashboard + alarme dispara
+
+#### `[ ]` 218.5.1 — createTreatment optimistic + doses local + alarme
+
+**Como fazer:**
+1. Modo avião ON.
+2. Pacientes → tap paciente → ➕ Novo tratamento.
+3. Preencher medicamento "TesteOffline" + dose "1 comp" + intervalo 8h + dose inicial **+2min do agora** + duração 1 dia + salvar.
+
+**O que esperar:**
+- Modal fecha imediato.
+- Toast info: **"Tratamento salvo offline — sincroniza ao reconectar."**
+- **Dashboard mostra tratamento + dose pendente +2min**.
+- Esperar 2min com modo avião ON.
+- **Alarme nativo dispara** (som customizado + tela cheia OU notif heads-up).
+
+**Se falhar:**
+- Dashboard sem dose → `generateDoses` local não inseriu no cache `['doses']`.
+- Alarme não toca → AlarmScheduler não detectou doses temp no cache (verificar logcat `[Notif] reschedule`).
+
+---
+
+### #204.v218.6 — createTreatment drena após reconnect resolvendo temp patientId
+
+#### `[ ]` 218.6.1 — Drain ordem FIFO + lookup _tempIdSource
+
+**Como fazer:**
+1. Modo avião ON + receita 218.3 (paciente novo) + 218.5 (tratamento novo no mesmo paciente).
+2. Cache tem 2 mutations pausadas: `createPatient(temp-A)` + `createTreatment(patientId: temp-A)`.
+3. **Modo avião OFF.**
+4. Aguardar 5-10s banner drainings emerald.
+
+**O que esperar:**
+- Logcat:
+  ```
+  [Dosy:mut] updated createPatient status=success
+  [Dosy:mut] updated createTreatment status=success (sem failureCount=4)
+  ```
+- Banner some.
+- SQL no Supabase Studio:
+  ```sql
+  SELECT id, "patientId", "medName" FROM medcontrol.treatments
+  WHERE "userId" = auth.uid()
+  ORDER BY "createdAt" DESC LIMIT 3;
+  ```
+- Treatment row tem `patientId` real (UUID, não temp-xxx).
+
+**Se falhar:**
+- `createTreatment status=error failureCount=4` → mutationFn não resolveu temp patientId. Lookup `_tempIdSource` falhou.
+
+---
+
+### #204.v218.7 — Features FORA queue: bloqueio explícito + avisos
+
+#### `[ ]` 218.7.1 — Compartilhar paciente bloqueado offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Pacientes → tap paciente → 🔗 Compartilhar.
+3. Tentar digitar email + Compartilhar.
+
+**O que esperar:**
+- Banner amarelo topo Sheet: **"Você está offline. Compartilhamento de pacientes requer internet."**
+- Botão "Compartilhar" DESABILITADO.
+- Se clicar mesmo assim: toast warn **"Sem conexão. Compartilhar paciente requer internet."**
+
+**Se falhar:**
+- Botão clicável → `disabled={!guard.online}` não aplicou.
+- Sem banner → `<OfflineNotice />` não renderizou.
+
+---
+
+#### `[ ]` 218.7.2 — SOS regra bloqueada offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Página S.O.S → selecionar paciente + medicamento.
+3. Preencher intervalo mín 6h + clicar "Salvar regra".
+
+**O que esperar:**
+- Toast warn: **"Sem conexão. Salvar regra de segurança requer internet."**
+- Regra NÃO salva.
+
+**Se falhar:**
+- Toast diferente / nenhum → `guard.ensure` não foi chamado.
+
+---
+
+#### `[ ]` 218.7.3 — SOS dose registrada offline ENTRA queue
+
+**Como fazer:**
+1. Modo avião ON.
+2. Página S.O.S → preencher paciente + medicamento + dose + horário.
+3. Clicar "Registrar S.O.S".
+
+**O que esperar:**
+- Toast info: **"Dose S.O.S salva offline — sincroniza ao reconectar."**
+- Banner amber count incrementa.
+- Dashboard mostra dose SOS (status done).
+
+**Se falhar:**
+- Modal trava → `mutate` não foi chamado fire-and-forget.
+
+---
+
+#### `[ ]` 218.7.4 — LGPD exportar bloqueado offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Ajustes → "Exportar meus dados".
+
+**O que esperar:**
+- Toast warn: **"Sem conexão. Exportar dados LGPD requer internet."**
+- Sem download / sem dialog.
+
+**Se falhar:**
+- Tentativa de fetch → guard.ensure não foi adicionado em `exportUserData`.
+
+---
+
+#### `[ ]` 218.7.5 — LGPD excluir conta bloqueado offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Ajustes → "Excluir minha conta" → confirma.
+
+**O que esperar:**
+- Toast warn: **"Sem conexão. Excluir conta requer internet."**
+- Conta NÃO excluída.
+
+**Se falhar:**
+- Edge Function tentou rodar → guard.ensure não aplicou.
+
+---
+
+#### `[ ]` 218.7.6 — Settings banner global offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Abrir Ajustes.
+
+**O que esperar:**
+- Banner amarelo topo Ajustes: **"Você está offline. Exportação de dados, exclusão de conta e algumas configurações requer internet."**
+
+**Se falhar:**
+- Banner ausente → `<OfflineNotice />` não foi adicionado em Settings/index.
+
+---
+
+### #204.v218.8 — pause/resume/end Treatment optimistic
+
+#### `[ ]` 218.8.1 — Pausar tratamento offline
+
+**Como fazer:**
+1. Modo avião ON.
+2. Tratamento ativo → menu ⋮ → Pausar.
+
+**O que esperar:**
+- Status muda visualmente pra "Pausado" imediato.
+- Doses futuras pendentes do tratamento somem do Dashboard.
+- Alarmes do tratamento param (verificar próximo alarme NÃO toca).
+
+**Se falhar:**
+- Status não muda → onMutate optimistic não rodou.
+- Doses futuras continuam → filter cancelFutureDoses local não rolou.
+
+---
+
+### #205.v218.9 — Single source refresh token: zero storms xx:00
+
+#### `[ ]` 218.9.1 — Lifespan session ≥ 12h (sem re-login forçado)
+
+**Como fazer:**
+1. Instalar AAB vc 56 release variant (`com.dosyapp.dosy`) S25 Ultra.
+2. Login `lhenrique.pda@gmail.com` (conta admin pessoal).
+3. Anotar timestamp login + Painel admin `/auth-log` evento `login_email_senha`.
+4. Usar app normalmente por 24h (foreground/background ciclos naturais).
+5. Após 24h, abrir Painel admin `/auth-log` filtrado pelo user.
+
+**O que esperar:**
+- Eventos `login_email_senha` nas últimas 24h: **APENAS 1** (o login inicial).
+- Demais eventos: `sessao_restaurada` apenas.
+- Zero forced re-login (user não digitou senha novamente).
+
+**Se falhar:**
+- 2+ `login_email_senha` em 24h → re-login forçado ainda acontece. Verificar SQL `auth.refresh_tokens` se storm pattern xx:00 persiste.
+
+---
+
+#### `[ ]` 218.9.2 — SQL refresh_tokens sem storm xx:00
+
+**Como fazer:**
+1. 24h após install vc 56, abrir Supabase Studio SQL Editor.
+2. Rodar:
+   ```sql
+   WITH u AS (SELECT id::text AS uid FROM auth.users WHERE email = 'lhenrique.pda@gmail.com')
+   SELECT DATE_TRUNC('minute', rt.created_at) AS bucket,
+          COUNT(*) AS tokens_in_minute
+   FROM auth.refresh_tokens rt, u
+   WHERE rt.user_id = u.uid
+     AND rt.created_at > NOW() - INTERVAL '24 hours'
+   GROUP BY 1 HAVING COUNT(*) > 2
+   ORDER BY 1 DESC;
+   ```
+
+**O que esperar:**
+- Result: 0 rows. Nenhum minuto com mais de 2 refreshes simultâneos.
+
+**Se falhar:**
+- Qualquer bucket >5 tokens em 1 minuto → storm ativa. Anotar timestamp + verificar logcat `DoseSyncWorker` / `DosyMessagingService` se aparecem refresh attempts.
+
+---
+
+#### `[ ]` 218.9.3 — Sessions lifespan ≥ 12h
+
+**Como fazer:**
+1. SQL:
+   ```sql
+   WITH u AS (SELECT id::uuid AS uid FROM auth.users WHERE email = 'lhenrique.pda@gmail.com')
+   SELECT s.id, s.created_at, s.updated_at,
+          EXTRACT(EPOCH FROM (s.updated_at - s.created_at))/3600 AS lifespan_hours
+   FROM auth.sessions s, u
+   WHERE s.user_id = u.uid AND s.created_at > NOW() - INTERVAL '7 days'
+   ORDER BY s.created_at DESC LIMIT 10;
+   ```
+
+**O que esperar:**
+- Sessões S25 Ultra (`user_agent LIKE 'Dalvik%SM-S938B%'`) lifespan ≥ 12h cada (vs 18min-3h v0.2.1.7).
+
+**Se falhar:**
+- Lifespan curto persiste → refresh chain ainda corrompendo. Verificar logcat se Worker/MessagingService log refresh attempts.
+
+---
+
+#### `[ ]` 218.9.4 — Logcat sem refresh calls native
+
+**Como fazer:**
+1. Device USB + `adb logcat -s "DoseSyncWorker:V" "DosyMessagingService:V"`.
+2. Esperar Worker periodic rodar (6h ciclo natural OR forçar via Settings → Developer options → Workers → DoseSyncWorker → "Run").
+
+**O que esperar:**
+- Logs `DoseSyncWorker`: zero linhas `token refresh status=`.
+- Pode aparecer: `access_token expired/near-expiry — skip rodada` (esperado se >1h sem foreground).
+- `sync ok: fetched=N scheduled=M` em rodadas com token válido.
+
+**Se falhar:**
+- Linha `token refresh status=` → Worker ainda chama `/auth/v1/token`. Fix #205 não aplicou.
+
+---
+
+### Validação cruzada — drain completo após reconnect
+
+#### `[ ]` 218.X — Reconectar drena TODAS mutations sem perda
+
+**Como fazer:**
+1. Receita completa offline 218.3 + 218.4 + 218.5 + 218.7.3 + 218.8 + várias confirmDose/skipDose.
+2. **Modo avião OFF.**
+3. Aguardar drain (banner emerald → some, ~10s).
+
+**O que esperar:**
+- Logcat zero `status=error failureCount=4`.
+- Todas mutations `status=success`.
+- SQL:
+  ```sql
+  SELECT id, "medName", status, "actualTime", "updatedAt"
+  FROM medcontrol.doses
+  WHERE "userId" = auth.uid()
+    AND "updatedAt" > NOW() - INTERVAL '15 minutes'
+  ORDER BY "updatedAt" DESC;
+  ```
+- Reflete todas confirmações/skips + dose SOS + doses do tratamento novo.
+
+**Se falhar:**
+- Qualquer mutation `status=error` → bug específico daquela mutation. Anotar key + failureCount.
+
+---
+
 ## 🆕 Release v0.2.1.7 — versionCode 55 (publicado Internal Testing 2026-05-09 23:08)
 
 **Escopo:** [#204 Mutation queue offline](CHECKLIST.md#204--mutation-queue-offline-react-query-nativa--fase-1-offline-first) + [#207 Defesa em profundidade alarme crítico](CHECKLIST.md#207--defesa-em-profundidade-alarme-crítico-5-fixes)

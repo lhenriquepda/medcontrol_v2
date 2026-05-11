@@ -9,7 +9,9 @@ import { TIMING } from '../../animations'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import ChangePasswordModal from '../../components/ChangePasswordModal'
 import AdBanner from '../../components/AdBanner'
+import OfflineNotice from '../../components/OfflineNotice'
 import PageHeader from '../../components/dosy/PageHeader'
+import { useOfflineGuard } from '../../hooks/useOfflineGuard'
 import { useTheme } from '../../hooks/useTheme'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
@@ -48,6 +50,7 @@ export default function Settings() {
   const updatePrefsMut = useUpdateUserPrefs()
   const update = useAppUpdate()
   const appLock = useAppLock()
+  const guard = useOfflineGuard()
   const isNative = Capacitor.isNativePlatform()
 
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -117,6 +120,8 @@ export default function Settings() {
     if (!hasSupabase || !user) {
       toast.show({ message: 'Exportação disponível apenas com conta Supabase.', kind: 'warn' }); return
     }
+    // Item #204 v0.2.1.8 — exportar LGPD requer fetch fresh do server. Bloqueio offline.
+    if (!guard.ensure('Exportar dados LGPD')) return
     setExportingData(true)
     try {
       const [dosesRes, treatmentsRes, subsRes] = await Promise.all([
@@ -178,6 +183,8 @@ export default function Settings() {
 
   async function handleDeleteAccount() {
     if (!hasSupabase || !user) return
+    // Item #204 v0.2.1.8 — excluir conta requer Edge Function. Bloqueio offline.
+    if (!guard.ensure('Excluir conta')) return
     try {
       const { error } = await supabase.functions.invoke('delete-account')
       if (error) throw error
@@ -216,6 +223,7 @@ export default function Settings() {
         variants={{ animate: { transition: { staggerChildren: TIMING.stagger } } }}
       >
         <AdBanner />
+        <OfflineNotice featureLabel="exportação de dados, exclusão de conta e algumas configurações" />
 
         <PlanSection tier={tier} />
 

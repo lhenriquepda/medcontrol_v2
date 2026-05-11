@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Siren } from 'lucide-react'
+import { onlineManager } from '@tanstack/react-query'
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
 import MedNameInput from '../components/MedNameInput'
+import OfflineNotice from '../components/OfflineNotice'
 import { Card, Button, Input } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule } from '../hooks/useDoses'
+import { useOfflineGuard } from '../hooks/useOfflineGuard'
 import { validateSos } from '../services/dosesService'
 import { useToast } from '../hooks/useToast'
 import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '../utils/dateUtils'
@@ -26,6 +29,7 @@ export default function SOS() {
   const upsertRule = useUpsertSosRule()
   const register = useRegisterSos()
   const toast = useToast()
+  const guard = useOfflineGuard()
 
   const currentRule = useMemo(
     () => rules.find((r) => r.medName.toLowerCase() === medName.toLowerCase()),
@@ -36,6 +40,8 @@ export default function SOS() {
 
   async function saveRule() {
     if (!patientId || !medName) return
+    // Item #204 v0.2.1.8 — SOS rules NÃO entram queue offline. Bloqueio claro.
+    if (!guard.ensure('Salvar regra de segurança')) return
     await upsertRule.mutateAsync({
       id: currentRule?.id, patientId, medName: medName.trim(),
       minIntervalHours: ruleMin ? Number(ruleMin) : null,
@@ -59,8 +65,16 @@ export default function SOS() {
       })
       return
     }
-    await register.mutateAsync({ patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation })
-    toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
+    // Item #204 v0.2.1.8 — registerSos ESTÁ na queue offline (optimistic dose
+    // local). Offline: mutate fire-and-forget + toast claro "Salvo offline".
+    const payload = { patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation }
+    if (!onlineManager.isOnline()) {
+      register.mutate(payload)
+      toast.show({ message: 'Dose S.O.S salva offline — sincroniza ao reconectar.', kind: 'info' })
+    } else {
+      await register.mutateAsync(payload)
+      toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
+    }
     setMedName(''); setUnit(''); setObservation(''); setWhen(toDatetimeLocalInput(new Date().toISOString()))
   }
 
@@ -83,6 +97,8 @@ export default function SOS() {
         style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       >
         <AdBanner />
+        <OfflineNotice featureLabel="Regras de segurança SOS" />
+
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <label style={{

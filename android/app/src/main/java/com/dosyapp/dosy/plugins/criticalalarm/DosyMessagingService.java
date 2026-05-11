@@ -147,28 +147,40 @@ public class DosyMessagingService extends MessagingService {
      * Item #083.6 — POST pra Supabase REST registrando que esta dose+device
      * tem alarme agendado localmente. Permite notify-doses cron skip push tray.
      *
-     * Auth: usa anon key + access_token via refresh_token armazenado.
-     * Idempotente (PK doseId+deviceId, INSERT ON CONFLICT DO NOTHING).
+     * Item #205 (release v0.2.1.8) — REMOVE refresh_token endpoint call.
+     * Antes: refreshAccessToken() em paralelo com DoseSyncWorker + JS supabase-js
+     * causava storm xx:00. Agora usa access_token cached (gravado pelo plugin
+     * updateAccessToken em TOKEN_REFRESHED event). Se expirado/falha, skip
+     * report — alarme local já agendado, este endpoint é defense extra (cron
+     * notify-doses skip push se já agendado). Não-crítico se falhar.
      */
     static void reportAlarmScheduled(Context ctx, String doseId) {
         SharedPreferences sp = ctx.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
         String url = sp.getString("supabase_url", null);
         String anon = sp.getString("anon_key", null);
         String userId = sp.getString("user_id", null);
-        String refreshToken = sp.getString("refresh_token", null);
         String deviceId = sp.getString("device_id", null);
         String schema = sp.getString("schema", "medcontrol");
+        String accessToken = sp.getString("access_token", null);
+        long accessTokenExp = sp.getLong("access_token_exp_ms", 0L);
 
-        if (url == null || anon == null || userId == null || refreshToken == null || deviceId == null) {
+        if (url == null || anon == null || userId == null || deviceId == null) {
             Log.d(TAG, "reportAlarmScheduled skip: missing credentials");
             return;
         }
 
-        try {
-            // Refresh access_token (mesmo helper do DoseSyncWorker)
-            String accessToken = refreshAccessToken(url, anon, refreshToken, sp);
-            if (accessToken == null) return;
+        // Item #205 — usa access_token cached, NÃO faz refresh paralelo.
+        if (accessToken == null) {
+            Log.d(TAG, "reportAlarmScheduled skip: no access_token cached");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (accessTokenExp > 0 && (now + 60_000L) >= accessTokenExp) {
+            Log.d(TAG, "reportAlarmScheduled skip: access_token expired/near-expiry");
+            return;
+        }
 
+        try {
             JSONObject body = new JSONObject();
             body.put("doseId", doseId);
             body.put("userId", userId);
@@ -197,35 +209,5 @@ public class DosyMessagingService extends MessagingService {
         } catch (Exception e) {
             Log.w(TAG, "reportAlarmScheduled error: " + e.getMessage());
         }
-    }
-
-    private static String refreshAccessToken(String url, String anon, String refreshToken, SharedPreferences sp) throws IOException, JSONException {
-        URL endpoint = new URL(url + "/auth/v1/token?grant_type=refresh_token");
-        HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("apikey", anon);
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setDoOutput(true);
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(10000);
-
-        String body = new JSONObject().put("refresh_token", refreshToken).toString();
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(body.getBytes(StandardCharsets.UTF_8));
-        }
-
-        if (conn.getResponseCode() != 200) return null;
-
-        BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = r.readLine()) != null) sb.append(line);
-        r.close();
-
-        JSONObject json = new JSONObject(sb.toString());
-        String access = json.getString("access_token");
-        String newRefresh = json.optString("refresh_token", refreshToken);
-        sp.edit().putString("refresh_token", newRefresh).apply();
-        return access;
     }
 }

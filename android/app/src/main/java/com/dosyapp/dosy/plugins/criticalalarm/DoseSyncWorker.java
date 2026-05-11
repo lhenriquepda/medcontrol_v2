@@ -32,7 +32,7 @@ import java.util.TreeMap;
  * DoseSyncWorker — Item #081 (release v0.1.7.1) defense-in-depth caminho 3 de 3.
  *
  * Roda periodicamente (a cada 6h via WorkManager) mesmo com app fechado.
- * Faz fetch das doses pendentes próximas 72h via Supabase REST API e
+ * Faz fetch das doses pendentes próximas 7d via Supabase REST API e
  * agenda alarmes nativos via setAlarmClock() (bypassa Doze).
  *
  * Não depende de:
@@ -41,11 +41,18 @@ import java.util.TreeMap;
  *   - push FCM funcionando
  *
  * Garante que mesmo user idoso que NÃO abre app mensalmente, alarmes de
- * doses agendadas nos próximos 72h disparam pontualmente.
+ * doses agendadas nos próximos 7d disparam pontualmente.
  *
- * Auth: lê credentials de SharedPreferences (gravadas pelo plugin
- * setSyncCredentials() chamado pelo JS após login). Refresh access_token
- * via /auth/v1/token?grant_type=refresh_token quando expira (default 1h).
+ * Item #205 (release v0.2.1.8) — REMOVE refresh_token endpoint call.
+ * Antes: Worker + DosyMessagingService + JS supabase-js cada um chamava
+ * /auth/v1/token?grant_type=refresh_token em paralelo no xx:00 (JWT exp 1h).
+ * Supabase detectava token reuse → revogava chain → user re-login forçado.
+ *
+ * Agora: JS supabase-js é ÚNICA fonte refresh. Worker lê `access_token` cached
+ * em SharedPref (gravado pelo plugin updateAccessToken em TOKEN_REFRESHED event).
+ * Se access_token expirou (verificado via access_token_exp_ms local), Worker
+ * pula a rodada — próxima execução periódica pegará token fresco depois do JS
+ * ter refeito refresh em foreground.
  */
 public class DoseSyncWorker extends Worker {
     private static final String TAG = "DoseSyncWorker";
@@ -53,6 +60,9 @@ public class DoseSyncWorker extends Worker {
     // Item #207 (release v0.2.1.7) — 72h → 168h (7d) alinhado com SCHEDULE_WINDOW_MS JS.
     // WorkManager 6h periodic cobre janela inteira mesmo se app fechado vários dias.
     private static final long HORIZON_HOURS = 168L;
+    // Item #205 — margem de segurança expiry. Se faltam <60s pra expirar, considera
+    // já expirado (evita race entre check local e request HTTP).
+    private static final long EXP_SAFETY_MARGIN_MS = 60_000L;
 
     public DoseSyncWorker(@NonNull Context ctx, @NonNull WorkerParameters params) {
         super(ctx, params);
@@ -66,10 +76,11 @@ public class DoseSyncWorker extends Worker {
         String url = sp.getString("supabase_url", null);
         String anon = sp.getString("anon_key", null);
         String userId = sp.getString("user_id", null);
-        String refreshToken = sp.getString("refresh_token", null);
         String schema = sp.getString("schema", "medcontrol");
+        String accessToken = sp.getString("access_token", null);
+        long accessTokenExp = sp.getLong("access_token_exp_ms", 0L);
 
-        if (url == null || anon == null || userId == null || refreshToken == null) {
+        if (url == null || anon == null || userId == null) {
             Log.d(TAG, "no credentials yet — skip");
             return Result.success(); // não retry — user ainda não logou
         }
@@ -83,17 +94,27 @@ public class DoseSyncWorker extends Worker {
             return Result.success();
         }
 
-        try {
-            String accessToken = refreshAccessToken(url, anon, refreshToken, sp);
-            if (accessToken == null) {
-                Log.w(TAG, "refresh token failed — credentials may be stale");
-                return Result.success();
-            }
+        // Item #205 — verifica access_token local + exp. NÃO chama refresh endpoint.
+        if (accessToken == null) {
+            Log.d(TAG, "no access_token cached yet — JS app didn't sync token. Skip rodada.");
+            return Result.success();
+        }
+        long now = System.currentTimeMillis();
+        if (accessTokenExp > 0 && (now + EXP_SAFETY_MARGIN_MS) >= accessTokenExp) {
+            // Token expirado/quase-expirado. JS app vai refresh quando abrir / em
+            // foreground. Worker NÃO força refresh paralelo pra evitar storm.
+            // WorkManager periodic retry pega token fresco depois.
+            Log.d(TAG, "access_token expired/near-expiry (exp=" + accessTokenExp +
+                       " now=" + now + ") — skip rodada");
+            return Result.success();
+        }
 
+        try {
             JSONArray doses = fetchUpcomingDoses(url, anon, schema, accessToken);
             if (doses == null) {
-                Log.w(TAG, "fetch doses failed");
-                return Result.retry();
+                Log.w(TAG, "fetch doses failed (likely token rejected) — skip rodada");
+                // Result.success — NÃO retry pra evitar storm. JS refresca em foreground.
+                return Result.success();
             }
 
             int scheduled = scheduleDoses(ctx, doses);
@@ -103,36 +124,6 @@ public class DoseSyncWorker extends Worker {
             Log.e(TAG, "sync error: " + e.getMessage(), e);
             return Result.retry();
         }
-    }
-
-    private String refreshAccessToken(String url, String anon, String refreshToken, SharedPreferences sp) throws IOException, JSONException {
-        URL endpoint = new URL(url + "/auth/v1/token?grant_type=refresh_token");
-        HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("apikey", anon);
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setDoOutput(true);
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(15000);
-
-        String body = new JSONObject().put("refresh_token", refreshToken).toString();
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(body.getBytes(StandardCharsets.UTF_8));
-        }
-
-        if (conn.getResponseCode() != 200) {
-            Log.w(TAG, "token refresh status=" + conn.getResponseCode());
-            return null;
-        }
-
-        String resp = readBody(conn);
-        JSONObject json = new JSONObject(resp);
-        String access = json.getString("access_token");
-        String newRefresh = json.optString("refresh_token", refreshToken);
-
-        // Persiste novo refresh_token (Supabase rotaciona a cada uso)
-        sp.edit().putString("refresh_token", newRefresh).apply();
-        return access;
     }
 
     private JSONArray fetchUpcomingDoses(String url, String anon, String schema, String accessToken) throws IOException, JSONException {

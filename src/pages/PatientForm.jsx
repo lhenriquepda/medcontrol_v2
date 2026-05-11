@@ -14,7 +14,7 @@ import { usePatientLimitReached, FREE_PATIENT_LIMIT } from '../hooks/useSubscrip
 import { useToast } from '../hooks/useToast'
 import { useUndoableDelete } from '../hooks/useUndoableDelete'
 import { primePatientPhotoCache, dropPatientPhotoCache } from '../hooks/usePatientPhoto'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, onlineManager } from '@tanstack/react-query'
 import { deletePatient } from '../services/patientsService'
 
 // #100 (release v0.2.0.11) — Avatar emoji redesign:
@@ -130,6 +130,22 @@ export default function PatientForm() {
       // Fix: coerce String(weight) antes de replace.
       weight: form.weight ? Number(String(form.weight).replace(',', '.')) : null,
       photo_version: nextVersion,
+    }
+    // Item #204 v0.2.1.8 fix-A — offline-aware submit (create + edit paths).
+    // Online: await mutateAsync (mostra erro real se falhar). Offline: mutate fire-and-forget
+    // (mutationRegistry.onMutate aplica cache patch optimistic + drena ao reconectar).
+    // Modal fecha imediato em ambos casos — sem isso, mutateAsync espera reconnect e trava UI.
+    const isOffline = !onlineManager.isOnline()
+    if (isOffline) {
+      if (editing) {
+        update.mutate({ id, patch: payload })
+        toast.show({ message: 'Alterações salvas offline — sincronizam ao reconectar.', kind: 'info' })
+      } else {
+        create.mutate(payload)
+        toast.show({ message: 'Paciente salvo offline — sincroniza ao reconectar.', kind: 'info' })
+      }
+      nav('/pacientes')
+      return
     }
     try {
       let saved

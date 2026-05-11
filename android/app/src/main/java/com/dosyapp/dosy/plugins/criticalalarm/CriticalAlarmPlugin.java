@@ -149,6 +149,14 @@ public class CriticalAlarmPlugin extends Plugin {
         String userId = call.getString("userId");
         String refreshToken = call.getString("refreshToken");
         String schema = call.getString("schema", "medcontrol");
+        // Item #205 (release v0.2.1.8) — access_token + exp epoch ms opcionais.
+        // Quando passados, native NÃO precisa chamar /auth/v1/token?grant_type=refresh_token
+        // (storm xx:00 fix). JS fica como ÚNICA fonte de refresh.
+        String accessToken = call.getString("accessToken");
+        Long accessTokenExp = null;
+        if (call.hasOption("accessTokenExp")) {
+            try { accessTokenExp = call.getLong("accessTokenExp"); } catch (Exception ignored) {}
+        }
 
         if (url == null || anonKey == null || userId == null || refreshToken == null) {
             call.reject("missing: supabaseUrl, anonKey, userId, refreshToken");
@@ -170,19 +178,48 @@ public class CriticalAlarmPlugin extends Plugin {
             criticalAlarmEnabled = call.getBoolean("criticalAlarmEnabled", true);
         }
 
-        sp.edit()
+        SharedPreferences.Editor ed = sp.edit()
             .putString("supabase_url", url)
             .putString("anon_key", anonKey)
             .putString("user_id", userId)
             .putString("refresh_token", refreshToken)
             .putString("schema", schema)
             .putString("device_id", deviceId)
-            .putBoolean("critical_alarm_enabled", criticalAlarmEnabled)
-            .apply();
+            .putBoolean("critical_alarm_enabled", criticalAlarmEnabled);
+        if (accessToken != null) ed.putString("access_token", accessToken);
+        if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
+        ed.apply();
 
         JSObject ret = new JSObject();
         ret.put("deviceId", deviceId);
         call.resolve(ret);
+    }
+
+    /**
+     * Item #205 (release v0.2.1.8) — atualiza apenas access_token + exp em
+     * SharedPreferences. Chamado pelo useAuth.jsx no listener TOKEN_REFRESHED.
+     *
+     * Estratégia anti-storm xx:00: JS supabase-js é ÚNICA fonte de refresh.
+     * Native (DoseSyncWorker, DosyMessagingService) consome access_token cached
+     * via essa SharedPref. Sem isso, 3 fontes paralelas refresh chain → Supabase
+     * detecta token reuse → revoga chain → user re-login.
+     */
+    @PluginMethod
+    public void updateAccessToken(PluginCall call) {
+        String accessToken = call.getString("accessToken");
+        Long accessTokenExp = null;
+        if (call.hasOption("accessTokenExp")) {
+            try { accessTokenExp = call.getLong("accessTokenExp"); } catch (Exception ignored) {}
+        }
+        if (accessToken == null) {
+            call.reject("accessToken required");
+            return;
+        }
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+        SharedPreferences.Editor ed = sp.edit().putString("access_token", accessToken);
+        if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
+        ed.apply();
+        call.resolve();
     }
 
     /**

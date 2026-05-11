@@ -4,6 +4,8 @@ import { Sheet, Button, Input, Avatar } from './dosy'
 import { usePatientShares, useSharePatient, useUnsharePatient } from '../hooks/useShares'
 import { useMyTier } from '../hooks/useSubscription'
 import PaywallModal from './PaywallModal'
+import OfflineNotice from './OfflineNotice'
+import { useOfflineGuard } from '../hooks/useOfflineGuard'
 
 export default function SharePatientSheet({ open, onClose, patient }) {
   const { data: tier } = useMyTier()
@@ -12,6 +14,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
   const { data: shares = [], isLoading } = usePatientShares(patientId)
   const shareMut = useSharePatient()
   const unshareMut = useUnsharePatient()
+  const guard = useOfflineGuard()
   const [email, setEmail] = useState('')
   const [err, setErr] = useState(null)
   const [okMsg, setOkMsg] = useState(null)
@@ -23,6 +26,9 @@ export default function SharePatientSheet({ open, onClose, patient }) {
     const v = email.trim()
     if (!v) { setErr('Informe um e-mail.'); return }
     if (!isPro) { setPaywall(true); return }
+    // Item #204 v0.2.1.8 — share NÃO entra queue offline (depende envio email
+    // server-side). Bloqueio claro + toast em vez de iludir.
+    if (!guard.ensure('Compartilhar paciente')) return
     try {
       await shareMut.mutateAsync({ patientId, email: v })
       setOkMsg(`Paciente compartilhado com ${v}.`)
@@ -33,6 +39,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
   }
 
   async function remove(targetUserId) {
+    if (!guard.ensure('Remover compartilhamento')) return
     try {
       await unshareMut.mutateAsync({ patientId, targetUserId })
     } catch (e) {
@@ -48,6 +55,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
         title={`Compartilhar · ${patient?.name || ''}`}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <OfflineNotice featureLabel="compartilhamento de pacientes" />
           <p style={{
             fontSize: 12.5, color: 'var(--dosy-fg-secondary)',
             lineHeight: 1.5, margin: 0,
@@ -72,7 +80,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
             <Button
               type="submit"
               kind="primary"
-              disabled={shareMut.isPending}
+              disabled={shareMut.isPending || !guard.online}
               full
             >
               {shareMut.isPending ? 'Enviando…' : 'Compartilhar'}
