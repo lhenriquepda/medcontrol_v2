@@ -561,7 +561,9 @@
 
 ---
 
-#### `[ ]` 207.2 — Alarme dispara no horário EXATO (não 15min antes)
+#### `[x]` 207.2 — Alarme dispara no horário EXATO (não 15min antes)
+
+✅ **Validado device S25 Ultra 2026-05-11** (user confirmou): alarme +5min disparou no horário exato, não 15min antes. Fix `advanceMins ?? 0` em scheduler.js aplicou.
 
 **Contexto bug:** antes do fix, `advanceMins ?? 15` no scheduler.js fazia o alarme disparar 15 minutos antes do horário marcado quando as preferências locais não tinham o campo explícito. Agora `?? 0` alinha com o default real (alarme exato).
 
