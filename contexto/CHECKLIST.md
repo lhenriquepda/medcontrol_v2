@@ -6029,7 +6029,7 @@ Commits: `4c9a588` (sound + channel + bump vc 54).
 
 ### #204 — Mutation queue offline (React Query nativa) — Fase 1 offline-first
 
-- **Status:** ✅ Fechado v0.2.1.7 (vc 55, Vercel prod 2026-05-10) — validação device acumulada em [`Validar.md`](Validar.md)
+- **Status:** ✅ Fechado v0.2.1.7 base + v0.2.1.8 expand fixes A1/A2/B/C (vc 56, Vercel prod 2026-05-12 01:50 UTC, tag `v0.2.1.8` commit `b7b5c71`) — 13 validações marcadas [`Validar.md`](Validar.md) (8 device + 5 web + SQL); 218.9.x cumulativo 24h pendente (não-bloqueador)
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 (bloqueador antes Closed Testing público)
 - **Origem:** Auditoria offline-first 2026-05-08 (pré-Teste Fechado, pergunta crítica do usuário sobre comportamento offline em app de medicação)
@@ -6299,7 +6299,7 @@ if (!isOnline && pendingMutations > 0) {
 
 ### #205 — Single source refresh token (storm xx:00 fix)
 
-- **Status:** 🚧 Código mergeado release/v0.2.1.8 — validação device pendente em [`Validar.md`](Validar.md) §218.x
+- **Status:** ✅ Fechado v0.2.1.8 (vc 56, Vercel prod 2026-05-12 01:50 UTC, tag `v0.2.1.8` commit `b7b5c71`, AAB Internal Testing 2026-05-11 22:45 BRT) — validação cumulativa 218.9.x 24h pendente (não-bloqueador release; qualquer falha → fix v0.2.1.9+)
 - **Categoria:** 🚀 IMPLEMENTAÇÃO
 - **Prioridade:** P0 (bloqueador antes Closed Testing público — re-logins frequentes degradam UX healthcare crítica)
 - **Origem:** Investigação 2026-05-10 SQL `auth.refresh_tokens` + `auth.sessions` + telemetria `medcontrol.auth_events` durante session lifecycle user `lhenrique.pda@gmail.com` no S25 Ultra (vc 55 Internal Testing v0.2.1.7)

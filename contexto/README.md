@@ -429,17 +429,17 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `release/v0.2.1.8` (vc 56, em curso 2026-05-10). Master @ `v0.2.1.7` (vc 55 Internal Testing 2026-05-09 23:08).
-**Vercel prod:** `https://dosymed.app/` (sincronizado master)
+**Versão atual:** master @ `v0.2.1.8` (vc 56 Internal Testing publicado 2026-05-11 22:45 BRT, Vercel prod deployed 2026-05-12 01:50 UTC, tag `v0.2.1.8` commit `b7b5c71`)
+**Vercel prod:** `https://dosymed.app/` (sincronizado master, version.json reporta 0.2.1.8)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
-**Release em curso:**
-- 🚧 v0.2.1.8 — #205 NOVO P0 single source refresh token (storm xx:00 fix) + #204 expand fixes A1/A2/B/C identificados logcat S25 Ultra + optimistic CRUD completos (update/pause/resume/end Treatment + registerSos) + forms edit offline + `useOfflineGuard` + `OfflineNotice` bloqueios features fora queue. AAB pendente publish. Validação device acumulada `Validar.md` 22 checks.
+**Última release fechada:**
+- ✅ v0.2.1.8 (2026-05-11) — #205 NOVO P0 single source refresh token (storm xx:00 fix) + #204 expand fixes A1/A2/B/C + optimistic CRUD completos (update/pause/resume/end Treatment + registerSos) + forms edit offline + `useOfflineGuard` + `OfflineNotice` bloqueios features fora queue + bug fix `usePatient/useTreatment` initialData fallback + helper `patchEntityListsInCache`. Commit `b7b5c71`. Tag `v0.2.1.8`. 13 validações marcadas Validar.md.
 
-**Última release fechada master:**
-- ✅ v0.2.1.7 (2026-05-10) — #204 Mutation queue offline + #207 Defesa em profundidade alarme + reestruturação contexto/ V2 (entry point Passos 0-14 + Validar.md). Commit `0edc6b3`. Tag `v0.2.1.7`.
+**Release anterior:**
+- ✅ v0.2.1.7 (2026-05-10) — #204 Mutation queue offline base + #207 Defesa em profundidade alarme + reestruturação contexto/ V2 (entry point Passos 0-14 + Validar.md). Commit `0edc6b3`. Tag `v0.2.1.7`.
 
-**Validações pendentes:** ver [`Validar.md`](Validar.md) — 22 checks device-only S25 Ultra (#204 v218.1-8 + #205 v218.9 + #207).
+**Validações pendentes (cumulativas — não-bloqueador):** ver [`Validar.md`](Validar.md) — 218.9.x #205 storm xx:00 (24h device + SQL `auth.refresh_tokens` + sessions lifespan) + 207.3 (3 dias alarme) + 207.4/207.5 parciais. Qualquer falha → fix v0.2.1.9+.
 
 **P0 abertos pra Closed Testing público:**
 - #006 device validation 3 devices físicos (manual user)
