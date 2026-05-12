@@ -6431,3 +6431,104 @@ Ver [`Validar.md`](Validar.md) seção "#205 v218.x" — checklist completo S25 
 - [ ] Bumpar JWT expiry Supabase Dashboard Auth → Settings: 3600 → 28800 (8h) ou 86400 (24h) — paliativo extra que reduz frequência storms se algum caminho residual permanecer
 - [ ] Plus refactor `useUserPrefs.update` + `useUpsertSosRule` + `useSharePatient` etc pra entrarem na queue offline (item separado #206)
 - [ ] Telemetria PostHog `auth_refresh_storm_detected` (Worker detecta storm via timestamp delta)
+
+---
+
+### #208 — UpdateBanner mostra versionName errado quando map `VERSION_CODE_TO_NAME` desatualizado
+
+- **Status:** ⏳ Aberto
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P2 (UX bug recorrente, não-bloqueador — fluxo update funciona, label visual errado)
+- **Origem:** User-reported 2026-05-11 pós-install vc 56 Internal Testing — banner mostrou "v0.2.1.7" ao invés de "v0.2.1.8" na atualização vc 55→56
+- **Esforço estimado:** (a) curto-prazo 5min · (b) longer-term 1-2h
+- **Release sugerida:** v0.2.1.9+ (próxima code release; junto com outros fixes minores)
+- **Extends:** #189 (triple fallback chain já implementada v0.2.1.3 vc 49)
+
+**Problema:**
+
+User-reported 2026-05-11 22:50 BRT após desinstalar Dosy + reinstalar Teste Interno:
+
+> "app não veio atualizado... baixou versão anterior xx.1.7 e apareceu banner verde de atualização... atualizou pra xx.1.8, mas no banner verde estava escrito nova versão 0.2.1.7"
+
+Sequência observada:
+1. Install Teste Interno entregou vc 55 (0.2.1.7) — Internal Testing CDN ainda não propagou vc 56 (~1h delay esperado após publish)
+2. App vc 55 detectou update disponível via Play Core (`info.updateAvailability === 2`)
+3. UpdateBanner.jsx renderizou subtitle `v${latest.version}` — **mostrou "v0.2.1.7" (versão errada — deveria ser "v0.2.1.8" nova)**
+4. User clicou Atualizar → flexible update baixou vc 56 → app virou 0.2.1.8 ✅ (fluxo função OK)
+
+**Root cause:**
+
+`src/hooks/useAppUpdate.js:89-101` `VERSION_CODE_TO_NAME` map manual:
+
+```js
+const VERSION_CODE_TO_NAME = {
+  46: '0.2.1.0',
+  47: '0.2.1.1',
+  // ...
+  54: '0.2.1.6',
+  55: '0.2.1.7',
+  // adicionar próximas releases aqui  ← FALTA 56: '0.2.1.8'
+}
+```
+
+Triple fallback chain (#189 fix v0.2.1.3 vc 49) ordem:
+1. `info.availableVersion` Play Core — Android 16 retorna `undefined` (regressão API ou Play Core SDK)
+2. `versionData?.version` Vercel `/version.json` — CDN stale logo após deploy (vercel cache CDN ~minutos)
+3. `VERSION_CODE_TO_NAME[info.availableVersionCode]` — **undefined** (entry 56 faltando)
+4. Fallback `versão ${info.availableVersionCode}` — feio ("versão 56")
+
+User viu "0.2.1.7" — provavelmente Vercel CDN cache stale serviu `version.json` antigo (vc 55 era prod até minutos antes do deploy v0.2.1.8). Plus `currentVersion` no fallback final em outro caminho do banner.
+
+**Bug recorrente:**
+
+Comentário inline `// adicionar próximas releases aqui` nunca lembrado no release lifecycle (passo 8 commit ou passo 11 AAB build). Toda nova versionCode + versionName precisa entry manual nesse map — esquecimento sistemático.
+
+**Abordagem (a) curto-prazo — entry manual + memory note (5min):**
+
+```js
+const VERSION_CODE_TO_NAME = {
+  // ... existing
+  55: '0.2.1.7',
+  56: '0.2.1.8',  // ← NOVO
+  // futuro 57+, lembrar atualizar A CADA release no Passo 11 README
+}
+```
+
+Plus criar/atualizar `memory/feedback_release_lifecycle.md` com checklist:
+- [ ] Bump vc + vn em build.gradle + package.json
+- [ ] **Atualizar VERSION_CODE_TO_NAME em useAppUpdate.js** ← NOVO item
+- [ ] npm run build + cap sync
+- [ ] Commit chore
+- [ ] AAB build + upload Play Console
+
+**Abordagem (b) longer-term — gerar map dinamicamente (1-2h):**
+
+Opção 1: **Vite plugin custom** que lê `git tag --list "v*"` no build → emite chunk `versionMap.json` deployado junto `version.json` → useAppUpdate.js fetcha em vez de hardcoded.
+
+Opção 2: **Build script `scripts/sync-version-map.mjs`** rodado pre-build que parsea git tags → atualiza arquivo `src/data/versionMap.json` → committed git. Auto-update toda release.
+
+Trade-off (b): elimina bug recorrente sempre, mas adiciona complexidade build pipeline. Aceitável pra evitar manutenção manual.
+
+**Critério de aceitação:**
+
+- ✅ User instala vc N → banner mostra "v(N+1).versionName" correto (não "versão (N+1)" feio)
+- ✅ Vercel CDN cache miss não afeta banner — fallback map cobre
+- ✅ Memory note ou auto-pipeline previne esquecimento próximas releases
+
+**Risco / mitigações:**
+
+| Risco | Mitigação |
+|---|---|
+| Approach (a) esquecida outra release | Memory feedback + check Passo 11 README |
+| Approach (b) build pipeline overhead | Plugin Vite trivial — read git tags + emit JSON; +~50ms build |
+| Vercel CDN cache stale persiste 1h+ | Aceito — fallback map cobre quando CDN missing/stale |
+
+**Não-escopo:**
+
+- Não bumpa vc 57 só pra esse fix (cosmético). Próxima release "natural" (v0.2.1.9 ou code release) inclui.
+- Não muda fluxo update flexible — funcionou perfeito user. Apenas label banner subtitle.
+
+**Validação pós-fix:**
+
+- [ ] Reinstall via Internal Testing após próxima release N+1 publicada — banner deve mostrar "v0.X.Y.Z" (N+1) correto, não "versão (N+1)"
+- [ ] Se Vercel CDN ainda servir version.json antigo, map fallback kick in OK
