@@ -6294,3 +6294,140 @@ if (!isOnline && pendingMutations > 0) {
 - [ ] `CriticalAlarm.getActiveAlarms()` JS-side probe pra detectar mismatch real-time + force reschedule
 - [ ] Painel admin /alarm-debug por user (lista alarmes agendados ↔ DoseSyncWorker last-run + ignoringBatteryOpt status)
 - [ ] Fallback emergencial via In-app Foreground Service "Dosy Monitor" sempre ON (DosyMonitorService) — promover #23.7 backlog
+
+---
+
+### #205 — Single source refresh token (storm xx:00 fix)
+
+- **Status:** 🚧 Código mergeado release/v0.2.1.8 — validação device pendente em [`Validar.md`](Validar.md) §218.x
+- **Categoria:** 🚀 IMPLEMENTAÇÃO
+- **Prioridade:** P0 (bloqueador antes Closed Testing público — re-logins frequentes degradam UX healthcare crítica)
+- **Origem:** Investigação 2026-05-10 SQL `auth.refresh_tokens` + `auth.sessions` + telemetria `medcontrol.auth_events` durante session lifecycle user `lhenrique.pda@gmail.com` no S25 Ultra (vc 55 Internal Testing v0.2.1.7)
+- **Esforço estimado:** 4-6h (código real ~2h Java + 30min JS)
+
+**Problema observado:**
+
+User reportou re-login forçado constante no app S25 Ultra. Painel admin `/auth-log` mostrou 4 `login_email_senha` em ~12h (digitou senha manualmente) intercalados com `sessao_restaurada`. SQL revelou:
+
+```sql
+-- Sessions S25 Ultra últimas 72h: 8 sessões distintas, lifespans muito curtos
+WITH u AS (SELECT id::uuid AS uid FROM auth.users WHERE email = 'lhenrique.pda@gmail.com')
+SELECT s.id, s.created_at, s.updated_at,
+       EXTRACT(EPOCH FROM (s.updated_at - s.created_at))/3600 AS lifespan_hours
+FROM auth.sessions s, u WHERE s.user_id = u.uid
+ORDER BY s.created_at DESC LIMIT 10;
+-- Resultados: 0.27h, 3.66h, 0.30h, 8.54h, 3.41h, 3.81h, 60.35h (web), 9.05h
+-- → sessões mobile morrem em 18min a ~9h
+```
+
+```sql
+-- Pattern refresh storm 100% top-of-hour xx:00:0X
+WITH u AS (SELECT id::text AS uid FROM auth.users WHERE email = 'lhenrique.pda@gmail.com')
+SELECT DATE_TRUNC('minute', created_at) AS bucket, COUNT(*) AS tokens
+FROM auth.refresh_tokens rt, u WHERE rt.user_id = u.uid
+  AND created_at > NOW() - INTERVAL '48 hours'
+GROUP BY 1 HAVING COUNT(*) > 2 ORDER BY 1 DESC;
+-- 2026-05-11 00:00 → 20 tokens
+-- 2026-05-10 18:00 → 3 tokens
+-- 2026-05-10 12:00 → 19 tokens
+-- 2026-05-09 12:00 → 25 tokens
+-- → TODAS storms top-of-hour
+```
+
+20+ refreshes em 7 segundos mesma session 89867645 (00:00:04 → 00:00:11). Cada token rotacionado em 5-8ms, todos `rotated_from_parent=true revoked=true` exceto último. Lifespan session: 16 minutos.
+
+**Causas (3 fontes paralelas chamando `/auth/v1/token?grant_type=refresh_token`):**
+
+1. **JS supabase-js auto-refresh** — `createClient({ auth: { autoRefreshToken: true }})` em `src/services/supabase.js:34`. Refresh automático quando JWT expira (~xx:00 após login).
+
+2. **`DoseSyncWorker.refreshAccessToken()` Android** — `android/.../DoseSyncWorker.java:108`. WorkManager periodic 6h chama HTTP POST direto. Lê `refresh_token` SharedPref → POST → persist `newRefresh`.
+
+3. **`DosyMessagingService.refreshAccessToken()` Android FCM handler** — `android/.../DosyMessagingService.java:202`. Static method usado por `reportAlarmScheduled()` quando FCM data message chega.
+
+Os 3 caminhos compartilham SharedPref `dosy_sync_credentials.refresh_token`. Quando JWT expira ~xx:00:
+- JS app foreground chama refresh → recebe novoToken1, persiste
+- Worker periodic OU FCM handler entra → lê refresh_token (pode ser velho se app ainda processando), chama refresh com token velho → 400 OR usa newer → persiste outroToken
+- Race condition `sp.edit().putString.apply()` não-atômico → escritas se sobrescrevem
+- Supabase Auth detecta **token reuse** → revoga chain inteira → próximas tentativas retornam 401 → cascata 20+ refreshes em 7s todos falhando ou rotacionando inutilmente
+- App recebe sequência de erros → eventualmente `setUser(null)` → user vê tela login
+
+**Implementação fechada (código):**
+
+✅ `android/app/src/main/java/com/dosyapp/dosy/plugins/criticalalarm/CriticalAlarmPlugin.java`:
+- `setSyncCredentials` aceita opcionais `accessToken` (String) + `accessTokenExp` (Long epoch ms)
+- Novo `@PluginMethod public void updateAccessToken(PluginCall call)` — escreve apenas `access_token` + `access_token_exp_ms` em SharedPref, sem touchar refresh_token/anon_key/schema. Lightweight pra TOKEN_REFRESHED listener.
+
+✅ `android/app/src/main/java/com/dosyapp/dosy/plugins/criticalalarm/DoseSyncWorker.java`:
+- **Removeu `refreshAccessToken()` private method** — não chama mais `/auth/v1/token`
+- `doWork()` lê `access_token` + `access_token_exp_ms` SharedPref direto
+- Se `access_token == null` ou `(now + 60s) >= exp` → `Result.success()` (skip rodada, NÃO retry pra evitar storm; next periodic pega token fresco após JS refresh foreground)
+- Se fetch retorna não-200 → `Result.success()` (assume token rejeitado, skip)
+- Mantém grouping doses por minuto + AlarmScheduler integration
+
+✅ `android/app/src/main/java/com/dosyapp/dosy/plugins/criticalalarm/DosyMessagingService.java`:
+- **Removeu static `refreshAccessToken()` method** completo + chamada de `reportAlarmScheduled()`
+- `reportAlarmScheduled()` lê `access_token` cached + verifica exp local
+- Se ausente/expirado → skip silencioso (alarme local já scheduled em `handleScheduleAlarms`, este report é defense extra pra cron skip push redundante — não-crítico se falhar)
+
+✅ `src/services/criticalAlarm.js`:
+- `setSyncCredentials` payload inclui `accessToken` + `accessTokenExp` opcionais
+- Novo `updateAccessToken({accessToken, accessTokenExp})` export — chama plugin method
+
+✅ `src/hooks/useAuth.jsx`:
+- Listener `onAuthStateChange` em SIGNED_IN/TOKEN_REFRESHED/INITIAL_SESSION propaga `s.access_token` + `s.expires_at * 1000` ms via `setSyncCredentials`
+- Mantém propagation `refresh_token` (Worker ainda lê — mas NÃO usa pra refresh; mantido pra futuro fallback)
+
+**Estratégia anti-storm:**
+
+| Camada | Antes | Depois |
+|---|---|---|
+| JS supabase-js | auto-refresh ON | auto-refresh ON (ÚNICA fonte) |
+| Worker periodic | refreshAccessToken() POST `/auth/v1/token` | lê `access_token` cached + verifica exp local; expirado → skip rodada |
+| FCM handler reportAlarmScheduled | refreshAccessToken() POST `/auth/v1/token` | lê `access_token` cached + verifica exp local; expirado → skip report (não-crítico) |
+| useAppResume #202 | mutex JS-side | mantém (refresh JS-side único) |
+
+**Trade-offs:**
+
+- WorkManager rodada pode skip se user não foreground app por >1h após token expirar → AlarmManager local já scheduled da rodada anterior (HORIZON 168h cobre 7 dias). Próximas execuções (6h período) acabarão pegando token fresco quando user abrir app.
+- DosyMessagingService.reportAlarmScheduled skip → notify-doses cron pode mandar push redundante mesmo com alarme local agendado. Não-crítico (defense extra; cobre cenário Worker não tinha rodado ainda).
+- Se user ficar offline literal >7d sem abrir app → Worker eventualmente terá só doses fora HORIZON cached + alarmes não agendados. Cenário extremo aceitável.
+
+**Auditoria egress #205:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Worker pula rodadas se token expirado → menos requests | 🟢 Zero/negativo | N/A | **Aceitável** — net egress reduz (storm 20 reqs/min eliminada) |
+| FCM handler skip reportAlarmScheduled → cron sem flag agendado | 🟡 Médio | Cron `notify-doses` fallback push tray cobre — user vê notif mesmo sem alarme | **Aceitável** — defense extra perdida em raro cenário |
+| JS supabase-js single source → próximo refresh natural cobre | 🟢 Zero | onAuthStateChange TOKEN_REFRESHED dispara `setSyncCredentials` com access_token fresco | **OK** |
+
+**Critério de aceitação:**
+
+- ✅ Build verde
+- ✅ SQL `auth.refresh_tokens` durante 24h após install vc 56: zero buckets >5 tokens/minuto top-of-hour
+- ✅ SQL `auth.sessions` lifespan >12h por sessão (em vez de 18min-3h atual)
+- ✅ Painel admin `/auth-log` zero `login_email_senha` em <24h consecutivos (apenas `sessao_restaurada`)
+- ✅ Sentry zero issues "TypeError: Failed to fetch (refresh_token)" pós-install
+- ✅ Logcat S25 Ultra: zero linhas `[DoseSyncWorker] token refresh status=` ou `[DosyMessagingService] refreshAccessToken`
+
+**Risco / mitigações:**
+
+| Risco | Mitigação |
+|---|---|
+| access_token expira durante Worker rodada (rara — JS deveria ter refeito refresh antes Worker rodar) | Worker skip + retry periodic 6h depois. AlarmManager local cobertura 168h cobre janela |
+| User fica offline >1h sem abrir app → access_token expira → Worker skip + nenhum JS pra refresh | Aceitável: AlarmManager local da rodada anterior cobre próximas 168h. User abrir app → JS refresh → próximo Worker rodada usa fresh |
+| Race FCM handler + JS app foreground refresh simultâneo (raríssimo) | FCM handler agora lê apenas access_token, não chama refresh. Race eliminada arquiteturalmente |
+| Plugin updateAccessToken falhar silencioso (catch geral) | Sentry breadcrumb opcional pós-Closed Testing (Fase 1.5) |
+
+**Validação device pré-merge:**
+
+Ver [`Validar.md`](Validar.md) seção "#205 v218.x" — checklist completo S25 Ultra:
+- Reinstalar vc 56 + login → SQL refresh_tokens monitorar 24h
+- Forçar lifecycle: foreground 30min, background 90min, retornar, repetir 3 ciclos cobrindo top-of-hour
+- Sentry breadcrumbs zero "Failed to fetch"
+- Painel admin `/auth-log` apenas `sessao_restaurada` consecutivos
+
+**Pós-merge (não bloqueia):**
+
+- [ ] Bumpar JWT expiry Supabase Dashboard Auth → Settings: 3600 → 28800 (8h) ou 86400 (24h) — paliativo extra que reduz frequência storms se algum caminho residual permanecer
+- [ ] Plus refactor `useUserPrefs.update` + `useUpsertSosRule` + `useSharePatient` etc pra entrarem na queue offline (item separado #206)
+- [ ] Telemetria PostHog `auth_refresh_storm_detected` (Worker detecta storm via timestamp delta)

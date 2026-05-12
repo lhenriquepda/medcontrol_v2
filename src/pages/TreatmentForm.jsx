@@ -15,7 +15,7 @@ import MedNameInput from '../components/MedNameInput'
 import PatientPicker from '../components/PatientPicker'
 import { CONTINUOUS_DAYS, deleteTreatment } from '../services/treatmentsService'
 import { useUndoableDelete } from '../hooks/useUndoableDelete'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, onlineManager } from '@tanstack/react-query'
 
 // [horas, rótulo]
 const INTERVALS = [
@@ -161,21 +161,48 @@ export default function TreatmentForm() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setErrors({})
     if (!form.patientId) { toast.show({ message: 'Selecione um paciente.', kind: 'error' }); return }
-    try {
-      const payload = {
-        patientId: form.patientId,
-        medName: form.medName.trim(),
-        unit: form.unit.trim(),
-        durationDays: form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays),
-        isContinuous: form.isContinuous,
-        startDate: fromDatetimeLocalInput(form.startAt),
-        mode: form.mode,
-        intervalHours: form.mode === 'interval' ? Number(form.intervalHours) : null,
-        firstDoseTime: form.mode === 'interval'
-          ? form.firstDoseTime
-          : JSON.stringify(form.dailyTimes),
-        dailyTimes: form.mode === 'times' ? form.dailyTimes : null,
+    const payload = {
+      patientId: form.patientId,
+      medName: form.medName.trim(),
+      unit: form.unit.trim(),
+      durationDays: form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays),
+      isContinuous: form.isContinuous,
+      startDate: fromDatetimeLocalInput(form.startAt),
+      mode: form.mode,
+      intervalHours: form.mode === 'interval' ? Number(form.intervalHours) : null,
+      firstDoseTime: form.mode === 'interval'
+        ? form.firstDoseTime
+        : JSON.stringify(form.dailyTimes),
+      dailyTimes: form.mode === 'times' ? form.dailyTimes : null,
+    }
+    // Item #204 v0.2.1.8 fix-A — offline-aware submit (create + edit paths).
+    const isOffline = !onlineManager.isOnline()
+    if (isOffline) {
+      if (editing) {
+        update.mutate({ id, patch: {
+          medName: payload.medName, unit: payload.unit,
+          intervalHours: payload.intervalHours, durationDays: payload.durationDays,
+          isContinuous: payload.isContinuous,
+          startDate: payload.startDate, firstDoseTime: payload.firstDoseTime,
+        } })
+        toast.show({ message: 'Alterações salvas offline — sincronizam ao reconectar.', kind: 'info' })
+      } else {
+        create.mutate(payload)
+        // Template NÃO entra queue offline (useCreateTemplate fora mutationRegistry).
+        // Aviso explícito ao user se ele marcou saveAsTemplate offline.
+        if (form.saveAsTemplate && form.templateName.trim()) {
+          toast.show({
+            message: 'Tratamento salvo offline. Salvar como modelo requer internet — refaça online.',
+            kind: 'warn', duration: 6000,
+          })
+        } else {
+          toast.show({ message: 'Tratamento salvo offline — sincroniza ao reconectar.', kind: 'info' })
+        }
       }
+      nav('/')
+      return
+    }
+    try {
       if (editing) {
         await update.mutateAsync({ id, patch: {
           medName: payload.medName, unit: payload.unit,

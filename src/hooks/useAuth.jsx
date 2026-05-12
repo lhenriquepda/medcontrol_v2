@@ -146,14 +146,20 @@ export function AuthProvider({ children }) {
           }
 
           // Item #081 (release v0.1.7.1) — propaga credentials pro DoseSyncWorker
-          // (Android background) sempre que session muda. Worker precisa do
-          // refresh_token atualizado pra fetch autenticado em background.
+          // (Android background) sempre que session muda.
+          // Item #205 (release v0.2.1.8) — agora propaga access_token + exp pra
+          // Worker consumir token cached em vez de chamar /auth/v1/token paralelo.
+          // JS é ÚNICA fonte refresh (storm xx:00 fix).
           if (s?.user?.id && s?.refresh_token && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+            const accessToken = s?.access_token || null
+            const expiresAt = s?.expires_at ? Number(s.expires_at) * 1000 : null // s.expires_at é epoch seconds
             setSyncCredentials({
               supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
               anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
               userId: s.user.id,
               refreshToken: s.refresh_token,
+              accessToken,
+              accessTokenExp: expiresAt,
               schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
             }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
 

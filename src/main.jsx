@@ -95,29 +95,39 @@ const queryClient = new QueryClient({
 // resumePausedMutations não acha mutationFn e descarta mutations persistidas.
 registerMutationDefaults(queryClient)
 
-// Item #204 — bridge connectivity real → TanStack onlineManager.
-// Native (Capacitor): @capacitor/network detecta wifi-sem-internet, avião mode etc
-//   (mais preciso que navigator.onLine no WebView, que costuma reportar true sempre).
-// Web: navigator.onLine + window online/offline events (já é o default do TanStack,
-//   mas explicitamos pra consistency cross-platform).
-;(async () => {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const { Network } = await import('@capacitor/network')
-      const status = await Network.getStatus()
-      onlineManager.setOnline(status.connected)
-      Network.addListener('networkStatusChange', (s) => {
-        onlineManager.setOnline(s.connected)
-      })
-    } catch (e) {
-      console.warn('[onlineManager bridge] Capacitor Network indisponível:', e?.message)
+// Item #204 v0.2.1.8 fix-C — bridge connectivity real → TanStack onlineManager.
+// Substitui default subscriber TanStack via setEventListener pra Capacitor.Network
+// ser ÚNICA fonte de verdade native (default usa window.online/offline events
+// que em Capacitor WebView Android disparam erradamente — race condition observada
+// logcat 2026-05-10 09:24:38: window.online dispara 7ms ANTES Capacitor confirmar
+// avião mode → mutations resumed prematuro + falham + re-pausam).
+//
+// Web: mantém default TanStack (navigator.onLine + window events — único caminho disponível).
+if (Capacitor.isNativePlatform()) {
+  onlineManager.setEventListener((setOnline) => {
+    let listenerHandle = null
+    let mounted = true
+    ;(async () => {
+      try {
+        const { Network } = await import('@capacitor/network')
+        const status = await Network.getStatus()
+        if (mounted) setOnline(status.connected)
+        listenerHandle = await Network.addListener('networkStatusChange', (s) => {
+          if (mounted) setOnline(s.connected)
+        })
+      } catch (e) {
+        console.warn('[onlineManager bridge] Capacitor Network indisponível:', e?.message)
+        // fallback navigator.onLine se plugin falhar
+        if (typeof navigator !== 'undefined' && mounted) setOnline(navigator.onLine)
+      }
+    })()
+    return () => {
+      mounted = false
+      listenerHandle?.remove?.()
     }
-  } else if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-    onlineManager.setOnline(navigator.onLine)
-    window.addEventListener('online', () => onlineManager.setOnline(true))
-    window.addEventListener('offline', () => onlineManager.setOnline(false))
-  }
-})()
+  })
+}
+// Web: TanStack default subscriber já cobre (navigator.onLine + online/offline events).
 
 // Persist React Query cache → fast re-open + offline last-known data.
 // Native: localStorage (Capacitor WebView storage); Web: localStorage.
@@ -156,7 +166,23 @@ if (Capacitor.isNativePlatform()) {
   })()
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+// [Fix B v0.2.1.8] Boot bloqueante — pre-mount sync Network.getStatus + setOnline
+// pra garantir onlineManager.isOnline() reflete realidade ANTES React mount +
+// PersistQueryClientProvider hydrate + resumePausedMutations. Sem isso, mutations
+// rehydradas em avião mode tentam executar (1s), falham, re-pausam — burn fetches
+// + race condition observada logcat 09:24:22.
+async function boot() {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { Network } = await import('@capacitor/network')
+      const status = await Network.getStatus()
+      onlineManager.setOnline(status.connected)
+    } catch (e) {
+      console.warn('[onlineManager] pre-mount fail:', e?.message)
+    }
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <PersistQueryClientProvider
@@ -195,4 +221,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       </PersistQueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>
-)
+  )
+}
+boot()

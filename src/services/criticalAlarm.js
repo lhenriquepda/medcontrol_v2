@@ -140,9 +140,13 @@ export async function requestIgnoreBatteryOptimizations() {
  * Chamar após login (useAuth onAuthStateChange SIGNED_IN/TOKEN_REFRESHED)
  * pra Worker ter token de refresh atualizado.
  */
-export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refreshToken, schema, criticalAlarmEnabled }) {
+export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refreshToken, accessToken, accessTokenExp, schema, criticalAlarmEnabled }) {
   if (!isCriticalAlarmAvailable()) return null
-  return CriticalAlarm.setSyncCredentials({
+  // Item #205 (release v0.2.1.8) — inclui access_token + exp epoch ms. Native
+  // (Worker + MessagingService) consome esse token cached em vez de chamar
+  // /auth/v1/token?grant_type=refresh_token em paralelo (storm xx:00 fix).
+  // JS supabase-js é ÚNICA fonte de refresh; native só lê o token cached.
+  const payload = {
     supabaseUrl,
     anonKey,
     userId,
@@ -151,9 +155,24 @@ export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refresh
     // Item #085 (release v0.1.7.3) — propaga toggle Alarme Crítico pro
     // SharedPreferences Android. DoseSyncWorker + DosyMessagingService
     // leem essa flag antes de agendar alarme nativo.
-    // Default true mantém comportamento atual (alarme ON) se não passado.
-    criticalAlarmEnabled: criticalAlarmEnabled !== false
-  })
+    criticalAlarmEnabled: criticalAlarmEnabled !== false,
+  }
+  if (accessToken) payload.accessToken = accessToken
+  if (typeof accessTokenExp === 'number' && accessTokenExp > 0) payload.accessTokenExp = accessTokenExp
+  return CriticalAlarm.setSyncCredentials(payload)
+}
+
+/**
+ * Item #205 (release v0.2.1.8) — atualiza apenas access_token + exp.
+ * Chamado pelo useAuth.jsx no listener TOKEN_REFRESHED + INITIAL_SESSION.
+ * Lightweight: não toca refresh_token, anon_key, schema etc.
+ */
+export async function updateAccessToken({ accessToken, accessTokenExp }) {
+  if (!isCriticalAlarmAvailable()) return null
+  if (!accessToken) return null
+  const payload = { accessToken }
+  if (typeof accessTokenExp === 'number' && accessTokenExp > 0) payload.accessTokenExp = accessTokenExp
+  return CriticalAlarm.updateAccessToken(payload)
 }
 
 /**
