@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listPatients, getPatient } from '../services/patientsService'
 
 export function usePatients() {
@@ -15,7 +15,22 @@ export function usePatients() {
   })
 }
 export function usePatient(id) {
-  return useQuery({ queryKey: ['patients', id], queryFn: () => getPatient(id), enabled: !!id })
+  const qc = useQueryClient()
+  // Item #204 v0.2.1.8 — initialData lookup na lista ['patients'] cache.
+  // Sem isso, offline PatientDetail trava em "Carregando..." quando user navega
+  // direto pra detalhe sem ter visitado antes (PATIENT_COLS_LIST tem dados
+  // suficientes pra renderizar; photo_url full vem do fetch online quando disponível).
+  return useQuery({
+    queryKey: ['patients', id],
+    queryFn: () => getPatient(id),
+    enabled: !!id,
+    initialData: () => {
+      if (!id) return undefined
+      const list = qc.getQueryData(['patients']) || []
+      return list.find(p => p.id === id)
+    },
+    initialDataUpdatedAt: () => qc.getQueryState(['patients'])?.dataUpdatedAt,
+  })
 }
 
 // Item #204 (release v0.2.1.7) — Mutation queue offline. Defaults em mutationRegistry.

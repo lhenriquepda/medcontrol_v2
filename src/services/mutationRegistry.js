@@ -65,6 +65,53 @@ function patchDoseInCache(qc, id, patch) {
   return snapshots
 }
 
+// Item #204 v0.2.1.8 fix — patch genérico em TODAS variações de queryKey
+// `[entity, *]` (lista filtrada por patientId/filter etc). Antes:
+// `setQueryData(['treatments'], ...)` só afetava chave exata sem filter array
+// → UI lendo `useTreatments({patientId})` não via update → status pausado não
+// refletia visualmente offline. Agora varre cache, patch cada list array.
+function patchEntityListsInCache(qc, entity, id, patch) {
+  const queries = qc.getQueryCache().findAll({ queryKey: [entity] })
+  const snapshots = []
+  for (const q of queries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    snapshots.push([q.queryKey, data])
+    qc.setQueryData(
+      q.queryKey,
+      data.map((item) => (item?.id === id ? { ...item, ...patch } : item))
+    )
+  }
+  return snapshots
+}
+
+// Insert temp entity em TODAS variações de queryKey `[entity, *]` lista.
+function insertEntityIntoLists(qc, entity, item, filterMatchFn) {
+  const queries = qc.getQueryCache().findAll({ queryKey: [entity] })
+  const snapshots = []
+  for (const q of queries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    snapshots.push([q.queryKey, data])
+    // Aplica filter da queryKey se função fornecida + match retornar true
+    const filterArg = q.queryKey[1] || {}
+    if (!filterMatchFn || filterMatchFn(item, filterArg)) {
+      qc.setQueryData(q.queryKey, [item, ...data])
+    }
+  }
+  return snapshots
+}
+
+// Remove items por predicado em TODAS variações queryKey `[entity, *]`.
+function removeFromEntityLists(qc, entity, predicateFn) {
+  const queries = qc.getQueryCache().findAll({ queryKey: [entity] })
+  for (const q of queries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    qc.setQueryData(q.queryKey, data.filter((item) => !predicateFn(item)))
+  }
+}
+
 function rollback(qc, snapshots) {
   for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
 }
@@ -411,19 +458,23 @@ export function registerMutationDefaults(qc) {
     },
   })
 
-  // Item #204 v0.2.1.8 fix-A — optimistic pauseTreatment.
-  // Status muda imediato no cache + cancela doses futuras local (AlarmScheduler
-  // re-agenda baseado no cache → alarmes param). Drain RPC server-side replica.
+  // Item #204 v0.2.1.8 fix — pauseTreatment patch TODAS variações queryKey
+  // ['treatments', filter]. setQueryData(['treatments']) sozinho NÃO atinge
+  // useTreatments({patientId}) etc → UI mostrava status antigo.
   qc.setMutationDefaults(['pauseTreatment'], {
     mutationFn: pauseTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
       await qc.cancelQueries({ queryKey: ['doses'] })
-      const prevT = qc.getQueryData(['treatments'])
-      qc.setQueryData(['treatments'], (old = []) =>
-        (old || []).map(t => t.id === id ? { ...t, status: 'paused', _optimistic: true } : t)
-      )
-      // Remove doses futuras pendentes local (mesma semântica cancelFutureDoses server)
+      const treatmentSnapshots = patchEntityListsInCache(qc, 'treatments', id, {
+        status: 'paused', _optimistic: true
+      })
+      // Patch single cache key também (useTreatment(id))
+      const prevSingle = qc.getQueryData(['treatments', id])
+      if (prevSingle) {
+        qc.setQueryData(['treatments', id], { ...prevSingle, status: 'paused', _optimistic: true })
+      }
+      // Remove doses futuras pendentes local (cancelFutureDoses semântica server)
       const nowMs = Date.now()
       const doseQueries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
       const doseSnapshots = doseQueries.map(q => [q.queryKey, q.state.data])
@@ -434,11 +485,12 @@ export function registerMutationDefaults(qc) {
           !(d.treatmentId === id && d.status === 'pending' && new Date(d.scheduledAt).getTime() > nowMs)
         ))
       }
-      return { prevT, doseSnapshots, id }
+      return { treatmentSnapshots, doseSnapshots, prevSingle, id }
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prevT !== undefined) qc.setQueryData(['treatments'], ctx.prevT)
-      for (const [key, data] of (ctx?.doseSnapshots ?? [])) qc.setQueryData(key, data)
+      rollback(qc, ctx?.treatmentSnapshots)
+      rollback(qc, ctx?.doseSnapshots)
+      if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_PAUSED || 'treatment_paused')
@@ -448,22 +500,23 @@ export function registerMutationDefaults(qc) {
     },
   })
 
-  // Item #204 v0.2.1.8 fix-A — optimistic resumeTreatment.
-  // Status flip pra active local; doses futuras geradas SERVER-SIDE pela RPC
-  // update_treatment_schedule. Offline cache não regenera doses — drain online
-  // restaura. Aceitável (resume é raro + AlarmScheduler refetch após drain).
+  // Item #204 v0.2.1.8 fix — resumeTreatment patch TODAS variações.
   qc.setMutationDefaults(['resumeTreatment'], {
     mutationFn: resumeTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
-      const prev = qc.getQueryData(['treatments'])
-      qc.setQueryData(['treatments'], (old = []) =>
-        (old || []).map(t => t.id === id ? { ...t, status: 'active', _optimistic: true } : t)
-      )
-      return { prev, id }
+      const snapshots = patchEntityListsInCache(qc, 'treatments', id, {
+        status: 'active', _optimistic: true
+      })
+      const prevSingle = qc.getQueryData(['treatments', id])
+      if (prevSingle) {
+        qc.setQueryData(['treatments', id], { ...prevSingle, status: 'active', _optimistic: true })
+      }
+      return { snapshots, prevSingle, id }
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev !== undefined) qc.setQueryData(['treatments'], ctx.prev)
+      rollback(qc, ctx?.snapshots)
+      if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_RESUMED || 'treatment_resumed')
@@ -473,17 +526,19 @@ export function registerMutationDefaults(qc) {
     },
   })
 
-  // Item #204 v0.2.1.8 fix-A — optimistic endTreatment.
-  // Mesma estratégia pauseTreatment: status=ended + cancela doses futuras local.
+  // Item #204 v0.2.1.8 fix — endTreatment patch TODAS variações + cancel doses.
   qc.setMutationDefaults(['endTreatment'], {
     mutationFn: endTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
       await qc.cancelQueries({ queryKey: ['doses'] })
-      const prevT = qc.getQueryData(['treatments'])
-      qc.setQueryData(['treatments'], (old = []) =>
-        (old || []).map(t => t.id === id ? { ...t, status: 'ended', _optimistic: true } : t)
-      )
+      const treatmentSnapshots = patchEntityListsInCache(qc, 'treatments', id, {
+        status: 'ended', _optimistic: true
+      })
+      const prevSingle = qc.getQueryData(['treatments', id])
+      if (prevSingle) {
+        qc.setQueryData(['treatments', id], { ...prevSingle, status: 'ended', _optimistic: true })
+      }
       const nowMs = Date.now()
       const doseQueries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
       const doseSnapshots = doseQueries.map(q => [q.queryKey, q.state.data])
@@ -494,11 +549,12 @@ export function registerMutationDefaults(qc) {
           !(d.treatmentId === id && d.status === 'pending' && new Date(d.scheduledAt).getTime() > nowMs)
         ))
       }
-      return { prevT, doseSnapshots, id }
+      return { treatmentSnapshots, doseSnapshots, prevSingle, id }
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prevT !== undefined) qc.setQueryData(['treatments'], ctx.prevT)
-      for (const [key, data] of (ctx?.doseSnapshots ?? [])) qc.setQueryData(key, data)
+      rollback(qc, ctx?.treatmentSnapshots)
+      rollback(qc, ctx?.doseSnapshots)
+      if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_ENDED || 'treatment_ended')

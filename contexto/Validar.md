@@ -34,7 +34,9 @@
 
 ### #204.v218.1 — Boot offline: mutations rehydradas NÃO disparam fetches espúrios
 
-#### `[ ]` 218.1.1 — Pre-mount Network.getStatus bloqueante
+#### `[x]` 218.1.1 — Pre-mount Network.getStatus bloqueante
+
+✅ **Validado device S25 Ultra 2026-05-11 via logcat**: boot pós force-kill em avião mode mostrou `[Dosy:net] pre-mount Network.getStatus: {"connected":false}` ANTES React mount. 21 mutations rehydradas mantiveram `isPaused=true failureCount=1` (sem fetch espúrio que incrementaria failureCount). Pós-religar wifi, todas drenaram `status=success`.
 
 **Como fazer:**
 1. App aberto + algumas ações offline pendentes da sessão anterior (mutations no localStorage).
@@ -60,7 +62,9 @@
 
 ### #204.v218.2 — Reconnect: setOnline única fonte (Capacitor bridge)
 
-#### `[ ]` 218.2.1 — Sem flips espúrios `setOnline(true)` por TanStack default subscriber
+#### `[x]` 218.2.1 — Sem flips espúrios `setOnline(true)` por TanStack default subscriber
+
+✅ **Validado device S25 Ultra 2026-05-11 via logcat** (evidência indireta): 7 events `[Dosy:net] networkStatusChange` consecutivos em transição avião→online (none→cellular→wifi → connected:true), todos via plugin Capacitor.Network bridge. Zero callers `vendor-data` ou outras fontes paralelas. Mutations drenaram 100% `status=success` sem `failureCount` inflado — indicador indireto de zero refresh espúrio durante reconnect window. Wrap `onlineManager.setOnline` debug removido pré-commit, rastreio direto de outros callers não disponível nesta sessão.
 
 **Como fazer:**
 1. App offline com mutations pausadas.
@@ -78,7 +82,7 @@
 
 ### #204.v218.3 — Modal Cadastrar Paciente fecha imediato offline
 
-#### `[ ]` 218.3.1 — Create offline + UX honesto
+#### `[x]` 218.3.1 — Create offline + UX honesto
 
 **Como fazer:**
 1. Modo avião ON.
@@ -99,7 +103,9 @@
 
 ### #204.v218.4 — Modal Editar Paciente fecha imediato offline
 
-#### `[ ]` 218.4.1 — Edit offline + UX honesto
+#### `[x]` 218.4.1 — Edit offline + UX honesto
+
+✅ **Validado device S25 Ultra 2026-05-11**: bug encontrado — `usePatient(id)` sem cache fallback travava PatientDetail em "Carregando…". Fix aplicado: `initialData` lookup na lista `['patients']` cache + análogo em `useTreatment(id)`. Após rebuild, edit offline OK: modal fecha imediato + toast "Alterações salvas offline" + logcat `[Dosy:mut] updatePatient pending→paused→success` pós-reconnect.
 
 **Como fazer:**
 1. Modo avião ON.
@@ -118,7 +124,9 @@
 
 ### #204.v218.5 — Tratamento offline aparece no Dashboard + alarme dispara
 
-#### `[ ]` 218.5.1 — createTreatment optimistic + doses local + alarme
+#### `[x]` 218.5.1 — createTreatment optimistic + doses local + alarme
+
+✅ **Validado device S25 Ultra 2026-05-11 via logcat**: createTreatment pausou offline + `generateDoses` JS gerou doses local → `AlarmScheduler: scheduled id=723326328 at=<+2min>` + 2 doses futuras adicionais agendadas. AlarmReceiver BROADCAST disparou no horário, app levantou (Start proc com.dosyapp.dosy.dev) processar alarme. Fix A2 (doses optimistic local + alarme offline) funcionando end-to-end.
 
 **Como fazer:**
 1. Modo avião ON.
@@ -140,7 +148,9 @@
 
 ### #204.v218.6 — createTreatment drena após reconnect resolvendo temp patientId
 
-#### `[ ]` 218.6.1 — Drain ordem FIFO + lookup _tempIdSource
+#### `[x]` 218.6.1 — Drain ordem FIFO + lookup _tempIdSource
+
+✅ **Validado device S25 Ultra 2026-05-11 + SQL Supabase**: logcat `[Dosy:mut] updated createTreatment status=success failureCount=0` pós-reconnect (zero `failureCount=4 error` de v0.2.1.7). SQL `medcontrol.treatments` mostra row `medName=TesteOffiline` com `patientId=0bdf9abb-21fe-4312-8318-393d58aefc1d` (UUID real, não `temp-xxx`) + JOIN `patients` retornou `name="Teste Offline 2"` (FK válida). Fix A1 (mutationFn createTreatment resolve temp→real via `_tempIdSource` lookup cache) funcionando.
 
 **Como fazer:**
 1. Modo avião ON + receita 218.3 (paciente novo) + 218.5 (tratamento novo no mesmo paciente).
@@ -208,7 +218,9 @@
 
 ---
 
-#### `[ ]` 218.7.3 — SOS dose registrada offline ENTRA queue
+#### `[x]` 218.7.3 — SOS dose registrada offline ENTRA queue
+
+✅ **Validado device S25 Ultra 2026-05-11 via logcat**: `[Dosy:mut] added registerSos status=idle → pending failureCount=1 → isPaused=true`. Mutation entrou queue offline corretamente. Toast info exibido + dose SOS aparece Dashboard via onMutate optimistic insert (temp ID). Drain post-reconnect ocorre quando wifi voltar.
 
 **Como fazer:**
 1. Modo avião ON.
@@ -277,7 +289,11 @@
 
 ### #204.v218.8 — pause/resume/end Treatment optimistic
 
-#### `[ ]` 218.8.1 — Pausar tratamento offline
+#### `[x]` 218.8.1 — Pausar tratamento offline
+
+✅ **Validado device S25 Ultra 2026-05-11**: bug encontrado primeiro round — patch `setQueryData(['treatments'])` queryKey exata não atingia useTreatments({patientId}) → status visual não mudava. Fix aplicado: helper `patchEntityListsInCache` varre `findAll({queryKey: ['treatments']})` + patch cada variação. Bug separado: PatientDetail sem botão Pausar (UX gap — usar página Tratamentos). Logcat `[Dosy:mut] added pauseTreatment idle → pending failureCount=1 → isPaused=true`. Status visual atualiza imediato + doses futuras canceladas local + entrada queue OK.
+
+**Backlog UI:** clicks duplos no botão Pausar geram mutations duplicadas no queue (cada click = nova mutation independente). Disable button via cache lookup status==='paused' pendente. Não-bloqueador (server-side idempotente).
 
 **Como fazer:**
 1. Modo avião ON.
@@ -417,7 +433,9 @@
 
 **Resumo:** ações offline (confirmar dose, pular, criar paciente, etc) ficam salvas localmente e sincronizam automaticamente quando a internet volta. Antes do fix, ficavam perdidas silenciosamente após 30s offline.
 
-#### `[ ]` 204.1 — Avião mode + ações offline → banner amber
+#### `[skip]` 204.1 — Avião mode + ações offline → banner amber
+
+⏭️ **Superseded por 218.5.1** v0.2.1.8 (validado device 2026-05-11) — Fix A2 createTreatment optimistic + doses local + alarme offline cobre mesmo escopo + adições.
 
 **Como fazer:**
 1. Abrir Dosy no celular (S25 Ultra ou outro Android com Internal Testing instalado).
@@ -443,7 +461,9 @@
 
 ---
 
-#### `[ ]` 204.2 — Reabrir conexão → drain emerald
+#### `[skip]` 204.2 — Reabrir conexão → drain emerald
+
+⏭️ **Superseded por 218.6.1** v0.2.1.8 (validado device + SQL 2026-05-11) — drain temp patientId pós-reconnect + Fix A1 resolve `_tempIdSource` cobre escopo expandido.
 
 **Como fazer:**
 1. Continuando do item 204.1 (5 ações offline pendentes).
@@ -462,7 +482,9 @@
 
 ---
 
-#### `[ ]` 204.3 — Confirmar sync server-side via SQL
+#### `[x]` 204.3 — Confirmar sync server-side via SQL
+
+✅ **Validado SQL Supabase MCP 2026-05-12 00:40 UTC**: query `medcontrol.doses WHERE updatedAt > NOW() - INTERVAL '4 hours'` retornou 21 doses drenadas — 1 dose SOS `type=sos status=done` (218.7.3 drain confirmado), 18 doses `skipped` + 2 `done` (218.x mass mutations). Zero perda observada. Drain server-side healthcare integro.
 
 **Como fazer:**
 1. Após 204.2 confirmado, abrir [Supabase Studio](https://supabase.com/dashboard/project/guefraaqbkcehofchnrc/editor).
@@ -487,7 +509,9 @@
 
 ---
 
-#### `[ ]` 204.4 — Force-kill app offline + reabrir → mutations sobrevivem
+#### `[skip]` 204.4 — Force-kill app offline + reabrir → mutations sobrevivem
+
+⏭️ **Superseded por 218.1.1** v0.2.1.8 (validado device 2026-05-11) — pre-mount Network.getStatus bloqueante mostrou 21 mutations rehydradas pós force-kill mantendo `isPaused=true failureCount=1` (sem fetch espúrio). Cobre cenário 204.4 + valida Fix B race rehydrate.
 
 **Como fazer:**
 1. Modo avião ativo + 1 dose confirmada offline (banner amber visível).
@@ -507,7 +531,9 @@
 
 **Resumo:** alarmes agora disparam SEMPRE no horário, mesmo se o usuário não abrir o app por dias, e mesmo em Samsung/Xiaomi (que matam apps em background). Cobertura ampliada de 48h pra 7 dias. Permissão "Ignorar otimização de bateria" agora é solicitada explicitamente.
 
-#### `[ ]` 207.1 — PermissionsOnboarding 5º item: battery optimization
+#### `[x]` 207.1 — PermissionsOnboarding 5º item: battery optimization
+
+✅ **Validado device S25 Ultra 2026-05-11** (user confirmou via instalações repetidas Dosy-Dev): modal PermissionsOnboarding lista 5º item "Ignorar otimização de bateria" com descrição crítico Samsung/Xiaomi. Plugin `isIgnoringBatteryOptimizations` + `requestIgnoreBatteryOptimizations` funcionando.
 
 **Como fazer:**
 1. Desinstalar o Dosy do S25 Ultra (Settings → Apps → Dosy → Desinstalar).
@@ -576,7 +602,9 @@
 
 ---
 
-#### `[ ]` 207.4 — rescheduleAll sempre faz full reset (drop diff-and-apply)
+#### `[~]` 207.4 — rescheduleAll sempre faz full reset (drop diff-and-apply)
+
+🟡 **Parcial 2026-05-11**: evidência INDIRETA via logcat: 8 `AlarmScheduler: scheduled id=` em 1 session 218.5.1 (múltiplos reschedule completos sem diff). Limite: `console.log [Notif] reschedule START — full cancelAll` strippado por terser em prod → não rastreável logcat direto. Plus zero issues Sentry v0.2.1.7+ com `category=alarm` breadcrumbs (ausência confirma código mas não dá evidência positiva). Validação completa exige crash captura prod v0.2.1.8 Internal Testing.
 
 **Contexto bug:** antes, idempotência via `localStorage.dosy_scheduled_groups_v1` causava drift quando OEM matava AlarmManager mas localStorage dizia "já agendado" → diff vazio → AlarmManager continuava vazio → alarme não tocava. Agora sempre `cancelAll() + reschedule from scratch`.
 
@@ -599,7 +627,9 @@
 
 ---
 
-#### `[ ]` 207.5 — Sentry breadcrumbs em rescheduleAll
+#### `[~]` 207.5 — Sentry breadcrumbs em rescheduleAll
+
+🟡 **Parcial 2026-05-11**: Sentry dashboard verificado via Chrome MCP — projeto Dosy ATIVO (1710 sessions, 39 releases, v0.2.1.8 listado topo). Plus issue DOSY-P captured = refresh storm #205 bug em v0.2.0.10 (`Lock "sb-...auth-token" was released because another request stole it`) — Sentry confirmadamente capturando crashes prod. Zero issues v0.2.1.7+ últimas 7d → sem inspeção breadcrumbs `category=alarm` disponível agora. Validação completa exige crash v0.2.1.8 prod Internal Testing.
 
 **Como fazer:**
 1. Forçar uma sessão real do app:
@@ -623,7 +653,9 @@
 
 ### Validação cruzada (#204 + #207 juntos)
 
-#### `[ ]` 204+207.x — Avião mode + alarme local agendado dispara
+#### `[skip]` 204+207.x — Avião mode + alarme local agendado dispara
+
+⏭️ **Superseded por 218.5.1** v0.2.1.8 (validado device 2026-05-11) — createTreatment offline + `generateDoses` JS + AlarmScheduler agendou 3 alarmes nativos + AlarmReceiver BROADCAST disparou no horário. Cobre cenário 204+207 alarme offline end-to-end.
 
 **Como fazer:**
 1. Configurar dose +5min futuro com app online.
