@@ -11,7 +11,11 @@ export const PREFS_LOCAL_KEY = 'medcontrol_notif'
 // Cobre user que não abre app por dias (Samsung One UI 7 mata WorkManager
 // background → DoseSyncWorker pode não rodar 6h periodic). 28 alarmes/user
 // típico (4 doses/dia × 7d) está bem dentro do limit AlarmManager Android (~500/app).
-export const SCHEDULE_WINDOW_MS = 168 * 3600 * 1000 // 7 dias
+// #209 v0.2.1.9: 168h → 48h alinha daily-alarm-sync cron 5am + Worker periodic.
+// 168h gerava ~100 doses/batch agendadas no AlarmManager. 48h tem ~30 doses.
+// Cron 5am + Worker 6h + dose-trigger real-time mantêm janela rolling.
+// v0.2.2.1: comentário atualizado pra refletir valor real (era 48 no plan mas 168 hardcoded).
+export const SCHEDULE_WINDOW_MS = 48 * 3600 * 1000 // 48h
 export const CHANNEL_ID = 'doses_v2'
 export const DAILY_SUMMARY_NOTIF_ID = 999000001
 export const isNative = Capacitor.isNativePlatform()

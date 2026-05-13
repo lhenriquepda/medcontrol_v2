@@ -429,9 +429,12 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** Master @ `v0.2.2.0` (vc 58 Internal Testing 2026-05-13 10:50 BRT, tag `v0.2.2.0` + `v0.2.1.9`). v0.2.1.9 (vc 57) também publicado 10:09 BRT mas v0.2.2.0 superseded.
+**Versão atual:** `release/v0.2.2.1` em curso (vc 59) — hotfix storm rescheduleAll descoberto via audit v0.2.2.0. Master @ `v0.2.2.0` (vc 58).
 **Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
+
+**Release em curso:**
+- 🚧 v0.2.2.1 — **#211 P1 HOTFIX** Storm rescheduleAll descoberto via audit v0.2.2.0. 3 fixes: (a) `SCHEDULE_WINDOW_MS` 168h→48h (alinha plan #209, era 168h hardcoded mas comentário dizia 48h); (b) Throttle module-level rescheduleAll 30s com trailing run (mata storm 1/min causado por realtime invalidation OR useEffect deps); (c) Audit batch single insert (acumulator + 1 insert/batch — antes 10-400 inserts/batch). Plus GRANT service_role + authenticated em alarm_audit_log/config (bug DB descoberto post-deploy v0.2.2.0). AAB vc 59 + Internal Testing pendente.
 
 **Última release fechada master:**
 - ✅ v0.2.2.0 (2026-05-13) — **#210 NOVO P1** Sistema auditoria alarmes admin.dosymed.app. Tabela `alarm_audit_log` + config whitelist `alarm_audit_config` (seed: lhenrique.pda@gmail.com). Captura 6 caminhos (JS scheduler + Java AlarmScheduler/Worker/FCM + Edge daily-sync/trigger-handler) com source/action/dose/scheduledAt/metadata jsonb. Admin pages `/alarm-audit` (filtros + modal detalhes) + `/alarm-audit-config` (toggle por email). Cron diário cleanup >7d. AAB vc 58 publicado Internal Testing 2026-05-13 10:50 BRT. Tag `v0.2.2.0`.
