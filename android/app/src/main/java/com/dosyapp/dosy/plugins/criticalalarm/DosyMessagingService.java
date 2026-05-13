@@ -125,6 +125,14 @@ public class DosyMessagingService extends MessagingService {
             doseIdsByMinute.get(minute).add(d.getString("doseId"));
         }
 
+        // Audit batch_start FCM received
+        try {
+            JSONObject meta = new JSONObject();
+            meta.put("groupsCount", groups.size());
+            meta.put("dosesCount", doses.length());
+            AlarmAuditLogger.logBatch(ctx, "java_fcm_received", "batch_start", meta);
+        } catch (JSONException ignore) {}
+
         int scheduled = 0;
         for (Map.Entry<Long, JSONArray> e : groups.entrySet()) {
             Set<String> ids = doseIdsByMinute.get(e.getKey());
@@ -139,14 +147,40 @@ public class DosyMessagingService extends MessagingService {
                 // notify-doses cron skip push se alarme já agendado
                 for (int i = 0; i < e.getValue().length(); i++) {
                     try {
-                        String doseId = e.getValue().getJSONObject(i).getString("doseId");
+                        JSONObject doseEntry = e.getValue().getJSONObject(i);
+                        String doseId = doseEntry.getString("doseId");
                         reportAlarmScheduled(ctx, doseId);
+                        // Audit per dose scheduled
+                        try {
+                            JSONObject meta = new JSONObject();
+                            meta.put("groupId", alarmId);
+                            meta.put("groupSize", e.getValue().length());
+                            meta.put("triggerAtMs", e.getKey());
+                            meta.put("kind", "critical_alarm");
+                            AlarmAuditLogger.logScheduled(
+                                ctx, "java_fcm_received",
+                                doseId,
+                                doseEntry.optString("scheduledAt", null),
+                                doseEntry.optString("patientName", null),
+                                doseEntry.optString("medName", null),
+                                meta
+                            );
+                        } catch (JSONException ignore) {}
                     } catch (Exception ex) {
                         Log.w(TAG, "reportAlarmScheduled fail: " + ex.getMessage());
                     }
                 }
             }
         }
+
+        // Audit batch_end
+        try {
+            JSONObject meta = new JSONObject();
+            meta.put("scheduledGroups", scheduled);
+            meta.put("totalGroups", groups.size());
+            AlarmAuditLogger.logBatch(ctx, "java_fcm_received", "batch_end", meta);
+        } catch (JSONException ignore) {}
+
         Log.d(TAG, "scheduled groups=" + scheduled);
     }
 
@@ -170,7 +204,16 @@ public class DosyMessagingService extends MessagingService {
             String trimmed = doseId.trim();
             if (trimmed.isEmpty()) continue;
             int alarmId = AlarmScheduler.idFromString(trimmed);
-            if (AlarmScheduler.cancelAlarm(ctx, alarmId)) cancelled++;
+            if (AlarmScheduler.cancelAlarm(ctx, alarmId)) {
+                cancelled++;
+                // Audit cancelled
+                try {
+                    JSONObject meta = new JSONObject();
+                    meta.put("alarmId", alarmId);
+                    meta.put("reason", "fcm_cancel_action");
+                    AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", trimmed, meta);
+                } catch (JSONException ignore) {}
+            }
         }
         Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
     }

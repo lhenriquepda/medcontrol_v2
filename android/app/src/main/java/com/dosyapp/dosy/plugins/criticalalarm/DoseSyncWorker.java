@@ -197,6 +197,15 @@ public class DoseSyncWorker extends Worker {
             doseIdsByMinute.get(minute).add(d.getString("id"));
         }
 
+        // Audit batch_start
+        try {
+            JSONObject meta = new JSONObject();
+            meta.put("groupsCount", groups.size());
+            meta.put("dosesCount", doses.length());
+            meta.put("horizonHours", HORIZON_HOURS);
+            AlarmAuditLogger.logBatch(ctx, "java_worker", "batch_start", meta);
+        } catch (JSONException ignore) {}
+
         int scheduled = 0;
         for (Map.Entry<Long, JSONArray> e : groups.entrySet()) {
             // group key: doseIds concat sorted (mesmo do JS)
@@ -208,8 +217,37 @@ public class DoseSyncWorker extends Worker {
 
             if (AlarmScheduler.scheduleDose(ctx, id, e.getKey(), e.getValue())) {
                 scheduled++;
+                // Audit: log per dose do grupo
+                JSONArray groupDoses = e.getValue();
+                for (int gi = 0; gi < groupDoses.length(); gi++) {
+                    try {
+                        JSONObject doseEntry = groupDoses.getJSONObject(gi);
+                        JSONObject meta = new JSONObject();
+                        meta.put("groupId", id);
+                        meta.put("groupSize", groupDoses.length());
+                        meta.put("triggerAtMs", e.getKey());
+                        meta.put("kind", "critical_alarm");
+                        AlarmAuditLogger.logScheduled(
+                            ctx, "java_worker",
+                            doseEntry.optString("doseId", null),
+                            doseEntry.optString("scheduledAt", null),
+                            doseEntry.optString("patientName", null),
+                            doseEntry.optString("medName", null),
+                            meta
+                        );
+                    } catch (JSONException ignore) {}
+                }
             }
         }
+
+        // Audit batch_end
+        try {
+            JSONObject meta = new JSONObject();
+            meta.put("scheduledGroups", scheduled);
+            meta.put("totalGroups", groups.size());
+            AlarmAuditLogger.logBatch(ctx, "java_worker", "batch_end", meta);
+        } catch (JSONException ignore) {}
+
         return scheduled;
     }
 

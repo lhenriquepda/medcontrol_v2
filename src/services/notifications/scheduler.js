@@ -24,6 +24,7 @@ import {
   enrichDose
 } from './prefs'
 import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
+import { logAuditEvent, logAuditEventsBatch } from './auditLog'
 
 /**
  * Re-agenda baseado em doses + prefs atuais.
@@ -70,6 +71,11 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     data: { dosesCount: doses.length, patientsCount: patients.length }
   })
   console.log('[Notif] reschedule START — full cancelAll')
+  // Audit log: batch_start
+  logAuditEvent({
+    action: 'batch_start',
+    metadata: { dosesCount: doses.length, patientsCount: patients.length }
+  })
   await cancelAll()
 
   // Setup channel (idempotent, OK chamar sempre)
@@ -135,6 +141,22 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
         alarmsScheduled += group.length
         newState[groupId] = hash
 
+        // Audit log: cada dose do grupo agendada como alarme crítico
+        logAuditEventsBatch(group.map(dose => ({
+          action: 'scheduled',
+          doseId: dose.id,
+          scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null,
+          medName: dose.medName || null,
+          metadata: {
+            groupId,
+            groupSize: group.length,
+            ringAt: at.toISOString(),
+            advanceMins: adv,
+            kind: 'critical_alarm'
+          }
+        })))
+
         // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
         try {
           const deviceId = await getDeviceId()
@@ -159,6 +181,14 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     } else if (isDndWin && criticalOn) {
       dndSkipped += group.length
       newState[groupId] = hash
+      logAuditEventsBatch(group.map(dose => ({
+        action: 'skipped',
+        doseId: dose.id,
+        scheduledAt: dose.scheduledAt,
+        patientName: dose.patientName || null,
+        medName: dose.medName || null,
+        metadata: { groupId, reason: 'dnd_window' }
+      })))
     }
 
     // Push notif (tray) — só se NÃO vai tocar alarme crítico.
@@ -179,6 +209,23 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
         autoCancel: true
       })
       newState[groupId] = hash
+
+      // Audit: local tray notif agendado (não critical)
+      logAuditEventsBatch(group.map(dose => ({
+        action: 'scheduled',
+        doseId: dose.id,
+        scheduledAt: dose.scheduledAt,
+        patientName: dose.patientName || null,
+        medName: dose.medName || null,
+        metadata: {
+          groupId,
+          groupSize: group.length,
+          ringAt: at.toISOString(),
+          advanceMins: adv,
+          kind: 'local_notif',
+          dndWindow: isDndWin
+        }
+      })))
     }
   }
 
@@ -243,6 +290,19 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     message: 'rescheduleAll END',
     level: 'info',
     data: {
+      alarmsScheduled,
+      dndSkipped,
+      localNotifs: localNotifs.length,
+      summary: summaryOn,
+      advanceMins: adv,
+      groupsCount: desired.size
+    }
+  })
+
+  // Audit log: batch_end
+  logAuditEvent({
+    action: 'batch_end',
+    metadata: {
       alarmsScheduled,
       dndSkipped,
       localNotifs: localNotifs.length,

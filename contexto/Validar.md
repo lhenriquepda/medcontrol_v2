@@ -14,7 +14,122 @@
 
 ---
 
-## 🆕 Release v0.2.1.9 — versionCode 57 (Internal Testing pendente)
+## 🆕 Release v0.2.2.0 — versionCode 58 (Internal Testing pendente)
+
+**Escopo:** #210 NOVO P1 — Sistema auditoria de alarmes pra admin.dosymed.app. Captura 6 caminhos (JS scheduler + Java AlarmScheduler/Worker/FCM + Edge daily-sync/trigger-handler). Tabela `alarm_audit_log` + config whitelist `alarm_audit_config`. Admin pages `/alarm-audit` (filtros + modal detalhes) + `/alarm-audit-config` (toggle por email).
+
+**Conta teste audit:** `lhenrique.pda@gmail.com` (seed enabled).
+
+---
+
+### #210.v220.1 — Eventos JS scheduler aparecem em admin.dosymed
+
+#### `[ ]` 220.1.1 — Abrir app + rescheduleAll → linhas `js_scheduler` no /alarm-audit
+
+**Como fazer:**
+1. Instalar vc 58 via Internal Testing no S25 Ultra.
+2. Login `lhenrique.pda@gmail.com`.
+3. Aguardar 30s (rescheduleAll natural pós-login).
+4. Abrir admin.dosymed.app → /alarm-audit → filtro origem "App (em uso ativo)" + período "Última 1h".
+
+**O que esperar:**
+- Lista com pelo menos 1 `batch_start` + N eventos `scheduled` (kind=critical_alarm ou local_notif) + 1 `batch_end`.
+- Descrição linguagem natural: "Iniciou ciclo de agendamento (App em uso ativo)" + "Agendou alarme: Broncho-Vaxom para Liam" + "Concluiu ciclo — 14 alarmes agendados".
+
+**Se falhar:**
+- Zero rows → audit config OFF pro user (verificar /alarm-audit-config) OR RPC `is_alarm_audit_enabled` retornando false (RLS bug).
+
+---
+
+### #210.v220.2 — Eventos Java Worker 6h aparecem
+
+#### `[ ]` 220.2.1 — DoseSyncWorker periodic → rows `java_worker`
+
+**Como fazer:**
+1. App vc 58 instalado.
+2. Aguardar 6h (próxima execução WorkManager periodic) OR forçar via adb: `adb shell cmd jobscheduler run -f com.dosyapp.dosy 999`.
+3. /alarm-audit filtro origem "App (verificação automática 6h)".
+
+**O que esperar:**
+- Rows source=`java_worker`, batch_start/scheduled per dose/batch_end.
+
+**Se falhar:**
+- Sem rows → Worker não rodou OR audit credentials SharedPrefs (`access_token`) ausentes/expirados.
+
+---
+
+### #210.v220.3 — Eventos Edge daily-alarm-sync (5am BRT) aparecem
+
+#### `[ ]` 220.3.1 — Cron 5am BRT → rows `edge_daily_sync`
+
+**Como fazer:**
+1. Aguardar 5am BRT seguinte.
+2. /alarm-audit filtro origem "Servidor (sincronização diária 5h)" + período "Últimas 24h".
+
+**O que esperar:**
+- batch_start + N `fcm_sent` (kind=fcm_schedule_alarms, deviceTokenTail visível) + batch_end.
+- 1 par batch_start/batch_end por dia.
+
+**Se falhar:**
+- Sem rows 5am BRT → cron `daily-alarm-sync-5am` não executou. Verificar Supabase Dashboard → Edge Functions logs.
+
+---
+
+### #210.v220.4 — Eventos Edge dose-trigger-handler real-time aparecem
+
+#### `[ ]` 220.4.1 — Marcar dose como tomada → row `cancelled` source `edge_trigger_handler`
+
+**Como fazer:**
+1. Marcar uma dose pending como "Tomada" no app.
+2. /alarm-audit filtro origem "Servidor (alteração em tempo real)" + período "Última 1h".
+
+**O que esperar:**
+- Row `cancelled` com triggerReason=`status_pending_to_done` no metadata.
+- Plus row source=`java_fcm_received` action=`cancelled` (device recebeu FCM cancel).
+
+**Se falhar:**
+- Sem row Edge → trigger DB → webhook não disparou.
+- Sem row Java FCM cancelled → AlarmScheduler.cancelAlarm não executou (idFromString mismatch?).
+
+---
+
+### #210.v220.5 — Eventos AlarmReceiver fired aparecem
+
+#### `[ ]` 220.5.1 — Alarme dispara → row `fired_received` source `java_alarm_scheduler`
+
+**Como fazer:**
+1. Aguardar próximo alarme programado disparar.
+2. /alarm-audit filtro ação "Disparado".
+
+**O que esperar:**
+- Row source=`java_alarm_scheduler` action=`fired_received` per dose do group + metadata.alarmId.
+
+**Se falhar:**
+- Sem row pós-fire → AlarmAuditLogger Executor falhou OR access_token expirado naquele momento.
+
+---
+
+### #210.v220.6 — Toggle config refletindo
+
+#### `[ ]` 220.6.1 — Desabilitar user em /alarm-audit-config para inserções
+
+**Como fazer:**
+1. /alarm-audit-config → linha lhenrique.pda → botão "Pausar".
+2. Forçar rescheduleAll no app (kill + reabrir app).
+3. /alarm-audit período "Última 1h".
+
+**O que esperar:**
+- Eventos pós-pausa NÃO aparecem (RLS bloqueou INSERT).
+- Eventos pré-pausa permanecem visíveis até cleanup 7d.
+
+**Se falhar:**
+- Novos rows aparecem mesmo desabilitado → RLS policy `audit_log_user_insert` bug OR cache JS `is_alarm_audit_enabled` 5min ainda válido (esperar TTL OR force reload app).
+
+**Pós-validação:** Reativar `lhenrique.pda` no /alarm-audit-config.
+
+---
+
+## Release v0.2.1.9 — versionCode 57 (Internal Testing pendente)
 
 **Escopo:** #209 NOVO P0 — Refactor completo sistema alarmes + push. Fix 3 bugs reportados 2026-05-13 (alarme "Sem Paciente", push 5am pra dose 8am, alarme 8am não disparou). Substitui 5 caminhos redundantes por arquitetura simples: cron diário 5am BRT (FCM data 48h horizon) + trigger DB delta real-time + Worker 6h defense-in-depth + app open rescheduleAll JS.
 
@@ -31,6 +146,47 @@
 - **Memory note** `feedback_release_lifecycle.md` — checklist obrigatório bump VERSION_CODE_TO_NAME a cada release.
 
 **Conta de teste:** `lhenrique.pda@gmail.com` (admin pessoal, dados reais com Liam/Rael/Luiz Henrique).
+
+---
+
+### #209.v219.0 — Internal Testing vc 57 publicado + reinstall flow
+
+#### `[x]` 219.0.1 — AAB vc 57 (0.2.1.9) publicado Internal Testing
+
+✅ **Validado 2026-05-13 10:09 BRT** — Play Console Internal Testing mostra "57 (0.2.1.9) · Disponível para testadores internos · 1 código de versão · Data do lançamento: 13 de mai. 10:09". Upload via Chrome MCP (receita README §10).
+
+---
+
+#### `[ ]` 219.0.2 — Banner update mostra "v0.2.1.9" correto (fix #208)
+
+**Como fazer:**
+1. Aguardar propagação Internal Testing CDN (~30-60min pós-publish).
+2. Device S25 Ultra: Play Store → Dosy → "Atualizar" se já instalado vc 56, OU desinstalar + reinstalar via Teste Interno.
+3. Se já em vc 56 com banner aparecer: abrir app → ler subtitle banner verde.
+
+**O que esperar:**
+- Banner exibe **"v0.2.1.9"** (não "versão 57" feio fallback).
+- Map `VERSION_CODE_TO_NAME[57] = '0.2.1.9'` ativo (useAppUpdate.js).
+
+**Se falhar:**
+- "versão 57" aparece → map fallback não bateu, Vercel CDN ainda servindo `version.json` stale + map entry 57 missing (não é o caso — confirmado no commit ae656c3).
+
+---
+
+#### `[ ]` 219.0.3 — Reinstall limpa estado + login OK
+
+**Como fazer:**
+1. Desinstalar Dosy.
+2. Reinstalar via Teste Interno Play Store.
+3. Login `lhenrique.pda@gmail.com`.
+
+**O que esperar:**
+- Login completa sem storm refresh_token (#205 fix master).
+- Dashboard carrega doses Liam/Rael/Luiz Henrique.
+- Doses futuras 8am exibem horário 08:00 (não 05:00).
+
+**Se falhar:**
+- Doses 05:00 aparecem → migration TZ fix `update_treatment_schedule` não regenerou doses pending (re-rodar `data_fix_doses_timezone_v0_2_1_9_retry`).
 
 ---
 
