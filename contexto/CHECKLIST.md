@@ -7125,9 +7125,24 @@ Tabela `medcontrol.dose_alarms_scheduled` criada em #083.7 (v0.1.7.2) pra `notif
 - **Categoria:** 🔄 TURNAROUND
 - **Prioridade:** 🔴 P0
 - **Origem:** [Auditoria 2026-05-13 B-01 + B-02 + B-09 + arquitetura duplicada cross-source]
-- **Esforço:** 8-12h (refactor + testes E2E + validação device S25 Ultra)
+- **Esforço:** 10-14h (refactor + testes E2E + validação device S25 Ultra + edge cases limite+cuidador)
 - **Dependências:** #220 (alinhar hash JS↔Java antes pra IDs determinísticos cross-source funcionarem)
 - **Release alvo:** `release/v0.2.3.0` (bump versão app — gera AAB novo)
+
+**Decisões consolidadas com user 2026-05-13 (pós-revisão plano 3 cenários):**
+
+| # | Decisão | Comportamento final |
+|---|---|---|
+| 2 | Margem boot recovery alarme atrasado | **2h** (era proposto 1h em #224 — alinhar pra 2h também) |
+| 3 | Push silencioso dentro janela DnD | **Vibração leve** (não 100% silencioso) — canal `dosy_tray` com `vibration: true` + pattern curto (200ms) + sound null |
+| 4 | User desliga toggle Alarme Crítico no Ajustes | **Cancela todos alarmes nativos agendados + troca por push** (próximos 48h passam a ser cobertos só por push) — já é o comportamento do helper unificado, só garantir `useUserPrefs` mutation dispara `rescheduleAll` ao mudar flag |
+| 6 | Cuidador compartilhando paciente | **SEMPRE alarme cheio prioridade** + respeita DnD/criticalAlarm-off do cuidador. Se cuidador tem DnD 22h-7h ativo e dose paciente 23h → cuidador recebe só push silencioso vibração leve; paciente recebe baseado nas configs próprias. Cenário 02 envia FCM data pra TODOS aparelhos (paciente + cuidadores) — cada aparelho aplica próprias prefs ao decidir branch |
+| 8 | Limite Android ~500 alarmes/notificações por app | **Janela dinâmica:** se total agendado (alarmes + pushes) projetado > 400 itens (margem 100 do limit) → janela cai pra **24h** apenas. Se < 400 → mantém **48h** normal. Recalcula a cada execução Cenário 01/03. User com 50+ doses/dia (raro) automaticamente fica em 24h horizon. Inclui telemetria `alarm_horizon_decision: 24h\|48h` em metadata audit log |
+| 9 | Mudança horário tratamento via update_treatment_schedule | **Aceita proposta:** servidor regenera doses pendentes; Cenário 02 dispara FCM `cancel_alarms` (#221) pra cada dose alterada + FCM `schedule_alarms` pras novas |
+| 10 | Cuidador opt-in receber alarmes de paciente compartilhado | **Sempre recebe** (por enquanto). Toggle "Quero receber lembretes das doses dos pacientes compartilhados: Sim/Não" parqueado pra release futura. Helper unificado fica preparado pra ler future flag `prefs.receiveShared` (default true) sem refactor adicional |
+| 11 | Admin panel `admin.dosymed.app/alarm-audit` + `/alarm-audit-config` | **Mantém funcional** — refactor preserva populamento de `medcontrol.alarm_audit_log` em **TODOS 4 paths** (Cenário 01 source `js_scheduler`, Cenário 02 sources `js_scheduler` + `java_fcm_received` + `edge_trigger_handler`, Cenário 03 sources `java_worker` + `edge_daily_sync`). Cada insert inclui metadata `branch: alarm_plus_push\|push_dnd\|push_critical_off\|skipped` + `horizon: 24h\|48h` + `reason` (debug) |
+
+**Problema (3 falhas em 1 release):**
 
 **Problema (3 falhas em 1 release):**
 
@@ -7138,42 +7153,194 @@ Tabela `medcontrol.dose_alarms_scheduled` criada em #083.7 (v0.1.7.2) pra `notif
 
 **Solução (fluxo user-aligned 2026-05-13):**
 
-**4 momentos cadastro alarme:**
-1. App open/update — `App.jsx` top-level useEffect (signature guard pós #212/#213) ✅ já existe
-2. Status change dose — `rescheduleAll` quando app foreground; `cancel_alarms` FCM (B-08/#221) quando background
-3. Periodic 6h — WorkManager `DoseSyncWorker` (defense-in-depth REST direto) ✅ já existe
-4. Cron daily 5am BRT — `daily-alarm-sync` FCM data 48h horizon ✅ já existe
+### Cenário 01 — App abre / atualiza
 
-**1 helper unificado `scheduleDoseAlarm(ctx, dose, prefs)`** chamado por todos caminhos:
+Gatilhos: `App.jsx` top-level useEffect (signature guard pós #212/#213) ao mount, ao receber update de cache, ao mudança de toggle prefs (Alarme Crítico ON/OFF, DnD enable/disable, DnD horário).
+
 ```pseudo
-function scheduleDoseAlarm(ctx, dose, prefs):
-  doseInDnd = inDndWindow(dose.scheduledAt, prefs)
+function cenario01_appOpen(ctx):
+  # 1. Sync banco → cache local
+  doses = fetchDoses(now, now + windowHours)  # window decidido em scheduleHorizon() ↓
+  prefs = loadPrefs()
 
-  if !prefs.criticalAlarm:
-    # User desligou alarme estilo despertador → só push tray
-    LocalNotifications.schedule({
-      id: groupId, channel: 'doses_v2',
-      sound: 'default', schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+  # 2. Cancela TUDO agendado pra evitar drift
+  cancelAllAlarms()
+  cancelAllLocalNotifications()
+
+  # 3. Determina janela dinâmica (decisão 8)
+  totalItemsProjected = doses.filter(d => criticalOn && !inDnd(d, prefs)).length * 2  # alarm + push
+                     + doses.filter(d => !criticalOn || inDnd(d, prefs)).length        # só push
+  horizonHours = (totalItemsProjected > 400) ? 24 : 48
+  doses = doses.filter(d => d.scheduledAt <= now + horizonHours)
+
+  # 4. Pra cada dose, chama helper unificado
+  for dose in doses:
+    branch = scheduleDoseAlarm(ctx, dose, prefs)
+    auditLog.insert({
+      source: 'js_scheduler',
+      action: branch == 'skipped' ? 'skipped' : 'scheduled',
+      dose_id: dose.id,
+      scheduled_at: dose.scheduledAt,
+      metadata: { branch, horizon: horizonHours, source_scenario: 'app_open' }
     })
-    return 'tray_only'
-
-  if doseInDnd:
-    # User configurou janela silêncio → só push tray silencioso
-    LocalNotifications.schedule({ id: groupId, channel: 'doses_v2', ... })
-    return 'tray_dnd'
-
-  # Caso normal: alarme nativo + push backup local (anti-OEM-kill)
-  AlarmScheduler.scheduleDose(ctx, groupId, dose.triggerAt, doses)
-  LocalNotifications.schedule({
-    id: groupId + BACKUP_OFFSET, channel: 'doses_v2',
-    sound: 'default', schedule: { at: dose.scheduledAt, allowWhileIdle: true }
-  })
-  return 'alarm_plus_backup'
 ```
 
-**Coordenação alarme + backup:**
-- `AlarmReceiver.onReceive` (alarme nativo disparou OK): chamar `LocalNotifications.cancel({ id: groupId + BACKUP_OFFSET })` ANTES de start AlarmService → anti-duplicate (alarme + notif backup vibrando simultâneo).
-- Se OEM mata alarme nativo (Doze profundo Samsung One UI 7 mesmo com battery whitelist), LocalNotification backup dispara como fallback visual. Tray silencioso mas user vê notif + vibração leve.
+### Cenário 02 — Mudança status dose (Tomada / Pulada / Desfazer)
+
+Gatilho: user clica "Ciente" / "Pular" / "Desfazer" no DoseCard, DoseModal, AlarmActivity, AlarmActionReceiver.
+
+```pseudo
+function cenario02_doseStatusChange(doseId, newStatus):
+  # 1. RPC server-side (confirm_dose / skip_dose / undo_dose)
+  rpc.callServerMutation(doseId, newStatus)
+
+  # 2. Local: cancela ou reagenda APENAS essa dose
+  if newStatus == 'pending':  # undo
+    dose = fetchDose(doseId)
+    branch = scheduleDoseAlarm(ctx, dose, loadPrefs())
+    auditLog.insert({ source: 'js_scheduler', action: 'scheduled', metadata: { branch, source_scenario: 'undo_dose' }})
+  else:  # done/skipped
+    cancelAlarm(doseId)
+    cancelLocalNotification(doseId + BACKUP_OFFSET)
+    auditLog.insert({ source: 'js_scheduler', action: 'cancelled', metadata: { source_scenario: 'mark_dose' }})
+
+  # 3. Server-side trigger dose_change_notify → Edge dose-trigger-handler envia FCM
+  #    para TODOS aparelhos (paciente + cuidadores) com action=schedule_alarms OU cancel_alarms
+  #    (depende newStatus). Cada aparelho recebe via DosyMessagingService e chama
+  #    handler que delega ao helper unificado Java (mesma lógica scheduleDoseAlarm).
+  #    Aparelho aplica PRÓPRIAS prefs (decisão 6 + 10) — cuidador com DnD próprio recebe só push silencioso.
+```
+
+### Cenário 03 — Manutenção a cada 6h (app fechado) + cron diário 5am BRT
+
+**Cenário 03a — WorkManager 6h (Android background):**
+
+```pseudo
+function cenario03a_workManager6h():
+  # Android acorda app brevemente (~10s budget)
+  doses = fetchDosesViaREST(now, now + horizonHours)  # auth via cached accessToken
+  prefs = loadPrefsFromSharedPreferences()
+
+  cancelAllAlarms()  # opcional: só doses cujo conteúdo mudou (otimização futura)
+  for dose in doses:
+    branch = scheduleDoseAlarmJava(ctx, dose, prefs)  # MESMA lógica do helper JS, paridade
+    auditLog.insertViaREST({
+      source: 'java_worker',
+      action: branch == 'skipped' ? 'skipped' : 'scheduled',
+      metadata: { branch, horizon: horizonHours, source_scenario: 'workmanager_6h' }
+    })
+```
+
+**Cenário 03b — Cron daily 5am BRT (servidor → todos devices):**
+
+```pseudo
+function cenario03b_dailyAlarmSync():
+  # Edge function rodando 5am BRT diário
+  for user in pushSubscriptions:
+    prefs = getUserNotifPrefs(user.id)
+    doses = getDosesNext48h(user.id)
+    horizonHours = (projectedItems(doses, prefs) > 400) ? 24 : 48
+    doses = doses.filter(d => d.scheduledAt <= now + horizonHours)
+
+    # Particionar em chunks 30 doses (#225 chunking 4KB FCM limit)
+    chunks = chunkBy(doses, 30)
+    for chunk in chunks:
+      for device in user.devices:
+        sendFcmData(device.deviceToken, {
+          action: 'schedule_alarms',
+          doses: JSON.stringify(chunk),
+          horizon: horizonHours
+        })
+
+    auditLog.insertBatch(doses.map(d => ({
+      source: 'edge_daily_sync',
+      action: 'fcm_sent',
+      dose_id: d.id,
+      metadata: { horizon: horizonHours, source_scenario: 'cron_5am' }
+    })))
+```
+
+Device recebe FCM → `DosyMessagingService.onMessageReceived(action=schedule_alarms)` → delega ao helper unificado Java que aplica prefs locais + decide branch.
+
+### Helper unificado `scheduleDoseAlarm(ctx, dose, prefs)` — 1 lugar 4 paths
+
+```pseudo
+function scheduleDoseAlarm(ctx, dose, prefs):
+  groupId = idFromString(dose.id)  # hash alinhado JS↔Java (#220)
+  backupId = groupId + BACKUP_OFFSET
+
+  # Branch A — Alarme Crítico OFF → só push tray
+  if !prefs.criticalAlarm:
+    LocalNotifications.schedule({
+      id: groupId,
+      channel: 'dosy_tray',
+      sound: 'default',
+      schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+    })
+    return 'push_critical_off'
+
+  # Branch B — DnD ON e dose em janela → só push tray COM VIBRAÇÃO LEVE (decisão 3)
+  if inDndWindow(dose.scheduledAt, prefs):
+    LocalNotifications.schedule({
+      id: groupId,
+      channel: 'dosy_tray',  # canal com vibration:true + pattern curto 200ms + sound null
+      schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+    })
+    return 'push_dnd'
+
+  # Branch C — Caso normal → alarme nativo + push backup co-agendado
+  AlarmScheduler.scheduleDose(ctx, groupId, dose.scheduledAt, [dose])  # AlarmManager.setAlarmClock
+  LocalNotifications.schedule({
+    id: backupId,
+    channel: 'dosy_tray',
+    sound: 'default',
+    schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+  })
+  return 'alarm_plus_push'
+```
+
+**Coordenação alarme + push backup (decisão antiga mantida):**
+
+- `AlarmReceiver.onReceive` (alarme nativo disparou OK): chamar `NotificationManagerCompat.cancel(backupId)` ANTES de start AlarmService → anti-duplicate (user não vê alarme + push vibrando ao mesmo tempo).
+- Se OEM mata alarme nativo (Doze profundo Samsung One UI 7, Xiaomi MIUI), LocalNotification backup dispara como fallback visual no horário exato. Tray com som default + vibração — user vê notif + sente vibração mesmo sem fullscreen.
+
+**Janela dinâmica (decisão 8):**
+
+```pseudo
+function computeHorizon(doses, prefs):
+  # Estima quantos itens vão pro AlarmManager + LocalNotifications storage
+  projectedItems = 0
+  for dose in doses:
+    if !prefs.criticalAlarm or inDndWindow(dose.scheduledAt, prefs):
+      projectedItems += 1  # só push
+    else:
+      projectedItems += 2  # alarm + push backup
+
+  # Android limit ~500 por app. Margem 100 → threshold 400.
+  return projectedItems > 400 ? 24 : 48
+```
+
+Edge case: user com 50 doses/dia × 48h = 100 doses × 2 itens = 200. Long da limit. Janela 48h mantida.
+Edge case extremo: user com 100 doses/dia (cuidador profissional 5+ residências modo futuro #185) × 48h = 200 doses × 2 = 400 itens. Próximo refactor pra 24h. Telemetria PostHog `alarm_horizon_24h` event futuro pra identificar quem cai nessa categoria.
+
+**Audit log mantém admin `/alarm-audit` funcional (decisão 11):**
+
+Todos 4 paths (JS scheduler / Java worker / Java FCM / Edge daily-sync + Edge trigger-handler) inserem em `medcontrol.alarm_audit_log` quando user está em `alarm_audit_config.enabled=true` whitelist. Metadata uniformizada inclui:
+
+```json
+{
+  "branch": "alarm_plus_push | push_dnd | push_critical_off | skipped",
+  "horizon": 24 | 48,
+  "source_scenario": "app_open | mark_dose | undo_dose | workmanager_6h | cron_5am | fcm_trigger_handler",
+  "groupId": 12345678,
+  "criticalAlarmEnabled": true,
+  "dndEnabled": false,
+  "inDndWindow": false,
+  "reason": "string (debug curto)"
+}
+```
+
+Páginas admin `/alarm-audit` (filtros usuário/origem/ação/dose/período + modal detalhes) + `/alarm-audit-config` (toggle por email) continuam funcionando sem mudança — refactor apenas enriquece metadata.
 
 **Auditoria egress + storm risk:**
 
@@ -7213,13 +7380,21 @@ function scheduleDoseAlarm(ctx, dose, prefs):
 **Critério aceitação (validação device S25 Ultra):**
 
 - ✅ Build verde + AAB novo (vc 63+) gerado
-- 🧪 Cenário A: criticalAlarm ON + DnD OFF + dose +5min → alarme nativo full-screen toca + LocalNotification backup NÃO toca (cancelada por AlarmReceiver)
-- 🧪 Cenário B: criticalAlarm ON + DnD 22:00-07:00 + dose 23:30 → LocalNotification tray silenciosa dispara (sem fullscreen) — alarme nativo NÃO agendado
-- 🧪 Cenário C: criticalAlarm OFF + dose +5min → LocalNotification tray dispara (sem fullscreen) — alarme nativo NÃO agendado
-- 🧪 Cenário D: criticalAlarm ON + DnD OFF + Force-stop app + dose +5min → AlarmManager dispara mesmo com app killed (defense-in-depth mantida)
-- 🧪 Cenário E: Samsung One UI 7 sem battery whitelist + dose +30min com app fechado → OEM pode matar AlarmManager; LocalNotification backup dispara como fallback ~30min depois
-- 🧪 Cenário F: 10 doses 48h horizon → 10 alarmes + 10 LocalNotifications agendadas (20 total no AlarmManager + LocalNotifications storage)
-- 🧪 Cenário G: alarm_audit_log tem sources `js_scheduler` + `java_fcm_received` + `java_worker` + `edge_daily_sync` registrando branch escolhida (alarm/tray/tray_dnd) em metadata
+- 🧪 **Cenário 01.A** criticalAlarm ON + DnD OFF + dose +5min via app foreground → alarme nativo full-screen toca + LocalNotification backup NÃO toca (cancelada por AlarmReceiver). audit log: `branch=alarm_plus_push source_scenario=app_open horizon=48`
+- 🧪 **Cenário 01.B** criticalAlarm ON + DnD 22:00-07:00 + dose 23:30 → LocalNotification tray COM vibração leve (200ms) dispara, sem fullscreen, sem som — alarme nativo NÃO agendado. audit log: `branch=push_dnd horizon=48`
+- 🧪 **Cenário 01.C** criticalAlarm OFF + dose +5min → LocalNotification tray dispara (sem fullscreen, com sound default) — alarme nativo NÃO agendado. audit log: `branch=push_critical_off horizon=48`
+- 🧪 **Cenário 01.D** Toggle Alarme Crítico ON → OFF em Ajustes → todos alarmes nativos pendentes cancelados imediatamente + recadastrados como push. SQL `SELECT count(*) FROM alarm_audit_log WHERE source_scenario='toggle_critical_off'` > 0
+- 🧪 **Cenário 02.A** dose +30min agendada → user marca Tomada → alarme + push backup cancelados em <2s local + outros aparelhos cancelam em <5s via FCM. audit log: 2 entries (`action=cancelled` source=`js_scheduler` + source=`java_fcm_received` outro device)
+- 🧪 **Cenário 02.B** dose Tomada → user Desfazer → alarme + push reagendados. audit log: `branch=alarm_plus_push source_scenario=undo_dose`
+- 🧪 **Cenário 02.C** cuidador compartilha paciente da mãe → mãe e cuidador têm app instalado → dose mãe 8h → ambos recebem alarme cheio 8h em paralelo (decisão 6). Cuidador marca Tomada → alarme da mãe cancela <5s
+- 🧪 **Cenário 02.D** cuidador com DnD próprio 22-7h + dose paciente compartilhado 23h → cuidador recebe SÓ push silencioso vibração leve; paciente recebe baseado nas configs próprias. audit log: `branch=push_dnd` no aparelho cuidador
+- 🧪 **Cenário 03.A** Force-stop app + WorkManager dispara 6h depois → device acorda <10s + cancelAlarmes + reagenda + dorme. audit log: `source=java_worker source_scenario=workmanager_6h`
+- 🧪 **Cenário 03.B** Cron 5am BRT dispara → device recebe FCM data → DosyMessagingService agenda. audit log: `source=edge_daily_sync source_scenario=cron_5am` + `source=java_fcm_received source_scenario=fcm_schedule_alarms`
+- 🧪 **Cenário 03.C** Samsung One UI 7 SEM battery whitelist + dose +30min app fechado → OEM pode matar AlarmManager; LocalNotification backup dispara como fallback ~30min depois (sem fullscreen mas COM vibração + som). User vê notif na barra
+- 🧪 **Boot recovery** device desligado pós-dose 8h → boot 9h30 → BootReceiver detecta `(now - triggerAt) < 2h` (decisão 2 — 2h margem) → dispara alarme imediato com flag `lateRecovery=true`. AlarmActivity mostra badge "Atrasada — celular estava desligado"
+- 🧪 **Limite dinâmico** seed test user com 200 doses/dia × 2 dias = 400 doses × 2 itens = 800 (acima limit). Helper compute horizon = 24h (decisão 8). audit log: `horizon=24` registrado
+- 🧪 **Audit consistência** SQL `SELECT count(*) FROM alarm_audit_log WHERE source IN ('js_scheduler','java_worker','java_fcm_received','edge_daily_sync','edge_trigger_handler') AND created_at > now() - interval '1 day' GROUP BY source` — todos 5 sources com entries
+- 🧪 **Admin panel** `admin.dosymed.app/alarm-audit` carrega + filtros funcionam + modal detalhes mostra metadata `branch + horizon + source_scenario` legível
 
 **Risco / mitigações:**
 
@@ -7690,7 +7865,7 @@ export { useNotifications as usePushNotifications } from '../services/notificati
 
 ---
 
-### #224 — BootReceiver dispara alarme atrasado se <1h margem
+### #224 — BootReceiver dispara alarme atrasado se <2h margem
 
 - **Categoria:** 🐛 BUGS
 - **Prioridade:** 🟡 P2
@@ -7709,8 +7884,8 @@ Cenário: user dorme com phone off, boota às 9am, dose era 8am. BootReceiver pu
 **Solução:**
 
 ```java
-// BootReceiver.java
-private static final long LATE_ALARM_GRACE_MS = 60 * 60 * 1000L; // 1h
+// BootReceiver.java — decisão user 2026-05-13: margem 2h (era 1h proposta)
+private static final long LATE_ALARM_GRACE_MS = 2 * 60 * 60 * 1000L; // 2h
 
 for (int i = 0; i < arr.length(); i++) {
   JSONObject obj = arr.getJSONObject(i);
@@ -7737,7 +7912,7 @@ for (int i = 0; i < arr.length(); i++) {
 
 - ✅ Build verde
 - 🧪 Device runtime: agendar dose +30min, force-stop app, reiniciar device com phone off > 5min, boot pós-horário dose → alarme dispara imediato com label "atrasada"
-- 🧪 Edge case: dose >1h atrás → skip silencioso (fluxo atual mantido)
+- 🧪 Edge case: dose >2h atrás → skip silencioso (fluxo atual mantido)
 - 🧪 alarm_audit_log mostra `action=fired_received` source `java_boot_receiver` com metadata `lateRecovery=true`
 
 **Risco / mitigação:**
