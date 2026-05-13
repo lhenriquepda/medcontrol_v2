@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { hasSupabase, supabase } from '../services/supabase'
-import { setCriticalAlarmEnabled } from '../services/criticalAlarm'
+import { setCriticalAlarmEnabled, syncUserPrefs } from '../services/criticalAlarm'
 
 /**
  * User-wide notification + UX preferences. Stored in DB (medcontrol.user_prefs)
@@ -70,6 +70,15 @@ export function useUserPrefs() {
         // Item #085 — sincroniza toggle pro SharedPreferences Android no carregamento
         // (best-effort — Android nativo lê flag em DoseSyncWorker + DosyMessagingService)
         setCriticalAlarmEnabled(merged.criticalAlarm !== false).catch(() => {})
+        // #215 v0.2.3.0 — sincroniza prefs completas (criticalAlarm + DnD) pro
+        // namespace `dosy_user_prefs` consumido por AlarmScheduler.scheduleDoseAlarm
+        // helper unificado.
+        syncUserPrefs({
+          criticalAlarm: merged.criticalAlarm !== false,
+          dndEnabled: !!merged.dndEnabled,
+          dndStart: merged.dndStart || '23:00',
+          dndEnd: merged.dndEnd || '07:00'
+        }).catch(() => {})
         return merged
       } catch (e) {
         console.warn('[useUserPrefs] exception:', e?.message)
@@ -118,6 +127,17 @@ export function useUpdateUserPrefs() {
         setCriticalAlarmEnabled(merged.criticalAlarm !== false).catch(e =>
           console.warn('[useUserPrefs] setCriticalAlarmEnabled fail:', e?.message)
         )
+      }
+      // #215 v0.2.3.0 — sincroniza prefs completas pro namespace unificado se
+      // qualquer pref relacionada a alarme/DnD mudou. AlarmScheduler.scheduleDoseAlarm
+      // helper unificado lê dali.
+      if ('criticalAlarm' in patch || 'dndEnabled' in patch || 'dndStart' in patch || 'dndEnd' in patch) {
+        syncUserPrefs({
+          criticalAlarm: merged.criticalAlarm !== false,
+          dndEnabled: !!merged.dndEnabled,
+          dndStart: merged.dndStart || '23:00',
+          dndEnd: merged.dndEnd || '07:00'
+        }).catch(e => console.warn('[useUserPrefs] syncUserPrefs fail:', e?.message))
       }
       return merged
     }

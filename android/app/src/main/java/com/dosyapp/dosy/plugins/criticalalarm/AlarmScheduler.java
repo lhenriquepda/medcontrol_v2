@@ -1,15 +1,31 @@
 package com.dosyapp.dosy.plugins.criticalalarm;
 
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
+import android.net.Uri;
+import android.os.Build;
 import android.util.Log;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+
+import com.dosyapp.dosy.MainActivity;
+import com.dosyapp.dosy.R;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /**
  * AlarmScheduler — helper static usado pelo plugin (chamadas JS) E pelo
@@ -25,6 +41,184 @@ public class AlarmScheduler {
     private static final String TAG = "AlarmScheduler";
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
+
+    // #215 v0.2.3.0 — paridade com src/services/notifications/unifiedScheduler.js
+    public static final int BACKUP_OFFSET = 700_000_000;
+    public static final String TRAY_CHANNEL_ID = "dosy_tray";
+    public static final String TRAY_DND_CHANNEL_ID = "dosy_tray_dnd";
+
+    // Prefs SharedPreferences (gravadas pelo JS via setSyncCredentials + plugin updateUserPrefs futuro)
+    private static final String USER_PREFS = "dosy_user_prefs";
+    private static final String KEY_CRITICAL_ALARM = "critical_alarm_enabled";
+    private static final String KEY_DND_ENABLED = "dnd_enabled";
+    private static final String KEY_DND_START = "dnd_start"; // formato "HH:mm"
+    private static final String KEY_DND_END = "dnd_end";     // formato "HH:mm"
+
+    public enum Branch {
+        PUSH_CRITICAL_OFF,
+        PUSH_DND,
+        ALARM_PLUS_PUSH
+    }
+
+    /**
+     * #215 — Helper unificado: decide branch + agenda alarme + tray notification.
+     * Paridade com JS `unifiedScheduler.buildSchedulePayload`.
+     *
+     * Lê prefs de SharedPreferences `dosy_user_prefs` (criticalAlarm, dndEnabled, dndStart, dndEnd).
+     *
+     * Branches:
+     *   PUSH_CRITICAL_OFF  → só tray notif canal `dosy_tray` (sound default)
+     *   PUSH_DND           → só tray notif canal `dosy_tray_dnd` (vibração leve, sem sound)
+     *   ALARM_PLUS_PUSH    → setAlarmClock + tray notif backup canal `dosy_tray`
+     *
+     * @param ctx Android Context
+     * @param groupId int hash determinístico do groupKey (deve coincidir com JS doseIdToNumber)
+     * @param triggerAtEpochMs UTC epoch ms do horário da dose
+     * @param doses JSONArray de {doseId, medName, unit, patientName, scheduledAt}
+     * @return Branch escolhida
+     */
+    public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs, JSONArray doses) {
+        SharedPreferences sp = ctx.getSharedPreferences(USER_PREFS, Context.MODE_PRIVATE);
+        boolean criticalOn = sp.getBoolean(KEY_CRITICAL_ALARM, true);
+        boolean dndOn = sp.getBoolean(KEY_DND_ENABLED, false);
+
+        boolean inDnd = false;
+        if (dndOn) {
+            String dndStart = sp.getString(KEY_DND_START, "23:00");
+            String dndEnd = sp.getString(KEY_DND_END, "07:00");
+            inDnd = isInDndWindow(triggerAtEpochMs, dndStart, dndEnd);
+        }
+
+        Branch branch;
+        if (!criticalOn) {
+            branch = Branch.PUSH_CRITICAL_OFF;
+        } else if (inDnd) {
+            branch = Branch.PUSH_DND;
+        } else {
+            branch = Branch.ALARM_PLUS_PUSH;
+        }
+
+        switch (branch) {
+            case ALARM_PLUS_PUSH:
+                scheduleDose(ctx, groupId, triggerAtEpochMs, doses);
+                scheduleTrayNotification(ctx, groupId + BACKUP_OFFSET, triggerAtEpochMs, doses, TRAY_CHANNEL_ID);
+                break;
+            case PUSH_DND:
+                scheduleTrayNotification(ctx, groupId, triggerAtEpochMs, doses, TRAY_DND_CHANNEL_ID);
+                break;
+            case PUSH_CRITICAL_OFF:
+                scheduleTrayNotification(ctx, groupId, triggerAtEpochMs, doses, TRAY_CHANNEL_ID);
+                break;
+        }
+
+        Log.d(TAG, "scheduleDoseAlarm groupId=" + groupId + " branch=" + branch + " count=" + doses.length());
+        return branch;
+    }
+
+    /**
+     * Agenda LocalNotification tray via PendingIntent (mesmo pattern Capacitor LocalNotifications usa).
+     * Channel `dosy_tray` tem sound default + vibração; `dosy_tray_dnd` tem só vibração leve.
+     */
+    private static void scheduleTrayNotification(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
+        ensureTrayChannel(ctx, channelId);
+
+        Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+        intent.putExtra("notifId", notifId);
+        intent.putExtra("doses", doses.toString());
+        intent.putExtra("channelId", channelId);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, notifId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+        } catch (SecurityException e) {
+            Log.w(TAG, "tray schedule failed (permission): " + e.getMessage());
+            am.set(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+        }
+    }
+
+    /**
+     * Cria channel dosy_tray ou dosy_tray_dnd se ainda não existe (idempotente).
+     */
+    private static void ensureTrayChannel(Context ctx, String channelId) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null || nm.getNotificationChannel(channelId) != null) return;
+
+        boolean isDnd = TRAY_DND_CHANNEL_ID.equals(channelId);
+        int importance = isDnd
+            ? NotificationManager.IMPORTANCE_DEFAULT  // sem heads-up + sem som
+            : NotificationManager.IMPORTANCE_HIGH;     // heads-up + som default
+
+        NotificationChannel ch = new NotificationChannel(
+            channelId,
+            isDnd ? "Lembretes — Não Perturbe" : "Lembretes de Dose",
+            importance
+        );
+        ch.setDescription(isDnd
+            ? "Lembretes silenciosos dentro da janela Não Perturbe"
+            : "Lembretes de doses agendadas");
+        ch.enableLights(!isDnd);
+        ch.enableVibration(true);
+        if (isDnd) {
+            ch.setVibrationPattern(new long[]{0, 200}); // pulse curto 200ms
+            ch.setSound(null, null);
+        }
+        ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+        nm.createNotificationChannel(ch);
+    }
+
+    /**
+     * Verifica se epoch ms cai dentro janela DnD (interpretada em America/Sao_Paulo).
+     * Suporta janelas que cruzam meia-noite (ex: 23:00 → 07:00).
+     */
+    private static boolean isInDndWindow(long epochMs, String dndStart, String dndEnd) {
+        try {
+            ZonedDateTime zdt = Instant.ofEpochMilli(epochMs).atZone(ZoneId.of("America/Sao_Paulo"));
+            LocalTime t = zdt.toLocalTime();
+            LocalTime start = LocalTime.parse(dndStart);
+            LocalTime end = LocalTime.parse(dndEnd);
+            int tMin = t.getHour() * 60 + t.getMinute();
+            int sMin = start.getHour() * 60 + start.getMinute();
+            int eMin = end.getHour() * 60 + end.getMinute();
+            if (sMin <= eMin) {
+                return tMin >= sMin && tMin < eMin;
+            } else {
+                return tMin >= sMin || tMin < eMin;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "isInDndWindow parse error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * #215 — Cancela alarme nativo + tray backup co-agendado (cobre branch ALARM_PLUS_PUSH).
+     * Idempotente — cancelar id inexistente = no-op.
+     */
+    public static boolean cancelDoseAlarmAndBackup(Context ctx, int groupId) {
+        boolean ok = cancelAlarm(ctx, groupId);
+        // Plus cancela tray backup
+        try {
+            NotificationManagerCompat.from(ctx).cancel(groupId + BACKUP_OFFSET);
+            // Cancela também PendingIntent da AlarmManager pra prevent dispare
+            Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+            PendingIntent pi = PendingIntent.getBroadcast(
+                ctx, groupId + BACKUP_OFFSET, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) am.cancel(pi);
+            pi.cancel();
+        } catch (Exception ignored) {}
+        Log.d(TAG, "cancelDoseAlarmAndBackup groupId=" + groupId);
+        return ok;
+    }
 
     /**
      * Schedule a critical alarm for the given trigger time + doses payload.
@@ -152,16 +346,17 @@ public class AlarmScheduler {
     /**
      * Determinístic id derivation from a stable string (e.g. concat of doseIds).
      * Used by DoseSyncWorker pra coincidir com ids do JS-side (groupKey hash).
+     *
+     * #220 v0.2.3.0 — alinhado com JS `doseIdToNumber` (src/services/notifications/prefs.js):
+     * ambos aplicam `Math.abs(h) % 2147483647` pra garantir paridade cross-source.
+     * Antes Java só fazia `Math.abs(h)` — strings longas podiam divergir do JS.
      */
     public static int idFromString(String s) {
-        // Mesma fórmula do JS doseIdToNumber pra coincidir alarmes JS-scheduled
-        // com Worker-scheduled (idempotente). Ver src/services/notifications.js
-        // doseIdToNumber: int positivo via simple hash.
         int h = 0;
         for (int i = 0; i < s.length(); i++) {
             h = ((h << 5) - h) + s.charAt(i);
             h |= 0; // i32 cast
         }
-        return Math.abs(h);
+        return Math.abs(h) % 2147483647;
     }
 }

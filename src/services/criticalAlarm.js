@@ -185,6 +185,23 @@ export async function setCriticalAlarmEnabled(enabled) {
   return CriticalAlarm.setCriticalAlarmEnabled({ enabled: enabled !== false })
 }
 
+/**
+ * #215 v0.2.3.0 — sincroniza prefs (criticalAlarm + DnD) pro SharedPreferences
+ * `dosy_user_prefs` Android. AlarmScheduler.scheduleDoseAlarm (helper unificado
+ * usado por DoseSyncWorker + DosyMessagingService) lê dali pra decidir branch.
+ *
+ * Chamado por useUserPrefs.mutationFn sempre que prefs mudam.
+ */
+export async function syncUserPrefs(prefs) {
+  if (!isCriticalAlarmAvailable() || !prefs) return null
+  const payload = {}
+  if (typeof prefs.criticalAlarm === 'boolean') payload.criticalAlarm = prefs.criticalAlarm
+  if (typeof prefs.dndEnabled === 'boolean') payload.dndEnabled = prefs.dndEnabled
+  if (typeof prefs.dndStart === 'string') payload.dndStart = prefs.dndStart
+  if (typeof prefs.dndEnd === 'string') payload.dndEnd = prefs.dndEnd
+  return CriticalAlarm.syncUserPrefs(payload)
+}
+
 export async function clearSyncCredentials() {
   if (!isCriticalAlarmAvailable()) return null
   return CriticalAlarm.clearSyncCredentials()

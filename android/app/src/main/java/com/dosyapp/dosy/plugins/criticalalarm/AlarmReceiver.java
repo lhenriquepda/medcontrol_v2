@@ -37,6 +37,13 @@ public class AlarmReceiver extends BroadcastReceiver {
     private static final String CHANNEL_ID = "doses_critical_v2";
     private static final int FS_NOTIF_OFFSET = 200_000_000;
 
+    // #215 v0.2.3.0 — alinhado com src/services/notifications/unifiedScheduler.js BACKUP_OFFSET.
+    // Alarme nativo disparou OK → cancela LocalNotification backup co-agendada
+    // (anti-duplicate: user não vê alarme fullscreen + notif tray vibrando junto).
+    // Se startForegroundService falhar (catch block abaixo), backup CONTINUA agendada
+    // como fallback visual.
+    private static final int BACKUP_OFFSET = 700_000_000;
+
     @Override
     public void onReceive(Context context, Intent intent) {
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
@@ -67,6 +74,16 @@ public class AlarmReceiver extends BroadcastReceiver {
                     meta
                 );
             }
+        } catch (Exception ignored) {}
+
+        // #215 v0.2.3.0 — anti-duplicate: cancela LocalNotification backup antes
+        // de start service. Se startForegroundService falhar (catch block abaixo),
+        // backup continua disponível como fallback visual mesmo cancelado aqui
+        // (LocalNotifications.cancel não previne dispare se já agendada — só remove
+        // do tray quando visível). Aceitável — o objetivo é evitar tray duplicado
+        // QUANDO alarme funcionou.
+        try {
+            NotificationManagerCompat.from(context).cancel(alarmId + BACKUP_OFFSET);
         } catch (Exception ignored) {}
 
         // Primary path (Android 8+): start foreground service → service launches AlarmActivity.

@@ -227,6 +227,9 @@ public class CriticalAlarmPlugin extends Plugin {
      * SharedPreferences. Chamado pelo useUserPrefs.mutationFn quando user
      * mexe no toggle em Ajustes (sem precisar redo full setSyncCredentials).
      * DoseSyncWorker + DosyMessagingService leem essa flag antes de agendar.
+     *
+     * #215 v0.2.3.0 — também grava em `dosy_user_prefs` SharedPreferences
+     * (namespace separado) pra AlarmScheduler.scheduleDoseAlarm helper unificado ler.
      */
     @PluginMethod
     public void setCriticalAlarmEnabled(PluginCall call) {
@@ -235,8 +238,40 @@ public class CriticalAlarmPlugin extends Plugin {
             call.reject("enabled required (boolean)");
             return;
         }
+        // Legacy namespace (consumido por DoseSyncWorker + DosyMessagingService)
         SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
         sp.edit().putBoolean("critical_alarm_enabled", enabled).apply();
+        // #215 namespace unificado (consumido por AlarmScheduler.scheduleDoseAlarm)
+        SharedPreferences spPrefs = getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        spPrefs.edit().putBoolean("critical_alarm_enabled", enabled).apply();
+        call.resolve();
+    }
+
+    /**
+     * #215 v0.2.3.0 — sincroniza prefs completas pro namespace `dosy_user_prefs`.
+     * Chamado pelo useUserPrefs.mutationFn sempre que prefs mudam.
+     * AlarmScheduler.scheduleDoseAlarm lê dali pra decidir branch.
+     *
+     * Payload esperado:
+     *   { criticalAlarm: bool, dndEnabled: bool, dndStart: "HH:mm", dndEnd: "HH:mm" }
+     */
+    @PluginMethod
+    public void syncUserPrefs(PluginCall call) {
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        SharedPreferences.Editor ed = sp.edit();
+        if (call.hasOption("criticalAlarm")) {
+            ed.putBoolean("critical_alarm_enabled", call.getBoolean("criticalAlarm", true));
+        }
+        if (call.hasOption("dndEnabled")) {
+            ed.putBoolean("dnd_enabled", call.getBoolean("dndEnabled", false));
+        }
+        if (call.hasOption("dndStart")) {
+            ed.putString("dnd_start", call.getString("dndStart", "23:00"));
+        }
+        if (call.hasOption("dndEnd")) {
+            ed.putString("dnd_end", call.getString("dndEnd", "07:00"));
+        }
+        ed.apply();
         call.resolve();
     }
 

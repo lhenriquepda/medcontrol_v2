@@ -71,6 +71,13 @@
             android:exported="false"
             android:enabled="true"
         />
+        <!-- #215 v0.2.3.0 — TrayNotificationReceiver dispara LocalNotification tray
+             pra branches PUSH_CRITICAL_OFF + PUSH_DND + backup ALARM_PLUS_PUSH -->
+        <receiver
+            android:name=".plugins.criticalalarm.TrayNotificationReceiver"
+            android:exported="false"
+            android:enabled="true"
+        />
 
         <service
             android:name=".plugins.criticalalarm.AlarmService"

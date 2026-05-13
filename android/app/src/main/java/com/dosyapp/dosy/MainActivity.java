@@ -1,6 +1,9 @@
 package com.dosyapp.dosy;
 
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -21,6 +24,31 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         handleAlarmAction(getIntent());
         enqueueDoseSyncWorker();
+        cleanupLegacyChannels();
+    }
+
+    /**
+     * #222 v0.2.3.0 — remove canais legados que ficaram órfãos pós-refactor #215.
+     * Idempotente — Android no-op se canal não existe.
+     *
+     * Canais removidos:
+     *   - doses_v2          (LocalNotifications pré-#215, substituído por dosy_tray)
+     *   - doses_critical_v2 (AlarmReceiver fallback pré-#215, substituído por dosy_tray)
+     *
+     * Canais mantidos:
+     *   - doses_critical (AlarmService FG sound null — MediaPlayer drives loop)
+     *   - dosy_tray + dosy_tray_dnd (criados via Capacitor channels.js)
+     */
+    private void cleanupLegacyChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            nm.deleteNotificationChannel("doses_v2");
+            nm.deleteNotificationChannel("doses_critical_v2");
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "cleanupLegacyChannels failed: " + e.getMessage());
+        }
     }
 
     /**
