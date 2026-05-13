@@ -150,9 +150,12 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.1.9` (vc 57, em curso 2026-05-13).
+**Branch ativa:** `release/v0.2.2.0` (vc 58, em curso 2026-05-13). Predecessora `release/v0.2.1.9` (vc 57) AAB publicado Internal Testing 2026-05-13 10:09 BRT, aguardando validação device + merge master.
 
-**Release em curso — v0.2.1.9 (2026-05-13):**
+**Release em curso — v0.2.2.0 (2026-05-13):**
+- 🚧 **#210 NOVO P1** — Sistema de auditoria de alarmes para `admin.dosymed.app`. Captura cada agendamento/cancelamento/disparo de alarme nos 6 caminhos do sistema (JS scheduler, Java AlarmScheduler, Java Worker, Java FCM received, Edge daily-sync, Edge trigger-handler) e envia pra nova tabela `medcontrol.alarm_audit_log`. Configurável por user_id (`alarm_audit_config` whitelist) — só registra usuários explicitamente habilitados. Cron diário 3:15 UTC limpa registros >7d. **Admin UI:** página `/alarm-audit` com filtros (usuário/origem/ação/dose/período) + clicável → modal detalhes + descrições em linguagem natural pt-BR. Página `/alarm-audit-config` configurar quais users monitorar via email. Seed inicial habilita `lhenrique.pda@gmail.com`. Objetivo: investigar duplicidade/sobreposição/inconsistência entre caminhos pós-#209.
+
+**Release anterior em validação — v0.2.1.9 (2026-05-13):**
 - 🚧 **#209 NOVO P0** — Refactor completo sistema alarmes + push. User-reported 2026-05-13: 3 bugs (alarme "Sem Paciente", push 5am pra dose 8am, alarme 8am não tocou). Causas raiz: (1) `DoseSyncWorker.java` hardcoded `patientName: ""` quando Worker era fonte do scheduling; (2) RPC SQL `update_treatment_schedule` sem `AT TIME ZONE` correction → dose `firstDoseTime: "08:00"` BRT salvava `08:00 UTC = 05:00 BRT`; (3) cascata Bug 2 — cron `notify-doses-1min` rodando 5am BRT detectou dose como "agora" + sistema atual com 5 caminhos concorrentes (cron 1min + cron 6h + Worker + JS + trigger) sem coordenação. Fix: (a) Migration SQL `update_treatment_schedule` + `AT TIME ZONE`; (b) Data-fix regenerando doses de todos treatments via RPC fixada (idempotente); (c) `DoseSyncWorker` PostgREST embed `patients(name)` + extract `patientName` + HORIZON 168h→48h; (d) Nova Edge Function `daily-alarm-sync` (cron 8am UTC = 5am BRT, FCM data 48h horizon, retry exponential, multi-TZ); (e) Refactor `dose-trigger-handler` horizon 6h→48h + action `cancel_alarms` em DELETE/status-change; (f) `DosyMessagingService` handler `cancel_alarms` + `AlarmScheduler.cancelAlarm` method; (g) UNSCHEDULE crons `notify-doses-1min` + `schedule-alarms-fcm-6h`; (h) SCHEDULE `daily-alarm-sync-5am`. **Egress estimado -99%** (1440 reqs/dia/user → ~5/dia/user). Plus fix #208 BUG superseded — VERSION_CODE_TO_NAME map +56 +57 entries.
 
 **Última release fechada master — v0.2.1.8 (2026-05-11):**

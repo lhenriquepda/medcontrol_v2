@@ -6641,3 +6641,118 @@ Ver [`Validar.md`](Validar.md) seções 219.1.1 → 219.6.1 — checklist comple
 - Migrar todas Edge Functions pra usar `_shared/userPrefs.ts` (incremental)
 - Telemetria PostHog `alarm_missed_detected` Worker side (item separado)
 
+---
+
+### #210 — Sistema auditoria de alarmes para admin.dosymed.app
+
+- **Status:** ✅ Resolvido (release v0.2.2.0 vc 58)
+- **Categoria:** 🛠️ OBSERVABILIDADE / DEBUG
+- **Prioridade:** P1 (debug arquitetura alarmes pós-#209)
+- **Origem:** User-requested 2026-05-13 pós-publish v0.2.1.9 — necessidade observar fluxo completo de agendamento de alarmes no celular pra debugar duplicidade/sobreposição/inconsistência entre 6 caminhos.
+
+**Problema:**
+
+Pós-refactor #209, arquitetura de alarmes ficou com 4 paths coordenados (JS rescheduleAll + dose-trigger-handler + daily-alarm-sync + DoseSyncWorker) + AlarmReceiver fire + FCM cancel handler. Sem visibilidade end-to-end, impossível confirmar:
+- Algum path agendando duplicado?
+- Cancel chegou ao device?
+- Cron 5am realmente disparou FCM data?
+- Worker rodou nas últimas 24h?
+- Alarme fired_received aconteceu?
+
+**Implementação:**
+
+1. **DB schema** (migration `create_alarm_audit_log_v0_2_2_0`):
+   - `medcontrol.alarm_audit_log` (user_id, device_id, dose_id, source, action, scheduled_at, patient_name, med_name, metadata jsonb, created_at)
+   - `medcontrol.alarm_audit_config` (user_id, enabled, notes, created_by, updated_at) — whitelist usuários
+   - RLS: admin-only SELECT logs + manage config. User INSERT próprio gated por config.enabled.
+   - Helper RPC `is_alarm_audit_enabled(p_user_id)` (consultado app/Edge)
+   - Admin RPCs: `admin_list_alarm_audit(filtros)`, `admin_list_alarm_audit_config()`, `admin_toggle_alarm_audit(email, enabled, notes)`
+   - Seed `lhenrique.pda@gmail.com` enabled
+   - Cron `alarm-audit-cleanup-daily` 3:15 UTC — retention 7d via `cron_alarm_audit_cleanup()`
+
+2. **JS helper** (`src/services/notifications/auditLog.js`):
+   - `isEnabled()` cache 5min via RPC
+   - `logAuditEvent(ev)` + `logAuditEventsBatch(events)` silent-fail
+   - Wire `scheduler.js rescheduleAll`: batch_start/batch_end + per-dose scheduled (critical_alarm + local_notif) + per-dose skipped (dnd_window)
+
+3. **Java helper** (`AlarmAuditLogger.java`):
+   - Executor single-thread (não bloqueia hot path)
+   - `logScheduled/logCancelled/logFired/logBatch` POST `/rest/v1/alarm_audit_log`
+   - Reuse credentials `dosy_sync_credentials` SharedPrefs
+   - device_id = `Build.MODEL (Build.MANUFACTURER)`
+   - Wire `DoseSyncWorker` (source `java_worker`): batch_start/batch_end + per-dose scheduled
+   - Wire `DosyMessagingService.handleScheduleAlarms` (source `java_fcm_received`): batch_start/batch_end + per-dose scheduled
+   - Wire `DosyMessagingService.handleCancelAlarms` (source `java_fcm_received`): per-dose cancelled
+   - Wire `AlarmReceiver.onReceive` (source `java_alarm_scheduler`): per-dose fired_received
+
+4. **Edge Functions** (`_shared/auditLog.ts` novo):
+   - `getEnabledAuditUsers(supabase)` → `Set<user_id>` whitelist preload
+   - `logAuditBatch(supabase, rows[])` insert batch
+   - `daily-alarm-sync` v2: per-user gate audit + batch_start/end + per-dose fcm_sent/skipped (source `edge_daily_sync`)
+   - `dose-trigger-handler` v17: gate audit + per-dose fcm_sent/cancelled/skipped (source `edge_trigger_handler`) com `triggerType` (INSERT/UPDATE/DELETE) + `triggerReason` (insert_pending_future / status_pending_to_done / scheduled_at_changed / undo_to_pending / delete_pending) no metadata
+
+5. **Admin UI dosy-admin**:
+   - `/alarm-audit` página principal — RPC `admin_list_alarm_audit` paginado, filtros (email user, source, action, dose_id, hoursBack [1h/6h/24h/72h/168h/all], limit [50-1000]), stats cards (total/doses/sources/actions), tabela clicável → modal detalhes (descrição linguagem natural pt-BR + tags coloridas source/action + metadata raw JSON pretty + link "Ver todos eventos desta dose")
+   - `/alarm-audit-config` página config — RPC `admin_list_alarm_audit_config` lista usuários monitorados com log_count, form add (email + notes) via `admin_toggle_alarm_audit`, toggle pause/reactivate por linha
+   - Nav Layout entry "⏰ Histórico de alarmes"
+   - Linguagem natural pt-BR (caveman OFF user-facing): labels traduzidos `js_scheduler` → "App (em uso ativo)", `edge_daily_sync` → "Servidor (sincronização diária 5h)", etc
+
+**Configuração inicial:**
+
+- Seed migration: `lhenrique.pda@gmail.com` enabled = true (notes: "Owner debug — seed v0.2.2.0")
+- Outros users: invisíveis ao sistema (zero inserts geração)
+
+**Egress audit:**
+
+| Cenário | Rows/dia estimado | Notas |
+|---|---|---|
+| lhenrique device foreground (JS rescheduleAll 3x/dia) | ~60 rows | 14 doses × 3 reschedule + batch tags |
+| lhenrique Worker periodic 6h (4x/dia) | ~60 rows | 14 doses × 4 rodadas |
+| lhenrique FCM received (cron 5am + trigger real-time ~10/dia) | ~150 rows | 14 doses × 11 events |
+| lhenrique AlarmReceiver fired (14/dia) | 14 rows | 1 por fire |
+| Edge daily-sync 5am 1x/dia | ~30 rows | 14 doses × 2 devices × 1 cron |
+| Edge trigger-handler real-time (~10/dia) | ~10 rows | 1 per mudança dose |
+| **Total estimado lhenrique** | **~324 rows/dia** | aceitável debug feature |
+| Outros users (não habilitados) | 0 rows | gate via RLS + Set<userId> Edge |
+
+7d retention × 324/dia = ~2300 rows total — trivial pra Postgres.
+
+**Critério de aceitação:**
+
+- ✅ Build verde admin + app
+- ✅ AAB vc 58 publicado Internal Testing
+- ✅ Migration aplicada — `SELECT * FROM medcontrol.alarm_audit_config` retorna lhenrique enabled
+- ✅ Cron `alarm-audit-cleanup-daily` SCHEDULED
+- ✅ Edge functions deployed: daily-alarm-sync v2 + dose-trigger-handler v17
+- 🧪 Device runtime: instalar vc 58, abrir app, abrir admin `/alarm-audit` → ver eventos JS scheduler.js rescheduleAll na lista
+- 🧪 Aguardar 5am BRT seguinte: cron daily-alarm-sync deve gerar batch_start/fcm_sent/batch_end events source `edge_daily_sync`
+- 🧪 Confirmar dose como tomada via app: dose-trigger-handler deve gerar `cancelled` event source `edge_trigger_handler`
+- 🧪 Aguardar 8am alarme fire: AlarmReceiver deve gerar `fired_received` event source `java_alarm_scheduler`
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Audit insert silent fail bloqueia alarme hot path | 🔴 Alto | JS: try/catch wrap. Java: Executor separado + silent fail. Edge: try/catch + console.warn | **OK** — alarme nunca bloqueado |
+| RLS muito restritivo bloqueia INSERT autenticado | 🟡 Médio | Policy `audit_log_user_insert` valida user_id = auth.uid() + EXISTS config.enabled | **OK** — testado seed lhenrique |
+| Egress alto se +1 user habilitado | 🟡 Médio | Gate per-user no Edge via `Set<user_id>` pré-loaded — não habilitados zero insert | **OK** |
+| Cron cleanup falhar → tabela cresce | 🟢 Baixo | 7d × 324 rows/dia × 1 user = 2300 rows. Manual cleanup acessível via Supabase SQL Editor | **OK** |
+| Privacy concern (logs detalhados doses) | 🟢 Baixo | Apenas admin-only SELECT (RLS). User opt-in via config whitelist explícita | **OK** |
+| dose-trigger-handler trigger DB falha em INSERT/UPDATE | 🟡 Médio | Edge Function async fire-and-forget pelo trigger. DB INSERT/UPDATE não bloqueia se Edge fail | **OK** |
+
+**Validação device pré-merge:**
+
+Ver [`Validar.md`](Validar.md) seções 220.x — checklist completo S25 Ultra:
+- Instalar vc 58 + abrir app → SQL `SELECT * FROM medcontrol.alarm_audit_log WHERE user_id = (lhenrique uuid) ORDER BY created_at DESC LIMIT 10` retorna eventos
+- Abrir admin `/alarm-audit` → eventos aparecem com timestamps próximos
+- Filtros source/action/dose funcionam
+- Modal detalhes mostra metadata jsonb completo
+- Habilitar/desabilitar via `/alarm-audit-config` toggle reflete (próximo evento usuário não habilitado some)
+
+**Não-escopo:**
+
+- Realtime live updates admin page (manual refresh OK per user)
+- Notif/alerta admin pra eventos suspeitos (próximo iteration)
+- Export CSV histórico (futuro)
+- Retention configurável (hardcode 7d agora)
+
