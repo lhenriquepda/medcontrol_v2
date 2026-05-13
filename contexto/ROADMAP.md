@@ -150,7 +150,10 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** Master @ `v0.2.2.2` FECHADA (vc 60 Internal Testing 2026-05-13 15:14 BRT, tag `v0.2.2.2`).
+**Branch ativa:** `release/v0.2.2.3` (vc 61, em curso 2026-05-13).
+
+**Release em curso — v0.2.2.3 (2026-05-13):**
+- 🚧 **#213 P1 STORM REAL ROOT CAUSE** — Auditoria via logcat Dosy-Dev (~6min monitoramento) confirmou storm 60s exato gerado por `Dashboard.jsx:99` `setInterval setTick(60s)`. Tick muda → `todayDoses` filter recalcula → useEffect `Dashboard.jsx:222` re-fires → `scheduleDoses(todayDoses)` → `cancelAll` + reagenda 9 alarmes idênticos. Conteúdo zero-mudança. App.jsx top-level signature guard v0.2.2.2 funcionando OK (initial só) mas Dashboard caller sem guard mantinha storm. Fix mínimo: remove caller redundante completo (`useEffect scheduleDoses` + `usePushNotifications` import desnecessários). App.jsx top-level cobre full 48h window. Esperado: 1440 reschedules/dia → ~1-5/dia.
 
 **Última release fechada master — v0.2.2.2 (2026-05-13):**
 - ✅ **#212 P1 STORM ROOT CAUSE** — Throttle v0.2.2.1 reduziu impacto mas root cause continuou: app reagendando 1.36 vezes/minuto (~2000/dia esperado ~10). Audit polling 11min confirmou cadência 60s estável + outliers. Egress estimado ~30-40 MB/dia/device em loop. 2 fixes: (a) `useRealtime.js WATCHDOG_INTERVAL_MS` 60s → 300s (5min) — watchdog reconnect cycle era gatilho primário, refetchQueries blanket disparava useEffect rescheduleAll; (b) `App.jsx useEffect` signature guard via `useMemo` — `dosesSignature` calculado por `id:status:scheduledAt` ordenado, useEffect dep usa signature em vez de array ref (mesma referência mas com timestamps microsec diferentes não retriggam). Esperado pós-fix: ~10 rescheduleAll/dia em vez de ~2000.

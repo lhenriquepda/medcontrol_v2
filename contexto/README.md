@@ -429,9 +429,12 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** Master @ `v0.2.2.2` (vc 60 Internal Testing 2026-05-13 15:14 BRT, tag `v0.2.2.2`). Storm root cause #212.
+**Versão atual:** `release/v0.2.2.3` em curso (vc 61). Master @ `v0.2.2.2`. Storm root cause REAL #213 (Dashboard.jsx setInterval setTick 60s → caller redundante).
 **Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
+
+**Release em curso:**
+- 🚧 v0.2.2.3 — **#213 P1 STORM REAL ROOT CAUSE** Logcat Dosy-Dev confirmou storm 60s exato vinha de `Dashboard.jsx:99` `setInterval setTick(60s)` flipando `todayDoses` ref → useEffect Dashboard:222 chamando `scheduleDoses(todayDoses)` → cancelAll + reagenda 9 alarmes idênticos cada 60s. App.jsx top-level signature guard v0.2.2.2 OK mas Dashboard caller sem guard era o storm. Fix: remove Dashboard caller completo (1 linha + import). App.jsx top-level cobre full 48h window — Dashboard caller era vestígio pré-#198. Esperado: ~1-5 reschedules/dia (era 1440).
 
 **Última release fechada master:**
 - ✅ v0.2.2.2 (2026-05-13) — **#212 P1 STORM ROOT CAUSE** Throttle v0.2.2.1 não eliminou storm (1.36 batches/min observado pós-deploy). 2 fixes: (a) Watchdog realtime 60s → 300s (5min); (b) App.jsx useEffect signature guard via useMemo `dosesSignature` (id:status:scheduledAt sorted) — re-trigger só em mudança real, não em ref-change. Esperado pós-vc 60: ~10 rescheduleAll/dia (era ~2000). AAB vc 60 publicado Internal Testing 2026-05-13 15:14 BRT. Tag `v0.2.2.2`.

@@ -21,7 +21,6 @@ import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useDoses, useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
 import { usePatients } from '../hooks/usePatients'
-import { usePushNotifications } from '../hooks/usePushNotifications'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
@@ -215,13 +214,12 @@ export default function Dashboard() {
   }, [collapsed])
   const toggleCollapse = (id) => setCollapsed((s) => ({ ...s, [id]: !s[id] }))
 
-  // Schedule push notifications for upcoming doses + daily summary.
-  // SEMPRE roda (mesmo sem doses hoje) — daily summary é independente e precisa
-  // ser agendado mesmo quando não há doses programadas.
-  const { scheduleDoses } = usePushNotifications()
-  useEffect(() => {
-    scheduleDoses(todayDoses, { patients })
-  }, [todayDoses, patients, scheduleDoses])
+  // v0.2.2.3 (#213) — REMOVIDO scheduleDoses caller. App.jsx top-level useEffect
+  // (com signature guard v0.2.2.2) já agenda full window 48h. Dashboard caller
+  // era vestígio pré-#198 + executava a cada 60s via setInterval setTick:99
+  // que flipava todayDoses ref → useEffect re-fire → cancelAll + reagenda mesmo
+  // conteúdo idêntico → storm 1440 reschedules/dia. Audit logcat confirmou.
+  // Daily summary é agendado dentro do mesmo rescheduleAll de App.jsx, sem perda.
 
   // Pull-to-refresh — overlay bar (não wrapa content, preserva sticky FilterBar)
   const handleRefresh = async () => {

@@ -6958,5 +6958,101 @@ Ver `Validar.md` seção `#212.v222.x`:
 
 - Root cause raiz pq channel.state !== 'joined' frequente em S25 Ultra (Android Doze suspending WS, token refresh churn) — investigação Capacitor.Network listener vs supabase-js auth events.
 
+---
+
+### #213 — Storm REAL root cause: Dashboard.jsx setInterval setTick → caller redundante (v0.2.2.3)
+
+- **Status:** ✅ Resolvido (release v0.2.2.3 vc 61)
+- **Categoria:** 🐛 BUG / 🛠️ PERFORMANCE
+- **Prioridade:** P1
+- **Origem:** Logcat Dosy-Dev (~6min monitoramento) pós-deploy v0.2.2.2 — signature guard App.jsx funcionou (initial só), mas storm 60s continuou.
+
+**Problema:**
+
+Auditoria logcat capturou pattern exato:
+```
+15:33:29 rescheduleAll START dosesCount=30 patientsCount=3
+15:33:29 CriticalAlarm.cancelAll
+15:33:29 AlarmScheduler scheduled id=386571675 count=2
+15:33:30 AlarmScheduler scheduled id=1912498711 count=7
+15:33:29 rescheduleAll END alarmsScheduled=9 groupsCount=2
+
+15:34:31 rescheduleAll START dosesCount=30 (+62s — idêntico!)
+... loop infinito
+```
+
+**Conteúdo IDÊNTICO entre cycles** — mesmos IDs, mesmas timestamps `at=...`. Cancel + reagenda mesmos alarmes 1×/min = waste puro.
+
+**Root cause real:**
+
+`src/pages/Dashboard.jsx:99`:
+```js
+const t = setInterval(() => setTick(Math.floor(Date.now() / 60000)), 60000)
+```
+
+Plus `Dashboard.jsx:222-224`:
+```js
+const { scheduleDoses } = usePushNotifications()
+useEffect(() => {
+  scheduleDoses(todayDoses, { patients })
+}, [todayDoses, patients, scheduleDoses])
+```
+
+Cadeia 60s:
+1. `setInterval 60s` → `setTick(novo número)`
+2. `tick` muda → `todayDoses = useMemo(... [doses, tick])` recalcula → new array ref
+3. `useEffect([todayDoses, ...])` re-fires → `scheduleDoses(todayDoses, {patients})`
+4. `rescheduleAll` → `cancelAll` + reagenda 9 alarmes (mesmo conteúdo)
+5. 60s loop reinicia
+
+**Por que signature guard App.jsx não pegou?**
+
+App.jsx signature guard funciona no App.jsx useEffect próprio. Mas Dashboard.jsx tem seu próprio useEffect chamando scheduleDoses diretamente — bypassa App.jsx completamente. 2 callers competindo.
+
+**Implementação:**
+
+Remove Dashboard.jsx:222-224 completamente. App.jsx top-level signature guard cobre full window 48h. Daily summary é agendado dentro do mesmo rescheduleAll do App.jsx (sem perda). Plus remove import `usePushNotifications` Dashboard.jsx:24 desnecessário.
+
+```diff
+-  // Schedule push notifications for upcoming doses + daily summary.
+-  // SEMPRE roda (mesmo sem doses hoje) — daily summary é independente e precisa
+-  // ser agendado mesmo quando não há doses programadas.
+-  const { scheduleDoses } = usePushNotifications()
+-  useEffect(() => {
+-    scheduleDoses(todayDoses, { patients })
+-  }, [todayDoses, patients, scheduleDoses])
++  // v0.2.2.3 (#213) — REMOVIDO scheduleDoses caller. App.jsx top-level useEffect
++  // (com signature guard v0.2.2.2) já agenda full window 48h. Dashboard caller
++  // era vestígio pré-#198 + executava a cada 60s via setInterval setTick:99...
+```
+
+**Critério de aceitação:**
+
+- ✅ Build verde + AAB vc 61 publicado Internal Testing
+- 🧪 Device runtime vc 61: app aberto 10min → /alarm-audit ≤2 batches
+- 🧪 Logcat zero `rescheduleAll dosesCount=30` (Dashboard caller eliminado)
+- 🧪 60min uso normal: ≤5 batches total (era 60)
+- 🧪 Daily summary notif ainda agendado (verificar metadata.localNotifs ≥1)
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Dashboard caller cobria edge case que App.jsx não cobre | 🟢 Baixo | App.jsx top-level com `alarmWindow -1d/+14d` é superset do Dashboard `todayDoses`. scheduler.js filtra 48h. Daily summary agendado em rescheduleAll mesmo | **OK** |
+| Dose criada hoje após app open não agenda alarme | 🟢 Baixo | dose-trigger-handler Edge dispara FCM real-time em INSERT pending. mutationRegistry chama scheduleDoses ao confirm/skip/undo | **OK** |
+| Push tray daily summary perdido | 🟢 Baixo | scheduler.js linhas 277-307 agendam DAILY_SUMMARY_NOTIF dentro do rescheduleAll. Roda no App.jsx initial | **OK** |
+
+**Egress estimado pós-fix:**
+
+| Componente | Antes (v0.2.2.2) | Após (v0.2.2.3) |
+|---|---|---|
+| rescheduleAll/dia | ~1440 | ~5 |
+| useDoses refetch/dia | ~1440 | ~24 (watchdog 5min + interações) |
+| dose_alarms_scheduled upsert/dia | ~13000 | ~50 |
+| **Total egress MB/dia/device** | **~30-40** | **~1-2** |
+
+**95% redução estimada.** Plano Supabase Pro 250GB/mês recupera margem pra Closed Testing 100 users.
+
+
 
 
