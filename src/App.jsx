@@ -170,6 +170,30 @@ export default function App() {
     return () => { cancelled = true }
   }, [])
 
+  // v0.2.2.2 (#212) — signature guard previne storm rescheduleAll. Audit
+  // v0.2.2.0 revelou: useDoses refetch (disparado por realtime watchdog +
+  // invalidations) retorna new array ref a cada call MESMO QUANDO conteúdo
+  // idêntico. structuralSharing TanStack helps mas timestamps microsec
+  // diferem. useEffect dep `allDoses` flipa identity → scheduleDoses fires
+  // → storm 1/min. Signature por id+status+scheduledAt detecta mudança real.
+  const dosesSignature = useMemo(() => {
+    if (!dosesLoaded) return ''
+    // Sort + serialize só campos que importam pra scheduling.
+    // mudanças em campos não-sched (medName, etc) NÃO retrigger scheduleDoses.
+    return (allDoses || [])
+      .map(d => `${d.id}:${d.status}:${d.scheduledAt}`)
+      .sort()
+      .join('|')
+  }, [allDoses, dosesLoaded])
+
+  const patientsSignature = useMemo(() => {
+    if (!patientsLoaded) return ''
+    return (allPatients || [])
+      .map(p => `${p.id}:${p.name || ''}`)
+      .sort()
+      .join('|')
+  }, [allPatients, patientsLoaded])
+
   useEffect(() => {
     if (!user) return
     // Item #198 (release v0.2.1.5) — só agendar quando doses + patients
@@ -179,8 +203,11 @@ export default function App() {
     // terminava. Window vazio + risco AlarmManager fica zerado se app fecha
     // entre cancel e reschedule.
     if (!dosesLoaded || !patientsLoaded) return
+    // v0.2.2.2 — deps via signatures ao invés de refs. signature muda só
+    // se algum dose.status/scheduledAt mudou (interação real, cron, edit).
     scheduleDoses(allDoses, { patients: allPatients })
-  }, [user, allDoses, allPatients, dosesLoaded, patientsLoaded, scheduleDoses])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, dosesSignature, patientsSignature, dosesLoaded, patientsLoaded, scheduleDoses])
 
   // ─── Notification tap handlers (LocalNotifications + FCM) ─────────────
   useEffect(() => {

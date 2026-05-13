@@ -42,7 +42,15 @@ const TABLE_TO_KEYS = {
  *   3. patient_shares fica sem filter (multi-user resource — necessário
  *      receber notif quando outro user compartilha paciente comigo)
  */
-const WATCHDOG_INTERVAL_MS = 60_000 // 60s — verifica saúde do channel
+// v0.2.2.2 (#212) — 60s → 300s. Audit revelou storm rescheduleAll cadência 60s
+// gatilhado por watchdog reconnect cycle (channel state !== 'joined' em Android
+// Doze + token refresh window → force reconnect → refetchQueries ['doses'] →
+// useEffect App.jsx detecta new data ref → scheduleDoses → rescheduleAll storm).
+// 5min reduz frequência 5×. Status callbacks (CLOSED/CHANNEL_ERROR/TIMED_OUT)
+// continuam funcionando — watchdog é só safety net pra silent fail (heartbeat
+// parou mas status não disparou). Item separado: investigar pq channel state
+// não é 'joined' a cada watchdog tick em S25 Ultra.
+const WATCHDOG_INTERVAL_MS = 300_000 // 5min — verifica saúde do channel
 
 export function useRealtime() {
   const qc = useQueryClient()

@@ -6861,4 +6861,102 @@ GRANT SELECT ON medcontrol.alarm_audit_config TO authenticated;
 - Investigar root cause storm (App.jsx useEffect deps + realtime watchdog) — item separado #212
 - Telemetria storm detection — alerta admin se rows/min > threshold
 
+---
+
+### #212 — Storm rescheduleAll root cause (watchdog + signature guard) — v0.2.2.2
+
+- **Status:** ✅ Resolvido (release v0.2.2.2 vc 60)
+- **Categoria:** 🐛 BUG / 🛠️ PERFORMANCE
+- **Prioridade:** P1
+- **Origem:** Pós-deploy v0.2.2.1 (hotfix throttle), audit polling 11min confirmou storm continuou em 1.36 batches/min — throttle reduziu impacto mas não eliminou gatilho.
+
+**Problema:**
+
+Audit revelou cadência 60s estável entre batches + outliers:
+```
+17:01:29 → 59 (initial)
+17:01:58 → 10 (+29s trailing run throttle)
+17:02:28 → 10 (+30s)
+17:03:28 → 10 (+60s)
+... 15 batches em 11min
+```
+
+Esperado pelo plan #209: ~10 rescheduleAll/dia (cron 5h + Worker 6h + interações). Realidade: ~2000/dia. **200× excesso.**
+
+**Egress estimado:**
+
+| Componente | Egress/dia/device |
+|---|---|
+| `useDoses` refetch (14 dias window) | ~17 MB |
+| `dose_alarms_scheduled` upsert | ~5-10 MB |
+| Realtime channel reconnect | ~7 MB |
+| `alarm_audit_log` INSERT | ~1 MB |
+| **Total** | **~30-40 MB/dia/device** |
+
+Escalado pra 100 testers Closed = 3-4 GB/dia. Plano Pro 250GB/mês = 12% só desse loop.
+
+**Root cause (cadeia 60s):**
+
+1. `useRealtime.js` mantém WebSocket canal ['realtime:userId:gen:ts']
+2. `WATCHDOG_INTERVAL_MS = 60_000` — vigia roda a cada 60s checando channel.state
+3. Em Android Doze + token JWT refresh window, state muda pra `!== 'joined'` ocasionalmente
+4. Watchdog dispara `unsubscribe + subscribe + refetchQueries({queryKey: ['doses'], type: 'active'})`
+5. Refetch retorna fresh data — mesmo conteúdo, mas array ref novo (timestamps microsec diferem)
+6. App.jsx useEffect dep `allDoses` detecta "mudou" → `scheduleDoses(allDoses, {patients})` → `rescheduleAll`
+7. Throttle v0.2.2.1 prevent concurrent execution mas trailing run sempre dispara → storm 60s+30s cycles
+
+**Implementação:**
+
+1. **`useRealtime.js`** — `WATCHDOG_INTERVAL_MS` 60000 → 300000 (5min). Reduz frequência reconnect cycle 5×. Status callbacks (CLOSED/CHANNEL_ERROR/TIMED_OUT) continuam funcionando — watchdog é safety net only.
+
+2. **`App.jsx`** — Signature guard via `useMemo`:
+```js
+const dosesSignature = useMemo(() => {
+  if (!dosesLoaded) return ''
+  return (allDoses || [])
+    .map(d => `${d.id}:${d.status}:${d.scheduledAt}`)
+    .sort()
+    .join('|')
+}, [allDoses, dosesLoaded])
+
+const patientsSignature = useMemo(() => {
+  if (!patientsLoaded) return ''
+  return (allPatients || []).map(p => `${p.id}:${p.name || ''}`).sort().join('|')
+}, [allPatients, patientsLoaded])
+
+useEffect(() => {
+  if (!user || !dosesLoaded || !patientsLoaded) return
+  scheduleDoses(allDoses, { patients: allPatients })
+}, [user, dosesSignature, patientsSignature, dosesLoaded, patientsLoaded, scheduleDoses])
+```
+
+Refetch retorna mesma signature → useEffect não re-fires. Mudança real (status pending→done, scheduledAt change, dose new) → signature flipa → reschedule.
+
+**Critério de aceitação:**
+
+- ✅ Build verde + AAB vc 60 publicado Internal Testing
+- 🧪 Device runtime vc 60: app aberto 10min → /alarm-audit mostra ≤2 batches (não 15)
+- 🧪 60min uso normal: ≤10 batches total (não ~80)
+- 🧪 Egress Supabase Dashboard: queda ~95% useDoses queries/hora vs vc 59
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Watchdog 5min lento pra detectar silent fail (heartbeat parou mas status ok) | 🟡 Médio | Status callbacks supabase-js cobrem 95%+ casos. Watchdog era safety net pra raros. Reconnect manual via app resume listener (App.jsx) cobre cold path | **Aceitável** |
+| Signature pode não detectar mudança sutil (ex: dose updatedAt only) | 🟢 Baixo | scheduleDoses não usa updatedAt — só status/scheduledAt. Outros campos irrelevantes pra scheduling | **OK** |
+| useMemo deps allDoses ainda flipa ref a cada refetch | 🟢 Baixo | useMemo recalcula signature, mas saída string identical → dep não muda → useEffect não re-fires | **OK** |
+
+**Validação device pós-merge:**
+
+Ver `Validar.md` seção `#212.v222.x`:
+- vc 60 instalado → /alarm-audit últimos 10min ≤2 batches
+- Marcar dose como tomada → 1 batch_start aparece (signature flipou)
+- Idle 30min → 0-1 batches (cron 5am + Worker 6h apenas)
+
+**Não-escopo:**
+
+- Root cause raiz pq channel.state !== 'joined' frequente em S25 Ultra (Android Doze suspending WS, token refresh churn) — investigação Capacitor.Network listener vs supabase-js auth events.
+
+
 

@@ -150,9 +150,13 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** Master @ `v0.2.2.1` FECHADA (vc 59 Internal Testing 2026-05-13 13:53 BRT, tag `v0.2.2.1`).
+**Branch ativa:** Master @ `v0.2.2.2` FECHADA (vc 60 Internal Testing 2026-05-13 15:14 BRT, tag `v0.2.2.2`).
 
-**Última release fechada master — v0.2.2.1 (2026-05-13):**
+**Última release fechada master — v0.2.2.2 (2026-05-13):**
+- ✅ **#212 P1 STORM ROOT CAUSE** — Throttle v0.2.2.1 reduziu impacto mas root cause continuou: app reagendando 1.36 vezes/minuto (~2000/dia esperado ~10). Audit polling 11min confirmou cadência 60s estável + outliers. Egress estimado ~30-40 MB/dia/device em loop. 2 fixes: (a) `useRealtime.js WATCHDOG_INTERVAL_MS` 60s → 300s (5min) — watchdog reconnect cycle era gatilho primário, refetchQueries blanket disparava useEffect rescheduleAll; (b) `App.jsx useEffect` signature guard via `useMemo` — `dosesSignature` calculado por `id:status:scheduledAt` ordenado, useEffect dep usa signature em vez de array ref (mesma referência mas com timestamps microsec diferentes não retriggam). Esperado pós-fix: ~10 rescheduleAll/dia em vez de ~2000.
+- AAB vc 60 publicado Internal Testing 2026-05-13 15:14 BRT. Tag `v0.2.2.2`.
+
+**Release anterior fechada master — v0.2.2.1 (2026-05-13):**
 - ✅ **#211 P1 HOTFIX** — Storm rescheduleAll 1×/min descoberto via audit v0.2.2.0 imediato pós-deploy. Audit gerou 868 rows em 30min (esperado: ~10). Root causes: realtime invalidation OR useEffect deps changing 1×/min em App.jsx → rescheduleAll re-run cycle, plus `SCHEDULE_WINDOW_MS` 168h (era 48h no plan #209 mas hardcoded errado) gerando 100 doses agendadas/batch, plus audit per-group inserts (10-100/batch) em vez de single batch insert. Fixes: (a) `SCHEDULE_WINDOW_MS = 48 * 3600 * 1000` em `prefs.js` (alinha daily-alarm-sync cron + Worker 6h); (b) Module-level throttle em `scheduler.js` — `RESCHEDULE_THROTTLE_MS = 30000` + `_lastRunAt` + `_pendingTrailing` setTimeout — primeira execução roda imediato, requests dentro janela 30s coalescem em single trailing run com last args; (c) `auditAccumulator` array push em todas paths + single `logAuditEventsBatch` flush pré-return (cobre 3 paths: nothing_to_schedule, error LocalNotifications.schedule, normal). DB-side: GRANT SELECT/INSERT/UPDATE/DELETE service_role + GRANT USAGE schema + GRANT SELECT/INSERT authenticated em alarm_audit_log/config (RLS policies estavam OK, mas table-level GRANTs faltando → silent fail antes deste fix). Limpeza: DELETE 868 storm rows.
 - AAB vc 59 publicado Internal Testing 2026-05-13 13:53 BRT. Tag `v0.2.2.1`.
 

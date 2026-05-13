@@ -14,7 +14,65 @@
 
 ---
 
-## 🆕 Release v0.2.2.1 — versionCode 59 (Internal Testing publicado 13:53 BRT)
+## 🆕 Release v0.2.2.2 — versionCode 60 (Internal Testing pendente)
+
+**Escopo:** #212 P1 — Storm rescheduleAll root cause. Watchdog 60s→300s + signature guard useEffect.
+
+---
+
+### #212.v222.1 — Storm eliminado
+
+#### `[ ]` 222.1.1 — App aberto 10min gera ≤2 batches
+
+**Como fazer:**
+1. Limpar audit log: `TRUNCATE medcontrol.alarm_audit_log`.
+2. Instalar vc 60 + abrir app.
+3. Aguardar 10min sem interagir.
+4. /alarm-audit últimos 10min.
+
+**O que esperar:**
+- ≤2 batches (initial open + máximo 1 watchdog em 10min com 5min interval).
+
+**Se falhar:**
+- 5+ batches → signature guard não aplicou OR watchdog ainda em 60s.
+
+---
+
+### #212.v222.2 — Mudança real dispara reschedule
+
+#### `[ ]` 222.2.1 — Marcar dose como tomada → 1 batch_start aparece
+
+**Como fazer:**
+1. App aberto vc 60.
+2. /alarm-audit última 1h.
+3. Confirmar dose Tomada no app.
+4. Refresh /alarm-audit.
+
+**O que esperar:**
+- 1 batch_start novo com signature change → scheduleDoses fires.
+
+**Se falhar:**
+- Nenhum batch → signature não detectou status change (bug).
+
+---
+
+### #212.v222.3 — Idle longo
+
+#### `[ ]` 222.3.1 — Idle 30min mostra ≤1 batches
+
+**Como fazer:**
+1. App aberto 30min idle (não interagir).
+2. /alarm-audit últimos 30min.
+
+**O que esperar:**
+- 0-2 batches (initial + máx 1 watchdog 5min).
+
+**Se falhar:**
+- 5+ → watchdog OR algum useEffect ainda flipa identity.
+
+---
+
+## Release v0.2.2.1 — versionCode 59 (Internal Testing publicado 13:53 BRT)
 
 **Escopo:** #211 P1 HOTFIX — Storm rescheduleAll 1×/min descoberto via audit v0.2.2.0. Throttle 30s + window 168h→48h + audit batch single insert + DB grants.
 
