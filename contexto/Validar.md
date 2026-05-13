@@ -14,7 +14,48 @@
 
 ---
 
-## 🆕 Release v0.2.2.2 — versionCode 60 (Internal Testing pendente)
+## 🆕 Release v0.2.2.3 — versionCode 61 (Internal Testing pendente)
+
+**Escopo:** #213 P1 STORM REAL — Remove `Dashboard.jsx` caller redundante. Confirmado via logcat Dosy-Dev: 60s exato vinha setInterval setTick(60s) flipando todayDoses ref. Fix mínimo 1 linha.
+
+---
+
+### #213.v223.1 — Storm eliminado definitivamente
+
+#### `[ ]` 223.1.1 — App aberto 10min ≤2 batches
+
+**Como fazer:**
+1. TRUNCATE alarm_audit_log.
+2. Instalar vc 61 + login.
+3. Aguardar 10min sem interagir.
+4. /alarm-audit últimas 24h.
+
+**O que esperar:**
+- ≤2 batches (initial App.jsx open + máximo 1 watchdog 5min).
+- Logcat: 1 só `rescheduleAll START dosesCount=434` (App.jsx full). Zero rescheduleAll dosesCount=30 (Dashboard caller eliminado).
+
+**Se falhar:**
+- 5+ batches OU logs `dosesCount=30` aparecem → Dashboard caller voltou OR build não tem fix.
+
+---
+
+### #213.v223.2 — Daily summary ainda agendado
+
+#### `[ ]` 223.2.1 — Daily summary notif agendado pelo App.jsx
+
+**Como fazer:**
+1. /alarm-audit último batch normal.
+2. Click modal → metadata `localNotifs` ≥1 e `summary: true`.
+
+**O que esperar:**
+- Daily summary não-perdido (App.jsx caller agenda dentro mesmo rescheduleAll).
+
+**Se falhar:**
+- summary=false → Settings.prefs.dailySummary=true mas scheduler skip — bug.
+
+---
+
+## Release v0.2.2.2 — versionCode 60 (Internal Testing pendente)
 
 **Escopo:** #212 P1 — Storm rescheduleAll root cause. Watchdog 60s→300s + signature guard useEffect.
 
