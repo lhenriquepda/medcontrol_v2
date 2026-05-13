@@ -174,14 +174,19 @@ export function AuthProvider({ children }) {
               try {
                 const cachedToken = localStorage.getItem('dosy_fcm_token')
                 if (cachedToken) {
+                  // #226 v0.2.3.0 — passa device_id UUID estável
+                  const { getDeviceId } = await import('../services/criticalAlarm')
+                  let deviceIdUuid = null
+                  try { deviceIdUuid = await getDeviceId() } catch { /* fallback null */ }
                   supabase.schema('medcontrol').rpc('upsert_push_subscription', {
                     p_device_token: cachedToken,
                     p_platform: 'android',
                     p_advance_mins: 15,
                     p_user_agent: 'capacitor-android',
+                    p_device_id_uuid: deviceIdUuid,
                   }).then(({ error }) => {
                     if (error) console.warn('[useAuth] re-upsert push_sub err:', error.message)
-                    else console.log('[useAuth] push_sub re-bound to user', s.user.id)
+                    else console.log('[useAuth] push_sub re-bound to user', s.user.id, 'device_id_uuid:', deviceIdUuid)
                   })
                 }
               } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }

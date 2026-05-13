@@ -101,9 +101,14 @@ public class AlarmAuditLogger {
                         return;
                     }
 
+                    // #226 v0.2.3.0 — device_id padronizado UUID estável (lê de SharedPreferences
+                    // `device_id` gravado por CriticalAlarmPlugin.setSyncCredentials/getDeviceId).
+                    // Antes: "MODEL (MANUFACTURER)" não-único entre devices iguais.
+                    String deviceIdUuid = sp.getString("device_id", null);
+
                     JSONObject row = new JSONObject();
                     row.put("user_id", userId);
-                    row.put("device_id", android.os.Build.MODEL + " (" + android.os.Build.MANUFACTURER + ")");
+                    row.put("device_id", deviceIdUuid != null ? deviceIdUuid : "unknown");
                     if (doseId != null) row.put("dose_id", doseId);
                     row.put("source", source);
                     row.put("action", action);
