@@ -150,7 +150,13 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** Master @ `v0.2.2.4` FECHADA (vc 62 Internal Testing 2026-05-13 16:48 BRT, tag `v0.2.2.4`, validado Dosy-Dev + AAB Play Console publicado).
+**Branch ativa:** Master @ `v0.2.2.4` FECHADA (vc 62 Internal Testing 2026-05-13 16:48 BRT, tag `v0.2.2.4`, validado Dosy-Dev + AAB Play Console publicado). **Branch `docs/auditoria-alarme-push` mergeada master 2026-05-13** (commit merge `db89a8f`) — auditoria 100% ponta-a-ponta sistema Alarme + Push + 12 NOVOS items #215-#226 catalogados ROADMAP/CHECKLIST + decisões user 11 pontos consolidadas em #215. **Próximo passo:** abrir `release/v0.2.3.0` pra atacar **#215 refactor scheduler unificado 3-cenários** (P0 TURNAROUND — cobre B-01 DnD silêncio + B-02 criticalAlarm-off silêncio + arquitetura single-file scheduleDoseAlarm + push backup co-agendado). Pós-#215 opcionalmente atacar **#216-#221** cleanup P1 BUGS (Edge notify-doses ref tabela DROPADA + drift repo↔prod daily-alarm-sync source + 15 migrations locais faltantes + Edges órfãs expostas + hash JS↔Java mismatch + cancel_alarms server-side).
+
+**Auditoria 2026-05-13 — Relatório completo:**
+- `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (563 linhas)
+- Cobertura: 11 arquivos Java native + JS services/notifications/* + criticalAlarm + mutationRegistry + hooks + App.jsx + Dashboard + PermissionsOnboarding + Settings + 6 Edge Functions + 22 migrations + Manifest + capacitor.config + build.gradle + sw.js
+- 19 bugs/riscos priorizados P0→P3 + análise impacto egress + storm risk
+- 12 NOVOS items #215-#226 detalhados em CHECKLIST com pseudocódigo + critérios aceitação + 13 cenários validação device S25 Ultra
 
 **Última release fechada master — v0.2.2.4 (2026-05-13):**
 - ✅ **#214 P2 CLEANUP** — Remove `dose_alarms_scheduled` tabela órfã. Tabela criada em #083.7 (v0.1.7.2) pra `notify-doses-1min` cron skipar push se alarme local já agendado. Cron foi UNSCHEDULED em #209 (v0.2.1.9). Tabela ficou sem consumers leitores — apenas 2 writers (JS scheduler + Java FCM) gerando ~13k upserts/dia/device sem proposto. `alarm_audit_log` v0.2.2.0 substitui rastreio. Mudanças: (a) `src/services/notifications/scheduler.js` remove upsert + imports unused; (b) `DosyMessagingService.java` remove `reportAlarmScheduled()` method + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. Economia ~5-10 MB/dia/device egress. Validado Dosy-Dev Studio Run vc 62 com mark/skip/undo doses + E2E 4 caminhos. AAB vc 62 publicado Internal Testing 2026-05-13 16:48 BRT. Tag `v0.2.2.4`.
