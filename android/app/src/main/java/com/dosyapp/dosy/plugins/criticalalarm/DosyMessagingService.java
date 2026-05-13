@@ -13,13 +13,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -143,32 +136,27 @@ public class DosyMessagingService extends MessagingService {
 
             if (AlarmScheduler.scheduleDose(ctx, alarmId, e.getKey(), e.getValue())) {
                 scheduled++;
-                // Reporta server-side pra cada dose individualmente — permite
-                // notify-doses cron skip push se alarme já agendado
+                // v0.2.2.4 (#214) — REMOVIDO reportAlarmScheduled (dose_alarms_scheduled
+                // órfã pós-#209). alarm_audit_log substitui rastreio.
+                // Audit per dose scheduled
                 for (int i = 0; i < e.getValue().length(); i++) {
                     try {
                         JSONObject doseEntry = e.getValue().getJSONObject(i);
                         String doseId = doseEntry.getString("doseId");
-                        reportAlarmScheduled(ctx, doseId);
-                        // Audit per dose scheduled
-                        try {
-                            JSONObject meta = new JSONObject();
-                            meta.put("groupId", alarmId);
-                            meta.put("groupSize", e.getValue().length());
-                            meta.put("triggerAtMs", e.getKey());
-                            meta.put("kind", "critical_alarm");
-                            AlarmAuditLogger.logScheduled(
-                                ctx, "java_fcm_received",
-                                doseId,
-                                doseEntry.optString("scheduledAt", null),
-                                doseEntry.optString("patientName", null),
-                                doseEntry.optString("medName", null),
-                                meta
-                            );
-                        } catch (JSONException ignore) {}
-                    } catch (Exception ex) {
-                        Log.w(TAG, "reportAlarmScheduled fail: " + ex.getMessage());
-                    }
+                        JSONObject meta = new JSONObject();
+                        meta.put("groupId", alarmId);
+                        meta.put("groupSize", e.getValue().length());
+                        meta.put("triggerAtMs", e.getKey());
+                        meta.put("kind", "critical_alarm");
+                        AlarmAuditLogger.logScheduled(
+                            ctx, "java_fcm_received",
+                            doseId,
+                            doseEntry.optString("scheduledAt", null),
+                            doseEntry.optString("patientName", null),
+                            doseEntry.optString("medName", null),
+                            meta
+                        );
+                    } catch (JSONException ignore) {}
                 }
             }
         }
@@ -218,71 +206,7 @@ public class DosyMessagingService extends MessagingService {
         Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
     }
 
-    /**
-     * Item #083.6 — POST pra Supabase REST registrando que esta dose+device
-     * tem alarme agendado localmente. Permite notify-doses cron skip push tray.
-     *
-     * Item #205 (release v0.2.1.8) — REMOVE refresh_token endpoint call.
-     * Antes: refreshAccessToken() em paralelo com DoseSyncWorker + JS supabase-js
-     * causava storm xx:00. Agora usa access_token cached (gravado pelo plugin
-     * updateAccessToken em TOKEN_REFRESHED event). Se expirado/falha, skip
-     * report — alarme local já agendado, este endpoint é defense extra (cron
-     * notify-doses skip push se já agendado). Não-crítico se falhar.
-     */
-    static void reportAlarmScheduled(Context ctx, String doseId) {
-        SharedPreferences sp = ctx.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
-        String url = sp.getString("supabase_url", null);
-        String anon = sp.getString("anon_key", null);
-        String userId = sp.getString("user_id", null);
-        String deviceId = sp.getString("device_id", null);
-        String schema = sp.getString("schema", "medcontrol");
-        String accessToken = sp.getString("access_token", null);
-        long accessTokenExp = sp.getLong("access_token_exp_ms", 0L);
-
-        if (url == null || anon == null || userId == null || deviceId == null) {
-            Log.d(TAG, "reportAlarmScheduled skip: missing credentials");
-            return;
-        }
-
-        // Item #205 — usa access_token cached, NÃO faz refresh paralelo.
-        if (accessToken == null) {
-            Log.d(TAG, "reportAlarmScheduled skip: no access_token cached");
-            return;
-        }
-        long now = System.currentTimeMillis();
-        if (accessTokenExp > 0 && (now + 60_000L) >= accessTokenExp) {
-            Log.d(TAG, "reportAlarmScheduled skip: access_token expired/near-expiry");
-            return;
-        }
-
-        try {
-            JSONObject body = new JSONObject();
-            body.put("doseId", doseId);
-            body.put("userId", userId);
-            body.put("deviceId", deviceId);
-            body.put("via", "fcm-data");
-
-            HttpURLConnection conn = (HttpURLConnection) new URL(url + "/rest/v1/dose_alarms_scheduled").openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("apikey", anon);
-            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Content-Profile", schema);
-            conn.setRequestProperty("Prefer", "resolution=ignore-duplicates"); // PK conflict = skip
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(body.toString().getBytes(StandardCharsets.UTF_8));
-            }
-
-            int status = conn.getResponseCode();
-            if (status != 201 && status != 200 && status != 409) {
-                Log.w(TAG, "reportAlarmScheduled status=" + status);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "reportAlarmScheduled error: " + e.getMessage());
-        }
-    }
+    // v0.2.2.4 (#214) — REMOVIDO método reportAlarmScheduled().
+    // Tabela dose_alarms_scheduled órfã pós-#209 (notify-doses-1min cron removido).
+    // alarm_audit_log v0.2.2.0 substitui rastreio completamente.
 }

@@ -7056,3 +7056,60 @@ Remove Dashboard.jsx:222-224 completamente. App.jsx top-level signature guard co
 
 
 
+
+---
+
+### #214 — Cleanup dose_alarms_scheduled tabela órfã (v0.2.2.4)
+
+- **Status:** ✅ Resolvido (release v0.2.2.4 vc 62)
+- **Categoria:** 🧹 CLEANUP / 🛠️ PERFORMANCE
+- **Prioridade:** P2
+- **Origem:** Auditoria pós-#213 identificou tabela órfã ainda recebendo ~13k writes/dia sem consumers.
+
+**Problema:**
+
+Tabela `medcontrol.dose_alarms_scheduled` criada em #083.7 (v0.1.7.2) pra `notify-doses-1min` cron skipar push se alarme local já agendado. Plus `schedule-alarms-fcm-6h` cron consultava também. Ambos crons foram **UNSCHEDULED em #209** (v0.2.1.9) substituídos por `daily-alarm-sync-5am` + `dose-trigger-handler` real-time.
+
+**Tabela ficou:**
+- 2 writers ativos: JS `scheduler.js` upsert + Java `DosyMessagingService.reportAlarmScheduled()` POST
+- **0 readers** (consumers removidos #209)
+- ~13k upserts/dia/device storming pré-fix #213, ~50/dia pós-fix
+
+`alarm_audit_log` v0.2.2.0 substitui completamente rastreio.
+
+**Implementação:**
+
+1. **`src/services/notifications/scheduler.js`:**
+   - Remove bloco upsert linhas 204-221 (`supabase.from('dose_alarms_scheduled').upsert(...)`)
+   - Remove imports unused: `supabase`, `hasSupabase`, `getDeviceId`
+
+2. **`DosyMessagingService.java`:**
+   - Remove método static `reportAlarmScheduled()` (~50 linhas)
+   - Remove call sites em `handleScheduleAlarms` (loop chamada)
+   - Remove imports HTTP unused: `BufferedReader`, `IOException`, `InputStreamReader`, `OutputStream`, `HttpURLConnection`, `URL`, `StandardCharsets`
+
+3. **Migration `drop_dose_alarms_scheduled_v0_2_2_4`:**
+   ```sql
+   DROP TABLE IF EXISTS medcontrol.dose_alarms_scheduled CASCADE;
+   ```
+
+**Critério de aceitação:**
+
+- ✅ Build verde + AAB vc 62 pendente
+- ✅ Migration aplicada — SQL `EXISTS` retorna false pra tabela
+- 🧪 Device runtime vc 62: logcat ZERO menções `dose_alarms_scheduled` OR `reportAlarmScheduled`
+- 🧪 audit log continua funcionando normal
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Algum Edge function legado consulta tabela | 🟢 Baixo | grep código + Edge functions confirmou zero consumers ativos #209+ | **OK** |
+| Script admin/SQL ad-hoc usava | 🟢 Baixo | RLS policy só permitia user read próprio + service_role. Sem dependências externas | **OK** |
+| Feature "cron pula push se alarme local existe" precisaria volta | 🟢 Baixo | Arquitetura #209 cron 5am + trigger real-time torna feature desnecessária | **OK** |
+
+**Egress save:** ~5-10 MB/dia/device.
+
+**Não-escopo:**
+
+- Cleanup outras tabelas/colunas órfãs (item separado se aplicável)

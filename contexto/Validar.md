@@ -14,7 +14,62 @@
 
 ---
 
-## 🆕 Release v0.2.2.3 — versionCode 61 (Internal Testing pendente)
+## 🆕 Release v0.2.2.4 — versionCode 62 (Internal Testing pendente)
+
+**Escopo:** #214 P2 CLEANUP — Remove `dose_alarms_scheduled` tabela órfã + writers. Validação: zero logs `dose_alarms_scheduled upsert` + zero rows novas tabela (DROPada).
+
+---
+
+### #214.v224.1 — Cleanup órfão sem regressão
+
+#### `[ ]` 224.1.1 — JS scheduler não tenta upsert dose_alarms_scheduled
+
+**Como fazer:**
+1. Instalar vc 62 + abrir app.
+2. Logcat `adb logcat -v time --pid=$(adb shell pidof com.dosyapp.dosy.dev) | grep -E "dose_alarms_scheduled|reportAlarmScheduled"`.
+3. Aguardar rescheduleAll fire.
+
+**O que esperar:**
+- ZERO ocorrências `dose_alarms_scheduled` no logcat.
+- Audit log v0.2.2.0 continua funcionando normal (batch_start/scheduled/batch_end).
+
+**Se falhar:**
+- Logs `[Notif] dose_alarms_scheduled upsert` → fix não aplicou JS-side.
+- Logs `reportAlarmScheduled` → Java path ainda tentando.
+
+---
+
+### #214.v224.2 — Java FCM handler sem reportAlarmScheduled
+
+#### `[ ]` 224.2.1 — Trigger FCM data simulado não chama método removido
+
+**Como fazer:**
+1. SQL: `UPDATE doses SET "updatedAt"=now() WHERE id = <some pending>` (dispara dose-trigger-handler).
+2. Logcat filter `DosyMessagingService`.
+
+**O que esperar:**
+- `schedule_alarms: N doses` log
+- `AlarmScheduler scheduled id=...` logs
+- `audit per dose scheduled` logs (alarm_audit_log)
+- ZERO `reportAlarmScheduled` log.
+
+---
+
+### #214.v224.3 — Tabela DROPada não afeta nada
+
+#### `[ ]` 224.3.1 — SQL confirma tabela DROPada
+
+**Como fazer:**
+```sql
+SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'medcontrol' AND table_name = 'dose_alarms_scheduled') AS exists;
+```
+
+**O que esperar:**
+- `exists = false`.
+
+---
+
+## Release v0.2.2.3 — versionCode 61 (Internal Testing pendente)
 
 **Escopo:** #213 P1 STORM REAL — Remove `Dashboard.jsx` caller redundante. Confirmado via logcat Dosy-Dev: 60s exato vinha setInterval setTick(60s) flipando todayDoses ref. Fix mínimo 1 linha.
 

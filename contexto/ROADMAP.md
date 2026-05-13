@@ -150,7 +150,10 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** Master @ `v0.2.2.3` FECHADA (vc 61, tag `v0.2.2.3`, validado Dosy-Dev Studio Run, AAB Internal Testing pendente).
+**Branch ativa:** `release/v0.2.2.4` (vc 62, em curso 2026-05-13).
+
+**Release em curso — v0.2.2.4 (2026-05-13):**
+- 🚧 **#214 P2 CLEANUP** — Remove `dose_alarms_scheduled` tabela órfã. Tabela criada em #083.7 (v0.1.7.2) pra `notify-doses-1min` cron skipar push se alarme local já agendado. Cron foi UNSCHEDULED em #209 (v0.2.1.9). Tabela ficou sem consumers leitores — apenas 2 writers (JS scheduler + Java FCM) gerando ~13k upserts/dia/device sem proposto. `alarm_audit_log` v0.2.2.0 substitui rastreio. Mudanças: (a) `src/services/notifications/scheduler.js` remove upsert + imports unused; (b) `DosyMessagingService.java` remove `reportAlarmScheduled()` method + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. Economia ~5-10 MB/dia/device egress.
 
 **Última release fechada master — v0.2.2.3 (2026-05-13):**
 - ✅ **#213 P1 STORM REAL ROOT CAUSE** — Auditoria via logcat Dosy-Dev (~6min monitoramento) confirmou storm 60s exato gerado por `Dashboard.jsx:99` `setInterval setTick(60s)`. Tick muda → `todayDoses` filter recalcula → useEffect `Dashboard.jsx:222` re-fires → `scheduleDoses(todayDoses)` → `cancelAll` + reagenda 9 alarmes idênticos. Conteúdo zero-mudança. App.jsx top-level signature guard v0.2.2.2 funcionando OK (initial só) mas Dashboard caller sem guard mantinha storm. Fix mínimo: remove caller redundante completo (`useEffect scheduleDoses` + `usePushNotifications` import desnecessários). App.jsx top-level cobre full 48h window. Esperado: 1440 reschedules/dia → ~5/dia (-99.7%). Validado Dosy-Dev Studio Run vc 61: 2 batches em 2.5min depois silêncio. Tag `v0.2.2.3`. AAB Internal Testing pendente.

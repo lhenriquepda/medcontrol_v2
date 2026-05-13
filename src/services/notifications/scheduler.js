@@ -5,12 +5,10 @@
  */
 
 import * as Sentry from '@sentry/react'
-import { supabase, hasSupabase } from '../supabase'
 import {
   scheduleCriticalAlarmGroup,
   isCriticalAlarmAvailable,
-  checkCriticalAlarmEnabled,
-  getDeviceId
+  checkCriticalAlarmEnabled
 } from '../criticalAlarm'
 import {
   CHANNEL_ID,
@@ -201,24 +199,10 @@ async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = n
           })
         }
 
-        // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
-        try {
-          const deviceId = await getDeviceId()
-          if (deviceId && hasSupabase) {
-            const rows = group.map(dose => ({
-              doseId: dose.id,
-              userId: dose.userId,
-              deviceId,
-              via: 'app-foreground'
-            }))
-            const { error } = await supabase
-              .from('dose_alarms_scheduled')
-              .upsert(rows, { onConflict: 'doseId,deviceId', ignoreDuplicates: true })
-            if (error) console.warn('[Notif] dose_alarms_scheduled upsert:', error.message)
-          }
-        } catch (e) {
-          console.warn('[Notif] report alarm scheduled fail:', e?.message)
-        }
+        // v0.2.2.4 (#214) — REMOVIDO dose_alarms_scheduled upsert.
+        // Tabela órfã pós-#209 (notify-doses-1min + schedule-alarms-fcm-6h crons
+        // removidos). alarm_audit_log v0.2.2.0 substitui completamente como
+        // rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia.
       } catch (e) {
         console.error('[Notif] alarm schedule fail at groupId', groupId, ':', e?.message || e)
       }
