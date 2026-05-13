@@ -429,9 +429,12 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** Master @ `v0.2.2.1` (vc 59 Internal Testing 2026-05-13 13:53 BRT, tag `v0.2.2.1`). Hotfix storm rescheduleAll descoberto via audit v0.2.2.0.
+**Versão atual:** `release/v0.2.2.2` em curso (vc 60). Master @ `v0.2.2.1` (vc 59). Storm root cause #212.
 **Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
+
+**Release em curso:**
+- 🚧 v0.2.2.2 — **#212 P1 STORM ROOT CAUSE** Throttle v0.2.2.1 não eliminou storm (1.36 batches/min observado pós-deploy). 2 fixes: (a) Watchdog realtime 60s → 300s (5min); (b) App.jsx useEffect signature guard via useMemo `dosesSignature` (id:status:scheduledAt sorted) — re-trigger só em mudança real, não em ref-change. Esperado pós-vc 60: ~10 rescheduleAll/dia (era ~2000).
 
 **Última release fechada master:**
 - ✅ v0.2.2.1 (2026-05-13) — **#211 P1 HOTFIX** Storm rescheduleAll descoberto via audit v0.2.2.0. 3 fixes: (a) `SCHEDULE_WINDOW_MS` 168h→48h (alinha plan #209, era 168h hardcoded mas comentário dizia 48h); (b) Throttle module-level rescheduleAll 30s com trailing run (mata storm 1/min causado por realtime invalidation OR useEffect deps); (c) Audit batch single insert (acumulator + 1 insert/batch — antes 10-400 inserts/batch). Plus GRANT service_role + authenticated em alarm_audit_log/config (bug DB descoberto post-deploy v0.2.2.0). AAB vc 59 publicado Internal Testing 2026-05-13 13:53 BRT. Tag `v0.2.2.1`.
