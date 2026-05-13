@@ -50,6 +50,25 @@ public class AlarmReceiver extends BroadcastReceiver {
         String dosesJson = intent.getStringExtra("doses");
         if (dosesJson == null) dosesJson = "[]";
 
+        // Audit: log fired event per dose (debug observability)
+        try {
+            JSONArray arrAudit = new JSONArray(dosesJson);
+            for (int i = 0; i < arrAudit.length(); i++) {
+                JSONObject d = arrAudit.getJSONObject(i);
+                JSONObject meta = new JSONObject();
+                meta.put("alarmId", alarmId);
+                meta.put("groupSize", arrAudit.length());
+                AlarmAuditLogger.logFired(
+                    context, "java_alarm_scheduler",
+                    d.optString("doseId", null),
+                    d.optString("scheduledAt", null),
+                    d.optString("patientName", null),
+                    d.optString("medName", null),
+                    meta
+                );
+            }
+        } catch (Exception ignored) {}
+
         // Primary path (Android 8+): start foreground service → service launches AlarmActivity.
         // FGS-style exemption bypasses BAL (Background Activity Launch) on Android 14+.
         try {
