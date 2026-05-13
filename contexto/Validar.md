@@ -23,7 +23,25 @@
 **Backend deployed via MCP:**
 - Edge `dose-trigger-handler` v18 ACTIVE
 - Edge `daily-alarm-sync` v3 ACTIVE
+- Edge `notify-doses` v20 deprecated 410 Gone + verify_jwt:true (#216 + #219)
+- Edge `schedule-alarms-fcm` v16 deprecated 410 Gone + verify_jwt:true (#219)
 - Migration `expand_dose_change_notify_to_delete_v0_2_3_0` applied
+- Migration `add_device_id_uuid_to_push_subscriptions_v0_2_3_0` applied (#226)
+
+**Validação web Chrome MCP 2026-05-13 (eu, parcial):**
+
+- ✅ `unifiedScheduler.decideBranch` retorna 3 branches corretas (alarm_plus_push | push_dnd | push_critical_off)
+- ✅ `unifiedScheduler.computeHorizon` janela dinâmica 48h se ≤400 itens, 24h se >400
+- ✅ `unifiedScheduler.buildSchedulePayload` group de 3 doses → groupId hash determinístico + trayId = groupId + BACKUP_OFFSET (700_000_000)
+- ✅ DnD cross-midnight (22:00→07:00): dose 3am=push_dnd, dose 14h=alarm_plus_push
+- ✅ Trigger DB `dose_change_notify` AFTER INSERT/UPDATE/DELETE — testado mock dose pra teste-plus:
+  - INSERT pending +2h → Edge `dose-trigger-handler` v18 fires + audit log `source=edge_trigger_handler action=skipped metadata.kind=fcm_schedule_alarms source_scenario=dose_inserted_or_updated`
+  - UPDATE pending→done → Edge fires + audit `action=cancelled metadata.reason=status_change source_scenario=status_change newStatus=done`
+- ✅ Edges `notify-doses` v20 + `schedule-alarms-fcm` v16 deprecated: anon 401 (verify_jwt:true bloqueia)
+- ✅ Schema `push_subscriptions.device_id_uuid text NULL` + RPC `upsert_push_subscription(p_device_token, p_platform, p_advance_mins, p_user_agent, p_device_id_uuid)` 5 args
+- ✅ admin.dosymed.app `/alarm-audit` painel funcional: filtros (email/origem/ação/dose/período/limite) + tradução PT-BR ("Servidor (alteração em tempo real)" pra edge_trigger_handler, "1 alarme(s) cancelado(s)" pra action=cancelled)
+
+**Pendente device (você emulador + Dosy-Dev):** 13 cenários listados abaixo cobrem TUDO o que web não consegue (alarme nativo dispara, channels Android, FCM data DosyMessagingService, WorkManager 6h, BootReceiver 2h, Samsung OEM fallback).
 
 ---
 
