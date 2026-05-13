@@ -429,11 +429,14 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** master @ `v0.2.1.8` (vc 56 Internal Testing publicado 2026-05-11 22:45 BRT, Vercel prod deployed 2026-05-12 01:50 UTC, tag `v0.2.1.8` commit `b7b5c71`)
-**Vercel prod:** `https://dosymed.app/` (sincronizado master, version.json reporta 0.2.1.8)
+**Versão atual:** `release/v0.2.1.9` em curso (vc 57). Master @ `v0.2.1.8` (vc 56 Internal Testing 2026-05-11 22:45 BRT, Vercel prod 2026-05-12 01:50 UTC, tag `v0.2.1.8` commit `b7b5c71`).
+**Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
-**Última release fechada:**
+**Release em curso:**
+- 🚧 v0.2.1.9 — **#209 NOVO P0** Refactor sistema alarmes + push pós 3 bugs reportados user 2026-05-13. Migration SQL TZ fix `update_treatment_schedule` + data-fix doses pending; `DoseSyncWorker` JOIN patients; Nova Edge Function `daily-alarm-sync` (cron 5am BRT, 48h horizon); `dose-trigger-handler` v16 + action `cancel_alarms`; `AlarmScheduler.cancelAlarm`; UNSCHEDULE crons antigos (`notify-doses-1min`, `schedule-alarms-fcm-6h`); SCHEDULE `daily-alarm-sync-5am`. Egress estimado -99%. Plus fix #208 (VERSION_CODE_TO_NAME map +57). AAB vc 57 + Internal Testing pendente.
+
+**Última release fechada master:**
 - ✅ v0.2.1.8 (2026-05-11) — #205 NOVO P0 single source refresh token (storm xx:00 fix) + #204 expand fixes A1/A2/B/C + optimistic CRUD completos (update/pause/resume/end Treatment + registerSos) + forms edit offline + `useOfflineGuard` + `OfflineNotice` bloqueios features fora queue + bug fix `usePatient/useTreatment` initialData fallback + helper `patchEntityListsInCache`. Commit `b7b5c71`. Tag `v0.2.1.8`. 13 validações marcadas Validar.md.
 
 **Release anterior:**

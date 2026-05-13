@@ -6532,3 +6532,112 @@ Trade-off (b): elimina bug recorrente sempre, mas adiciona complexidade build pi
 
 - [ ] Reinstall via Internal Testing após próxima release N+1 publicada — banner deve mostrar "v0.X.Y.Z" (N+1) correto, não "versão (N+1)"
 - [ ] Se Vercel CDN ainda servir version.json antigo, map fallback kick in OK
+
+---
+
+### #209 — Push 5am + alarme 8am falha + header "Sem Paciente" (TZ bug update_treatment_schedule + arq alarmes redundante)
+
+- **Status:** ✅ Resolvido (release v0.2.1.9 vc 57)
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** P0 (alarme crítico falhou — risco clínico real)
+- **Origem:** User-reported 2026-05-13 manhã — 3 bugs simultâneos S25 Ultra Android 16:
+  1. Alarme 20h 2026-05-12 tocou com várias doses no horário mas header "Sem Paciente"
+  2. Push notification 5am 2026-05-13 pra Broncho-Vaxom Liam/Rael (agendado 8am)
+  3. Alarme 8am 2026-05-13 NÃO tocou — nem Broncho-Vaxom, nem 14 outras doses regulares 8am (Luiz Henrique/Liam/Rael)
+
+**Problema:**
+
+3 bugs com causas relacionadas mas distintas:
+
+**BUG 1 (Header "Sem Paciente"):**
+DoseSyncWorker.java query `/rest/v1/doses` sem embed `patients(name)`. Persistia `patientName=""` no SharedPreferences. AlarmActivity render "Sem Paciente" fallback quando nome vazio + grouped doses.
+
+**BUG 2 (Push 5am pra dose 8am):**
+RPC `update_treatment_schedule` interpretava `dose_times = "08:00"` como UTC ao invés de BRT. Postgres `(date_trunc('day', startDate) + interval '8 hours')::timestamptz` virou `08:00 UTC = 05:00 BRT`. Doses criadas com `scheduledAt = 2026-05-13 05:00:00-03:00` (5am local) ao invés de 8am. Edge Function `notify-doses-1min` cron disparou push 5am corretamente — só que o `scheduledAt` que estava errado.
+
+**BUG 3 (Alarme 8am não tocou — 2 categorias):**
+- Doses Broncho-Vaxom: scheduledAt errado 5am → não havia alarme 8am pra tocar
+- 14 doses regulares 8am: arq alarmes redundante — DoseSyncWorker 6h cobertura 168h, schedule-alarms-fcm-6h cron, notify-doses-1min cron, JS rescheduleAll. Múltiplos paths concorrentes sem coordenação → cancelamentos/sobreposições + Doze mode S25 Ultra agressivo bloqueou FCM data delivery → alarme local nunca agendado pra esses ids específicos.
+
+**Root cause:**
+
+1. `medcontrol.update_treatment_schedule` PL/pgSQL sem `AT TIME ZONE` correção — interpretava times locais como UTC
+2. `DoseSyncWorker.java` query sem PostgREST embed `patients(name)` → patientName vazio persistido
+3. Arquitetura alarmes 5 paths redundantes (rescheduleAll JS + dose-trigger-handler 6h + notify-doses-1min cron + schedule-alarms-fcm-6h cron + DoseSyncWorker 168h) sem coordenação → race + over-egress + Doze blocking
+4. Edge Function `dose-trigger-handler` horizon 6h muito curto pra dose criada hoje 23h pra amanhã 8am (>6h gap)
+
+**Implementação:**
+
+**Fase 1 — Correção bugs imediatos:**
+
+1. `DoseSyncWorker.java` query PostgREST embed `patients(name)`, extrair `d.patients.name` → `entry.put("patientName", ...)`. HORIZON 168h → 48h (alinhado com daily-alarm-sync).
+2. `AlarmScheduler.java` novo método estático `cancelAlarm(Context, int id)` + `removePersisted(Context, int id)` helper — pra DosyMessagingService cancelar alarmes via FCM remoto.
+3. `DosyMessagingService.java` novo handler action `cancel_alarms` (parse CSV `doseIds`, loop `AlarmScheduler.cancelAlarm`).
+4. DB migration `fix_update_treatment_schedule_timezone`: RPC reescrito com parâmetro `p_timezone DEFAULT 'America/Sao_Paulo'`, `v_start_local := (v_treatment."startDate" AT TIME ZONE p_timezone)::timestamp`, `v_first := (date_trunc('day', v_start_local) + make_interval(...)) AT TIME ZONE p_timezone`.
+5. DB migration `data_fix_doses_timezone_v0_2_1_9_retry`: regenera doses `status=pending` `scheduledAt > now()` via RPC corrigido idempotente.
+
+**Fase 2 — Refactor cron 5am:**
+
+6. Edge Function nova `daily-alarm-sync/index.ts`: cron `0 8 * * *` UTC (5am BRT), horizon 48h, FCM data com retry exponencial 3 attempts, multi-TZ via `user_prefs.prefs.timezone`. Shared module `_shared/userPrefs.ts`.
+7. Edge Function `dose-trigger-handler` v16: horizon 6h → 48h, novo action `cancel_alarms` pra DELETE + UPDATE pending→non-pending + scheduledAt-change.
+8. DB migration `cron_jobs_v0_2_1_9_daily_alarm_sync`: UNSCHEDULE `notify-doses-1min` + `schedule-alarms-fcm-6h`, SCHEDULE `daily-alarm-sync-5am`.
+
+**Fase 3 — Bug #208 follow-up:**
+
+9. `useAppUpdate.js` adicionar `56: '0.2.1.8'` + `57: '0.2.1.9'` no `VERSION_CODE_TO_NAME` map (fix #208 inline).
+
+**Nova arquitetura (4 paths coordenados):**
+
+| Path | Quem | Quando | Horizon | Função |
+|---|---|---|---|---|
+| JS rescheduleAll | App foreground | App start + offline replay | 48h | Reagenda local instantâneo |
+| dose-trigger-handler | DB trigger | Mudança real-time (INSERT/UPDATE/DELETE) | 48h | FCM data pra todos devices user |
+| daily-alarm-sync | pg_cron 5am BRT | Diário | 48h | Garante alarmes 48h frente independente |
+| DoseSyncWorker | WorkManager | Periodic 6h | 48h | Defense-in-depth Doze-recovery |
+
+**Egress audit:**
+
+| Path antes | Reqs/dia | Path agora | Reqs/dia | Redução |
+|---|---|---|---|---|
+| notify-doses-1min cron | 1440 (1/min) | daily-alarm-sync 5am | 1 | -99.9% |
+| schedule-alarms-fcm 6h cron | 4 | (removido) | 0 | -100% |
+| dose-trigger-handler real-time | ~10-30/dia user (mudanças) | dose-trigger-handler real-time | ~10-30/dia user | = |
+| DoseSyncWorker periodic 6h | 4/dia/device | DoseSyncWorker periodic 6h | 4/dia/device | = |
+| JS rescheduleAll | 1-10/dia/app session | JS rescheduleAll | 1-10/dia/app session | = |
+| **Total estimado** | **~1480/dia (servidor) + ~14/dia/device** | **~5/dia/user (servidor) + ~14/dia/device** | **-99% servidor** |
+
+**Critério de aceitação:**
+
+- ✅ Build verde + AAB vc 57 publicado Internal Testing
+- ✅ DB SQL `doses pending scheduledAt LIKE '%05:00:00%'` retorna 0 rows (corrigidas pra 08:00)
+- ✅ S25 Ultra dose criada hoje pra amanhã 8am → alarme dispara 8am BRT com header patient correto
+- ✅ Push notification chega apenas na hora certa (não +3h offset)
+- ✅ Cron `notify-doses-1min` + `schedule-alarms-fcm-6h` UNSCHEDULED no `cron.job` view
+- ✅ Cron `daily-alarm-sync-5am` SCHEDULED + executando 5am BRT diariamente
+- ✅ Supabase egress dashboard: queda ~99% requests Edge Functions vs baseline pré-v0.2.1.9
+- ✅ Update banner mostra "v0.2.1.9" correto (não "versão 57" fallback feio)
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| daily-alarm-sync cron falhar 5am (Supabase outage) | 🟡 Médio | DoseSyncWorker 6h periodic cobre próximas 48h independente. dose-trigger-handler real-time cobre mudanças | **Aceitável** — defense-in-depth |
+| Doze mode S25 Ultra bloquear FCM data | 🟡 Médio | DoseSyncWorker local AlarmManager.setAlarmClock bypassa Doze. Local agendamento via WorkManager backup | **Aceitável** |
+| RPC update_treatment_schedule TZ default `America/Sao_Paulo` errado pra usuários outros fusos | 🟢 Baixo | Param `p_timezone` aceita user_prefs.timezone — futuro multi-TZ ready. BR-only release atual | **OK** |
+| Migration data-fix re-trigger update_treatment_schedule sobrescreve customizações user | 🟢 Baixo | Idempotente — só regenera doses `status=pending scheduledAt > now()`. Status taken/skipped preserved | **OK** |
+| Cron unschedule deixa órfãos schedule-alarms-fcm-6h job rodando | 🟢 Baixo | DROP cron.job aplicado migration. Verificar SELECT * FROM cron.job retorna apenas daily-alarm-sync-5am | **OK** |
+
+**Validação device pré-merge:**
+
+Ver [`Validar.md`](Validar.md) seções 219.1.1 → 219.6.1 — checklist completo S25 Ultra:
+- Doses futuras 8am criadas hoje 23h → alarme 8am BRT dispara com nome paciente correto
+- Cancelar tratamento → FCM `cancel_alarms` chega + AlarmScheduler.cancelAlarm executado + SharedPreferences cleaned
+- 5am cron daily-alarm-sync logs Edge Function executa + agenda 48h doses pending
+- Update banner pós-install vc 57 mostra "v0.2.1.9" correto
+
+**Não-escopo:**
+
+- Multi-TZ user UI selector (futuro release)
+- Migrar todas Edge Functions pra usar `_shared/userPrefs.ts` (incremental)
+- Telemetria PostHog `alarm_missed_detected` Worker side (item separado)
+
