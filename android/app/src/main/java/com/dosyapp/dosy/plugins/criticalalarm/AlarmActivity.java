@@ -3,22 +3,14 @@ package com.dosyapp.dosy.plugins.criticalalarm;
 import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.KeyguardManager;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -38,11 +30,9 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import com.dosyapp.dosy.MainActivity;
-import com.dosyapp.dosy.R;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -60,12 +50,12 @@ import java.util.List;
  */
 public class AlarmActivity extends Activity {
 
-    private static final String CHANNEL_ID = "doses_v2";
-    private static final int NOTIF_ID_OFFSET = 100_000_000;
+    // #222 v0.2.3.0 — channel IDs consolidados. Antigos `doses_v2` + NOTIF_ID_OFFSET
+    // usados apenas em postPersistentNotification/cancelPersistentNotification —
+    // funções removidas (código morto). FS_NOTIF_OFFSET mantido pra cancel notif
+    // do AlarmReceiver fallback.
     private static final int FS_NOTIF_OFFSET = 200_000_000;
 
-    private MediaPlayer mediaPlayer;
-    private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
 
     private int alarmId;
@@ -673,53 +663,12 @@ public class AlarmActivity extends Activity {
         );
     }
 
-    private void startAlarmSound() {
-        try {
-            mediaPlayer = new MediaPlayer();
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build();
-            mediaPlayer.setAudioAttributes(attrs);
-
-            int rawId = getResources().getIdentifier("dosy_alarm", "raw", getPackageName());
-            if (rawId != 0) {
-                Uri uri = Uri.parse("android.resource://" + getPackageName() + "/" + rawId);
-                mediaPlayer.setDataSource(this, uri);
-            } else {
-                Uri ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-                if (ringtone == null) ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                mediaPlayer.setDataSource(this, ringtone);
-            }
-
-            mediaPlayer.setLooping(true);
-            mediaPlayer.prepare();
-            mediaPlayer.start();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void startVibration() {
-        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if (vibrator == null || !vibrator.hasVibrator()) return;
-        long[] pattern = { 0, 800, 600, 800, 600 };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
-        } else {
-            vibrator.vibrate(pattern, 0);
-        }
-    }
+    // #222 v0.2.3.0 — startAlarmSound + startVibration REMOVIDAS (código morto):
+    // AlarmService.startMediaPlayerLoop + startVibrationLoop são as fontes reais
+    // de som + vibração. AlarmActivity é apenas UI.
 
     private void stopSoundAndVibration() {
-        try {
-            if (mediaPlayer != null) {
-                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
-                mediaPlayer.release();
-                mediaPlayer = null;
-            }
-        } catch (Exception ignored) {}
-        try { if (vibrator != null) vibrator.cancel(); } catch (Exception ignored) {}
+        // Stop apenas wakelock; sound + vibration drived por AlarmService.
         if (wakeLock != null && wakeLock.isHeld()) {
             try { wakeLock.release(); } catch (Exception ignored) {}
         }
@@ -733,14 +682,12 @@ public class AlarmActivity extends Activity {
         if ("acknowledge".equals(action)) {
             // Open MainActivity directly with doseIds → opens modal queue
             openAppWithDoseIds();
-            cancelPersistentNotification();
         } else if ("snooze".equals(action)) {
-            cancelPersistentNotification();
             scheduleSnooze(10);
-        } else if ("ignore".equals(action)) {
-            // Dismiss alarm without opening app, without snooze. User saw it, will deal later.
-            cancelPersistentNotification();
         }
+        // #222 v0.2.3.0 — cancelPersistentNotification removida (código morto):
+        // postPersistentNotification nunca era chamada (Service tem própria notif FG).
+        // 'ignore' simplesmente dismiss alarme — doses permanecem pending no DB.
 
         finish();
     }
@@ -771,73 +718,13 @@ public class AlarmActivity extends Activity {
         startActivity(i);
     }
 
-    private void postPersistentNotification() {
-        ensureChannel();
-
-        Intent tapIntent = new Intent(this, MainActivity.class);
-        tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        String csv = getDoseIdsCsv();
-        if (!csv.isEmpty()) tapIntent.putExtra("openDoseIds", csv);
-
-        PendingIntent tapPi = PendingIntent.getActivity(
-            this,
-            alarmId + NOTIF_ID_OFFSET,
-            tapIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        StringBuilder body = new StringBuilder();
-        for (DoseItem d : doses) {
-            if (body.length() > 0) body.append(" · ");
-            body.append(d.medName);
-            if (!d.unit.isEmpty()) body.append(" (").append(d.unit).append(")");
-        }
-        if (body.length() == 0) body.append("Dose");
-
-        String title = doses.size() <= 1
-            ? "💊 " + (doses.isEmpty() ? "Dose" : doses.get(0).medName)
-            : "💊 " + doses.size() + " doses pendentes";
-
-        NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_dosy)
-            .setColor(0xFFFF6B5B)
-            .setContentTitle(title)
-            .setContentText(body.toString())
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(body.toString()))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(true)
-            .setOngoing(false)
-            .setContentIntent(tapPi);
-
-        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
-        try {
-            nm.notify(alarmId + NOTIF_ID_OFFSET, b.build());
-        } catch (SecurityException ignored) {}
-    }
-
-    private void cancelPersistentNotification() {
-        NotificationManagerCompat.from(this).cancel(alarmId + NOTIF_ID_OFFSET);
-    }
-
-    private void ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
-
-        NotificationChannel ch = new NotificationChannel(
-            CHANNEL_ID,
-            "Doses de Medicação",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        ch.setDescription("Lembretes de doses agendadas");
-        ch.enableLights(true);
-        ch.enableVibration(true);
-        ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-        nm.createNotificationChannel(ch);
-    }
+    // #222 v0.2.3.0 — postPersistentNotification + cancelPersistentNotification +
+    // ensureChannel REMOVIDAS (código morto):
+    //   - postPersistentNotification NUNCA era chamada
+    //   - cancelPersistentNotification chamada em handleAction mas cancelava notif
+    //     que nunca foi postada (no-op)
+    //   - ensureChannel criava canal `doses_v2` legacy — agora substituído por
+    //     `dosy_tray` criado em AlarmScheduler.ensureTrayChannel + channels.js
 
     private void scheduleSnooze(int minutes) {
         long snoozeAt = System.currentTimeMillis() + minutes * 60 * 1000L;

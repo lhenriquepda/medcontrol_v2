@@ -215,28 +215,32 @@ public class DoseSyncWorker extends Worker {
             String groupKey = String.join("|", sorted);
             int id = AlarmScheduler.idFromString(groupKey);
 
-            if (AlarmScheduler.scheduleDose(ctx, id, e.getKey(), e.getValue())) {
-                scheduled++;
-                // Audit: log per dose do grupo
-                JSONArray groupDoses = e.getValue();
-                for (int gi = 0; gi < groupDoses.length(); gi++) {
-                    try {
-                        JSONObject doseEntry = groupDoses.getJSONObject(gi);
-                        JSONObject meta = new JSONObject();
-                        meta.put("groupId", id);
-                        meta.put("groupSize", groupDoses.length());
-                        meta.put("triggerAtMs", e.getKey());
-                        meta.put("kind", "critical_alarm");
-                        AlarmAuditLogger.logScheduled(
-                            ctx, "java_worker",
-                            doseEntry.optString("doseId", null),
-                            doseEntry.optString("scheduledAt", null),
-                            doseEntry.optString("patientName", null),
-                            doseEntry.optString("medName", null),
-                            meta
-                        );
-                    } catch (JSONException ignore) {}
-                }
+            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm que
+            // lê prefs SharedPreferences `dosy_user_prefs` e decide branch
+            // (push_critical_off | push_dnd | alarm_plus_push) per dose.
+            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, id, e.getKey(), e.getValue());
+            scheduled++;
+
+            // Audit: log per dose do grupo (incluindo branch escolhida)
+            JSONArray groupDoses = e.getValue();
+            for (int gi = 0; gi < groupDoses.length(); gi++) {
+                try {
+                    JSONObject doseEntry = groupDoses.getJSONObject(gi);
+                    JSONObject meta = new JSONObject();
+                    meta.put("groupId", id);
+                    meta.put("groupSize", groupDoses.length());
+                    meta.put("triggerAtMs", e.getKey());
+                    meta.put("branch", branch.name().toLowerCase());
+                    meta.put("source_scenario", "workmanager_6h");
+                    AlarmAuditLogger.logScheduled(
+                        ctx, "java_worker",
+                        doseEntry.optString("doseId", null),
+                        doseEntry.optString("scheduledAt", null),
+                        doseEntry.optString("patientName", null),
+                        doseEntry.optString("medName", null),
+                        meta
+                    );
+                } catch (JSONException ignore) {}
             }
         }
 

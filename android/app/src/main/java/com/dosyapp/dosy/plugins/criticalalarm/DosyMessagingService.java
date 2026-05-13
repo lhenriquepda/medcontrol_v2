@@ -134,30 +134,32 @@ public class DosyMessagingService extends MessagingService {
             String groupKey = String.join("|", sorted);
             int alarmId = AlarmScheduler.idFromString(groupKey);
 
-            if (AlarmScheduler.scheduleDose(ctx, alarmId, e.getKey(), e.getValue())) {
-                scheduled++;
-                // v0.2.2.4 (#214) — REMOVIDO reportAlarmScheduled (dose_alarms_scheduled
-                // órfã pós-#209). alarm_audit_log substitui rastreio.
-                // Audit per dose scheduled
-                for (int i = 0; i < e.getValue().length(); i++) {
-                    try {
-                        JSONObject doseEntry = e.getValue().getJSONObject(i);
-                        String doseId = doseEntry.getString("doseId");
-                        JSONObject meta = new JSONObject();
-                        meta.put("groupId", alarmId);
-                        meta.put("groupSize", e.getValue().length());
-                        meta.put("triggerAtMs", e.getKey());
-                        meta.put("kind", "critical_alarm");
-                        AlarmAuditLogger.logScheduled(
-                            ctx, "java_fcm_received",
-                            doseId,
-                            doseEntry.optString("scheduledAt", null),
-                            doseEntry.optString("patientName", null),
-                            doseEntry.optString("medName", null),
-                            meta
-                        );
-                    } catch (JSONException ignore) {}
-                }
+            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm que
+            // decide branch (push_critical_off | push_dnd | alarm_plus_push)
+            // baseado em prefs SharedPreferences `dosy_user_prefs`.
+            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, alarmId, e.getKey(), e.getValue());
+            scheduled++;
+
+            // Audit per dose scheduled (incluindo branch escolhida)
+            for (int i = 0; i < e.getValue().length(); i++) {
+                try {
+                    JSONObject doseEntry = e.getValue().getJSONObject(i);
+                    String doseId = doseEntry.getString("doseId");
+                    JSONObject meta = new JSONObject();
+                    meta.put("groupId", alarmId);
+                    meta.put("groupSize", e.getValue().length());
+                    meta.put("triggerAtMs", e.getKey());
+                    meta.put("branch", branch.name().toLowerCase());
+                    meta.put("source_scenario", "fcm_schedule_alarms");
+                    AlarmAuditLogger.logScheduled(
+                        ctx, "java_fcm_received",
+                        doseId,
+                        doseEntry.optString("scheduledAt", null),
+                        doseEntry.optString("patientName", null),
+                        doseEntry.optString("medName", null),
+                        meta
+                    );
+                } catch (JSONException ignore) {}
             }
         }
 
@@ -192,13 +194,14 @@ public class DosyMessagingService extends MessagingService {
             String trimmed = doseId.trim();
             if (trimmed.isEmpty()) continue;
             int alarmId = AlarmScheduler.idFromString(trimmed);
-            if (AlarmScheduler.cancelAlarm(ctx, alarmId)) {
+            // #215 v0.2.3.0 — cancela alarme nativo + LocalNotification backup co-agendada
+            if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, alarmId)) {
                 cancelled++;
-                // Audit cancelled
                 try {
                     JSONObject meta = new JSONObject();
                     meta.put("alarmId", alarmId);
                     meta.put("reason", "fcm_cancel_action");
+                    meta.put("source_scenario", "fcm_cancel_alarms");
                     AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", trimmed, meta);
                 } catch (JSONException ignore) {}
             }
