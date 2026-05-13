@@ -24,7 +24,7 @@ import {
   enrichDose
 } from './prefs'
 import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
-import { logAuditEvent, logAuditEventsBatch } from './auditLog'
+import { logAuditEventsBatch } from './auditLog'
 
 /**
  * Re-agenda baseado em doses + prefs atuais.
@@ -51,11 +51,51 @@ import { logAuditEvent, logAuditEventsBatch } from './auditLog'
  * @param {Array} params.patients — pra enriquecer com patientName
  * @param {Object} [params.prefsOverride] — força prefs customizadas (default: lê do storage)
  */
-export async function rescheduleAll({ doses = [], patients = [], prefsOverride = null } = {}) {
+// v0.2.2.1 (#211) — throttle module-level. Realtime channel reconnect, useEffect
+// deps changing, watchdog 60s, e queries refetch convergem em rescheduleAll
+// frequente. Audit log v0.2.2.0 revelou 1+ batch/min com 100-400 inserts/min.
+// Throttle 30s acumula múltiplas invocações próximas em uma execução real
+// (skip + agenda single trailing run). Preserva updates real quando dose
+// muda (mutationRegistry chama scheduleDoses ao confirm/skip/undo).
+const RESCHEDULE_THROTTLE_MS = 30_000
+let _lastRunAt = 0
+let _pendingTrailing = null
+let _pendingArgs = null
+
+export async function rescheduleAll(args = {}) {
   if (!isNative) {
-    return rescheduleAllWeb(doses, patients, prefsOverride)
+    return rescheduleAllWeb(args.doses, args.patients, args.prefsOverride)
   }
 
+  const now = Date.now()
+  const elapsed = now - _lastRunAt
+  if (elapsed < RESCHEDULE_THROTTLE_MS) {
+    // Within throttle window — schedule trailing run com last args
+    _pendingArgs = args
+    if (!_pendingTrailing) {
+      const delay = RESCHEDULE_THROTTLE_MS - elapsed
+      _pendingTrailing = setTimeout(() => {
+        _pendingTrailing = null
+        const a = _pendingArgs
+        _pendingArgs = null
+        rescheduleAll(a)
+      }, delay)
+      console.log(`[Notif] reschedule throttled — trailing run em ${delay}ms`)
+    }
+    return { throttled: true }
+  }
+  _lastRunAt = now
+  // Clear pending trailing pois agora vamos executar
+  if (_pendingTrailing) {
+    clearTimeout(_pendingTrailing)
+    _pendingTrailing = null
+    _pendingArgs = null
+  }
+
+  return _rescheduleAllImpl(args)
+}
+
+async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = null } = {}) {
   const prefs = prefsOverride || loadPrefs()
   const adv = prefs.advanceMins ?? 0  // #207: alinha DEFAULT_PREFS (alarme exato)
   const pushOn = prefs.push === true
@@ -71,8 +111,10 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     data: { dosesCount: doses.length, patientsCount: patients.length }
   })
   console.log('[Notif] reschedule START — full cancelAll')
-  // Audit log: batch_start
-  logAuditEvent({
+  // v0.2.2.1 — Audit batched: acumula tudo + 1 insert no final.
+  // Antes: per-group insert (10-100 inserts/batch). Agora: 1 insert/batch.
+  const auditAccumulator = []
+  auditAccumulator.push({
     action: 'batch_start',
     metadata: { dosesCount: doses.length, patientsCount: patients.length }
   })
@@ -141,21 +183,23 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
         alarmsScheduled += group.length
         newState[groupId] = hash
 
-        // Audit log: cada dose do grupo agendada como alarme crítico
-        logAuditEventsBatch(group.map(dose => ({
-          action: 'scheduled',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
-          metadata: {
-            groupId,
-            groupSize: group.length,
-            ringAt: at.toISOString(),
-            advanceMins: adv,
-            kind: 'critical_alarm'
-          }
-        })))
+        // Audit acumula (flush no batch_end)
+        for (const dose of group) {
+          auditAccumulator.push({
+            action: 'scheduled',
+            doseId: dose.id,
+            scheduledAt: dose.scheduledAt,
+            patientName: dose.patientName || null,
+            medName: dose.medName || null,
+            metadata: {
+              groupId,
+              groupSize: group.length,
+              ringAt: at.toISOString(),
+              advanceMins: adv,
+              kind: 'critical_alarm'
+            }
+          })
+        }
 
         // Item #083.7 — reporta dose_alarms_scheduled pra cada dose
         try {
@@ -181,14 +225,16 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     } else if (isDndWin && criticalOn) {
       dndSkipped += group.length
       newState[groupId] = hash
-      logAuditEventsBatch(group.map(dose => ({
-        action: 'skipped',
-        doseId: dose.id,
-        scheduledAt: dose.scheduledAt,
-        patientName: dose.patientName || null,
-        medName: dose.medName || null,
-        metadata: { groupId, reason: 'dnd_window' }
-      })))
+      for (const dose of group) {
+        auditAccumulator.push({
+          action: 'skipped',
+          doseId: dose.id,
+          scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null,
+          medName: dose.medName || null,
+          metadata: { groupId, reason: 'dnd_window' }
+        })
+      }
     }
 
     // Push notif (tray) — só se NÃO vai tocar alarme crítico.
@@ -210,22 +256,24 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
       })
       newState[groupId] = hash
 
-      // Audit: local tray notif agendado (não critical)
-      logAuditEventsBatch(group.map(dose => ({
-        action: 'scheduled',
-        doseId: dose.id,
-        scheduledAt: dose.scheduledAt,
-        patientName: dose.patientName || null,
-        medName: dose.medName || null,
-        metadata: {
-          groupId,
-          groupSize: group.length,
-          ringAt: at.toISOString(),
-          advanceMins: adv,
-          kind: 'local_notif',
-          dndWindow: isDndWin
-        }
-      })))
+      // Audit acumula (flush no batch_end)
+      for (const dose of group) {
+        auditAccumulator.push({
+          action: 'scheduled',
+          doseId: dose.id,
+          scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null,
+          medName: dose.medName || null,
+          metadata: {
+            groupId,
+            groupSize: group.length,
+            ringAt: at.toISOString(),
+            advanceMins: adv,
+            kind: 'local_notif',
+            dndWindow: isDndWin
+          }
+        })
+      }
     }
   }
 
@@ -263,6 +311,11 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     // Item #207 — persiste state pra observabilidade (debug + getScheduledIds futuro).
     saveScheduledState(newState)
     console.log('[Notif] reschedule END — nothing to schedule')
+    auditAccumulator.push({
+      action: 'batch_end',
+      metadata: { alarmsScheduled, dndSkipped, localNotifs: 0, summary: false, reason: 'nothing_to_schedule' }
+    })
+    logAuditEventsBatch(auditAccumulator)
     return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: false }
   }
 
@@ -279,6 +332,11 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     // Schedule batch falhou. Alarmes críticos podem estar agendados mas tray notifs não.
     // Limpar state força próximo rescheduleAll fazer reset completo (safe fallback).
     clearScheduledState()
+    auditAccumulator.push({
+      action: 'batch_end',
+      metadata: { alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true, errorMsg: e?.message }
+    })
+    logAuditEventsBatch(auditAccumulator)
     return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true }
   }
 
@@ -299,8 +357,8 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
     }
   })
 
-  // Audit log: batch_end
-  logAuditEvent({
+  // v0.2.2.1 — flush audit accumulator em 1 insert único (batch_start + N scheduled + batch_end).
+  auditAccumulator.push({
     action: 'batch_end',
     metadata: {
       alarmsScheduled,
@@ -311,6 +369,7 @@ export async function rescheduleAll({ doses = [], patients = [], prefsOverride =
       groupsCount: desired.size
     }
   })
+  logAuditEventsBatch(auditAccumulator)
 
   return { alarms: alarmsScheduled, dndSkipped, localNotifs: localNotifs.length, summary: summaryOn }
 }

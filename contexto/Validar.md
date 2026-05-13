@@ -14,7 +14,63 @@
 
 ---
 
-## 🆕 Release v0.2.2.0 — versionCode 58 (Internal Testing pendente)
+## 🆕 Release v0.2.2.1 — versionCode 59 (Internal Testing publicado 13:53 BRT)
+
+**Escopo:** #211 P1 HOTFIX — Storm rescheduleAll 1×/min descoberto via audit v0.2.2.0. Throttle 30s + window 168h→48h + audit batch single insert + DB grants.
+
+---
+
+### #211.v221.1 — Throttle rescheduleAll 30s
+
+#### `[ ]` 221.1.1 — App aberto 5min gera ≤5 batches
+
+**Como fazer:**
+1. Instalar vc 59 device.
+2. Abrir app + interagir 5min (Dashboard, Pacientes, voltar).
+3. /alarm-audit filtro origem "App (em uso ativo)" + período "Última 1h".
+
+**O que esperar:**
+- ≤5 batches em 5min.
+- Logcat (`adb logcat -s "Capacitor/Console:V"`) mostra `[Notif] reschedule throttled — trailing run em Xms` quando algo tenta reagendar dentro 30s.
+
+**Se falhar:**
+- 10+ batches em 5min → throttle não aplicou.
+
+---
+
+### #211.v221.2 — Window 48h reduz scheduled por batch
+
+#### `[ ]` 221.2.1 — Cada batch agenda ≤40 doses
+
+**Como fazer:**
+1. /alarm-audit filtro origem "App (em uso ativo)" + ação "Fim do ciclo".
+2. Click row → modal metadata.
+
+**O que esperar:**
+- metadata.groupsCount ≤30 (com janela 48h).
+- metadata.alarmsScheduled ≤40.
+
+**Se falhar:**
+- 100+ scheduled → window ainda 168h.
+
+---
+
+### #211.v221.3 — Audit batch single insert
+
+#### `[ ]` 221.3.1 — Eventos do batch compartilham timestamp ms
+
+**Como fazer:**
+1. SQL: `SELECT date_trunc('millisecond', created_at) AS ts, action, COUNT(*) FROM medcontrol.alarm_audit_log WHERE source='js_scheduler' GROUP BY 1,2 ORDER BY 1 DESC LIMIT 30;`
+
+**O que esperar:**
+- Todos eventos de 1 batch (batch_start + N scheduled + batch_end) compartilham mesmo timestamp ms (single INSERT).
+
+**Se falhar:**
+- Timestamps espaçados → ainda per-iteration inserts.
+
+---
+
+## Release v0.2.2.0 — versionCode 58 (Internal Testing pendente)
 
 **Escopo:** #210 NOVO P1 — Sistema auditoria de alarmes pra admin.dosymed.app. Captura 6 caminhos (JS scheduler + Java AlarmScheduler/Worker/FCM + Edge daily-sync/trigger-handler). Tabela `alarm_audit_log` + config whitelist `alarm_audit_config`. Admin pages `/alarm-audit` (filtros + modal detalhes) + `/alarm-audit-config` (toggle por email).
 

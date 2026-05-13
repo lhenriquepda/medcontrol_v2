@@ -6756,3 +6756,109 @@ Ver [`Validar.md`](Validar.md) seções 220.x — checklist completo S25 Ultra:
 - Export CSV histórico (futuro)
 - Retention configurável (hardcode 7d agora)
 
+---
+
+### #211 — Storm rescheduleAll + window 168h + audit per-group inserts (HOTFIX v0.2.2.1)
+
+- **Status:** ✅ Resolvido (release v0.2.2.1 vc 59)
+- **Categoria:** 🐛 BUG / 🛠️ PERFORMANCE
+- **Prioridade:** P1 (storm silencioso pré-existente, revelado pelo audit v0.2.2.0)
+- **Origem:** Descoberto via `/alarm-audit` no admin.dosymed.app — 868 rows em 30min após install vc 58. Esperado ~10.
+
+**Problema:**
+
+Audit v0.2.2.0 imediato pós-deploy revelou padrão:
+```
+16:18:50-53 (BURST INICIAL — 3s):
+  3 batch_start concorrentes, 418 scheduled rows, 4 batch_end
+16:19:49 → batch_start + 10 scheduled + batch_end
+16:20:49 → batch_start + 10 scheduled + batch_end
+16:21:50 → ...
+```
+
+rescheduleAll JS rodando 1×/min recorrente após burst inicial. Audit revelou problema pré-existente (storm sempre existiu, era invisível).
+
+**Root causes (3 simultâneos):**
+
+1. **Storm 1/min** — App.jsx useEffect `[user, allDoses, allPatients, dosesLoaded, patientsLoaded, scheduleDoses]`. Algum dep flipa ref a cada 60s. Suspeita primária: realtime channel reconnect (watchdog 60s) → refetch `['doses']` → new data ref → useEffect re-fires. Investigação completa = item separado, throttle resolve sintoma.
+2. **Window 168h** — `prefs.js SCHEDULE_WINDOW_MS = 168 * 3600 * 1000` mas comentário inline dizia "48h". Plan #209 era 48h. 168h × 14-30 doses/dia = ~100-200 doses/batch.
+3. **Audit per-group inserts** — scheduler.js wire v0.2.2.0 chamava `logAuditEventsBatch(group.map(...))` per iteration. 10 grupos × 1 insert = 10 separate inserts/batch.
+
+**Implementação:**
+
+1. `prefs.js SCHEDULE_WINDOW_MS = 48 * 3600 * 1000` + comment atualizado (alinha daily-alarm-sync cron 5am + Worker 6h + dose-trigger real-time).
+
+2. `scheduler.js` throttle pattern:
+```js
+const RESCHEDULE_THROTTLE_MS = 30_000
+let _lastRunAt = 0
+let _pendingTrailing = null
+let _pendingArgs = null
+
+export async function rescheduleAll(args = {}) {
+  if (!isNative) return rescheduleAllWeb(args.doses, args.patients, args.prefsOverride)
+  const now = Date.now()
+  const elapsed = now - _lastRunAt
+  if (elapsed < RESCHEDULE_THROTTLE_MS) {
+    _pendingArgs = args
+    if (!_pendingTrailing) {
+      _pendingTrailing = setTimeout(() => {
+        _pendingTrailing = null
+        const a = _pendingArgs; _pendingArgs = null
+        rescheduleAll(a)
+      }, RESCHEDULE_THROTTLE_MS - elapsed)
+    }
+    return { throttled: true }
+  }
+  _lastRunAt = now
+  return _rescheduleAllImpl(args)
+}
+```
+
+Pattern: primeira execução roda imediato. Requests dentro janela 30s coalescem em single trailing run com last args. Garante updates real (dose confirm/skip/undo invoke scheduleDoses) NÃO são perdidas — apenas atrasadas até 30s.
+
+3. `scheduler.js` audit accumulator:
+```js
+const auditAccumulator = []
+auditAccumulator.push({ action: 'batch_start', metadata: {...} })
+// ... per group: auditAccumulator.push(...)
+auditAccumulator.push({ action: 'batch_end', metadata: {...} })
+logAuditEventsBatch(auditAccumulator)  // single insert
+```
+
+Cobre 3 return paths: nothing_to_schedule (early return), error (LocalNotifications.schedule fail), normal completion.
+
+4. DB GRANTS (descoberto durante debug):
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON medcontrol.alarm_audit_log TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON medcontrol.alarm_audit_config TO service_role;
+GRANT USAGE ON SCHEMA medcontrol TO authenticated, anon;
+GRANT INSERT, SELECT ON medcontrol.alarm_audit_log TO authenticated;
+GRANT SELECT ON medcontrol.alarm_audit_config TO authenticated;
+```
+
+5. Cleanup 868 storm rows: `DELETE FROM alarm_audit_log WHERE created_at < now() - interval '1 minute'`.
+
+**Critério de aceitação:**
+
+- ✅ Build verde + AAB vc 59 publicado Internal Testing
+- ✅ DB grants aplicados via migrations grant_service_role_audit_tables + grant_authenticated_audit_tables
+- 🧪 Device runtime vc 59: abrir app → /alarm-audit mostra 1 batch_start + N scheduled (≤30 com window 48h) + 1 batch_end em 1 row INSERT
+- 🧪 30s após abrir app: tentativas adicionais de schedule são throttled (logcat `[Notif] reschedule throttled — trailing run em Xms`)
+- 🧪 60min uso normal: ~5-15 batches no audit (não 60)
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| Throttle perde update real-time (dose confirm não reagenda imediato) | 🟢 Baixo | Trailing run garante last args executados em ≤30s. Worker 6h + dose-trigger real-time + daily 5am cobrem | **OK** |
+| Window 48h muito curta — dose >48h não agenda | 🟢 Baixo | Cron daily 5am BRT roda diário cobrindo próximas 48h. Worker 6h reforço | **OK** |
+| Storm root cause não identificado (só sintoma fixado via throttle) | 🟡 Médio | Item separado investigar useEffect deps + realtime watchdog. Throttle previne degradação enquanto isso | **Aceitável** |
+| Audit batch grande (>200 rows) demora pra escrever | 🟢 Baixo | Postgres COPY/INSERT batch <100ms pra ~1000 rows. silent-fail wrap | **OK** |
+
+**Não-escopo:**
+
+- Investigar root cause storm (App.jsx useEffect deps + realtime watchdog) — item separado #212
+- Telemetria storm detection — alerta admin se rows/min > threshold
+
+

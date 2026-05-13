@@ -150,9 +150,13 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** Master @ `v0.2.2.0` FECHADA (vc 58 Internal Testing 2026-05-13 10:50 BRT, tags `v0.2.2.0` + `v0.2.1.9`).
+**Branch ativa:** Master @ `v0.2.2.1` FECHADA (vc 59 Internal Testing 2026-05-13 13:53 BRT, tag `v0.2.2.1`).
 
-**Última release fechada master — v0.2.2.0 (2026-05-13):**
+**Última release fechada master — v0.2.2.1 (2026-05-13):**
+- ✅ **#211 P1 HOTFIX** — Storm rescheduleAll 1×/min descoberto via audit v0.2.2.0 imediato pós-deploy. Audit gerou 868 rows em 30min (esperado: ~10). Root causes: realtime invalidation OR useEffect deps changing 1×/min em App.jsx → rescheduleAll re-run cycle, plus `SCHEDULE_WINDOW_MS` 168h (era 48h no plan #209 mas hardcoded errado) gerando 100 doses agendadas/batch, plus audit per-group inserts (10-100/batch) em vez de single batch insert. Fixes: (a) `SCHEDULE_WINDOW_MS = 48 * 3600 * 1000` em `prefs.js` (alinha daily-alarm-sync cron + Worker 6h); (b) Module-level throttle em `scheduler.js` — `RESCHEDULE_THROTTLE_MS = 30000` + `_lastRunAt` + `_pendingTrailing` setTimeout — primeira execução roda imediato, requests dentro janela 30s coalescem em single trailing run com last args; (c) `auditAccumulator` array push em todas paths + single `logAuditEventsBatch` flush pré-return (cobre 3 paths: nothing_to_schedule, error LocalNotifications.schedule, normal). DB-side: GRANT SELECT/INSERT/UPDATE/DELETE service_role + GRANT USAGE schema + GRANT SELECT/INSERT authenticated em alarm_audit_log/config (RLS policies estavam OK, mas table-level GRANTs faltando → silent fail antes deste fix). Limpeza: DELETE 868 storm rows.
+- AAB vc 59 publicado Internal Testing 2026-05-13 13:53 BRT. Tag `v0.2.2.1`.
+
+**Release anterior fechada master — v0.2.2.0 (2026-05-13):**
 - ✅ **#210 NOVO P1** — Sistema de auditoria de alarmes para `admin.dosymed.app`. Captura cada agendamento/cancelamento/disparo de alarme nos 6 caminhos do sistema (JS scheduler, Java AlarmScheduler, Java Worker, Java FCM received, Edge daily-sync, Edge trigger-handler) e envia pra nova tabela `medcontrol.alarm_audit_log`. Configurável por user_id (`alarm_audit_config` whitelist) — só registra usuários explicitamente habilitados. Cron diário 3:15 UTC limpa registros >7d. **Admin UI:** página `/alarm-audit` com filtros (usuário/origem/ação/dose/período) + clicável → modal detalhes + descrições em linguagem natural pt-BR. Página `/alarm-audit-config` configurar quais users monitorar via email. Seed inicial habilita `lhenrique.pda@gmail.com`. Objetivo: investigar duplicidade/sobreposição/inconsistência entre caminhos pós-#209.
 - AAB vc 58 publicado Internal Testing 2026-05-13 10:50 BRT. Tag `v0.2.2.0`.
 
