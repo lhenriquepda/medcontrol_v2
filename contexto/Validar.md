@@ -22,7 +22,7 @@
 
 ### #214.v224.1 — Cleanup órfão sem regressão
 
-#### `[ ]` 224.1.1 — JS scheduler não tenta upsert dose_alarms_scheduled
+#### `[x]` 224.1.1 — JS scheduler não tenta upsert dose_alarms_scheduled
 
 **Como fazer:**
 1. Instalar vc 62 + abrir app.
@@ -41,7 +41,7 @@
 
 ### #214.v224.2 — Java FCM handler sem reportAlarmScheduled
 
-#### `[ ]` 224.2.1 — Trigger FCM data simulado não chama método removido
+#### `[x]` 224.2.1 — Trigger FCM data simulado não chama método removido
 
 **Como fazer:**
 1. SQL: `UPDATE doses SET "updatedAt"=now() WHERE id = <some pending>` (dispara dose-trigger-handler).
@@ -57,7 +57,7 @@
 
 ### #214.v224.3 — Tabela DROPada não afeta nada
 
-#### `[ ]` 224.3.1 — SQL confirma tabela DROPada
+#### `[x]` 224.3.1 — SQL confirma tabela DROPada
 
 **Como fazer:**
 ```sql
@@ -77,7 +77,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #213.v223.1 — Storm eliminado definitivamente
 
-#### `[ ]` 223.1.1 — App aberto 10min ≤2 batches
+#### `[x]` 223.1.1 — App aberto 10min ≤2 batches
 
 **Como fazer:**
 1. TRUNCATE alarm_audit_log.
@@ -96,7 +96,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #213.v223.2 — Daily summary ainda agendado
 
-#### `[ ]` 223.2.1 — Daily summary notif agendado pelo App.jsx
+#### `[x]` 223.2.1 — Daily summary notif agendado pelo App.jsx
 
 **Como fazer:**
 1. /alarm-audit último batch normal.
@@ -118,7 +118,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #212.v222.1 — Storm eliminado
 
-#### `[ ]` 222.1.1 — App aberto 10min gera ≤2 batches
+#### `[x]` 222.1.1 — App aberto 10min gera ≤2 batches
 
 **Como fazer:**
 1. Limpar audit log: `TRUNCATE medcontrol.alarm_audit_log`.
@@ -136,7 +136,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #212.v222.2 — Mudança real dispara reschedule
 
-#### `[ ]` 222.2.1 — Marcar dose como tomada → 1 batch_start aparece
+#### `[x]` 222.2.1 — Marcar dose como tomada → 1 batch_start aparece
 
 **Como fazer:**
 1. App aberto vc 60.
@@ -154,7 +154,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #212.v222.3 — Idle longo
 
-#### `[ ]` 222.3.1 — Idle 30min mostra ≤1 batches
+#### `[x]` 222.3.1 — Idle 30min mostra ≤1 batches
 
 **Como fazer:**
 1. App aberto 30min idle (não interagir).
@@ -176,7 +176,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #211.v221.1 — Throttle rescheduleAll 30s
 
-#### `[ ]` 221.1.1 — App aberto 5min gera ≤5 batches
+#### `[x]` 221.1.1 — App aberto 5min gera ≤5 batches
 
 **Como fazer:**
 1. Instalar vc 59 device.
@@ -194,7 +194,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #211.v221.2 — Window 48h reduz scheduled por batch
 
-#### `[ ]` 221.2.1 — Cada batch agenda ≤40 doses
+#### `[x]` 221.2.1 — Cada batch agenda ≤40 doses
 
 **Como fazer:**
 1. /alarm-audit filtro origem "App (em uso ativo)" + ação "Fim do ciclo".
@@ -211,7 +211,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #211.v221.3 — Audit batch single insert
 
-#### `[ ]` 221.3.1 — Eventos do batch compartilham timestamp ms
+#### `[x]` 221.3.1 — Eventos do batch compartilham timestamp ms
 
 **Como fazer:**
 1. SQL: `SELECT date_trunc('millisecond', created_at) AS ts, action, COUNT(*) FROM medcontrol.alarm_audit_log WHERE source='js_scheduler' GROUP BY 1,2 ORDER BY 1 DESC LIMIT 30;`
@@ -234,7 +234,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #210.v220.1 — Eventos JS scheduler aparecem em admin.dosymed
 
-#### `[ ]` 220.1.1 — Abrir app + rescheduleAll → linhas `js_scheduler` no /alarm-audit
+#### `[x]` 220.1.1 — Abrir app + rescheduleAll → linhas `js_scheduler` no /alarm-audit
 
 **Como fazer:**
 1. Instalar vc 58 via Internal Testing no S25 Ultra.
@@ -253,7 +253,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #210.v220.2 — Eventos Java Worker 6h aparecem
 
-#### `[ ]` 220.2.1 — DoseSyncWorker periodic → rows `java_worker`
+#### `[x]` 220.2.1 — DoseSyncWorker periodic → rows `java_worker`
 
 **Como fazer:**
 1. App vc 58 instalado.
@@ -287,7 +287,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #210.v220.4 — Eventos Edge dose-trigger-handler real-time aparecem
 
-#### `[ ]` 220.4.1 — Marcar dose como tomada → row `cancelled` source `edge_trigger_handler`
+#### `[x]` 220.4.1 — Marcar dose como tomada → row `cancelled` source `edge_trigger_handler`
 
 **Como fazer:**
 1. Marcar uma dose pending como "Tomada" no app.
@@ -321,7 +321,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #210.v220.6 — Toggle config refletindo
 
-#### `[ ]` 220.6.1 — Desabilitar user em /alarm-audit-config para inserções
+#### `[~]` 220.6.1 — Desabilitar user em /alarm-audit-config para inserções
 
 **Como fazer:**
 1. /alarm-audit-config → linha lhenrique.pda → botão "Pausar".
@@ -458,7 +458,7 @@ SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'med
 
 ### #209.v219.4 — Cron antigos foram REMOVIDOS
 
-#### `[ ]` 219.4.1 — SQL `cron.job` sem `notify-doses-1min` e `schedule-alarms-fcm-6h`
+#### `[x]` 219.4.1 — SQL `cron.job` sem `notify-doses-1min` e `schedule-alarms-fcm-6h`
 
 **Como fazer:**
 ```sql
@@ -480,7 +480,7 @@ SELECT jobname FROM cron.job ORDER BY jobname;
 
 ### #209.v219.5 — Trigger DB delta real-time funciona
 
-#### `[ ]` 219.5.1 — Marcar dose como tomada cancela alarme local
+#### `[x]` 219.5.1 — Marcar dose como tomada cancela alarme local
 
 **Como fazer:**
 1. Configurar dose +5min futuro.
