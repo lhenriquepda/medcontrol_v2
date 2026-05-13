@@ -55,9 +55,6 @@ public class DosyMessagingService extends MessagingService {
 
         if ("schedule_alarms".equals(action)) {
             // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
-            // Se OFF, skip scheduling local. Edges deveriam ter skipado FCM data
-            // antes mesmo de chegar aqui, mas double-check defensivo: server pode
-            // estar com cache stale OR mensagem foi enfileirada antes do toggle.
             SharedPreferences sp = getApplicationContext()
                 .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
             boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
@@ -67,11 +64,21 @@ public class DosyMessagingService extends MessagingService {
             }
             try {
                 handleScheduleAlarms(data.get("doses"));
-                // NÃO chama super — não mostra notif tray pra esta mensagem
                 return;
             } catch (Exception e) {
                 Log.e(TAG, "schedule_alarms handler error: " + e.getMessage(), e);
-                // Fallback: deixa Capacitor processar como notif normal
+            }
+        }
+
+        // Item #209 v0.2.1.9 — cancel_alarms handler. Trigger DB envia quando
+        // dose deletada OR status muda pending→done/skipped/cancelled. App
+        // cancela alarme local correspondente via AlarmScheduler.cancelAlarm.
+        if ("cancel_alarms".equals(action)) {
+            try {
+                handleCancelAlarms(data.get("doseIds"));
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "cancel_alarms handler error: " + e.getMessage(), e);
             }
         }
 
@@ -141,6 +148,31 @@ public class DosyMessagingService extends MessagingService {
             }
         }
         Log.d(TAG, "scheduled groups=" + scheduled);
+    }
+
+    /**
+     * Item #209 v0.2.1.9 — handle cancel_alarms FCM action.
+     * Recebe doseIds CSV (ex: "uuid1,uuid2,uuid3"). Pra cada, calcula
+     * AlarmScheduler.idFromString (mesma fórmula usada no scheduling) e
+     * chama AlarmScheduler.cancelAlarm. Idempotente — id inexistente OK.
+     *
+     * NOTA: dose individual = group de 1 dose. ID derivado de doseId só.
+     * Groups multi-dose (mesmo minute key) — cancela só se TODOS doses do
+     * group estão cancelados. Conservador: cancelar individual com risk de
+     * leave group order. Aceito — server-side garante consistência.
+     */
+    private void handleCancelAlarms(String doseIdsCsv) {
+        if (doseIdsCsv == null || doseIdsCsv.isEmpty()) return;
+        Context ctx = getApplicationContext();
+        String[] ids = doseIdsCsv.split(",");
+        int cancelled = 0;
+        for (String doseId : ids) {
+            String trimmed = doseId.trim();
+            if (trimmed.isEmpty()) continue;
+            int alarmId = AlarmScheduler.idFromString(trimmed);
+            if (AlarmScheduler.cancelAlarm(ctx, alarmId)) cancelled++;
+        }
+        Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
     }
 
     /**

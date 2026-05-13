@@ -109,6 +109,47 @@ public class AlarmScheduler {
     }
 
     /**
+     * Item #209 v0.2.1.9 — cancel a specific alarm by groupId.
+     * Chamado por DosyMessagingService handleCancelAlarms quando trigger DB
+     * envia action=cancel_alarms (dose deletada, status changed pending→done,
+     * etc). Plus chamado quando rescheduleAll detecta dose removida do cache.
+     */
+    public static boolean cancelAlarm(Context ctx, int id) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return false;
+        Intent intent = new Intent(ctx, AlarmReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, id, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        am.cancel(pi);
+        pi.cancel();
+        removePersisted(ctx, id);
+        Log.d(TAG, "cancelled id=" + id);
+        return true;
+    }
+
+    /**
+     * Remove entry persistida do SharedPreferences.
+     */
+    private static void removePersisted(Context ctx, int id) {
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_SCHEDULED, null);
+            if (existing == null) return;
+            JSONArray current = new JSONArray(existing);
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.getInt("id") != id) filtered.put(e);
+            }
+            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+        } catch (JSONException e) {
+            Log.w(TAG, "removePersisted error: " + e.getMessage());
+        }
+    }
+
+    /**
      * Determinístic id derivation from a stable string (e.g. concat of doseIds).
      * Used by DoseSyncWorker pra coincidir com ids do JS-side (groupKey hash).
      */

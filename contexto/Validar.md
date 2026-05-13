@@ -14,7 +14,141 @@
 
 ---
 
-## 🆕 Release v0.2.1.8 — versionCode 56 (debug variant Studio — Internal Testing pendente)
+## 🆕 Release v0.2.1.9 — versionCode 57 (Internal Testing pendente)
+
+**Escopo:** #209 NOVO P0 — Refactor completo sistema alarmes + push. Fix 3 bugs reportados 2026-05-13 (alarme "Sem Paciente", push 5am pra dose 8am, alarme 8am não disparou). Substitui 5 caminhos redundantes por arquitetura simples: cron diário 5am BRT (FCM data 48h horizon) + trigger DB delta real-time + Worker 6h defense-in-depth + app open rescheduleAll JS.
+
+**Mudanças código:**
+- **DB Migration `update_treatment_schedule`** — adiciona `AT TIME ZONE` correction + parâmetro opcional `p_timezone` (default `America/Sao_Paulo`). Fix Bug 2.
+- **DB data-fix** — regenera doses pending de todos treatments ativos via RPC fixada (idempotente). Doses já corrigidas.
+- **`DoseSyncWorker.java`** — embed PostgREST `patients(name)` + extrai `patientName` do payload. Fix Bug 1. Plus HORIZON_HOURS 168 → 48.
+- **Edge Function `daily-alarm-sync`** (NOVO) — substitui `notify-doses-1min` + `schedule-alarms-fcm-6h`. Cron 8am UTC = 5am BRT. FCM data 48h. Retry exponential. Multi-TZ via `user_prefs.timezone`.
+- **Edge Function `dose-trigger-handler` v16** — horizon 6h → 48h. Suporte action `cancel_alarms` em DELETE + UPDATE status pending→non-pending. Suporte UPDATE pending→pending com scheduledAt mudou (cancel+re-schedule).
+- **`DosyMessagingService.java`** — novo handler `cancel_alarms` action chamando `AlarmScheduler.cancelAlarm`.
+- **`AlarmScheduler.java`** — novo método static `cancelAlarm(ctx, id)` + `removePersisted` helper.
+- **Cron pg_cron** — UNSCHEDULE notify-doses-1min + schedule-alarms-fcm-6h. SCHEDULE daily-alarm-sync-5am.
+- **`useAppUpdate.js`** — VERSION_CODE_TO_NAME map adicionado entries 56 e 57 (fix #208 BUG superseded UpdateBanner version label).
+- **Memory note** `feedback_release_lifecycle.md` — checklist obrigatório bump VERSION_CODE_TO_NAME a cada release.
+
+**Conta de teste:** `lhenrique.pda@gmail.com` (admin pessoal, dados reais com Liam/Rael/Luiz Henrique).
+
+---
+
+### #209.v219.1 — Alarme dispara no horário correto (BRT)
+
+#### `[ ]` 219.1.1 — Dose 8am BRT alarme toca 8am BRT (não 5am)
+
+**Como fazer:**
+1. Confirmar SQL Supabase Studio: dose pending qualquer com `scheduledAt AT TIME ZONE 'America/Sao_Paulo'` = `08:00:00` (não `05:00:00`).
+2. Aguardar horário da dose.
+
+**O que esperar:**
+- Alarme nativo dispara **exatamente** no horário BRT (margem 30s).
+- NÃO dispara 3h antes (5am).
+- Tela cheia AlarmActivity OR notif heads-up.
+
+**Se falhar:**
+- Alarme tocou 3h antes → migration `update_treatment_schedule` TZ fix não aplicou (verificar via SQL re-run).
+
+---
+
+### #209.v219.2 — Alarme mostra nome do paciente correto
+
+#### `[ ]` 219.2.1 — Alarme nunca mostra "Sem Paciente" quando paciente existe
+
+**Como fazer:**
+1. Aguardar alarme disparar via qualquer caminho (cron 5am, trigger real-time, ou Worker 6h).
+
+**O que esperar:**
+- Header alarme mostra **nome real do paciente** (ex: "Liam", "Luiz Henrique").
+- NUNCA "Sem Paciente" pra dose com `patientId` válido.
+
+**Se falhar:**
+- "Sem Paciente" aparece → Worker `DoseSyncWorker.java:191` ainda não tem patientName extract. Verificar build vc 57 deployado.
+
+---
+
+### #209.v219.3 — Cron diário 5am dispara FCM data pra todos devices
+
+#### `[ ]` 219.3.1 — Logcat 5am BRT mostra schedule_alarms FCM data recebido
+
+**Como fazer:**
+1. Aguardar 5am BRT seguinte (próxima execução cron `daily-alarm-sync-5am`).
+2. USB device + `adb logcat -s DosyMessagingService:V AlarmScheduler:V`.
+
+**O que esperar:**
+- Logcat ~5am BRT:
+  ```
+  DosyMessagingService: schedule_alarms: N doses
+  AlarmScheduler: scheduled id=X at=Y count=Z
+  ```
+- Vários alarmes agendados (alarms próximas 48h).
+- Sentry breadcrumbs `rescheduleAll START/END` aparecem em qualquer crash.
+
+**Se falhar:**
+- 5am BRT sem FCM data recebido → cron `daily-alarm-sync-5am` falhou. Verificar Supabase Dashboard → cron logs.
+
+---
+
+### #209.v219.4 — Cron antigos foram REMOVIDOS
+
+#### `[ ]` 219.4.1 — SQL `cron.job` sem `notify-doses-1min` e `schedule-alarms-fcm-6h`
+
+**Como fazer:**
+```sql
+SELECT jobname FROM cron.job ORDER BY jobname;
+```
+
+**O que esperar:**
+- ✅ `anonymize-old-doses`
+- ✅ `cleanup-stale-push-subs-daily`
+- ✅ `daily-alarm-sync-5am`
+- ✅ `extend-continuous-treatments-daily`
+- ❌ NÃO deve aparecer `notify-doses-1min`
+- ❌ NÃO deve aparecer `schedule-alarms-fcm-6h`
+
+**Se falhar:**
+- Cron antigo ainda ativo → re-rodar migration `cron_jobs_v0_2_1_9_daily_alarm_sync`.
+
+---
+
+### #209.v219.5 — Trigger DB delta real-time funciona
+
+#### `[ ]` 219.5.1 — Marcar dose como tomada cancela alarme local
+
+**Como fazer:**
+1. Configurar dose +5min futuro.
+2. Aguardar AlarmScheduler agendar (`adb logcat AlarmScheduler`).
+3. Marcar dose como "Tomada" no app antes do alarme disparar.
+4. Aguardar 5min.
+
+**O que esperar:**
+- Logcat: `cancel_alarms: cancelled=1`.
+- Alarme NÃO toca 5min depois.
+
+**Se falhar:**
+- Alarme toca mesmo após dose marcada → trigger DB → dose-trigger-handler → cancel_alarms quebrou. Verificar Edge Function logs.
+
+---
+
+### #209.v219.6 — Egress reduzido (≥99% redução crons antigos)
+
+#### `[ ]` 219.6.1 — Supabase Dashboard Egress monitor 7 dias
+
+**Como fazer:**
+1. Aguardar 7 dias rodando v0.2.1.9.
+2. Supabase Dashboard → Reports → Edge Functions invocations.
+
+**O que esperar:**
+- `daily-alarm-sync` invocations: 7 (1×/dia) + 1-2× por dose criada/alterada.
+- `notify-doses` invocations: 0 (cron unscheduled).
+- `schedule-alarms-fcm` invocations: 0.
+- Total egress doses-related cai >99% vs baseline.
+
+**Se falhar:**
+- Egress não caiu → algum cron remanescente OR trigger DB rodando excessivo (storm). Investigar audit.
+
+---
 
 **Escopo:** #204 mutation queue offline expandido — fixes A1/A2/B/C identificados via logcat S25 Ultra (sessão 2026-05-10). Mutations CRUD completas com optimistic + alarme offline + bloqueios features fora queue + avisos UX honestos.
 

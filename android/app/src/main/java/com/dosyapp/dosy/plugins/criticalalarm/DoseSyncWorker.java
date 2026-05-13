@@ -57,9 +57,10 @@ import java.util.TreeMap;
 public class DoseSyncWorker extends Worker {
     private static final String TAG = "DoseSyncWorker";
     private static final String SYNC_PREFS = "dosy_sync_credentials";
-    // Item #207 (release v0.2.1.7) — 72h → 168h (7d) alinhado com SCHEDULE_WINDOW_MS JS.
-    // WorkManager 6h periodic cobre janela inteira mesmo se app fechado vários dias.
-    private static final long HORIZON_HOURS = 168L;
+    // Item #209 (release v0.2.1.9) — 168h → 48h alinhado com daily-alarm-sync cron.
+    // Cron diário 5am cobre janela 48h (margem 24h até próximo cron). Worker
+    // periodic 6h funciona como defense-in-depth caso FCM falhe entrega.
+    private static final long HORIZON_HOURS = 48L;
     // Item #205 — margem de segurança expiry. Se faltam <60s pra expirar, considera
     // já expirado (evita race entre check local e request HTTP).
     private static final long EXP_SAFETY_MARGIN_MS = 60_000L;
@@ -130,8 +131,11 @@ public class DoseSyncWorker extends Worker {
         Instant now = Instant.now();
         Instant horizon = now.plus(Duration.ofHours(HORIZON_HOURS));
 
+        // Item #209 v0.2.1.9 Bug 1 fix — embed patients(name) na query PostgREST.
+        // Antes Worker hardcoded patientName="" causando alarme "Sem Paciente"
+        // quando Worker era fonte do scheduling (Samsung One UI 7 caso comum).
         String qs = "/rest/v1/doses"
-            + "?select=id,medName,unit,scheduledAt,patientId,treatmentId"
+            + "?select=id,medName,unit,scheduledAt,patientId,treatmentId,patients(name)"
             + "&status=eq.pending"
             + "&scheduledAt=gte." + now.toString()
             + "&scheduledAt=lte." + horizon.toString()
@@ -175,11 +179,20 @@ public class DoseSyncWorker extends Worker {
             if (!groups.containsKey(minute)) groups.put(minute, new JSONArray());
             if (!doseIdsByMinute.containsKey(minute)) doseIdsByMinute.put(minute, new HashSet<>());
 
+            // Item #209 v0.2.1.9 Bug 1 fix — extrai patientName do embed PostgREST.
+            // d.patients é JSONObject {name: "..."} OR null se paciente deletado.
+            String patientName = "";
+            JSONObject patientObj = d.optJSONObject("patients");
+            if (patientObj != null) {
+                patientName = patientObj.optString("name", "");
+            }
+
             JSONObject entry = new JSONObject();
             entry.put("doseId", d.getString("id"));
             entry.put("medName", d.optString("medName", "Dose"));
             entry.put("unit", d.optString("unit", ""));
-            entry.put("patientName", "");
+            entry.put("patientName", patientName);
+            entry.put("scheduledAt", d.optString("scheduledAt", ""));
             groups.get(minute).put(entry);
             doseIdsByMinute.get(minute).add(d.getString("id"));
         }
