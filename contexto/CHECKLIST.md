@@ -7113,3 +7113,949 @@ Tabela `medcontrol.dose_alarms_scheduled` criada em #083.7 (v0.1.7.2) pra `notif
 **Não-escopo:**
 
 - Cleanup outras tabelas/colunas órfãs (item separado se aplicável)
+
+---
+
+## NOVOS items descobertos via auditoria 2026-05-13 Alarme + Push
+
+> Origem: `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (varredura ponta-a-ponta 11 arquivos Java + JS notifications + 6 Edge Functions + 22 migrations + Manifest + capacitor.config + sw.js). 19 bugs/riscos identificados P0→P3 + análise impacto egress + storm risk.
+
+### #215 — Refactor scheduler unificado + push backup co-agendado (cobre DnD/criticalAlarm-off)
+
+- **Categoria:** 🔄 TURNAROUND
+- **Prioridade:** 🔴 P0
+- **Origem:** [Auditoria 2026-05-13 B-01 + B-02 + B-09 + arquitetura duplicada cross-source]
+- **Esforço:** 10-14h (refactor + testes E2E + validação device S25 Ultra + edge cases limite+cuidador)
+- **Dependências:** #220 (alinhar hash JS↔Java antes pra IDs determinísticos cross-source funcionarem)
+- **Release alvo:** `release/v0.2.3.0` (bump versão app — gera AAB novo)
+
+**Decisões consolidadas com user 2026-05-13 (pós-revisão plano 3 cenários):**
+
+| # | Decisão | Comportamento final |
+|---|---|---|
+| 2 | Margem boot recovery alarme atrasado | **2h** (era proposto 1h em #224 — alinhar pra 2h também) |
+| 3 | Push silencioso dentro janela DnD | **Vibração leve** (não 100% silencioso) — canal `dosy_tray` com `vibration: true` + pattern curto (200ms) + sound null |
+| 4 | User desliga toggle Alarme Crítico no Ajustes | **Cancela todos alarmes nativos agendados + troca por push** (próximos 48h passam a ser cobertos só por push) — já é o comportamento do helper unificado, só garantir `useUserPrefs` mutation dispara `rescheduleAll` ao mudar flag |
+| 6 | Cuidador compartilhando paciente | **SEMPRE alarme cheio prioridade** + respeita DnD/criticalAlarm-off do cuidador. Se cuidador tem DnD 22h-7h ativo e dose paciente 23h → cuidador recebe só push silencioso vibração leve; paciente recebe baseado nas configs próprias. Cenário 02 envia FCM data pra TODOS aparelhos (paciente + cuidadores) — cada aparelho aplica próprias prefs ao decidir branch |
+| 8 | Limite Android ~500 alarmes/notificações por app | **Janela dinâmica:** se total agendado (alarmes + pushes) projetado > 400 itens (margem 100 do limit) → janela cai pra **24h** apenas. Se < 400 → mantém **48h** normal. Recalcula a cada execução Cenário 01/03. User com 50+ doses/dia (raro) automaticamente fica em 24h horizon. Inclui telemetria `alarm_horizon_decision: 24h\|48h` em metadata audit log |
+| 9 | Mudança horário tratamento via update_treatment_schedule | **Aceita proposta:** servidor regenera doses pendentes; Cenário 02 dispara FCM `cancel_alarms` (#221) pra cada dose alterada + FCM `schedule_alarms` pras novas |
+| 10 | Cuidador opt-in receber alarmes de paciente compartilhado | **Sempre recebe** (por enquanto). Toggle "Quero receber lembretes das doses dos pacientes compartilhados: Sim/Não" parqueado pra release futura. Helper unificado fica preparado pra ler future flag `prefs.receiveShared` (default true) sem refactor adicional |
+| 11 | Admin panel `admin.dosymed.app/alarm-audit` + `/alarm-audit-config` | **Mantém funcional** — refactor preserva populamento de `medcontrol.alarm_audit_log` em **TODOS 4 paths** (Cenário 01 source `js_scheduler`, Cenário 02 sources `js_scheduler` + `java_fcm_received` + `edge_trigger_handler`, Cenário 03 sources `java_worker` + `edge_daily_sync`). Cada insert inclui metadata `branch: alarm_plus_push\|push_dnd\|push_critical_off\|skipped` + `horizon: 24h\|48h` + `reason` (debug) |
+
+**Problema (3 falhas em 1 release):**
+
+**Problema (3 falhas em 1 release):**
+
+1. **B-01 — Janela DnD = zona silêncio total.** `dose-trigger-handler:134-138` skip FCM data se `inDndWindow=true`. `daily-alarm-sync:121` filtra `dosesOutsideDnd`. Cron `notify-doses-1min` (que era o caminho push tray fallback DnD) UNSCHEDULED em #209. Resultado: dose dentro DnD = ZERO alerta (era pra ser "silenciar alarme estilo despertador" mas hoje silencia tudo).
+2. **B-02 — `criticalAlarm=false` + app background = silêncio total.** Mesma raiz: 3 caminhos skipam (dose-trigger, daily-alarm-sync) + cron 1min unscheduled. User que escolheu "só push tray, sem alarme despertador" não recebe nada se app fechado.
+3. **B-09 — `dose-trigger-handler` `SIX_HOURS_MS` desalinhado com `daily-alarm-sync` 48h horizon.** Dose criada entre 6h-48h futuro fica sem FCM realtime; espera próximo cron 5am BRT (delay até 24h).
+4. **Bonus — lógica duplicada cross-source.** Filtros + grouping + audit espalhados em `notifications/scheduler.js` + `DosyMessagingService.handleScheduleAlarms` + `DoseSyncWorker.scheduleDoses` + `daily-alarm-sync` Edge. Drift silencioso (B-07 hash já desalinhou JS↔Java).
+
+**Solução (fluxo user-aligned 2026-05-13):**
+
+### Cenário 01 — App abre / atualiza
+
+Gatilhos: `App.jsx` top-level useEffect (signature guard pós #212/#213) ao mount, ao receber update de cache, ao mudança de toggle prefs (Alarme Crítico ON/OFF, DnD enable/disable, DnD horário).
+
+```pseudo
+function cenario01_appOpen(ctx):
+  # 1. Sync banco → cache local
+  doses = fetchDoses(now, now + windowHours)  # window decidido em scheduleHorizon() ↓
+  prefs = loadPrefs()
+
+  # 2. Cancela TUDO agendado pra evitar drift
+  cancelAllAlarms()
+  cancelAllLocalNotifications()
+
+  # 3. Determina janela dinâmica (decisão 8)
+  totalItemsProjected = doses.filter(d => criticalOn && !inDnd(d, prefs)).length * 2  # alarm + push
+                     + doses.filter(d => !criticalOn || inDnd(d, prefs)).length        # só push
+  horizonHours = (totalItemsProjected > 400) ? 24 : 48
+  doses = doses.filter(d => d.scheduledAt <= now + horizonHours)
+
+  # 4. Pra cada dose, chama helper unificado
+  for dose in doses:
+    branch = scheduleDoseAlarm(ctx, dose, prefs)
+    auditLog.insert({
+      source: 'js_scheduler',
+      action: branch == 'skipped' ? 'skipped' : 'scheduled',
+      dose_id: dose.id,
+      scheduled_at: dose.scheduledAt,
+      metadata: { branch, horizon: horizonHours, source_scenario: 'app_open' }
+    })
+```
+
+### Cenário 02 — Mudança status dose (Tomada / Pulada / Desfazer)
+
+Gatilho: user clica "Ciente" / "Pular" / "Desfazer" no DoseCard, DoseModal, AlarmActivity, AlarmActionReceiver.
+
+```pseudo
+function cenario02_doseStatusChange(doseId, newStatus):
+  # 1. RPC server-side (confirm_dose / skip_dose / undo_dose)
+  rpc.callServerMutation(doseId, newStatus)
+
+  # 2. Local: cancela ou reagenda APENAS essa dose
+  if newStatus == 'pending':  # undo
+    dose = fetchDose(doseId)
+    branch = scheduleDoseAlarm(ctx, dose, loadPrefs())
+    auditLog.insert({ source: 'js_scheduler', action: 'scheduled', metadata: { branch, source_scenario: 'undo_dose' }})
+  else:  # done/skipped
+    cancelAlarm(doseId)
+    cancelLocalNotification(doseId + BACKUP_OFFSET)
+    auditLog.insert({ source: 'js_scheduler', action: 'cancelled', metadata: { source_scenario: 'mark_dose' }})
+
+  # 3. Server-side trigger dose_change_notify → Edge dose-trigger-handler envia FCM
+  #    para TODOS aparelhos (paciente + cuidadores) com action=schedule_alarms OU cancel_alarms
+  #    (depende newStatus). Cada aparelho recebe via DosyMessagingService e chama
+  #    handler que delega ao helper unificado Java (mesma lógica scheduleDoseAlarm).
+  #    Aparelho aplica PRÓPRIAS prefs (decisão 6 + 10) — cuidador com DnD próprio recebe só push silencioso.
+```
+
+### Cenário 03 — Manutenção a cada 6h (app fechado) + cron diário 5am BRT
+
+**Cenário 03a — WorkManager 6h (Android background):**
+
+```pseudo
+function cenario03a_workManager6h():
+  # Android acorda app brevemente (~10s budget)
+  doses = fetchDosesViaREST(now, now + horizonHours)  # auth via cached accessToken
+  prefs = loadPrefsFromSharedPreferences()
+
+  cancelAllAlarms()  # opcional: só doses cujo conteúdo mudou (otimização futura)
+  for dose in doses:
+    branch = scheduleDoseAlarmJava(ctx, dose, prefs)  # MESMA lógica do helper JS, paridade
+    auditLog.insertViaREST({
+      source: 'java_worker',
+      action: branch == 'skipped' ? 'skipped' : 'scheduled',
+      metadata: { branch, horizon: horizonHours, source_scenario: 'workmanager_6h' }
+    })
+```
+
+**Cenário 03b — Cron daily 5am BRT (servidor → todos devices):**
+
+```pseudo
+function cenario03b_dailyAlarmSync():
+  # Edge function rodando 5am BRT diário
+  for user in pushSubscriptions:
+    prefs = getUserNotifPrefs(user.id)
+    doses = getDosesNext48h(user.id)
+    horizonHours = (projectedItems(doses, prefs) > 400) ? 24 : 48
+    doses = doses.filter(d => d.scheduledAt <= now + horizonHours)
+
+    # Particionar em chunks 30 doses (#225 chunking 4KB FCM limit)
+    chunks = chunkBy(doses, 30)
+    for chunk in chunks:
+      for device in user.devices:
+        sendFcmData(device.deviceToken, {
+          action: 'schedule_alarms',
+          doses: JSON.stringify(chunk),
+          horizon: horizonHours
+        })
+
+    auditLog.insertBatch(doses.map(d => ({
+      source: 'edge_daily_sync',
+      action: 'fcm_sent',
+      dose_id: d.id,
+      metadata: { horizon: horizonHours, source_scenario: 'cron_5am' }
+    })))
+```
+
+Device recebe FCM → `DosyMessagingService.onMessageReceived(action=schedule_alarms)` → delega ao helper unificado Java que aplica prefs locais + decide branch.
+
+### Helper unificado `scheduleDoseAlarm(ctx, dose, prefs)` — 1 lugar 4 paths
+
+```pseudo
+function scheduleDoseAlarm(ctx, dose, prefs):
+  groupId = idFromString(dose.id)  # hash alinhado JS↔Java (#220)
+  backupId = groupId + BACKUP_OFFSET
+
+  # Branch A — Alarme Crítico OFF → só push tray
+  if !prefs.criticalAlarm:
+    LocalNotifications.schedule({
+      id: groupId,
+      channel: 'dosy_tray',
+      sound: 'default',
+      schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+    })
+    return 'push_critical_off'
+
+  # Branch B — DnD ON e dose em janela → só push tray COM VIBRAÇÃO LEVE (decisão 3)
+  if inDndWindow(dose.scheduledAt, prefs):
+    LocalNotifications.schedule({
+      id: groupId,
+      channel: 'dosy_tray',  # canal com vibration:true + pattern curto 200ms + sound null
+      schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+    })
+    return 'push_dnd'
+
+  # Branch C — Caso normal → alarme nativo + push backup co-agendado
+  AlarmScheduler.scheduleDose(ctx, groupId, dose.scheduledAt, [dose])  # AlarmManager.setAlarmClock
+  LocalNotifications.schedule({
+    id: backupId,
+    channel: 'dosy_tray',
+    sound: 'default',
+    schedule: { at: dose.scheduledAt, allowWhileIdle: true }
+  })
+  return 'alarm_plus_push'
+```
+
+**Coordenação alarme + push backup (decisão antiga mantida):**
+
+- `AlarmReceiver.onReceive` (alarme nativo disparou OK): chamar `NotificationManagerCompat.cancel(backupId)` ANTES de start AlarmService → anti-duplicate (user não vê alarme + push vibrando ao mesmo tempo).
+- Se OEM mata alarme nativo (Doze profundo Samsung One UI 7, Xiaomi MIUI), LocalNotification backup dispara como fallback visual no horário exato. Tray com som default + vibração — user vê notif + sente vibração mesmo sem fullscreen.
+
+**Janela dinâmica (decisão 8):**
+
+```pseudo
+function computeHorizon(doses, prefs):
+  # Estima quantos itens vão pro AlarmManager + LocalNotifications storage
+  projectedItems = 0
+  for dose in doses:
+    if !prefs.criticalAlarm or inDndWindow(dose.scheduledAt, prefs):
+      projectedItems += 1  # só push
+    else:
+      projectedItems += 2  # alarm + push backup
+
+  # Android limit ~500 por app. Margem 100 → threshold 400.
+  return projectedItems > 400 ? 24 : 48
+```
+
+Edge case: user com 50 doses/dia × 48h = 100 doses × 2 itens = 200. Long da limit. Janela 48h mantida.
+Edge case extremo: user com 100 doses/dia (cuidador profissional 5+ residências modo futuro #185) × 48h = 200 doses × 2 = 400 itens. Próximo refactor pra 24h. Telemetria PostHog `alarm_horizon_24h` event futuro pra identificar quem cai nessa categoria.
+
+**Audit log mantém admin `/alarm-audit` funcional (decisão 11):**
+
+Todos 4 paths (JS scheduler / Java worker / Java FCM / Edge daily-sync + Edge trigger-handler) inserem em `medcontrol.alarm_audit_log` quando user está em `alarm_audit_config.enabled=true` whitelist. Metadata uniformizada inclui:
+
+```json
+{
+  "branch": "alarm_plus_push | push_dnd | push_critical_off | skipped",
+  "horizon": 24 | 48,
+  "source_scenario": "app_open | mark_dose | undo_dose | workmanager_6h | cron_5am | fcm_trigger_handler",
+  "groupId": 12345678,
+  "criticalAlarmEnabled": true,
+  "dndEnabled": false,
+  "inDndWindow": false,
+  "reason": "string (debug curto)"
+}
+```
+
+Páginas admin `/alarm-audit` (filtros usuário/origem/ação/dose/período + modal detalhes) + `/alarm-audit-config` (toggle por email) continuam funcionando sem mudança — refactor apenas enriquece metadata.
+
+**Auditoria egress + storm risk:**
+
+| Aspecto | Impacto | Mitigação |
+|---|---|---|
+| Egress server-side | **Zero** (LocalNotification é local Android) | — |
+| AlarmManager storm | Nenhum — throttle 30s + signature guard pós #211/#212 já cobre | — |
+| LocalNotifications limit | Capacitor LocalNotifications aceita ~500 simultâneas. Janela 48h × 4 doses/dia × 2 (alarme+backup) = 384 itens, dentro limit | — |
+| Cancel race alarme↔backup | AlarmReceiver pode falhar cancel se LocalNotification dispara primeiro (ms-level race) → user vê notif backup + alarme nativo simultâneos | Aceitável (vibração extra 1×/dia max) — alternativa: backup +60s delay |
+| Drift cross-source | **Eliminado** — 1 helper único, todas caminhos passam mesmas filtros | — |
+
+**Mudanças código:**
+
+1. **Novo** `src/services/notifications/unifiedScheduler.js` (ou expandir `scheduler.js`):
+   - Função `scheduleDoseAlarm(doses, prefs)` retorna `{ tray, tray_dnd, alarm_plus_backup }` arrays
+   - Substituído por `rescheduleAll` chama unifiedScheduler internamente
+
+2. **Java** `AlarmReceiver.java`:
+   ```java
+   @Override
+   public void onReceive(Context context, Intent intent) {
+     int alarmId = intent.getIntExtra("id", 0);
+     // Anti-duplicate: cancela LocalNotification backup
+     NotificationManagerCompat.from(context).cancel(alarmId + BACKUP_OFFSET);
+     // ... resto fluxo atual (audit, startForegroundService, etc)
+   }
+   ```
+
+3. **Edge `daily-alarm-sync`** + **`dose-trigger-handler`**: REMOVER skip DnD/criticalAlarm-off em payload constructor. Mandar TODAS doses 48h horizon (filtrar futuras + pending apenas). DosyMessagingService.handleScheduleAlarms recebe payload + delega ao helper Java unificado que decide alarme vs backup vs tray.
+
+4. **Java** `DosyMessagingService` + `DoseSyncWorker` chamam novo helper `AlarmScheduler.scheduleDoseFromPayload(ctx, doseJson, prefs)` (lê prefs SharedPreferences pra decidir branch).
+
+5. **`dose-trigger-handler`** `SIX_HOURS_MS` → `48 * 60 * 60 * 1000` (cobre B-09).
+
+6. **`notifications/channels.js`** — confirmar `doses_v2` aceita sound default + `allowWhileIdle: true` no schedule (cobertura Doze).
+
+**Critério aceitação (validação device S25 Ultra):**
+
+- ✅ Build verde + AAB novo (vc 63+) gerado
+- 🧪 **Cenário 01.A** criticalAlarm ON + DnD OFF + dose +5min via app foreground → alarme nativo full-screen toca + LocalNotification backup NÃO toca (cancelada por AlarmReceiver). audit log: `branch=alarm_plus_push source_scenario=app_open horizon=48`
+- 🧪 **Cenário 01.B** criticalAlarm ON + DnD 22:00-07:00 + dose 23:30 → LocalNotification tray COM vibração leve (200ms) dispara, sem fullscreen, sem som — alarme nativo NÃO agendado. audit log: `branch=push_dnd horizon=48`
+- 🧪 **Cenário 01.C** criticalAlarm OFF + dose +5min → LocalNotification tray dispara (sem fullscreen, com sound default) — alarme nativo NÃO agendado. audit log: `branch=push_critical_off horizon=48`
+- 🧪 **Cenário 01.D** Toggle Alarme Crítico ON → OFF em Ajustes → todos alarmes nativos pendentes cancelados imediatamente + recadastrados como push. SQL `SELECT count(*) FROM alarm_audit_log WHERE source_scenario='toggle_critical_off'` > 0
+- 🧪 **Cenário 02.A** dose +30min agendada → user marca Tomada → alarme + push backup cancelados em <2s local + outros aparelhos cancelam em <5s via FCM. audit log: 2 entries (`action=cancelled` source=`js_scheduler` + source=`java_fcm_received` outro device)
+- 🧪 **Cenário 02.B** dose Tomada → user Desfazer → alarme + push reagendados. audit log: `branch=alarm_plus_push source_scenario=undo_dose`
+- 🧪 **Cenário 02.C** cuidador compartilha paciente da mãe → mãe e cuidador têm app instalado → dose mãe 8h → ambos recebem alarme cheio 8h em paralelo (decisão 6). Cuidador marca Tomada → alarme da mãe cancela <5s
+- 🧪 **Cenário 02.D** cuidador com DnD próprio 22-7h + dose paciente compartilhado 23h → cuidador recebe SÓ push silencioso vibração leve; paciente recebe baseado nas configs próprias. audit log: `branch=push_dnd` no aparelho cuidador
+- 🧪 **Cenário 03.A** Force-stop app + WorkManager dispara 6h depois → device acorda <10s + cancelAlarmes + reagenda + dorme. audit log: `source=java_worker source_scenario=workmanager_6h`
+- 🧪 **Cenário 03.B** Cron 5am BRT dispara → device recebe FCM data → DosyMessagingService agenda. audit log: `source=edge_daily_sync source_scenario=cron_5am` + `source=java_fcm_received source_scenario=fcm_schedule_alarms`
+- 🧪 **Cenário 03.C** Samsung One UI 7 SEM battery whitelist + dose +30min app fechado → OEM pode matar AlarmManager; LocalNotification backup dispara como fallback ~30min depois (sem fullscreen mas COM vibração + som). User vê notif na barra
+- 🧪 **Boot recovery** device desligado pós-dose 8h → boot 9h30 → BootReceiver detecta `(now - triggerAt) < 2h` (decisão 2 — 2h margem) → dispara alarme imediato com flag `lateRecovery=true`. AlarmActivity mostra badge "Atrasada — celular estava desligado"
+- 🧪 **Limite dinâmico** seed test user com 200 doses/dia × 2 dias = 400 doses × 2 itens = 800 (acima limit). Helper compute horizon = 24h (decisão 8). audit log: `horizon=24` registrado
+- 🧪 **Audit consistência** SQL `SELECT count(*) FROM alarm_audit_log WHERE source IN ('js_scheduler','java_worker','java_fcm_received','edge_daily_sync','edge_trigger_handler') AND created_at > now() - interval '1 day' GROUP BY source` — todos 5 sources com entries
+- 🧪 **Admin panel** `admin.dosymed.app/alarm-audit` carrega + filtros funcionam + modal detalhes mostra metadata `branch + horizon + source_scenario` legível
+
+**Risco / mitigações:**
+
+| Risco | Severidade | Mitigação | Decisão |
+|---|---|---|---|
+| AlarmReceiver falha cancel backup → user vê notif duplicada | 🟡 Médio | Adicionar delay 60s ao backup (`scheduleAt + 60s`) → janela cancel maior | Aceitável — melhor receber 2× que perder dose |
+| LocalNotifications 500 items limit estourado | 🟢 Baixo | Janela 48h × 4 doses/dia × 2 = 384 < 500. Edge case 50+ doses/dia raro | Documentar limit + chunking se atingir |
+| OEM mata LocalNotification também | 🟡 Médio | LocalNotification.schedule `allowWhileIdle: true` força exact mesmo Doze. Battery whitelist (#207) cobre maioria | Aceitável vs ZERO alert hoje |
+| Refactor introduz regressão arquitetura crítica | 🟠 Alto | Validar TODOS cenários A-G device antes merge master + rollback plan via revert commit | OK — testes E2E obrigatórios |
+| Storm de cancel/reschedule durante migration | 🟢 Baixo | Próximo rescheduleAll faz cancelAll + reschedule from scratch ✅ já existe. Migration transparente | OK |
+
+**Egress save:** Zero (LocalNotification local) — fix elimina silêncio sem custo.
+
+**Não-escopo (vai pra items separados):**
+
+- B-04 (drift Edge daily-alarm-sync source) → #217
+- B-05 (drift migrations locais) → #218
+- B-07 (hash JS↔Java) → #220 (mas é blocker pra #215 — fazer antes ou junto)
+- B-08 (cancel_alarms server-side) → #221
+
+**Referências:**
+
+- Auditoria seção §4.1 [B-01, B-02], §4.3 [B-09] — `contexto/auditoria/2026-05-13-alarme-push-auditoria.md`
+- ROADMAP §6.7 #215
+
+---
+
+### #216 — Limpar Edge `notify-doses` ref tabela DROPADA `dose_alarms_scheduled`
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-03]
+- **Esforço:** 30min
+- **Dependências:** decisão #219 (manter Edge ou deletar)
+
+**Problema:**
+
+Edge `notify-doses` v19 ACTIVE (deployed) tem função `shouldSkipPushBecauseAlarmScheduled` em `supabase/functions/notify-doses/index.ts:187-203` que consulta `medcontrol.dose_alarms_scheduled`. Tabela foi DROPADA em migration `drop_dose_alarms_scheduled_v0_2_2_4` (#214). Se cron for re-scheduled OU alguém invocar Edge manualmente (verify_jwt:false) → resposta 500 com erro PostgreSQL `42P01 relation "medcontrol.dose_alarms_scheduled" does not exist`.
+
+**Solução:**
+
+```ts
+// supabase/functions/notify-doses/index.ts
+
+// REMOVER função inteira:
+// async function shouldSkipPushBecauseAlarmScheduled(doseId, userId) { ... }
+
+// REMOVER call site (linha ~287):
+// if (criticalAlarmOn && await shouldSkipPushBecauseAlarmScheduled(dose.id, userId)) {
+//   skipped++;
+//   continue;
+// }
+```
+
+**Critério aceitação:**
+
+- ✅ `notify-doses/index.ts` sem referências `dose_alarms_scheduled`
+- ✅ `supabase functions deploy notify-doses` OK
+- 🧪 `curl -X POST .../functions/v1/notify-doses` retorna 200 (não 500)
+- 🧪 Smoke test: cron re-scheduled 1 min com 1 user teste → push tray entregue OK
+
+**Risco / mitigação:** zero — código órfão (cron unscheduled).
+
+---
+
+### #217 — Drift repo↔prod: commit source `daily-alarm-sync` + `_shared/auditLog.ts`
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-04]
+- **Esforço:** 15min
+
+**Problema:**
+
+`supabase/functions/daily-alarm-sync/index.ts` (211 linhas) + `supabase/functions/_shared/auditLog.ts` (64 linhas) deployed v2 ACTIVE mas **ausentes do repo local**. Drift impede: code review via PR, gitleaks scan, eslint, busca grep, rollback via git revert. Próximo `supabase functions deploy daily-alarm-sync` daria push de pasta vazia → função perdida em prod.
+
+**Solução:**
+
+```bash
+cd supabase/functions
+supabase functions download daily-alarm-sync
+# Confirmar arquivos criados:
+# supabase/functions/daily-alarm-sync/index.ts
+# supabase/functions/_shared/auditLog.ts (se download incluir)
+
+# Plus garantir _shared/auditLog.ts (já que daily-alarm-sync importa):
+# Se não veio no download, baixar via Supabase MCP get_edge_function ou copiar conteúdo capturado em auditoria (já temos source completo)
+
+git add supabase/functions/daily-alarm-sync/ supabase/functions/_shared/auditLog.ts
+git commit -m "chore(supabase): commit daily-alarm-sync + auditLog source local (drift fix #217)"
+```
+
+**Critério aceitação:**
+
+- ✅ `supabase/functions/daily-alarm-sync/index.ts` existe local
+- ✅ `supabase/functions/_shared/auditLog.ts` existe local
+- ✅ gitleaks scan passa (sem secrets hardcoded)
+- 🧪 `supabase functions deploy daily-alarm-sync` mantém mesmo SHA256 (`a35a205cc152ad029bf8ba7b7d445672df6b94eadabf1f41090b568b6ef1c9c9`)
+
+**Risco / mitigação:** zero — apenas captura de estado atual.
+
+---
+
+### #218 — Drift migrations locais: restaurar 15 migrations faltantes
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-05]
+- **Esforço:** 1-2h
+
+**Problema:**
+
+Filesystem `supabase/migrations/` tem 21 arquivos; DB tem 22 migrations aplicadas. Faltam locais (~15 migrations cobrindo trabalho v0.2.0.4 → v0.2.2.4):
+
+```
+20260504133842_add_patient_photo_thumb
+20260504134036_replace_photo_thumb_with_photo_version
+20260504163656_drop_signup_plus_promo_trigger
+20260505133325_144_jwt_claim_tier_auth_hook
+20260505133542_146_cron_audit_log_extend_continuous
+20260507175920_admin_db_stats_function
+20260507191028_add_tester_grade_to_subscriptions_v2
+20260513121915_fix_update_treatment_schedule_timezone        # #209
+20260513122009_data_fix_doses_timezone_v0_2_1_9_retry        # #209
+20260513122442_cron_jobs_v0_2_1_9_daily_alarm_sync           # #209
+20260513132459_create_alarm_audit_log_v0_2_2_0               # #210
+20260513132512_cron_alarm_audit_cleanup_v0_2_2_0             # #210
+20260513161435_grant_service_role_audit_tables               # #211
+20260513161809_grant_authenticated_audit_tables              # #211
+20260513191154_drop_dose_alarms_scheduled_v0_2_2_4           # #214
+```
+
+Impacto: rebuild local schema impossível, ADR history perdido, hot-swap dev/prod inviável.
+
+**Solução:**
+
+```bash
+# Opção A: pull oficial
+supabase db pull
+
+# Opção B: por migration via Supabase MCP execute_sql + manual SQL extraction
+# Pra cada migration faltante, consultar supabase_migrations.schema_migrations + recriar arquivo .sql
+```
+
+**Critério aceitação:**
+
+- ✅ `ls supabase/migrations/ | wc -l` = 36 (21 atuais + 15 faltantes)
+- ✅ `supabase migration list` mostra paridade local↔remote
+- ✅ Diff `supabase db diff --schema medcontrol` vazio
+
+**Risco / mitigação:** zero — apenas captura de estado.
+
+---
+
+### #219 — Deletar/proteger Edges órfãs `notify-doses` + `schedule-alarms-fcm`
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-06]
+- **Esforço:** 15min
+- **Dependências:** decisão escopo — se `notify-doses` for caminho fallback DnD (alternativa ao #215), manter; senão deletar
+
+**Problema:**
+
+Edges `notify-doses` v19 + `schedule-alarms-fcm` v15 ainda ACTIVE deployed mas crons unscheduled em #209. Ambas `verify_jwt:false` = públicas anônimas. Atacante pode invocar manualmente → consume quota Supabase + FCM (potencial abuse).
+
+**Solução (2 opções, decisão user):**
+
+**Opção A — Deletar** (se #215 implementado e cobre toda funcionalidade):
+```bash
+supabase functions delete notify-doses
+supabase functions delete schedule-alarms-fcm
+# Plus DELETE source local
+rm -rf supabase/functions/notify-doses supabase/functions/schedule-alarms-fcm
+git add supabase/functions/ && git commit -m "chore(supabase): remove edges órfãs notify-doses + schedule-alarms-fcm (#219)"
+```
+
+**Opção B — Proteger** (manter como fallback):
+```bash
+# Set verify_jwt: true em config.toml + redeploy
+# Plus restringir uso via service_role only no cron
+```
+
+**Critério aceitação:**
+
+- ✅ `supabase functions list` mostra estado decidido (deletadas OU ambas com `verify_jwt:true`)
+- 🧪 `curl -X POST .../functions/v1/notify-doses` retorna 404 (deletado) OU 401 (auth required)
+
+**Risco / mitigação:** Opção A irreversível mas backup via git. Opção B custo zero mas mantém código órfão (B-03 ainda precisa fix).
+
+---
+
+### #220 — Alinhar hash `AlarmScheduler.idFromString` Java com `% 2147483647`
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-07]
+- **Esforço:** 30min
+- **Dependências:** **bloqueador implícito de #215** — IDs determinísticos cross-source são premissa
+
+**Problema:**
+
+`src/services/notifications/prefs.js:41-48` `doseIdToNumber`:
+```js
+function doseIdToNumber(uuid) {
+  let h = 0
+  for (let i = 0; i < uuid.length; i++) {
+    h = ((h << 5) - h) + uuid.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h) % 2147483647   // <-- mod aplicado
+}
+```
+
+`android/app/src/main/java/com/dosyapp/dosy/plugins/criticalalarm/AlarmScheduler.java:156-166` `idFromString`:
+```java
+public static int idFromString(String s) {
+  int h = 0;
+  for (int i = 0; i < s.length(); i++) {
+    h = ((h << 5) - h) + s.charAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);   // <-- SEM mod
+}
+```
+
+Pra strings longas, `Math.abs(h)` pode produzir valor `> 2147483647 / 2` → JS mod faz wrap, Java não. IDs cross-source divergem → mesma dose pode ter alarme agendado **duas vezes** (JS path id_A, FCM/Worker path id_B). Probabilidade baixa (UUID v4 hashes raramente estouram) mas não-zero.
+
+**Solução:**
+
+```java
+// AlarmScheduler.java:156-166
+public static int idFromString(String s) {
+  int h = 0;
+  for (int i = 0; i < s.length(); i++) {
+    h = ((h << 5) - h) + s.charAt(i);
+    h |= 0;
+  }
+  return Math.abs(h) % 2147483647;  // alinha JS
+}
+```
+
+**Critério aceitação:**
+
+- ✅ Java alinhado com JS
+- 🧪 Teste unitário cross-source: gerar 1000 UUID v4 random, calcular hash em ambos lados, asserir igualdade
+- 🧪 Device runtime vc 63+: logcat audit `alarm_audit_log` mostra mesmo `groupId` em sources `js_scheduler` + `java_fcm_received` + `java_worker` pra mesma dose
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| Storm transitória durante migration | 🟢 Baixo | Alarmes agendados pré-fix com ID-Java old continuam agendados; novos com ID-novo. Próximo `rescheduleAll` faz `cancelAll` → reset. 1 storm ~5s |
+| Alarmes duplicados durante janela 30s pós-deploy | 🟢 Baixo | AlarmReceiver dispara 2× alarme: 1× ID-old, 1× ID-novo. User vê 2× notif. Aceitável (raro) |
+
+**Egress save:** Zero. Storm transitória pequena.
+
+---
+
+### #221 — Implementar `cancel_alarms` server-side em `dose-trigger-handler`
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟠 P1
+- **Origem:** [Auditoria 2026-05-13 B-08]
+- **Esforço:** 2-3h
+
+**Problema:**
+
+Java pronto: `DosyMessagingService.handleCancelAlarms` recebe `data.action=cancel_alarms` com `doseIds` CSV; `AlarmScheduler.cancelAlarm` cancela cada por groupId hash. Mas **nenhuma Edge envia esse FCM data hoje**:
+
+- `dose-trigger-handler:100-101`: `type==='DELETE'` → response `'skipped: delete'`
+- Trigger DB `dose_change_notify` filtra `WHEN NEW.status='pending' AND NEW.scheduledAt>now` → UPDATE com `status` mudando `pending→done/skipped/cancelled` NÃO firea trigger
+- DELETE em doses (via deleteTreatment cascade) NÃO firea trigger
+
+Impacto: user marca dose done/skipped/deletada → alarme local continua agendado → toca no horário com payload SharedPreferences cached (dose já não-pending). User vê alarme fantasma da dose que ele acabou de marcar.
+
+**Mitigação atual:** próxima abertura do app, `rescheduleAll` cancela tudo + re-agenda só pending. Cobre user que abre app antes do alarme tocar.
+
+**Solução completa:**
+
+1. **Expandir trigger DB** pra firear também em DELETE + status change:
+   ```sql
+   -- supabase/migrations/YYYYMMDDHHmmss_expand_dose_change_notify_to_delete_and_status_change.sql
+   DROP TRIGGER IF EXISTS dose_change_notify ON medcontrol.doses;
+   CREATE TRIGGER dose_change_notify
+     AFTER INSERT OR UPDATE OR DELETE
+     ON medcontrol.doses
+     FOR EACH ROW
+     EXECUTE FUNCTION medcontrol.notify_dose_change();
+
+   -- Atualizar função pra incluir OLD em DELETE
+   CREATE OR REPLACE FUNCTION medcontrol.notify_dose_change()
+   RETURNS TRIGGER AS $$
+   DECLARE
+     edge_url text := 'https://guefraaqbkcehofchnrc.supabase.co/functions/v1/dose-trigger-handler';
+     payload jsonb;
+   BEGIN
+     payload := jsonb_build_object(
+       'type', TG_OP,
+       'table', TG_TABLE_NAME,
+       'schema', TG_TABLE_SCHEMA,
+       'record', CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END,
+       'old_record', CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) ELSE NULL END
+     );
+     PERFORM net.http_post(...);
+     RETURN COALESCE(NEW, OLD);
+   END;
+   $$;
+   ```
+
+2. **Estender `dose-trigger-handler`** pra disparar `cancel_alarms`:
+   ```ts
+   if (type === 'DELETE') {
+     await sendFcmData(deviceToken, {
+       action: 'cancel_alarms',
+       doseIds: record.id  // single ID
+     })
+     return
+   }
+
+   if (type === 'UPDATE' && old_record.status === 'pending' && record.status !== 'pending') {
+     // pending → done/skipped/cancelled
+     await sendFcmData(deviceToken, {
+       action: 'cancel_alarms',
+       doseIds: record.id
+     })
+     return
+   }
+   ```
+
+**Auditoria egress:**
+
+- +1 FCM data por mark/skip/undo dose. Hoje ~5 marks/day/user típico = 5 FCMs/dia/user. Trivial vs alarm-storm pré-#211 (1000+/dia).
+- AlarmScheduler.cancelAlarm idempotente — cancelar ID inexistente = no-op.
+
+**Critério aceitação:**
+
+- ✅ Trigger DB firea em INSERT/UPDATE/DELETE
+- ✅ `dose-trigger-handler` envia `cancel_alarms` em DELETE + UPDATE status change
+- 🧪 Device runtime: marcar dose done → ~2s depois logcat `cancel_alarms: requested=1 cancelled=1`
+- 🧪 Device runtime: deletar tratamento com 5 doses → 5 logcats `cancel_alarms` ou 1 com CSV
+- 🧪 alarm_audit_log mostra `action=cancelled` source `java_fcm_received` com metadata `reason=fcm_cancel_action`
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| Storm FCM se cron extend_continuous_treatments insere 100s doses em batch + cada um trigger | 🟡 Médio | Trigger atual já filtra `WHEN status='pending' AND scheduledAt>now` — INSERT OK. DELETE só acontece em deleteTreatment cascade (raro user-driven). UPDATE status só em mark/skip (raro) | OK |
+| Device offline durante mark → FCM perdido → alarme zombie ainda dispara | 🟡 Médio | Próximo `rescheduleAll` cancela. AlarmActivity ao abrir verifica status server e fecha se não-pending (defesa extra futuro) | Aceitável |
+
+**Egress save:** Negativo (+5 FCM/dia/user) — mas elimina alarme zombie UX problem.
+
+---
+
+### #222 — Consolidar 3 channels Android (→ 2) + cleanup código morto AlarmActivity
+
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** 🟡 P2
+- **Origem:** [Auditoria 2026-05-13 B-10 + B-11]
+- **Esforço:** 2-3h
+
+**Problema (2 sub-bugs combinados):**
+
+**B-10 — 3 channel IDs sobrepostos:**
+
+| Channel ID | Criado por | Sound | Uso |
+|---|---|---|---|
+| `doses_v2` | LocalNotifications + AlarmActivity.postPersistentNotification (código morto) | default ringtone | Push tray + LocalNotifications |
+| `doses_critical` | AlarmService.ensureChannel | **NULL** (MediaPlayer drives) | Notif FG service |
+| `doses_critical_v2` | AlarmReceiver.ensureChannel | `dosy_alarm.mp3` USAGE_ALARM | Fallback fullScreenIntent |
+
+Channel `doses_critical` (sound null) órfão no device users pré-#203. Sem cleanup migration.
+
+**B-11 — Código morto AlarmActivity (~150 linhas):**
+
+- `mediaPlayer`, `vibrator` campos instance (linhas 67-68) — nunca atribuídos
+- `startAlarmSound` (685), `startVibration` (703) — funções nunca chamadas
+- `postPersistentNotification` (774), `cancelPersistentNotification` (820) — postPersistent nunca chamada, cancel chamada mas no-op
+- `CHANNEL_ID = "doses_v2"` (63), `NOTIF_ID_OFFSET = 100_000_000` (64) — usados só no morto
+
+**Solução:**
+
+1. **Consolidar pra 2 canais:**
+   - `dosy_tray` (substitui `doses_v2`) — push tray + LocalNotifications + AlarmReceiver fallback (sound `dosy_alarm.mp3` USAGE_ALARM via channel)
+   - `dosy_critical` (mantém ID `doses_critical` por compatibilidade) — AlarmService FG (sound null, MediaPlayer drives)
+
+2. **Migration code em app boot:**
+   ```java
+   // MainActivity.onCreate ou app boot init
+   NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+   if (nm.getNotificationChannel("doses_v2") != null) {
+     nm.deleteNotificationChannel("doses_v2");
+   }
+   if (nm.getNotificationChannel("doses_critical_v2") != null) {
+     nm.deleteNotificationChannel("doses_critical_v2");
+   }
+   ```
+
+3. **Deletar código morto AlarmActivity:**
+   - Linhas 63 (CHANNEL_ID), 64 (NOTIF_ID_OFFSET)
+   - Linhas 67-68 (mediaPlayer, vibrator fields)
+   - Função `startAlarmSound` (676-700)
+   - Função `startVibration` (703-712)
+   - Função `postPersistentNotification` (774-818)
+   - Função `cancelPersistentNotification` (820-822)
+   - Função `ensureChannel` (824-840)
+   - Call site `cancelPersistentNotification()` em `handleAction` (linhas 736, 738, 742)
+
+**Critério aceitação:**
+
+- ✅ Build verde + AAB gerado
+- ✅ AlarmActivity.java ~150 linhas removidas
+- ✅ Channel migration code roda 1× per install fresh
+- 🧪 Device runtime: `adb shell dumpsys notification` mostra 2 canais (dosy_tray, dosy_critical), sem doses_v2 OR doses_critical_v2
+- 🧪 Settings > Apps > Dosy > Notifications mostra apenas 2 categorias canal
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| User config personalizada no canal antigo perdida | 🟢 Baixo | Canais antigos não tinham sound customizável por user. Defaults preservados | Aceitável |
+| Channel sound migration race | 🟢 Baixo | Channel ID novo → sistema cria fresh com sound novo | OK |
+
+**Egress save:** Zero. Apenas higiene.
+
+---
+
+### #223 — Deletar `usePushNotifications.js` deprecated re-export
+
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** 🟢 P3
+- **Origem:** [Auditoria 2026-05-13 B-12]
+- **Esforço:** 5min
+
+**Problema:**
+
+`src/hooks/usePushNotifications.js` é arquivo único de 7 linhas:
+```js
+/**
+ * @deprecated — Use `useNotifications` from '../services/notifications'.
+ */
+export { useNotifications as usePushNotifications } from '../services/notifications'
+```
+
+`App.jsx` ainda importa via `from '../hooks/usePushNotifications'`. Indireção desnecessária.
+
+**Solução:**
+
+```diff
+-import { usePushNotifications } from './hooks/usePushNotifications'
++import { useNotifications } from './services/notifications'
+
+// App.jsx renomear destructuring:
+-const { subscribe, isNative, supported, scheduleDoses } = usePushNotifications()
++const { subscribe, isNative, supported, scheduleDoses } = useNotifications()
+
+// Deletar arquivo:
+// rm src/hooks/usePushNotifications.js
+```
+
+**Critério aceitação:**
+
+- ✅ `src/hooks/usePushNotifications.js` removido
+- ✅ Build verde
+- ✅ `grep -r "usePushNotifications" src/` zero resultados (exceto comentários)
+
+**Risco / mitigação:** zero.
+
+---
+
+### #224 — BootReceiver dispara alarme atrasado se <2h margem
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** [Auditoria 2026-05-13 B-13]
+- **Esforço:** 30min
+
+**Problema:**
+
+`BootReceiver.java:41`:
+```java
+if (triggerAt <= now) continue; // alarme passou enquanto device estava off
+```
+
+Cenário: user dorme com phone off, boota às 9am, dose era 8am. BootReceiver pula esse alarme. Dose fica `pending` no DB sem alerta visual até user abrir app. Janela cega 0-Nh.
+
+**Solução:**
+
+```java
+// BootReceiver.java — decisão user 2026-05-13: margem 2h (era 1h proposta)
+private static final long LATE_ALARM_GRACE_MS = 2 * 60 * 60 * 1000L; // 2h
+
+for (int i = 0; i < arr.length(); i++) {
+  JSONObject obj = arr.getJSONObject(i);
+  long triggerAt = obj.getLong("triggerAt");
+
+  if (triggerAt <= now) {
+    // Se passou recentemente (<1h), dispara imediato com label "atrasada"
+    if ((now - triggerAt) < LATE_ALARM_GRACE_MS) {
+      Intent alarmIntent = new Intent(ctx, AlarmReceiver.class);
+      alarmIntent.putExtra("id", obj.getInt("id"));
+      alarmIntent.putExtra("doses", obj.optJSONArray("doses").toString());
+      alarmIntent.putExtra("lateRecovery", true);  // flag pra AlarmActivity mostrar "atrasada"
+      ctx.sendBroadcast(alarmIntent);
+      // não re-agenda (já passou)
+    }
+    continue;
+  }
+
+  // ... resto fluxo atual (re-agenda futuro)
+}
+```
+
+**Critério aceitação:**
+
+- ✅ Build verde
+- 🧪 Device runtime: agendar dose +30min, force-stop app, reiniciar device com phone off > 5min, boot pós-horário dose → alarme dispara imediato com label "atrasada"
+- 🧪 Edge case: dose >2h atrás → skip silencioso (fluxo atual mantido)
+- 🧪 alarm_audit_log mostra `action=fired_received` source `java_boot_receiver` com metadata `lateRecovery=true`
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| Boot pós-horário trigger storm 10+ alarmes simultâneos | 🟢 Baixo | Limit GRACE_MS = 1h. Doses 4×/dia × 1h = max 1 atrasada. AlarmActivity já suporta multi-dose group | OK |
+| User vê alarme "atrasada" sem entender contexto | 🟢 Baixo | UI flag `lateRecovery` adiciona badge "Atrasada — alarme não disparou no horário" | Documentar |
+
+**Egress save:** Zero.
+
+---
+
+### #225 — FCM payload `daily-alarm-sync` chunking 4KB
+
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** 🟡 P2
+- **Origem:** [Auditoria 2026-05-13 B-14]
+- **Esforço:** 1-2h
+
+**Problema:**
+
+`daily-alarm-sync/index.ts:145-149`:
+```ts
+const data = {
+  action: 'schedule_alarms',
+  doses: JSON.stringify(dosesPayload),  // <-- sem chunking
+  syncedAt: now.toISOString(),
+  horizonHours: String(HORIZON_HOURS)
+}
+```
+
+FCM v1 data message limit é 4KB. Para user com 50+ doses/dia e 48h horizon (limit 1000 doses no fetch), payload pode passar 4KB → FCM responde `INVALID_ARGUMENT` → device não recebe agendamento.
+
+**Solução:**
+
+```ts
+const CHUNK_SIZE = 30  // ~3KB safe margin
+
+const chunks: any[][] = []
+for (let i = 0; i < dosesPayload.length; i += CHUNK_SIZE) {
+  chunks.push(dosesPayload.slice(i, i + CHUNK_SIZE))
+}
+
+for (const sub of userSubs) {
+  const sendPromises = chunks.map((chunk, idx) =>
+    sendFcmDataWithRetry(sub.deviceToken, {
+      action: 'schedule_alarms',
+      doses: JSON.stringify(chunk),
+      syncedAt: now.toISOString(),
+      horizonHours: String(HORIZON_HOURS),
+      chunkIndex: String(idx),
+      chunkTotal: String(chunks.length)
+    })
+  )
+  const results = await Promise.all(sendPromises)
+  results.forEach(ok => ok ? totalDevicesOk++ : totalDevicesFail++)
+}
+```
+
+DosyMessagingService já é idempotente (mesmo groupKey hash) → safe receber múltiplas mensagens chunks.
+
+**Critério aceitação:**
+
+- ✅ Edge testada com 100 doses payload — não responde `INVALID_ARGUMENT`
+- 🧪 Device runtime: user com 60 doses/48h → recebe 2 FCM data messages → AlarmScheduler agenda 60 alarmes (não duplica via idFromString idempotência)
+- 🧪 alarm_audit_log mostra 60 `action=scheduled` source `edge_daily_sync`
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| Race entre chunks (chunk 2 chega antes chunk 1) | 🟢 Baixo | AlarmScheduler idempotente — ordem não importa | OK |
+| 1 chunk falha, outros OK → set parcial agendado | 🟢 Baixo | Retry exponential já existe (`sendFcmDataWithRetry`). Worker 6h pega gap | OK |
+
+**Egress save:** Zero líquido — múltiplas FCMs pequenas vs 1 grande. Mas alguns users hoje pode estar perdendo 100% dos alarmes (silent INVALID_ARGUMENT) — fix recupera entrega.
+
+---
+
+### #226 — Padronizar `device_id` UUID cross-source em `alarm_audit_log`
+
+- **Categoria:** ✨ MELHORIAS
+- **Prioridade:** 🟢 P3
+- **Origem:** [Auditoria 2026-05-13 B-15]
+- **Esforço:** 1-2h
+
+**Problema:**
+
+Três semânticas distintas pra coluna `alarm_audit_log.device_id`:
+
+| Source | Valor gravado |
+|---|---|
+| `js_scheduler` (JS) | UUID v4 estável (`SharedPreferences "device_id"` via `getDeviceId()`) |
+| `java_worker` / `java_fcm_received` / `java_alarm_scheduler` (Java) | `Build.MODEL + " (" + Build.MANUFACTURER + ")"` — **não-único** entre devices iguais |
+| `edge_daily_sync` (Edge) | `sub.deviceToken.slice(-12)` — últimos 12 chars FCM token |
+
+Análise cross-source dificultada — admin panel `/alarm-audit` não consegue filtrar por device consistente.
+
+**Solução:**
+
+1. **Java `AlarmAuditLogger.java:106`:**
+   ```java
+   // Antes:
+   row.put("device_id", android.os.Build.MODEL + " (" + android.os.Build.MANUFACTURER + ")");
+
+   // Depois:
+   String deviceId = sp.getString("device_id", null);
+   row.put("device_id", deviceId);  // UUID v4 já gravado por CriticalAlarmPlugin.setSyncCredentials
+   ```
+
+2. **Edge `daily-alarm-sync` `_shared/auditLog.ts`** (consequência #217 commit):
+   - Adicionar coluna `device_id` em `medcontrol.push_subscriptions` (UUID estável, populado pelo JS no upsert via RPC)
+   - Edge lê de `push_subscriptions.device_id` ao buscar subs
+   - Metadata pode incluir `device_token_tail: sub.deviceToken.slice(-12)` pra debug
+
+3. **Migration:**
+   ```sql
+   ALTER TABLE medcontrol.push_subscriptions ADD COLUMN device_id text;
+   -- Backfill pra rows existentes: gerar UUID v4 (devices vão atualizar pós próximo subscribe)
+   UPDATE medcontrol.push_subscriptions SET device_id = gen_random_uuid()::text WHERE device_id IS NULL;
+   ```
+
+4. **JS `fcm.js`** RPC `upsert_push_subscription` passa `device_id` parâmetro:
+   ```js
+   const deviceId = await getDeviceId()  // mesmo do plugin
+   await supabase.schema('medcontrol').rpc('upsert_push_subscription', {
+     p_device_token: deviceToken,
+     p_device_id: deviceId,
+     // ...
+   })
+   ```
+
+**Critério aceitação:**
+
+- ✅ Migration aplicada — `push_subscriptions.device_id` coluna existe
+- ✅ Java + Edge usam mesma fonte UUID
+- 🧪 admin `/alarm-audit` filtra por device_id mostra eventos consistentes cross-source
+
+**Risco / mitigação:**
+
+| Risco | Severidade | Mitigação |
+|---|---|---|
+| Rows audit pré-fix têm device_id incompatível | 🟢 Baixo | Aceitar — só dados históricos. Filter no admin "post-#226" | Documentar cutoff date |
+| RPC `upsert_push_subscription` precisa update assinatura | 🟢 Baixo | Adicionar `p_device_id` parâmetro opcional, backward-compat | OK |
+
+**Egress save:** Zero. Higiene observabilidade.
