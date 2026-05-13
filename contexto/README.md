@@ -429,14 +429,14 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** `release/v0.2.2.4` em curso (vc 62). Master @ `v0.2.2.3`. Cleanup dose_alarms_scheduled tabela órfã #214.
+**Versão atual:** Master @ `v0.2.2.4` (vc 62, tag `v0.2.2.4`). E2E validado Dosy-Dev Studio Run. AAB Internal Testing pendente.
 **Vercel prod:** `https://dosymed.app/` (sincronizado master)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
-**Release em curso:**
-- 🚧 v0.2.2.4 — **#214 P2 CLEANUP** Remove tabela `dose_alarms_scheduled` órfã (consumers — cron notify-doses-1min + schedule-alarms-fcm-6h — foram removidos em #209). 3 mudanças: (a) `scheduler.js` remove upsert + imports unused (`supabase`, `hasSupabase`, `getDeviceId`); (b) `DosyMessagingService.java` remove método `reportAlarmScheduled()` + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. `alarm_audit_log` v0.2.2.0 substitui rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia removidos.
-
 **Última release fechada master:**
+- ✅ v0.2.2.4 (2026-05-13) — **#214 P2 CLEANUP** Remove tabela `dose_alarms_scheduled` órfã (consumers — cron notify-doses-1min + schedule-alarms-fcm-6h — foram removidos em #209). 3 mudanças: (a) `scheduler.js` remove upsert + imports unused (`supabase`, `hasSupabase`, `getDeviceId`); (b) `DosyMessagingService.java` remove método `reportAlarmScheduled()` + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. `alarm_audit_log` v0.2.2.0 substitui rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia removidos. Validado Dosy-Dev Studio Run vc 62 — fluxo E2E 4 caminhos confirmados (JS App.jsx + Edge dose-trigger-handler + FCM + DosyMessagingService + AlarmScheduler nativo + audit log multi-source). Mark/skip/undo doses validados. Tag `v0.2.2.4`. AAB Internal Testing pendente.
+
+**Release anterior fechada master:**
 - ✅ v0.2.2.3 (2026-05-13) — **#213 P1 STORM REAL ROOT CAUSE** Logcat Dosy-Dev confirmou storm 60s exato vinha de `Dashboard.jsx:99` `setInterval setTick(60s)` flipando `todayDoses` ref → useEffect Dashboard:222 chamando `scheduleDoses(todayDoses)` → cancelAll + reagenda 9 alarmes idênticos cada 60s. App.jsx top-level signature guard v0.2.2.2 OK mas Dashboard caller sem guard era o storm. Fix: remove Dashboard caller completo (1 linha + import). App.jsx top-level cobre full 48h window. Validado Dosy-Dev Studio Run vc 61 — storm eliminado. Tag `v0.2.2.3`. AAB Internal Testing pendente.
 
 **Release anterior fechada master:**
