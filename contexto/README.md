@@ -429,9 +429,22 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** Master @ `v0.2.2.4` (vc 62 Internal Testing 2026-05-13 16:48 BRT, tag `v0.2.2.4`). E2E validado Dosy-Dev Studio Run + AAB Play Console publicado.
-**Vercel prod:** `https://dosymed.app/` (sincronizado master)
+**Versão atual:** Branch `release/v0.2.3.0` ativa (rebranded `v0.2.3.1` logicamente — vc 64, vn 0.2.3.1). AAB pendente Play Console + validação device 5 FLUXOS Validar.md.
+**Master @ tag:** `v0.2.2.4` (vc 62 Internal Testing 2026-05-13 16:48 BRT). Última release fechada estável.
+**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.2.4)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
+
+**Em curso — Release v0.2.3.1 (2026-05-13):**
+- 🚧 **Refactor Plano A + Fixes B/C** após 4 auditorias linha-por-linha revelando 4 root causes arquiteturais não cobertos por #215-#226 v0.2.3.0. 7 blocos implementados em 8 commits + bump vc 63→64:
+  - RC-1 dual tray race resolvido (Plano A unifica em Java M2 via `CriticalAlarm.scheduleTrayGroup`)
+  - RC-2 prefs fire time resolvido (Fix B AlarmReceiver consulta SharedPrefs antes de fire)
+  - RC-3 cancel group hash resolvido (Fix C reconstroi `sortedDoseIds.join('|')`)
+  - RC-4 5 paths coordenação resolvida (PendingIntent única AlarmManager)
+  - A-01..A-05 + B-01..B-03 fixados
+  - 23 itens código morto removidos
+- Backend: Edge dose-trigger-handler v20 (BATCH handlers) + 3 migrations applied
+- Docs: `docs/alarm-scheduling-v0.2.3.1.md` novo + `contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md` consolidado
+- Pendente: AAB vc 64 + validar 5 FLUXOS A-E em S25 Ultra (Validar.md)
 
 **Última release fechada master:**
 - ✅ v0.2.2.4 (2026-05-13) — **#214 P2 CLEANUP** Remove tabela `dose_alarms_scheduled` órfã (consumers — cron notify-doses-1min + schedule-alarms-fcm-6h — foram removidos em #209). 3 mudanças: (a) `scheduler.js` remove upsert + imports unused (`supabase`, `hasSupabase`, `getDeviceId`); (b) `DosyMessagingService.java` remove método `reportAlarmScheduled()` + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. `alarm_audit_log` v0.2.2.0 substitui rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia removidos. Validado Dosy-Dev Studio Run vc 62 — fluxo E2E 4 caminhos confirmados (JS App.jsx + Edge dose-trigger-handler + FCM + DosyMessagingService + AlarmScheduler nativo + audit log multi-source). Mark/skip/undo doses validados. AAB vc 62 publicado Internal Testing 2026-05-13 16:48 BRT. Tag `v0.2.2.4`.

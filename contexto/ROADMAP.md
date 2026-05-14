@@ -150,19 +150,47 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.0` (em curso) — código completo Etapas 1-5 refactor #215 mergeado, AAB pendente + validação device S25 Ultra 13 cenários CHECKLIST §#215. Commits: `21f8f32` bump vc 62→63 + `e45d1d5` Etapa 1 helper unificado + `04bbbef` Etapa 2 scheduler.js + `a2eb69c` Etapas 3+4+5 backend + Java + cleanup. Pushed `origin/release/v0.2.3.0`. Master @ `v0.2.2.4` FECHADA (vc 62 Internal Testing publicado).
+**Branch ativa:** `release/v0.2.3.0` (renomeada logicamente como v0.2.3.1) — refactor completo Alarme + Push aplicado em 7 blocos (commits `0ef1eac` → `ba346ce`). Bump vc 63→64 + versionName 0.2.3.0→0.2.3.1. Pushed `origin/release/v0.2.3.0`. AAB pendente + validação device 5 FLUXOS A-E (Validar.md).
 
-**Pendentes release v0.2.3.0:**
-- 🧪 Build AAB Android Studio vc 63 + valida 13 cenários device S25 Ultra (CHECKLIST §#215)
+**Pendentes release v0.2.3.1:**
+- 🧪 Build AAB Android Studio vc 64 + valida 5 FLUXOS LONGOS device S25 Ultra (Validar.md FLUXO-A a FLUXO-E + audit)
 - 🚀 Upload Play Console Internal Testing
-- 🏷️ Tag git `v0.2.3.0` + merge master + Vercel deploy prod
-- 📦 Updates log v0.2.3.0 fechada
+- 🏷️ Tag git `v0.2.3.1` + merge master + Vercel deploy prod
+- 📦 Updates log v0.2.3.1 fechada
 
-**Auditoria 2026-05-13 — Relatório completo:**
-- `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (563 linhas)
-- Cobertura: 11 arquivos Java native + JS services/notifications/* + criticalAlarm + mutationRegistry + hooks + App.jsx + Dashboard + PermissionsOnboarding + Settings + 6 Edge Functions + 22 migrations + Manifest + capacitor.config + build.gradle + sw.js
-- 19 bugs/riscos priorizados P0→P3 + análise impacto egress + storm risk
-- 12 NOVOS items #215-#226 detalhados em CHECKLIST com pseudocódigo + critérios aceitação + 13 cenários validação device S25 Ultra
+**Refactor v0.2.3.1 — 4 auditorias + 7 blocos implementação (2026-05-13):**
+
+- `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (auditoria 1, 563 linhas — bugs B-01 a B-15)
+- `contexto/auditoria/2026-05-13-alarme-push-auditoria-FUNDO.md` (auditoria 2 — 4 root causes arquiteturais RC-1 a RC-4)
+- `contexto/auditoria/2026-05-13-alarme-push-codigo-morto.md` (auditoria 3 — 23 itens código morto)
+- `contexto/auditoria/2026-05-13-alarme-push-releitura-linha-por-linha.md` (auditoria 4 — 5 achados A-XX + 3 B-XX)
+- `contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md` (consolidado + plano 7 blocos)
+- `docs/alarm-scheduling-v0.2.3.1.md` (novo doc fluxos atualizados, substitui `docs/archive/alarm-scheduling-shadows-pre-v0.2.3.1.md`)
+
+**7 blocos implementados (8 commits):**
+- **Bloco 1** `0ef1eac` — Cleanup código morto (23 itens: 2 Edge stubs + DB orphan + 6 JS exports + 2 Java methods + 4 imports + 5 comentários estale)
+- **Bloco 2** `f8596c7` — Fix B-01 (AlarmReceiver cancela PendingIntent tray pendente em AlarmManager) + A-03 (snooze persist via `AlarmScheduler.persistSnoozedAlarm`)
+- **Bloco 3** `88d7f17` — **Plano A** unifica tray em Java M2 (`CriticalAlarm.scheduleTrayGroup` + `cancelTrayGroup` + `cancelAllTrays` + BootReceiver re-agenda trays persistidas). Elimina RC-1 (dual tray race) + RC-4
+- **Bloco 4** `c8554c3` — **Fix B** AlarmReceiver consulta SharedPrefs `dosy_user_prefs` no fire time → re-rota se prefs mudaram (RC-2)
+- **Bloco 5** `0bb8070` — **Fix C** + A-02: trigger statement-level batch UPDATE/DELETE + cancelFutureDoses UPDATE (não DELETE) + handleCancelAlarms reconstrói hash multi-dose group + Edge BATCH_UPDATE/BATCH_DELETE deployed v20 + migration `add_cancelled_status_to_doses`
+- **Bloco 6** `5ab1af6` — A-05 consolida SharedPrefs (1 namespace `dosy_user_prefs`) + A-01 doc recomputeOverdue
+- **Bloco 7** `0cfef80` — A-04 janela useDoses unificada (-30d/+60d App+Dashboard) + B-02 DailySummary 1 query + docs novos
+- **Bump** `ba346ce` — v0.2.3.1 vc 64
+
+**Backend deployed via MCP:**
+- Edge `dose-trigger-handler` v20 ACTIVE (BATCH_UPDATE/BATCH_DELETE handlers)
+- Edge `daily-alarm-sync` v4 ACTIVE
+- Migration `cleanup_orphan_dose_notifications_v0_2_3_1` (DROP tabela + unschedule crons órfãos)
+- Migration `dose_change_batch_trigger_v0_2_3_1` (trigger statement-level batch)
+- Migration `add_cancelled_status_to_doses_v0_2_3_1`
+
+**Root causes resolvidos:**
+- **RC-1** dual tray race (Plano A unifica em M2 Java)
+- **RC-2** prefs fire time (Fix B AlarmReceiver consulta SharedPrefs)
+- **RC-3** cancel group hash multi-dose (Fix C reconstroi sortedDoseIds.join('|'))
+- **RC-4** 5 paths sem coordenação (convergem PendingIntent única)
+- **A-01..A-05** documentados/consolidados
+- **B-01..B-03** B-01 PendingIntent cancel + B-02 DailySummary 1 query + B-03 cosmético skip
 
 **Última release fechada master — v0.2.2.4 (2026-05-13):**
 - ✅ **#214 P2 CLEANUP** — Remove `dose_alarms_scheduled` tabela órfã. Tabela criada em #083.7 (v0.1.7.2) pra `notify-doses-1min` cron skipar push se alarme local já agendado. Cron foi UNSCHEDULED em #209 (v0.2.1.9). Tabela ficou sem consumers leitores — apenas 2 writers (JS scheduler + Java FCM) gerando ~13k upserts/dia/device sem proposto. `alarm_audit_log` v0.2.2.0 substitui rastreio. Mudanças: (a) `src/services/notifications/scheduler.js` remove upsert + imports unused; (b) `DosyMessagingService.java` remove `reportAlarmScheduled()` method + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. Economia ~5-10 MB/dia/device egress. Validado Dosy-Dev Studio Run vc 62 com mark/skip/undo doses + E2E 4 caminhos. AAB vc 62 publicado Internal Testing 2026-05-13 16:48 BRT. Tag `v0.2.2.4`.
@@ -601,6 +629,8 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 > Counter atualizado release v0.2.1.4 (2026-05-06). Recompor exato via `grep -cE "^- (✅\|⏳\|🚨\|🚫) " ROADMAP.md` ou auditoria semestral cross-ref ROADMAP × CHECKLIST. Origem itens: [Plan.md] · [Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD].
 
 ### 6.3 Δ Release log (cronológico)
+
+**Δ 2026-05-13 release/v0.2.3.1 (refactor Plano A + Fixes B/C):** **#refactor-v0.2.3.1** rebranding logico v0.2.3.0 → v0.2.3.1 (bump vc 63→64, vn 0.2.3.0→0.2.3.1). 7 blocos implementados em 8 commits após 4 auditorias linha-por-linha descobrindo problemas arquiteturais não cobertos por #215-#226. **4 root causes resolvidos:** RC-1 dual tray race (Plano A unifica em Java M2 via `CriticalAlarm.scheduleTrayGroup` substituindo `LocalNotifications.schedule` foreground path), RC-2 prefs fire time (Fix B AlarmReceiver consulta SharedPrefs dosy_user_prefs antes de fire → re-rota dinâmica), RC-3 cancel group hash multi-dose (Fix C DosyMessagingService reconstroi `sortedDoseIds.join('|')`), RC-4 5 paths sem coordenação (convergem PendingIntent única). **5 achados A-XX + 3 B-XX consolidados:** A-01 doc recomputeOverdue, A-02 cancelFutureDoses UPDATE batch (não DELETE 360 trigger fires), A-03 snooze persist em reboot, A-04 janela useDoses unificada -30d/+60d, A-05 1 namespace SharedPrefs, B-01 AlarmReceiver cancela PendingIntent (não só notif visível), B-02 DailySummary 1 query. **Cleanup 23 itens código morto** removidos. **Backend deployed:** Edge dose-trigger-handler v20 BATCH_UPDATE/BATCH_DELETE handlers + 3 migrations (cleanup_orphan_dose_notifications + dose_change_batch_trigger + add_cancelled_status_to_doses). Counter inalterado (refactor sem novos items #).
 
 **Δ 2026-05-13 release/v0.2.3.0 RODADA 2 (P1 fechamento total Alarme + Push):** +**#216 #218 #219 #226 código mergeado** — 4 items extras pra fechar TODOS P1 órfãos pré-launch. Mudanças: (a) **#216 + #219** Edges `notify-doses` v20 + `schedule-alarms-fcm` v16 deployed como stubs 410 Gone deprecated + verify_jwt:true (sources locais substituídos + endpoints anônimos protegidos); (b) **#218** 15 migrations DB restauradas locais via Supabase MCP `execute_sql schema_migrations.statements` — paridade local↔remote restaurada (add_patient_photo_thumb, replace_photo_thumb_with_photo_version, drop_signup_plus_promo_trigger, 144_jwt_claim_tier_auth_hook, 146_cron_audit_log_extend_continuous, admin_db_stats_function, add_tester_grade_to_subscriptions_v2, fix_update_treatment_schedule_timezone, data_fix_doses_timezone_v0_2_1_9_retry, cron_jobs_v0_2_1_9_daily_alarm_sync, create_alarm_audit_log_v0_2_2_0, cron_alarm_audit_cleanup_v0_2_2_0, grant_service_role_audit_tables, grant_authenticated_audit_tables, drop_dose_alarms_scheduled_v0_2_2_4); (c) **#226** migration `add_device_id_uuid_to_push_subscriptions_v0_2_3_0` applied + RPC `upsert_push_subscription` estendida pra aceitar `p_device_id_uuid` + Java `AlarmAuditLogger` lê SharedPreferences `device_id` UUID estável (não mais `MODEL (MANUFACTURER)`) + JS `fcm.js` + `useAuth.jsx` passam UUID via RPC. Counter: 142 fechados + 12 código mergeado (TODOS items #215-#226 da auditoria fechados em código — pendente validação device S25 Ultra).
 

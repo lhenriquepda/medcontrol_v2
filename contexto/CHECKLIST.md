@@ -6,6 +6,58 @@
 
 ---
 
+## 🚧 Refactor em curso v0.2.3.1
+
+### #refactor-v0.2.3.1 — Plano A + Fixes B/C alarme/push (consolidação 4 auditorias)
+- **Status:** 🚧 Código mergeado release/v0.2.3.0 (8 commits, bump vc 63→64). AAB + validação device pendentes.
+- **Origem:** 4 auditorias linha-por-linha 2026-05-13 revelando 4 root causes arquiteturais não cobertos por #215-#226 v0.2.3.0
+- **Esforço:** ~10h dedicadas (4 auditorias + 7 blocos implementação)
+- **Branch:** `release/v0.2.3.0` (renomeada logicamente v0.2.3.1)
+- **Commits (cronológico):**
+  - `0ef1eac` Bloco 1 — Cleanup código morto (23 itens: 2 Edge stubs + DB orphan + 6 JS exports + 2 Java methods + 4 imports + 5 comentários estale + canal `doses_v2` loop fix)
+  - `f8596c7` Bloco 2 — Fix B-01 (AlarmReceiver cancela PendingIntent tray pendente AlarmManager, não só notif visível) + A-03 (snooze persist via `AlarmScheduler.persistSnoozedAlarm`)
+  - `88d7f17` Bloco 3 — **Plano A** unifica tray em Java M2 (`CriticalAlarm.scheduleTrayGroup` + `cancelTrayGroup` + `cancelAllTrays` substituem `LocalNotifications.schedule` foreground path; BootReceiver re-agenda trays persistidas em novo namespace `dosy_tray_scheduled` SharedPrefs). Elimina RC-1 + RC-4
+  - `c8554c3` Bloco 4 — **Fix B** AlarmReceiver consulta SharedPrefs `dosy_user_prefs` antes de fire → re-rota dinâmica se prefs mudaram entre agendamento e fire (RC-2)
+  - `0bb8070` Bloco 5 — **Fix C** + A-02: trigger statement-level batch UPDATE/DELETE (1 fire vs N row-level) + `cancelFutureDoses` UPDATE status='cancelled' (não DELETE) + `DosyMessagingService.handleCancelAlarms` reconstroi `sortedDoseIds.join('|')` hash multi-dose group + Edge dose-trigger-handler v20 deployed BATCH_UPDATE/BATCH_DELETE handlers + migration `add_cancelled_status_to_doses` (constraint expand)
+  - `5ab1af6` Bloco 6 — A-05 consolida SharedPrefs (1 namespace `dosy_user_prefs`, remove duplicação `dosy_sync_credentials.critical_alarm_enabled`) + A-01 doc recomputeOverdue
+  - `0cfef80` Bloco 7 — A-04 janela useDoses unificada -30d/+60d (App.jsx + Dashboard compartilham cache TanStack) + B-02 DailySummary 1 query unificada + docs novos `docs/alarm-scheduling-v0.2.3.1.md`
+  - `ba346ce` Bump v0.2.3.1 (package.json + android/app/build.gradle vc 63→64, vn 0.2.3.0→0.2.3.1)
+- **Backend deployed via MCP:**
+  - Edge `dose-trigger-handler` v20 ACTIVE (BATCH_UPDATE/BATCH_DELETE handlers — agrupa old_rows por (ownerId,patientId), envia 1 FCM por device com CSV completo)
+  - Migration `20260514000000_cleanup_orphan_dose_notifications_v0_2_3_1` (DROP `dose_notifications` 150 rows órfãs + UNSCHEDULE notify-doses-1min + schedule-alarms-fcm-6h idempotente)
+  - Migration `20260514001000_dose_change_batch_trigger_v0_2_3_1` (trigger statement-level batch substitui FOR EACH ROW pra UPDATE/DELETE; INSERT continua per-row)
+  - Migration `20260514001500_add_cancelled_status_to_doses_v0_2_3_1` (CHECK constraint aceita 'cancelled')
+- **Root causes resolvidos:**
+  - **RC-1** dual tray race — Plano A unifica em Java M2. Antes: foreground path usava Capacitor LocalNotifications M3 + FCM path usava Java TrayNotificationReceiver M2 coexistindo no mesmo `groupId+BACKUP_OFFSET` PendingIntent slot mas Components diferentes → 2 PendingIntents pendentes AlarmManager → 2 fires
+  - **RC-2** prefs fire time — Fix B AlarmReceiver consulta SharedPrefs antes de startForegroundService. Branch dinâmico (alarm vs tray vs DnD-tray) re-decidido se prefs mudaram entre agendamento e fire
+  - **RC-3** cancel group hash multi-dose — Fix C reconstroi hash `sortedDoseIds.join('|')` ao receber CSV cancel_alarms FCM. Antes single-dose hashes não cobriam multi-dose group
+  - **RC-4** 5 paths sem coordenação — Plano A converge tudo em PendingIntent única AlarmManager. Idempotência via mesmo `groupId` agora funciona cross-source
+- **Achados A-XX + B-XX consolidados:**
+  - A-01 doc recomputeOverdue side-effect (dosesSignature flippa quando dose passa horário → scheduleDoses storm-protected via throttle 30s)
+  - A-02 cancelFutureDoses UPDATE batch (não DELETE 360 trigger fires)
+  - A-03 snooze persist via SharedPreferences pra sobreviver reboot
+  - A-04 janela useDoses unificada -30d/+60d App+Dashboard (cache compartilhado)
+  - A-05 1 namespace SharedPrefs `dosy_user_prefs` (remove legacy `dosy_sync_credentials.critical_alarm_enabled`)
+  - B-01 AlarmReceiver cancela tray PendingIntent (não só notif visível NotificationManagerCompat.cancel)
+  - B-02 DailySummary 1 query unificada (não 2 com status filter separados)
+  - B-03 cosmético `android:showOnLockScreen` atributo inválido manifest (skip)
+- **Cleanup 23 itens código morto removidos:** Edge functions `notify-doses` + `schedule-alarms-fcm` (deletadas repo, deploys 410 Gone stubs continuam até `supabase functions delete` manual), JS exports órfãos (`scheduleCriticalAlarm`, `cancelGroup`, `loadScheduledState`, `logAuditEvent`, `isIgnoringBatteryOptimizations`, `updateAccessToken`, `setCriticalAlarmEnabled`), re-exports notifications/index.js, CHANNEL_ID='doses_v2' constant + branch channels.js, 4 imports não usados AlarmScheduler.java, 5 comentários estale, Java methods `CriticalAlarmPlugin.schedule` + `updateAccessToken` + `setCriticalAlarmEnabled`, AlarmActionReceiver.NOTIF_ID_OFFSET morto, EVENTS analytics órfãs (ALARM_FIRED, ALARM_DISMISSED, ALARM_SNOOZED, NOTIFICATION_DISMISSED, DOSE_OVERDUE_DISMISSED)
+- **AlarmReceiver fallback canal renomeado:** `doses_critical_v2` → `dosy_alarm_fallback` (antes MainActivity.cleanupLegacyChannels deletava cada boot → AlarmReceiver.ensureChannel recriava = loop)
+- **Docs atualizados:**
+  - `docs/alarm-scheduling-v0.2.3.1.md` NOVO (fluxos end-to-end completos + arquivos críticos + validação cenários)
+  - `docs/archive/alarm-scheduling-shadows-pre-v0.2.3.1.md` (obsoleto arquivado)
+  - `contexto/Validar.md` substituído cenários granulares 230.1.1-230.5.2 por 5 FLUXOS LONGOS A-E + audit (cada fluxo executa várias ações em sequência cobrindo múltiplos cenários)
+- **Aceitação device (Validar.md FLUXO-A a FLUXO-E + audit):**
+  - FLUXO-A: 3 branches alarm/tray/DnD-tray + B-01 cancel race + Fix B re-rota
+  - FLUXO-B: snooze 10min + reboot 5min depois → alarme horário snoozed
+  - FLUXO-C: pause tratamento 90d → 1 FCM batch (não 360) + multi-dose group cancela corretamente + caregiver compartilhado respeita DnD próprio
+  - FLUXO-D: reboot re-agenda alarmes + trays + WorkManager 6h + cron 5am
+  - FLUXO-E: logout deleta push_subscription + Device A para de receber FCM
+  - audit: alarm_audit_log popula 5 sources após FLUXOS A-E
+- **Detalhe completo:** [`contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md`](auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md) (consolidado das 4 auditorias + plano 7 blocos)
+
+---
+
 ## 🔴 P0 — Bloqueadores de Produção
 
 ### #001 — Adicionar auth check de admin em `send-test-push` Edge Function
