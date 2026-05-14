@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
@@ -57,6 +58,31 @@ public class AlarmReceiver extends BroadcastReceiver {
         int alarmId = intent.getIntExtra("id", 0);
         String dosesJson = intent.getStringExtra("doses");
         if (dosesJson == null) dosesJson = "[]";
+
+        // v0.2.3.1 Fix B — re-rota fire time. AlarmReceiver consulta prefs ATUAIS
+        // antes de fire alarme fullscreen. Se prefs mudaram entre agendamento e fire
+        // (ex: user toggle Critical OFF, DnD ON), re-rota pra TrayNotificationReceiver
+        // sem disparar AlarmService (sem som, sem fullscreen).
+        SharedPreferences spPrefs = context.getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        boolean criticalOn = spPrefs.getBoolean("critical_alarm_enabled", true);
+        boolean dndOn = spPrefs.getBoolean("dnd_enabled", false);
+        String dndStart = spPrefs.getString("dnd_start", "23:00");
+        String dndEnd = spPrefs.getString("dnd_end", "07:00");
+        long nowMs = System.currentTimeMillis();
+        boolean inDnd = dndOn && AlarmScheduler.isInDndWindowPublic(nowMs, dndStart, dndEnd);
+        if (!criticalOn || inDnd) {
+            String channelId = inDnd ? AlarmScheduler.TRAY_DND_CHANNEL_ID : AlarmScheduler.TRAY_CHANNEL_ID;
+            android.util.Log.d("AlarmReceiver", "Fix B re-rota fire time: criticalOn=" + criticalOn
+                + " inDnd=" + inDnd + " channel=" + channelId);
+            // Re-rota direto pra TrayNotificationReceiver sem AlarmService.
+            Intent trayIntent = new Intent(context, TrayNotificationReceiver.class);
+            trayIntent.putExtra("notifId", alarmId);
+            trayIntent.putExtra("doses", dosesJson);
+            trayIntent.putExtra("channelId", channelId);
+            context.sendBroadcast(trayIntent);
+            if (wl.isHeld()) wl.release();
+            return;
+        }
 
         // Audit: log fired event per dose (debug observability)
         try {

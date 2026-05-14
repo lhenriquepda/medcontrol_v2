@@ -323,6 +323,13 @@ public class AlarmScheduler {
     }
 
     /**
+     * v0.2.3.1 Fix B — public exposure pra AlarmReceiver consultar fire time.
+     */
+    public static boolean isInDndWindowPublic(long epochMs, String dndStart, String dndEnd) {
+        return isInDndWindow(epochMs, dndStart, dndEnd);
+    }
+
+    /**
      * Verifica se epoch ms cai dentro janela DnD (interpretada em America/Sao_Paulo).
      * Suporta janelas que cruzam meia-noite (ex: 23:00 → 07:00).
      */
