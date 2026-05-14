@@ -99,5 +99,28 @@ public class BootReceiver extends BroadcastReceiver {
 
             prefs.edit().putString(KEY_SCHEDULED, remaining.toString()).apply();
         } catch (JSONException ignored) {}
+
+        // v0.2.3.1 Plano A — re-agenda trays persistidos (TrayNotificationReceiver).
+        // Antes: BootReceiver re-agendava apenas alarmes nativos (AlarmReceiver).
+        // Trays Capacitor LocalNotifications perdidas em reboot. Agora trays Java
+        // são re-agendadas + persisted em dosy_tray_scheduled.
+        try {
+            JSONArray trayEntries = AlarmScheduler.loadPersistedTrayEntries(ctx);
+            JSONArray remainingTrays = new JSONArray();
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < trayEntries.length(); i++) {
+                JSONObject e = trayEntries.getJSONObject(i);
+                long triggerAt = e.optLong("triggerAt", 0);
+                int notifId = e.optInt("notifId", -1);
+                if (notifId < 0 || triggerAt <= 0) continue;
+                if (triggerAt <= now) continue; // tray passou — skip silent
+                JSONArray doses = e.optJSONArray("doses");
+                String channelId = e.optString("channelId", "dosy_tray");
+                if (doses == null) doses = new JSONArray();
+                AlarmScheduler.scheduleTrayGroup(ctx, notifId, triggerAt, doses, channelId);
+                remainingTrays.put(e);
+            }
+            AlarmScheduler.saveTrayEntries(ctx, remainingTrays);
+        } catch (Exception ignored) {}
     }
 }

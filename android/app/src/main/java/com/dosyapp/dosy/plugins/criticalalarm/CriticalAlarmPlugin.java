@@ -45,6 +45,77 @@ public class CriticalAlarmPlugin extends Plugin {
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
 
+    /**
+     * v0.2.3.1 Plano A — scheduleTrayGroup: agenda tray notification puro Java
+     * (sem alarme fullscreen). Substitui Capacitor LocalNotifications.schedule
+     * pra trays de dose. JS scheduler.js refactor unifica em Java pra eliminar
+     * dual tray race (M2 + M3 coexistindo).
+     */
+    @PluginMethod
+    public void scheduleTrayGroup(PluginCall call) {
+        Integer id = call.getInt("id");
+        String at = call.getString("at");
+        String channelId = call.getString("channelId", "dosy_tray");
+        JSArray dosesArr = call.getArray("doses");
+        if (id == null || at == null || dosesArr == null) {
+            call.reject("missing required: id, at, doses[]");
+            return;
+        }
+        long triggerAt;
+        try {
+            triggerAt = java.time.Instant.parse(at).toEpochMilli();
+        } catch (Exception e) {
+            call.reject("invalid 'at': " + at);
+            return;
+        }
+        if (triggerAt <= System.currentTimeMillis()) {
+            call.reject("'at' must be in the future");
+            return;
+        }
+        JSONArray doses = new JSONArray();
+        for (int i = 0; i < dosesArr.length(); i++) {
+            try {
+                JSONObject src = dosesArr.getJSONObject(i);
+                JSONObject d = new JSONObject();
+                d.put("doseId", src.optString("doseId", ""));
+                d.put("medName", src.optString("medName", "Dose"));
+                d.put("unit", src.optString("unit", ""));
+                d.put("patientName", src.optString("patientName", ""));
+                d.put("scheduledAt", src.optString("scheduledAt", ""));
+                doses.put(d);
+            } catch (JSONException ignored) {}
+        }
+        AlarmScheduler.scheduleTrayGroup(getContext(), id, triggerAt, doses, channelId);
+        JSObject ret = new JSObject();
+        ret.put("scheduled", true);
+        ret.put("id", id);
+        ret.put("count", doses.length());
+        call.resolve(ret);
+    }
+
+    /**
+     * v0.2.3.1 Plano A — cancelTrayGroup: cancela tray PendingIntent + remove persisted.
+     */
+    @PluginMethod
+    public void cancelTrayGroup(PluginCall call) {
+        Integer id = call.getInt("id");
+        if (id == null) {
+            call.reject("id required");
+            return;
+        }
+        AlarmScheduler.cancelTrayGroup(getContext(), id);
+        call.resolve();
+    }
+
+    /**
+     * v0.2.3.1 Plano A — cancelAllTrays: rescheduleAll cleanup helper.
+     */
+    @PluginMethod
+    public void cancelAllTrays(PluginCall call) {
+        AlarmScheduler.cancelAllTrays(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void scheduleGroup(PluginCall call) {
         Integer id = call.getInt("id");

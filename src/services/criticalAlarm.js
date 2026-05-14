@@ -39,6 +39,38 @@ export async function scheduleCriticalAlarmGroup({ id, at, doses }) {
   })
 }
 
+/**
+ * v0.2.3.1 Plano A — bridge pra Java AlarmScheduler.scheduleTrayGroup.
+ * Substitui Capacitor LocalNotifications.schedule pra trays de dose (foreground path).
+ * Daily summary continua em Capacitor LocalNotifications (caso especial repeat=day).
+ * Elimina dual tray race (M2 Java + M3 Capacitor coexistindo).
+ */
+export async function scheduleTrayGroup({ id, at, channelId, doses }) {
+  if (!isCriticalAlarmAvailable()) return null
+  return CriticalAlarm.scheduleTrayGroup({
+    id,
+    at,
+    channelId: channelId || 'dosy_tray',
+    doses: doses.map(d => ({
+      doseId: d.doseId || d.id || '',
+      medName: d.medName || 'Dose',
+      unit: d.unit || '',
+      patientName: d.patientName || '',
+      scheduledAt: d.scheduledAt || ''
+    }))
+  })
+}
+
+export async function cancelTrayGroup(id) {
+  if (!isCriticalAlarmAvailable() || id == null) return
+  return CriticalAlarm.cancelTrayGroup({ id })
+}
+
+export async function cancelAllTrays() {
+  if (!isCriticalAlarmAvailable()) return
+  return CriticalAlarm.cancelAllTrays()
+}
+
 export async function cancelCriticalAlarm(id) {
   if (!isCriticalAlarmAvailable()) return
   return CriticalAlarm.cancel({ id })

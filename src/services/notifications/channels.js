@@ -4,7 +4,7 @@
  */
 
 import { isNative } from './prefs'
-import { cancelAllCriticalAlarms } from '../criticalAlarm'
+import { cancelAllCriticalAlarms, cancelAllTrays } from '../criticalAlarm'
 
 // #215 v0.2.3.0 — canais unificados pra refactor scheduler 3-cenários.
 // `dosy_tray`     — push tray normal (Alarme Crítico OFF) com som default + vibração
@@ -85,7 +85,12 @@ export const LEGACY_CHANNELS_TO_DELETE = ['doses_v2', 'doses_critical_v2']
  */
 export async function cancelAll() {
   if (!isNative) return
+  // v0.2.3.1 Plano A — cancelAll cobre 3 fontes:
+  //  1) Critical alarms (AlarmReceiver PendingIntents) via CriticalAlarm.cancelAll
+  //  2) Tray notifications Java (TrayNotificationReceiver) via cancelAllTrays
+  //  3) Capacitor LocalNotifications (daily summary apenas pós-refactor)
   try { await cancelAllCriticalAlarms() } catch (e) { console.warn('[Notif] cancelAll alarms:', e?.message) }
+  try { await cancelAllTrays() } catch (e) { console.warn('[Notif] cancelAll trays:', e?.message) }
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
     const pending = await LocalNotifications.getPending()

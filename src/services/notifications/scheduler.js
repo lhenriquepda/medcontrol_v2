@@ -13,6 +13,7 @@
 import * as Sentry from '@sentry/react'
 import {
   scheduleCriticalAlarmGroup,
+  scheduleTrayGroup,
   isCriticalAlarmAvailable,
   checkCriticalAlarmEnabled
 } from '../criticalAlarm'
@@ -134,26 +135,31 @@ async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = n
   let criticalOffCount = 0
   const newState = {}
 
+  // v0.2.3.1 Plano A — trays agendados em Java (TrayNotificationReceiver) via
+  // CriticalAlarm.scheduleTrayGroup. Capacitor LocalNotifications usado APENAS
+  // pra daily summary (caso especial repeat=day).
+  // Elimina dual tray race RC-1 (M2 Java + M3 Capacitor coexistindo).
   for (const [, group] of groups) {
     const payload = buildSchedulePayload(group, prefs)
     if (!payload) continue
 
     const { branch, groupId, alarmPayload, trayNotifPayload, metadata } = payload
+    const trayAt = trayNotifPayload.schedule.at
+    const trayChannelId = trayNotifPayload.channelId
 
-    // Branch alarm_plus_push: agenda alarme nativo + tray backup co-agendado
+    // Branch alarm_plus_push: alarme nativo + tray backup co-agendado (Java M2)
     if (branch === 'alarm_plus_push') {
       if (!criticalEnabledNative) {
-        // Permission negada (canScheduleExact=false) — degradate gracefully pra só push
-        console.warn('[Notif] alarm_plus_push solicitado mas permission negada — fallback pra só push tray')
-        localNotifs.push(trayNotifPayload)
-        trayScheduled++
+        // Permission negada (canScheduleExact=false) — degrade pra só tray Java
+        console.warn('[Notif] alarm_plus_push solicitado mas permission negada — fallback pra só tray Java')
+        try {
+          await scheduleTrayGroup({ id: groupId, at: trayAt, channelId: 'dosy_tray', doses: group })
+          trayScheduled++
+        } catch (e) { console.warn('[Notif] tray schedule fail:', e?.message) }
         for (const dose of group) {
           auditAccumulator.push({
-            action: 'scheduled',
-            doseId: dose.id,
-            scheduledAt: dose.scheduledAt,
-            patientName: dose.patientName || null,
-            medName: dose.medName || null,
+            action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+            patientName: dose.patientName || null, medName: dose.medName || null,
             metadata: { ...metadata, branch: 'push_critical_off', degraded: true, reason: 'cannot_schedule_exact', source_scenario: sourceScenario, horizon: horizonHours }
           })
         }
@@ -164,53 +170,50 @@ async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = n
         alarmsScheduled += group.length
       } catch (e) {
         console.error('[Notif] alarm schedule fail at groupId', groupId, ':', e?.message || e)
-        // Continua agendando tray backup mesmo se alarme falhar
       }
-      localNotifs.push(trayNotifPayload)
-      newState[groupId] = `${trayNotifPayload.schedule.at}|${branch}|${horizonHours}`
+      // Tray backup via Java (id = groupId + BACKUP_OFFSET, channel dosy_tray)
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+      } catch (e) { console.warn('[Notif] tray backup schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
       for (const dose of group) {
         auditAccumulator.push({
-          action: 'scheduled',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
           metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
         })
       }
     }
 
-    // Branch push_dnd: só tray (canal dosy_tray_dnd vibração leve)
+    // Branch push_dnd: só tray Java (canal dosy_tray_dnd vibração leve)
     else if (branch === 'push_dnd') {
-      localNotifs.push(trayNotifPayload)
-      trayScheduled++
-      dndCount += group.length
-      newState[groupId] = `${trayNotifPayload.schedule.at}|${branch}|${horizonHours}`
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+        trayScheduled++
+        dndCount += group.length
+      } catch (e) { console.warn('[Notif] tray DnD schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
       for (const dose of group) {
         auditAccumulator.push({
-          action: 'scheduled',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
           metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
         })
       }
     }
 
-    // Branch push_critical_off: só tray (canal dosy_tray)
+    // Branch push_critical_off: só tray Java (canal dosy_tray)
     else if (branch === 'push_critical_off') {
-      localNotifs.push(trayNotifPayload)
-      trayScheduled++
-      criticalOffCount += group.length
-      newState[groupId] = `${trayNotifPayload.schedule.at}|${branch}|${horizonHours}`
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+        trayScheduled++
+        criticalOffCount += group.length
+      } catch (e) { console.warn('[Notif] tray critical-off schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
       for (const dose of group) {
         auditAccumulator.push({
-          action: 'scheduled',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
           metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
         })
       }

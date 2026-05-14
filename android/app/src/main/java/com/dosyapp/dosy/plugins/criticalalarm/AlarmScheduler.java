@@ -36,6 +36,9 @@ public class AlarmScheduler {
     private static final String TAG = "AlarmScheduler";
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
+    // v0.2.3.1 Plano A — namespace separado pra tray pendentes (BootReceiver re-agenda).
+    private static final String TRAY_PREFS = "dosy_tray_scheduled";
+    private static final String KEY_TRAY_SCHEDULED = "tray_entries";
 
     // #215 v0.2.3.0 — paridade com src/services/notifications/unifiedScheduler.js
     // Fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
@@ -150,8 +153,18 @@ public class AlarmScheduler {
     }
 
     /**
+     * v0.2.3.1 Plano A — public entry pra JS scheduler.js refactor unificar tray em Java.
+     * Substitui Capacitor LocalNotifications.schedule pra trays de dose (foreground path).
+     * Daily summary continua em Capacitor LocalNotifications (caso especial repeat=day).
+     */
+    public static void scheduleTrayGroup(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
+        scheduleTrayNotification(ctx, notifId, triggerAtMs, doses, channelId);
+    }
+
+    /**
      * Agenda LocalNotification tray via PendingIntent (mesmo pattern Capacitor LocalNotifications usa).
      * Channel `dosy_tray` tem sound default + vibração; `dosy_tray_dnd` tem só vibração leve.
+     * v0.2.3.1 — persiste em dosy_tray_scheduled SharedPrefs pra BootReceiver re-agendar.
      */
     private static void scheduleTrayNotification(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
         ensureTrayChannel(ctx, channelId);
@@ -174,6 +187,108 @@ public class AlarmScheduler {
             Log.w(TAG, "tray schedule failed (permission): " + e.getMessage());
             am.set(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
         }
+
+        // v0.2.3.1 Plano A — persiste pra BootReceiver re-agendar pos reboot
+        persistTrayEntry(ctx, notifId, triggerAtMs, doses, channelId);
+    }
+
+    /**
+     * v0.2.3.1 — persiste tray entry em SharedPrefs separado (dosy_tray_scheduled).
+     * BootReceiver lê + re-agenda. Idempotente: mesmo notifId substitui entry.
+     */
+    private static void persistTrayEntry(Context ctx, int notifId, long triggerAt, JSONArray doses, String channelId) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+            JSONArray current = existing != null ? new JSONArray(existing) : new JSONArray();
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("notifId", -1) != notifId) filtered.put(e);
+            }
+            JSONObject entry = new JSONObject();
+            entry.put("notifId", notifId);
+            entry.put("triggerAt", triggerAt);
+            entry.put("doses", doses);
+            entry.put("channelId", channelId);
+            filtered.put(entry);
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).apply();
+        } catch (JSONException e) {
+            Log.w(TAG, "persistTrayEntry error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * v0.2.3.1 — BootReceiver lê todos tray entries persistidos.
+     */
+    public static JSONArray loadPersistedTrayEntries(Context ctx) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+        if (existing == null) return new JSONArray();
+        try {
+            return new JSONArray(existing);
+        } catch (JSONException e) {
+            return new JSONArray();
+        }
+    }
+
+    /**
+     * v0.2.3.1 — BootReceiver atualiza tray entries (remove expirados).
+     */
+    public static void saveTrayEntries(Context ctx, JSONArray entries) {
+        ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_TRAY_SCHEDULED, entries.toString()).apply();
+    }
+
+    /**
+     * v0.2.3.1 — remove tray entry pos cancel.
+     */
+    private static void removePersistedTrayEntry(Context ctx, int notifId) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+            if (existing == null) return;
+            JSONArray current = new JSONArray(existing);
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("notifId", -1) != notifId) filtered.put(e);
+            }
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).apply();
+        } catch (JSONException ignored) {}
+    }
+
+    /**
+     * v0.2.3.1 — cancela tray PendingIntent + remove persisted entry.
+     */
+    public static void cancelTrayGroup(Context ctx, int notifId) {
+        try {
+            NotificationManagerCompat.from(ctx).cancel(notifId);
+            Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+            PendingIntent pi = PendingIntent.getBroadcast(
+                ctx, notifId, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) am.cancel(pi);
+            pi.cancel();
+        } catch (Exception ignored) {}
+        removePersistedTrayEntry(ctx, notifId);
+    }
+
+    /**
+     * v0.2.3.1 — cancela TODOS trays pendentes (rescheduleAll cleanup).
+     */
+    public static void cancelAllTrays(Context ctx) {
+        JSONArray entries = loadPersistedTrayEntries(ctx);
+        for (int i = 0; i < entries.length(); i++) {
+            try {
+                JSONObject e = entries.getJSONObject(i);
+                int notifId = e.optInt("notifId", -1);
+                if (notifId >= 0) cancelTrayGroup(ctx, notifId);
+            } catch (JSONException ignored) {}
+        }
+        ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE).edit().remove(KEY_TRAY_SCHEDULED).apply();
     }
 
     /**
