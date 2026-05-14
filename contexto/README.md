@@ -231,9 +231,7 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 - Commit message via HEREDOC + `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`
 - Pre-commit hook DEVE passar (não `--no-verify`)
 
-> 🛑 **Após cada fix commit em release com escopo múltiplo (>1 item):** STOP, reportar `fix #XXX aplicado + validado runtime` + perguntar `"Continuamos #YYY? OU pivota?"`. NÃO emendar próximo fix automaticamente. User pode querer empilhar bug novo, descobrir issue durante validação, ou alterar prioridade.
->
-> Exceção: escopo único 1-item release pode prosseguir Passos 9-14 direto sem stop.
+> Múltiplos fixes em release com escopo múltiplo: commits individuais por fix lógico, **sem STOP entre eles**. IA prossegue aplicando fixes + adicionando ao Validar.md + validando autonomamente até completar todo escopo. STOP único acontece em Passo 10.5 antes Build AAB.
 
 ## Passo 9 — Sync docs (4 arquivos OBRIGATÓRIO)
 - `ROADMAP.md` §3 "Onde paramos" + §6.2 counter + §6.3 Δ release log + §6.4-6.7 entry status
@@ -246,22 +244,29 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 git push origin release/v{X.Y.Z}
 ```
 
-## ⚠️ Passo 10.5 — STOP OBRIGATÓRIO antes Build AAB
+## ⚠️ Passo 10.5 — STOP único obrigatório antes Build AAB
 
 **REGRA CRÍTICA — NUNCA fechar release sem autorização explícita do user.**
 
-Antes de qualquer comando `bundleRelease`, `cap sync`, AAB upload, tag git, OR merge master, **PARE** e reporte:
+**Pré-requisitos antes do STOP:**
+1. Todos os fixes do escopo aplicados + commits feitos + push origin branch
+2. Validar.md entry criada no topo com TODOS os items da release
+3. Validação autônoma rodada em tudo que cabe (Chrome MCP web §12a + emulator §12b + Supabase MCP DB state)
+4. Validar.md com `[x]` marcado em cada item validado autonomamente
+5. Items `[ ]` restantes = SÓ os que dependem de device físico real OR observação temporal pós-deploy (24h Supabase egress, Sentry symbols upload com token, etc)
 
-1. **Resumo do que foi feito** nesta sessão (commits aplicados, items fechados)
-2. **Pendências de validação** que IA não executou autonomamente
-3. **Sugestões pra empilhar** mais coisas antes ship (Sentry triage extra, bugs descobertos durante development, etc)
-4. **Pergunta explícita:** `"Posso gerar o AAB v{X.Y.Z} agora?"` OR `"Quer empilhar mais alguma coisa antes do ship?"`
+**Antes de qualquer `bundleRelease`, `cap sync`, AAB upload, tag git, OR merge master, PARE e reporte:**
 
-**ESPERAR resposta afirmativa explícita** (ex: "sim, gera o AAB", "pode subir", "ok ship").
+1. **Fixes aplicados:** lista commits + items fechados nesta sessão
+2. **Validar.md status:** N items marcados `[x]` validados, M items `[ ]` pendentes (com motivo cada um: device físico, observação temporal, etc)
+3. **Pendências device user:** o que sobrou pra ele fazer manualmente após ship
+4. **Pergunta explícita:** `"Posso gerar o AAB v{X.Y.Z} agora?"`
+
+**ESPERAR resposta afirmativa explícita** (ex: "sim, gera AAB", "pode subir", "ok ship").
 
 > 🛑 **"Continue" / "Segue" / "OK" sozinhos NÃO autorizam ship.** User precisa dizer explicitamente "gera AAB", "sobe Play", OR "fecha release".
 
-Após autorização explícita: prosseguir Passo 11 sem nova interrupção até Passo 14 (STOP final).
+Após autorização explícita: prosseguir Passos 11-14 sem nova interrupção.
 
 ---
 

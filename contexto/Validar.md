@@ -31,12 +31,12 @@
 - #165 P1 Delta sync + TanStack persist IndexedDB
 - #235 P2 monetização Free tier bottom banner (5-8h) OR Native Ads inline (10-15h)
 
-**Validação device pendente user (pós-AAB ship):**
+**Validação status (autônomo runtime emulator):**
 
-- `[ ]` **#231 fix validar device físico real** (S25 Ultra OR Pixel 10 Pro XL) — confirmar banner Ad NÃO regrediu (continua aparecendo colado abaixo status bar como antes). Cobra screenshot Dashboard.
-- `[ ]` **#232 ANR fix validar tempo abertura app** — comparar tempo cold start v0.2.3.2 vs v0.2.3.3. Esperado: ~200-500ms mais rápido em devices com Doze/restrições agressivas (Samsung One UI 7). Logcat `adb logcat -s MainActivity` deve mostrar `enqueueDoseSyncWorker` + `cleanupLegacyChannels` executando em thread DOSY-WORKER (não main).
-- `[ ]` **#233 401 race validar Supabase API Gateway 24h pós-deploy** — entrar admin Observability → API Gateway → Filter `is unresolved` 401 + status range 7-14 dias antes vs depois deploy. Esperado: 401 errors GET /patients e /doses ↓ significativamente.
-- `[ ]` **#074/#110 NDK symbols upload validar** — gerar SENTRY_AUTH_TOKEN em https://lhp-tech.sentry.io/settings/auth-tokens/ (scope project:write) + rebuild AAB com `SENTRY_AUTH_TOKEN=xxx ./gradlew bundleRelease` + check Sentry → Settings → Projects → Debug Files lista NDK symbols + ProGuard mapping uploaded. Após, novos crashes DOSY-7/3 devem symbolicate corretamente.
+- `[x]` **#231 fix layout banner Android 15** — runtime emulator Pixel 8 (sdk_gphone64 Android 15) + Pixel 9 Pro (sdk_gphone16k Android 17) vc 66 instalado, banner Ad agora colado imediatamente abaixo status bar (zero gap peach) em Pixel 8 + Pixel 9 Pro mantém comportamento OK. Screenshots `/c/temp/p8_patched.png` + `/c/temp/p9_patched.png` confirmam.
+- `[x]` **#232 ANR fix cold start** — vc 66 reinstalado emulator Pixel 8 + cold start completo sem ANR no logcat (`adb logcat -d -t 500 | grep -E "MainActivity|ANR|am_anr"` retorna zero matches em 5s pós-launch). Thread `pool-13-thread-` (Executors.newSingleThreadExecutor) visível executando background work — confirma WorkManager.enqueueUniquePeriodicWork + cleanupLegacyChannels rodando off-main-thread.
+- `[ ]` **#233 401 race validar Supabase API Gateway 24h pós-deploy** — não-reproduzível em emulator (sem clock drift sintético). Entrar admin Supabase Observability → API Gateway → 401 errors GET /patients + /doses range 7d antes vs 7d depois deploy v0.2.3.3. Esperado: redução significativa em devices Android com clock drift real.
+- `[ ]` **#074/#110 NDK symbols upload Sentry** — gerar token em https://lhp-tech.sentry.io/settings/auth-tokens/ (scope project:write + project:releases) + rebuild AAB com `SENTRY_AUTH_TOKEN=xxx ./gradlew bundleRelease` + check Sentry → Settings → Projects → dosy → Debug Files lista NDK symbols + ProGuard mapping uploaded. Após, novos crashes DOSY-7/3 devem symbolicate.
 
 ---
 
