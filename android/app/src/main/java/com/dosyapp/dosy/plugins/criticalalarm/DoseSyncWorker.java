@@ -118,7 +118,11 @@ public class DoseSyncWorker extends Worker {
                 return Result.success();
             }
 
-            int scheduled = scheduleDoses(ctx, doses);
+            // #215 v0.2.3.0 fix race-condition device-validation 2026-05-13:
+            // fetch user_prefs DB pra prefsOverride autoritativo (não confiar
+            // em SharedPreferences que pode estar stale).
+            JSONObject prefsOverride = fetchUserPrefs(url, anon, schema, accessToken, userId);
+            int scheduled = scheduleDoses(ctx, doses, prefsOverride);
             Log.d(TAG, "sync ok: fetched=" + doses.length() + " scheduled=" + scheduled);
             return Result.success();
         } catch (Exception e) {
@@ -165,7 +169,42 @@ public class DoseSyncWorker extends Worker {
      * alarme por grupo via AlarmScheduler. Cada grupo recebe id determinístico
      * baseado em concat dos doseIds — coincide com JS pra evitar duplicatas.
      */
-    private int scheduleDoses(Context ctx, JSONArray doses) throws JSONException {
+    /**
+     * #215 v0.2.3.0 fix — fetch user_prefs.prefs jsonb pra prefsOverride.
+     * Retorna JSON {criticalAlarm, dndEnabled, dndStart, dndEnd} OR null se falhar.
+     */
+    private JSONObject fetchUserPrefs(String url, String anon, String schema,
+                                       String accessToken, String userId) {
+        try {
+            String qs = "/rest/v1/user_prefs?select=prefs&user_id=eq." + userId + "&limit=1";
+            URL endpoint = new URL(url + qs);
+            HttpURLConnection conn = (HttpURLConnection) endpoint.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("apikey", anon);
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestProperty("Accept-Profile", schema);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            if (conn.getResponseCode() != 200) return null;
+            String body = readBody(conn);
+            JSONArray arr = new JSONArray(body);
+            if (arr.length() == 0) return null;
+            JSONObject row = arr.getJSONObject(0);
+            JSONObject prefs = row.optJSONObject("prefs");
+            if (prefs == null) return null;
+            JSONObject result = new JSONObject();
+            result.put("criticalAlarm", prefs.optBoolean("criticalAlarm", true));
+            result.put("dndEnabled", prefs.optBoolean("dndEnabled", false));
+            result.put("dndStart", prefs.optString("dndStart", "23:00"));
+            result.put("dndEnd", prefs.optString("dndEnd", "07:00"));
+            return result;
+        } catch (Exception e) {
+            Log.w(TAG, "fetchUserPrefs error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private int scheduleDoses(Context ctx, JSONArray doses, JSONObject prefsOverride) throws JSONException {
         // Group by minute (ms truncado)
         Map<Long, JSONArray> groups = new TreeMap<>();
         Map<Long, Set<String>> doseIdsByMinute = new HashMap<>();
@@ -215,10 +254,9 @@ public class DoseSyncWorker extends Worker {
             String groupKey = String.join("|", sorted);
             int id = AlarmScheduler.idFromString(groupKey);
 
-            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm que
-            // lê prefs SharedPreferences `dosy_user_prefs` e decide branch
-            // (push_critical_off | push_dnd | alarm_plus_push) per dose.
-            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, id, e.getKey(), e.getValue());
+            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm.
+            // prefsOverride do fetchUserPrefs DB (autoritativo) fix race-condition.
+            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, id, e.getKey(), e.getValue(), prefsOverride);
             scheduled++;
 
             // Audit: log per dose do grupo (incluindo branch escolhida)

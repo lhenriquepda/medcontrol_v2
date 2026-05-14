@@ -191,6 +191,14 @@ Deno.serve(async (req) => {
       // #215 #225 — chunking 30 doses/FCM message
       const chunks = chunkArray(dosesPayload, FCM_CHUNK_SIZE)
 
+      // Fix race-condition device-validation 2026-05-13: incluir prefs no payload
+      const prefsPayload = JSON.stringify({
+        criticalAlarm: prefs.criticalAlarm,
+        dndEnabled: prefs.dndEnabled,
+        dndStart: prefs.dndStart,
+        dndEnd: prefs.dndEnd,
+      })
+
       for (const sub of userSubs) {
         // Envia chunks paralelo pra mesmo device — DosyMessagingService idempotente
         // via hash determinístico AlarmScheduler.idFromString (alinha JS).
@@ -202,7 +210,8 @@ Deno.serve(async (req) => {
             horizonHours: String(horizonHours),
             chunkIndex: String(idx),
             chunkTotal: String(chunks.length),
-            source_scenario: 'cron_5am'
+            source_scenario: 'cron_5am',
+            prefs: prefsPayload
           })
         )
         const results = await Promise.all(sendPromises)

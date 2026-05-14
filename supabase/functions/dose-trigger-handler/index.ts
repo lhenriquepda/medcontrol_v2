@@ -294,7 +294,18 @@ Deno.serve(async (req) => {
 
     for (const userId of recipients) {
       // #215 decisão 6 — cuidador SEMPRE recebe alarme cheio prioridade,
-      // mas respeita DnD próprio do device dele (lógica branch local Java)
+      // mas respeita DnD próprio do device dele (lógica branch local Java).
+      // Fix race-condition device-validation 2026-05-13: incluir prefs no
+      // payload FCM (autoritativo server-side, Java decide branch sem ler
+      // SharedPreferences que pode estar stale).
+      const userPrefs = await getUserNotifPrefs(supabase, userId)
+      const prefsPayload = JSON.stringify({
+        criticalAlarm: userPrefs.criticalAlarm,
+        dndEnabled: userPrefs.dndEnabled,
+        dndStart: userPrefs.dndStart,
+        dndEnd: userPrefs.dndEnd,
+      })
+
       const { data: subs } = await supabase
         .from('push_subscriptions')
         .select('deviceToken')
@@ -303,7 +314,7 @@ Deno.serve(async (req) => {
       if (!subs?.length) continue
 
       for (const sub of subs) {
-        const ok = await sendFcmTo(sub.deviceToken, data)
+        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload })
         if (ok) sent++; else errors++
 
         if (auditEnabledUsers.has(userId)) {

@@ -78,26 +78,50 @@ public class AlarmScheduler {
      * @return Branch escolhida
      */
     public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs, JSONArray doses) {
-        SharedPreferences sp = ctx.getSharedPreferences(USER_PREFS, Context.MODE_PRIVATE);
-        // #215 fix bug device-validation 2026-05-13: legacy fallback ler de
-        // dosy_sync_credentials.critical_alarm_enabled (setSyncCredentials grava
-        // antes do syncUserPrefs novo rodar). Garante critical_alarm respeitado
-        // mesmo se syncUserPrefs JS ainda não disparou (login fresh, dose insert
-        // antes de Ajustes touch).
-        boolean criticalOn = sp.getBoolean(KEY_CRITICAL_ALARM, true);
-        if (!sp.contains(KEY_CRITICAL_ALARM)) {
-            SharedPreferences spLegacy = ctx.getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
-            criticalOn = spLegacy.getBoolean("critical_alarm_enabled", true);
+        return scheduleDoseAlarm(ctx, groupId, triggerAtEpochMs, doses, null);
+    }
+
+    /**
+     * #215 v0.2.3.0 + fix bug device-validation 2026-05-13 race condition
+     * SharedPrefs sync vs FCM arrival — overload aceita prefs JSON do payload
+     * FCM/Worker (autoritativo server-side). Se prefsOverride=null, fallback
+     * pra SharedPreferences locais.
+     *
+     * @param prefsOverride JSON {criticalAlarm, dndEnabled, dndStart, dndEnd} OR null
+     */
+    public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs,
+                                            JSONArray doses, JSONObject prefsOverride) {
+        boolean criticalOn;
+        boolean dndOn;
+        String dndStart;
+        String dndEnd;
+        String prefsSource;
+
+        if (prefsOverride != null) {
+            criticalOn = prefsOverride.optBoolean("criticalAlarm", true);
+            dndOn = prefsOverride.optBoolean("dndEnabled", false);
+            dndStart = prefsOverride.optString("dndStart", "23:00");
+            dndEnd = prefsOverride.optString("dndEnd", "07:00");
+            prefsSource = "payload";
+        } else {
+            SharedPreferences sp = ctx.getSharedPreferences(USER_PREFS, Context.MODE_PRIVATE);
+            criticalOn = sp.getBoolean(KEY_CRITICAL_ALARM, true);
+            if (!sp.contains(KEY_CRITICAL_ALARM)) {
+                SharedPreferences spLegacy = ctx.getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+                criticalOn = spLegacy.getBoolean("critical_alarm_enabled", true);
+            }
+            dndOn = sp.getBoolean(KEY_DND_ENABLED, false);
+            dndStart = sp.getString(KEY_DND_START, "23:00");
+            dndEnd = sp.getString(KEY_DND_END, "07:00");
+            prefsSource = "shared_prefs";
         }
-        boolean dndOn = sp.getBoolean(KEY_DND_ENABLED, false);
 
         boolean inDnd = false;
         if (dndOn) {
-            String dndStart = sp.getString(KEY_DND_START, "23:00");
-            String dndEnd = sp.getString(KEY_DND_END, "07:00");
             inDnd = isInDndWindow(triggerAtEpochMs, dndStart, dndEnd);
         }
-        Log.d(TAG, "scheduleDoseAlarm prefs: criticalOn=" + criticalOn + " dndOn=" + dndOn + " inDnd=" + inDnd);
+        Log.d(TAG, "scheduleDoseAlarm prefsSource=" + prefsSource + " criticalOn=" + criticalOn
+            + " dndOn=" + dndOn + " inDnd=" + inDnd + " triggerAt=" + triggerAtEpochMs);
 
         Branch branch;
         if (!criticalOn) {

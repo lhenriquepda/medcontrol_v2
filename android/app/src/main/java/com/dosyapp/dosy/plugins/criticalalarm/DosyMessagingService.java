@@ -47,16 +47,18 @@ public class DosyMessagingService extends MessagingService {
         String action = data != null ? data.get("action") : null;
 
         if ("schedule_alarms".equals(action)) {
-            // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
-            SharedPreferences sp = getApplicationContext()
-                .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
-            boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
-            if (!criticalAlarmEnabled) {
-                Log.d(TAG, "critical alarm OFF — skip schedule_alarms (push tray covers)");
-                return;
-            }
+            // #215 v0.2.3.0 fix race-condition device-validation 2026-05-13:
+            // Edge payload agora inclui prefs do user (criticalAlarm, dndEnabled,
+            // dndStart, dndEnd). Java passa prefsOverride pra scheduleDoseAlarm
+            // ao invés de ler SharedPreferences (que pode estar stale se
+            // syncUserPrefs JS ainda não rodou).
             try {
-                handleScheduleAlarms(data.get("doses"));
+                JSONObject prefsOverride = null;
+                String prefsJson = data.get("prefs");
+                if (prefsJson != null) {
+                    try { prefsOverride = new JSONObject(prefsJson); } catch (Exception ignored) {}
+                }
+                handleScheduleAlarms(data.get("doses"), prefsOverride);
                 return;
             } catch (Exception e) {
                 Log.e(TAG, "schedule_alarms handler error: " + e.getMessage(), e);
@@ -89,7 +91,7 @@ public class DosyMessagingService extends MessagingService {
      *     ...
      *   ])
      */
-    private void handleScheduleAlarms(String dosesJson) throws JSONException {
+    private void handleScheduleAlarms(String dosesJson, JSONObject prefsOverride) throws JSONException {
         if (dosesJson == null) return;
 
         Context ctx = getApplicationContext();
@@ -134,10 +136,10 @@ public class DosyMessagingService extends MessagingService {
             String groupKey = String.join("|", sorted);
             int alarmId = AlarmScheduler.idFromString(groupKey);
 
-            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm que
-            // decide branch (push_critical_off | push_dnd | alarm_plus_push)
-            // baseado em prefs SharedPreferences `dosy_user_prefs`.
-            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, alarmId, e.getKey(), e.getValue());
+            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm.
+            // prefsOverride autoritativo do payload FCM (fix race condition
+            // device-validation 2026-05-13 — Edge envia prefs no payload).
+            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, alarmId, e.getKey(), e.getValue(), prefsOverride);
             scheduled++;
 
             // Audit per dose scheduled (incluindo branch escolhida)
