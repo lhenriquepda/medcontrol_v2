@@ -18,6 +18,9 @@ public class BootReceiver extends BroadcastReceiver {
 
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
+    // #224 v0.2.3.0 — decisão user 2026-05-13: margem 2h pra alarmes que passaram
+    // durante boot (celular desligado entre horário da dose e boot).
+    private static final long LATE_ALARM_GRACE_MS = 2 * 60 * 60 * 1000L;
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
@@ -38,8 +41,24 @@ public class BootReceiver extends BroadcastReceiver {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 long triggerAt = obj.getLong("triggerAt");
-                if (triggerAt <= now) continue; // alarme passou enquanto device estava off
                 int id = obj.getInt("id");
+
+                // #224 v0.2.3.0 — alarme passou DURANTE boot: se <2h margem,
+                // dispara imediato (user vê com badge "Atrasada"). Se >2h, skip silencioso.
+                if (triggerAt <= now) {
+                    if ((now - triggerAt) < LATE_ALARM_GRACE_MS) {
+                        try {
+                            JSONArray doses = obj.optJSONArray("doses");
+                            String dosesStr = doses != null ? doses.toString() : "[]";
+                            Intent lateAlarm = new Intent(ctx, AlarmReceiver.class);
+                            lateAlarm.putExtra("id", id);
+                            lateAlarm.putExtra("doses", dosesStr);
+                            lateAlarm.putExtra("lateRecovery", true);
+                            ctx.sendBroadcast(lateAlarm);
+                        } catch (Exception ignored) {}
+                    }
+                    continue;
+                }
 
                 // Re-pass `doses` JSON array (current schema persisted by CriticalAlarmPlugin.persistAlarm).
                 // Legacy fallback: if `doses` ausente (upgrade de versão antiga), reconstrói a partir
@@ -80,5 +99,28 @@ public class BootReceiver extends BroadcastReceiver {
 
             prefs.edit().putString(KEY_SCHEDULED, remaining.toString()).apply();
         } catch (JSONException ignored) {}
+
+        // v0.2.3.1 Plano A — re-agenda trays persistidos (TrayNotificationReceiver).
+        // Antes: BootReceiver re-agendava apenas alarmes nativos (AlarmReceiver).
+        // Trays Capacitor LocalNotifications perdidas em reboot. Agora trays Java
+        // são re-agendadas + persisted em dosy_tray_scheduled.
+        try {
+            JSONArray trayEntries = AlarmScheduler.loadPersistedTrayEntries(ctx);
+            JSONArray remainingTrays = new JSONArray();
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < trayEntries.length(); i++) {
+                JSONObject e = trayEntries.getJSONObject(i);
+                long triggerAt = e.optLong("triggerAt", 0);
+                int notifId = e.optInt("notifId", -1);
+                if (notifId < 0 || triggerAt <= 0) continue;
+                if (triggerAt <= now) continue; // tray passou — skip silent
+                JSONArray doses = e.optJSONArray("doses");
+                String channelId = e.optString("channelId", "dosy_tray");
+                if (doses == null) doses = new JSONArray();
+                AlarmScheduler.scheduleTrayGroup(ctx, notifId, triggerAt, doses, channelId);
+                remainingTrays.put(e);
+            }
+            AlarmScheduler.saveTrayEntries(ctx, remainingTrays);
+        } catch (Exception ignored) {}
     }
 }

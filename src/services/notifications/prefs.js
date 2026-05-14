@@ -16,7 +16,6 @@ export const PREFS_LOCAL_KEY = 'medcontrol_notif'
 // Cron 5am + Worker 6h + dose-trigger real-time mantêm janela rolling.
 // v0.2.2.1: comentário atualizado pra refletir valor real (era 48 no plan mas 168 hardcoded).
 export const SCHEDULE_WINDOW_MS = 48 * 3600 * 1000 // 48h
-export const CHANNEL_ID = 'doses_v2'
 export const DAILY_SUMMARY_NOTIF_ID = 999000001
 export const isNative = Capacitor.isNativePlatform()
 
@@ -37,14 +36,19 @@ export function urlBase64ToUint8Array(b64) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
 }
 
-// Hash UUID -> int32 positivo. ID estável LocalNotification + alarm
+// Hash UUID -> int positivo range [0, 2^30-1].
+// #215 v0.2.3.0 fix overflow device-validation 2026-05-13: range reduzido
+// pra que groupId + BACKUP_OFFSET (2^30) ≤ Java MAX_INT (2^31 - 1).
+// Antes: hash % 2147483647 + BACKUP_OFFSET 700M = overflow no Capacitor
+// LocalNotifications.schedule (rejeita ID > MAX_INT). Java aceita silent
+// com overflow negativo → TrayNotificationReceiver agendado órfão.
 export function doseIdToNumber(uuid) {
   let h = 0
   for (let i = 0; i < uuid.length; i++) {
     h = ((h << 5) - h) + uuid.charCodeAt(i)
     h |= 0
   }
-  return Math.abs(h) % 2147483647
+  return Math.abs(h) % 1073741823  // 2^30 - 1
 }
 
 /**
@@ -73,14 +77,31 @@ export function groupByMinute(doses) {
   return groups
 }
 
-// Filtra apenas pending na janela 48h
+// Filtra apenas pending na janela 48h.
+// #215 v0.2.3.0 fix bug device-validation 2026-05-13: skip doses optimistic
+// (id começa `temp-` OR _optimistic=true). Doses temp são criadas pelo
+// mutationRegistry onMutate antes do server responder. Se agendar alarme
+// nativo com hash(temp-id), AlarmActivity passa `openDoseIds=temp-...`
+// pra MainActivity, mas onSuccess substituiu temp por UUID real → modal
+// MultiDose busca id no cache + temp não existe mais → modal não abre.
+// Solução: aguardar server confirm + onSuccess invalidate ['doses'] →
+// rescheduleAll re-roda com IDs reais.
+//
+// v0.2.3.1 A-01: race overdue/pending — recomputeOverdue em dosesService
+// pode lag 1-2s vs filterUpcoming check. Se status='pending' mas scheduledAt
+// passou <10s, ainda agenda (provavelmente vai virar overdue na proxima
+// recompute, dose pode disparar com pequeno delay vs nunca).
 export function filterUpcoming(doses) {
   const now = Date.now()
   const end = now + SCHEDULE_WINDOW_MS
+  const racePastWindowMs = 10_000 // 10s graceful overdue/pending race
   return (doses || []).filter((d) => {
     if (d.status !== 'pending') return false
+    if (d._optimistic) return false
+    if (typeof d.id === 'string' && d.id.startsWith('temp-')) return false
     const t = new Date(d.scheduledAt).getTime()
-    return t >= now && t <= end
+    // Race graceful: doses pending com scheduledAt no passado <10s ainda contam.
+    return t >= (now - racePastWindowMs) && t <= end
   })
 }
 

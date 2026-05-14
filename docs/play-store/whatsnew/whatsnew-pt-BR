@@ -1,7 +1,6 @@
-v0.2.1.7 — Alarme mais confiável + funciona offline
+v0.2.3.2 — Alarmes ainda mais confiáveis
 
-• Alarme dispara no horário exato (corrigido offset de 15 min)
-• Cobertura ampliada para 7 dias mesmo sem abrir o app
-• Nova permissão "Ignorar otimização de bateria" garante que o Android (especialmente Samsung) não cancele alarmes
-• Ações offline (confirmar/pular dose, criar paciente) ficam salvas e sincronizam automaticamente quando a internet volta
-• Banner avisa quando há ações aguardando sincronização
+• Soneca não perde mais o alarme após reiniciar o celular
+• Doses múltiplas no mesmo horário disparam um único alarme (sem duplicidade)
+• Histórico de alarmes registrado corretamente para diagnóstico
+• Logout em um aparelho não desativa notificações nos outros

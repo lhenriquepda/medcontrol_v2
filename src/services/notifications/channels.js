@@ -3,22 +3,37 @@
  * #030 (release v0.2.0.11): split de notifications.js.
  */
 
-import { CHANNEL_ID, isNative } from './prefs'
-import { cancelAllCriticalAlarms, cancelCriticalAlarm } from '../criticalAlarm'
+import { isNative } from './prefs'
+import { cancelAllCriticalAlarms, cancelAllTrays } from '../criticalAlarm'
+
+// v0.2.3.1 — canais unificados pra Plano A (Java AlarmScheduler.ensureTrayChannel cria com config correto).
+// `dosy_tray`        — push tray normal (Alarme Crítico OFF) com som default + vibração
+// `dosy_tray_dnd_v2` — push tray dentro DnD com vibração leve 200ms + SEM som
+//   v2 forced rename: Capacitor LocalNotifications.createChannel ignora `sound:null`
+//   e criava `dosy_tray_dnd` com som default. Channel immutable pós-criação → bump
+//   ID força Android criar novo channel com config correto via Java side.
+// v0.2.3.1 Plano A — Capacitor LocalNotifications.createChannel REMOVIDO pra trays.
+// Java AlarmScheduler.ensureTrayChannel cria channel sob-demand com sound:null pra DnD.
+// Daily summary ainda usa Capacitor mas channel TRAY_CHANNEL_ID (dosy_tray) compartilhado.
+export const TRAY_CHANNEL_ID = 'dosy_tray'
+export const TRAY_DND_CHANNEL_ID = 'dosy_tray_dnd_v2'
 
 export async function ensureChannel() {
   if (!isNative) return
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
+    // Canal `dosy_tray` — push tray normal + daily summary (Plano A mantém Capacitor pra daily summary)
     await LocalNotifications.createChannel({
-      id: CHANNEL_ID,
-      name: 'Doses de Medicação',
+      id: TRAY_CHANNEL_ID,
+      name: 'Lembretes de Dose',
       description: 'Lembretes de doses agendadas',
-      importance: 5,         // IMPORTANCE_HIGH (heads-up + som default)
-      visibility: 1,         // VISIBILITY_PUBLIC
+      importance: 5,        // IMPORTANCE_HIGH (heads-up + som default)
+      visibility: 1,        // VISIBILITY_PUBLIC
       vibration: true,
       lights: true
     })
+    // Canal `dosy_tray_dnd_v2` é criado por Java AlarmScheduler.ensureTrayChannel sob-demand
+    // (Capacitor LocalNotifications.createChannel ignora sound:null — bug Capacitor).
   } catch (e) { console.warn('[Notif] createChannel:', e?.message || e) }
 }
 
@@ -26,9 +41,10 @@ export async function ensureFcmChannel() {
   if (!isNative) return
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications')
+    // FCM push regular (servidor → cliente) — usa mesmo canal tray principal
     await PushNotifications.createChannel({
-      id: CHANNEL_ID,
-      name: 'Doses de Medicação',
+      id: TRAY_CHANNEL_ID,
+      name: 'Lembretes de Dose',
       description: 'Lembretes de doses agendadas',
       importance: 5,
       visibility: 1,
@@ -37,6 +53,14 @@ export async function ensureFcmChannel() {
     })
   } catch (e) { console.warn('[FCM] createChannel:', e?.message || e) }
 }
+
+/**
+ * Cleanup canais legados deletados em MainActivity.cleanupLegacyChannels:
+ *   doses_v2 (LocalNotifications pré-#215)
+ *   doses_critical_v2 (AlarmReceiver fallback pré-#215)
+ *   dosy_tray_dnd (Capacitor criou com som default por bug — substituído por dosy_tray_dnd_v2)
+ */
+export const LEGACY_CHANNELS_TO_DELETE = ['doses_v2', 'doses_critical_v2', 'dosy_tray_dnd']
 
 /**
  * Cancela TODOS critical alarms + LocalNotifications pendentes.
@@ -48,7 +72,12 @@ export async function ensureFcmChannel() {
  */
 export async function cancelAll() {
   if (!isNative) return
+  // v0.2.3.1 Plano A — cancelAll cobre 3 fontes:
+  //  1) Critical alarms (AlarmReceiver PendingIntents) via CriticalAlarm.cancelAll
+  //  2) Tray notifications Java (TrayNotificationReceiver) via cancelAllTrays
+  //  3) Capacitor LocalNotifications (daily summary apenas pós-refactor)
   try { await cancelAllCriticalAlarms() } catch (e) { console.warn('[Notif] cancelAll alarms:', e?.message) }
+  try { await cancelAllTrays() } catch (e) { console.warn('[Notif] cancelAll trays:', e?.message) }
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
     const pending = await LocalNotifications.getPending()
@@ -59,41 +88,10 @@ export async function cancelAll() {
 }
 
 /**
- * Item #200.1 (release v0.2.1.5) — cancela 1 grupo específico.
- * Cobre tanto critical alarm (id grupo) quanto LocalNotification tray
- * (mesmo id grupo — vide doseIdToNumber em scheduler.js que gera id estável).
- *
- * Usado pelo rescheduleAll diff-and-apply: alarmes não-modificados ficam,
- * só os removidos/alterados são cancelados.
- */
-export async function cancelGroup(groupId) {
-  if (!isNative || groupId == null) return
-  try { await cancelCriticalAlarm(groupId) } catch (e) { console.warn('[Notif] cancelGroup alarm:', groupId, e?.message) }
-  try {
-    const { LocalNotifications } = await import('@capacitor/local-notifications')
-    await LocalNotifications.cancel({ notifications: [{ id: groupId }] })
-  } catch (e) { console.warn('[Notif] cancelGroup local:', groupId, e?.message) }
-}
-
-/**
- * Item #200.1 — state tracker em localStorage pra diff-and-apply.
- * Map<groupId, hash> permite detectar groups removidos/alterados/novos
- * sem precisar consultar SharedPreferences nativo.
+ * State tracker em localStorage pra diff-and-apply.
+ * Map<groupId, hash> permite detectar groups removidos/alterados/novos.
  */
 const SCHEDULED_STATE_KEY = 'dosy_scheduled_groups_v1'
-
-export function loadScheduledState() {
-  try {
-    const raw = localStorage.getItem(SCHEDULED_STATE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return typeof parsed === 'object' && parsed !== null ? parsed : {}
-  } catch (e) {
-    console.warn('[Notif] loadScheduledState corrupted, resetting:', e?.message)
-    try { localStorage.removeItem(SCHEDULED_STATE_KEY) } catch { /* ignore */ }
-    return {}
-  }
-}
 
 export function saveScheduledState(map) {
   try {

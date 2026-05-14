@@ -1,15 +1,26 @@
 package com.dosyapp.dosy.plugins.criticalalarm;
 
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.util.Log;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /**
  * AlarmScheduler — helper static usado pelo plugin (chamadas JS) E pelo
@@ -25,6 +36,352 @@ public class AlarmScheduler {
     private static final String TAG = "AlarmScheduler";
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
+    // v0.2.3.1 Plano A — namespace separado pra tray pendentes (BootReceiver re-agenda).
+    private static final String TRAY_PREFS = "dosy_tray_scheduled";
+    private static final String KEY_TRAY_SCHEDULED = "tray_entries";
+
+    // #215 v0.2.3.0 — paridade com src/services/notifications/unifiedScheduler.js
+    // Fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
+    // groupId range [0, 2^30-1] + BACKUP_OFFSET 2^30 ≤ MAX_INT (2^31-1).
+    // Antes: groupId 1.69B + 700M = 2.39B → overflow Java int → Capacitor
+    // LocalNotifications.schedule rejeita silent + TrayNotificationReceiver
+    // pendente AlarmManager (overflow negativo aceito) → 2 push duplicados.
+    public static final int BACKUP_OFFSET = 1073741824; // 2^30
+    public static final String TRAY_CHANNEL_ID = "dosy_tray";
+    // v0.2.3.1 — bump dosy_tray_dnd -> dosy_tray_dnd_v2: canal anterior criado por
+    // Capacitor LocalNotifications.createChannel com sound default (bug Capacitor
+    // ignora sound:null). Channel immutable pós-criação. Forçar novo ID com
+    // sound:null criado por Java side (ensureTrayChannel).
+    public static final String TRAY_DND_CHANNEL_ID = "dosy_tray_dnd_v2";
+
+    // Prefs SharedPreferences (gravadas pelo JS via setSyncCredentials + plugin updateUserPrefs futuro)
+    private static final String USER_PREFS = "dosy_user_prefs";
+    private static final String KEY_CRITICAL_ALARM = "critical_alarm_enabled";
+    private static final String KEY_DND_ENABLED = "dnd_enabled";
+    private static final String KEY_DND_START = "dnd_start"; // formato "HH:mm"
+    private static final String KEY_DND_END = "dnd_end";     // formato "HH:mm"
+
+    public enum Branch {
+        PUSH_CRITICAL_OFF,
+        PUSH_DND,
+        ALARM_PLUS_PUSH
+    }
+
+    /**
+     * #215 — Helper unificado: decide branch + agenda alarme + tray notification.
+     * Paridade com JS `unifiedScheduler.buildSchedulePayload`.
+     *
+     * Lê prefs de SharedPreferences `dosy_user_prefs` (criticalAlarm, dndEnabled, dndStart, dndEnd).
+     *
+     * Branches:
+     *   PUSH_CRITICAL_OFF  → só tray notif canal `dosy_tray` (sound default)
+     *   PUSH_DND           → só tray notif canal `dosy_tray_dnd` (vibração leve, sem sound)
+     *   ALARM_PLUS_PUSH    → setAlarmClock + tray notif backup canal `dosy_tray`
+     *
+     * @param ctx Android Context
+     * @param groupId int hash determinístico do groupKey (deve coincidir com JS doseIdToNumber)
+     * @param triggerAtEpochMs UTC epoch ms do horário da dose
+     * @param doses JSONArray de {doseId, medName, unit, patientName, scheduledAt}
+     * @return Branch escolhida
+     */
+    public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs, JSONArray doses) {
+        return scheduleDoseAlarm(ctx, groupId, triggerAtEpochMs, doses, null);
+    }
+
+    /**
+     * #215 v0.2.3.0 + fix bug device-validation 2026-05-13 race condition
+     * SharedPrefs sync vs FCM arrival — overload aceita prefs JSON do payload
+     * FCM/Worker (autoritativo server-side). Se prefsOverride=null, fallback
+     * pra SharedPreferences locais.
+     *
+     * @param prefsOverride JSON {criticalAlarm, dndEnabled, dndStart, dndEnd} OR null
+     */
+    public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs,
+                                            JSONArray doses, JSONObject prefsOverride) {
+        boolean criticalOn;
+        boolean dndOn;
+        String dndStart;
+        String dndEnd;
+        String prefsSource;
+
+        if (prefsOverride != null) {
+            criticalOn = prefsOverride.optBoolean("criticalAlarm", true);
+            dndOn = prefsOverride.optBoolean("dndEnabled", false);
+            dndStart = prefsOverride.optString("dndStart", "23:00");
+            dndEnd = prefsOverride.optString("dndEnd", "07:00");
+            prefsSource = "payload";
+        } else {
+            SharedPreferences sp = ctx.getSharedPreferences(USER_PREFS, Context.MODE_PRIVATE);
+            criticalOn = sp.getBoolean(KEY_CRITICAL_ALARM, true);
+            if (!sp.contains(KEY_CRITICAL_ALARM)) {
+                SharedPreferences spLegacy = ctx.getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+                criticalOn = spLegacy.getBoolean("critical_alarm_enabled", true);
+            }
+            dndOn = sp.getBoolean(KEY_DND_ENABLED, false);
+            dndStart = sp.getString(KEY_DND_START, "23:00");
+            dndEnd = sp.getString(KEY_DND_END, "07:00");
+            prefsSource = "shared_prefs";
+        }
+
+        boolean inDnd = false;
+        if (dndOn) {
+            inDnd = isInDndWindow(triggerAtEpochMs, dndStart, dndEnd);
+        }
+        Log.d(TAG, "scheduleDoseAlarm prefsSource=" + prefsSource + " criticalOn=" + criticalOn
+            + " dndOn=" + dndOn + " inDnd=" + inDnd + " triggerAt=" + triggerAtEpochMs);
+
+        Branch branch;
+        if (!criticalOn) {
+            branch = Branch.PUSH_CRITICAL_OFF;
+        } else if (inDnd) {
+            branch = Branch.PUSH_DND;
+        } else {
+            branch = Branch.ALARM_PLUS_PUSH;
+        }
+
+        switch (branch) {
+            case ALARM_PLUS_PUSH:
+                scheduleDose(ctx, groupId, triggerAtEpochMs, doses);
+                scheduleTrayNotification(ctx, groupId + BACKUP_OFFSET, triggerAtEpochMs, doses, TRAY_CHANNEL_ID);
+                break;
+            case PUSH_DND:
+                scheduleTrayNotification(ctx, groupId, triggerAtEpochMs, doses, TRAY_DND_CHANNEL_ID);
+                break;
+            case PUSH_CRITICAL_OFF:
+                scheduleTrayNotification(ctx, groupId, triggerAtEpochMs, doses, TRAY_CHANNEL_ID);
+                break;
+        }
+
+        Log.d(TAG, "scheduleDoseAlarm groupId=" + groupId + " branch=" + branch + " count=" + doses.length());
+        return branch;
+    }
+
+    /**
+     * v0.2.3.1 Plano A — public entry pra JS scheduler.js refactor unificar tray em Java.
+     * Substitui Capacitor LocalNotifications.schedule pra trays de dose (foreground path).
+     * Daily summary continua em Capacitor LocalNotifications (caso especial repeat=day).
+     */
+    public static void scheduleTrayGroup(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
+        scheduleTrayNotification(ctx, notifId, triggerAtMs, doses, channelId);
+    }
+
+    /**
+     * Agenda LocalNotification tray via PendingIntent (mesmo pattern Capacitor LocalNotifications usa).
+     * Channel `dosy_tray` tem sound default + vibração; `dosy_tray_dnd` tem só vibração leve.
+     * v0.2.3.1 — persiste em dosy_tray_scheduled SharedPrefs pra BootReceiver re-agendar.
+     */
+    private static void scheduleTrayNotification(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
+        ensureTrayChannel(ctx, channelId);
+
+        Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+        intent.putExtra("notifId", notifId);
+        intent.putExtra("doses", doses.toString());
+        intent.putExtra("channelId", channelId);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, notifId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+        } catch (SecurityException e) {
+            Log.w(TAG, "tray schedule failed (permission): " + e.getMessage());
+            am.set(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+        }
+
+        // v0.2.3.1 Plano A — persiste pra BootReceiver re-agendar pos reboot
+        persistTrayEntry(ctx, notifId, triggerAtMs, doses, channelId);
+    }
+
+    /**
+     * v0.2.3.1 — persiste tray entry em SharedPrefs separado (dosy_tray_scheduled).
+     * BootReceiver lê + re-agenda. Idempotente: mesmo notifId substitui entry.
+     */
+    private static void persistTrayEntry(Context ctx, int notifId, long triggerAt, JSONArray doses, String channelId) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+            JSONArray current = existing != null ? new JSONArray(existing) : new JSONArray();
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("notifId", -1) != notifId) filtered.put(e);
+            }
+            JSONObject entry = new JSONObject();
+            entry.put("notifId", notifId);
+            entry.put("triggerAt", triggerAt);
+            entry.put("doses", doses);
+            entry.put("channelId", channelId);
+            filtered.put(entry);
+            // v0.2.3.2 #229 fix — commit() sync pra garantir durabilidade snooze+reboot.
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).commit();
+        } catch (JSONException e) {
+            Log.w(TAG, "persistTrayEntry error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * v0.2.3.1 — BootReceiver lê todos tray entries persistidos.
+     */
+    public static JSONArray loadPersistedTrayEntries(Context ctx) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+        if (existing == null) return new JSONArray();
+        try {
+            return new JSONArray(existing);
+        } catch (JSONException e) {
+            return new JSONArray();
+        }
+    }
+
+    /**
+     * v0.2.3.1 — BootReceiver atualiza tray entries (remove expirados).
+     */
+    public static void saveTrayEntries(Context ctx, JSONArray entries) {
+        // v0.2.3.2 #229 fix — commit() sync (mesma razão de persistAlarm).
+        ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_TRAY_SCHEDULED, entries.toString()).commit();
+    }
+
+    /**
+     * v0.2.3.1 — remove tray entry pos cancel.
+     */
+    private static void removePersistedTrayEntry(Context ctx, int notifId) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+            if (existing == null) return;
+            JSONArray current = new JSONArray(existing);
+            JSONArray filtered = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("notifId", -1) != notifId) filtered.put(e);
+            }
+            // v0.2.3.2 #229 fix — commit() sync.
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).commit();
+        } catch (JSONException ignored) {}
+    }
+
+    /**
+     * v0.2.3.1 — cancela tray PendingIntent + remove persisted entry.
+     */
+    public static void cancelTrayGroup(Context ctx, int notifId) {
+        try {
+            NotificationManagerCompat.from(ctx).cancel(notifId);
+            Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+            PendingIntent pi = PendingIntent.getBroadcast(
+                ctx, notifId, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) am.cancel(pi);
+            pi.cancel();
+        } catch (Exception ignored) {}
+        removePersistedTrayEntry(ctx, notifId);
+    }
+
+    /**
+     * v0.2.3.1 — cancela TODOS trays pendentes (rescheduleAll cleanup).
+     */
+    public static void cancelAllTrays(Context ctx) {
+        JSONArray entries = loadPersistedTrayEntries(ctx);
+        for (int i = 0; i < entries.length(); i++) {
+            try {
+                JSONObject e = entries.getJSONObject(i);
+                int notifId = e.optInt("notifId", -1);
+                if (notifId >= 0) cancelTrayGroup(ctx, notifId);
+            } catch (JSONException ignored) {}
+        }
+        ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE).edit().remove(KEY_TRAY_SCHEDULED).apply();
+    }
+
+    /**
+     * Cria channel dosy_tray ou dosy_tray_dnd se ainda não existe (idempotente).
+     */
+    private static void ensureTrayChannel(Context ctx, String channelId) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null || nm.getNotificationChannel(channelId) != null) return;
+
+        boolean isDnd = TRAY_DND_CHANNEL_ID.equals(channelId);
+        int importance = isDnd
+            ? NotificationManager.IMPORTANCE_DEFAULT  // sem heads-up + sem som
+            : NotificationManager.IMPORTANCE_HIGH;     // heads-up + som default
+
+        NotificationChannel ch = new NotificationChannel(
+            channelId,
+            isDnd ? "Lembretes — Não Perturbe" : "Lembretes de Dose",
+            importance
+        );
+        ch.setDescription(isDnd
+            ? "Lembretes silenciosos dentro da janela Não Perturbe"
+            : "Lembretes de doses agendadas");
+        ch.enableLights(!isDnd);
+        ch.enableVibration(true);
+        if (isDnd) {
+            ch.setVibrationPattern(new long[]{0, 200}); // pulse curto 200ms
+            ch.setSound(null, null);
+        }
+        ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+        nm.createNotificationChannel(ch);
+    }
+
+    /**
+     * v0.2.3.1 Fix B — public exposure pra AlarmReceiver consultar fire time.
+     */
+    public static boolean isInDndWindowPublic(long epochMs, String dndStart, String dndEnd) {
+        return isInDndWindow(epochMs, dndStart, dndEnd);
+    }
+
+    /**
+     * Verifica se epoch ms cai dentro janela DnD (interpretada em America/Sao_Paulo).
+     * Suporta janelas que cruzam meia-noite (ex: 23:00 → 07:00).
+     */
+    private static boolean isInDndWindow(long epochMs, String dndStart, String dndEnd) {
+        try {
+            ZonedDateTime zdt = Instant.ofEpochMilli(epochMs).atZone(ZoneId.of("America/Sao_Paulo"));
+            LocalTime t = zdt.toLocalTime();
+            LocalTime start = LocalTime.parse(dndStart);
+            LocalTime end = LocalTime.parse(dndEnd);
+            int tMin = t.getHour() * 60 + t.getMinute();
+            int sMin = start.getHour() * 60 + start.getMinute();
+            int eMin = end.getHour() * 60 + end.getMinute();
+            if (sMin <= eMin) {
+                return tMin >= sMin && tMin < eMin;
+            } else {
+                return tMin >= sMin || tMin < eMin;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "isInDndWindow parse error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * #215 — Cancela alarme nativo + tray backup co-agendado (cobre branch ALARM_PLUS_PUSH).
+     * Idempotente — cancelar id inexistente = no-op.
+     */
+    public static boolean cancelDoseAlarmAndBackup(Context ctx, int groupId) {
+        boolean ok = cancelAlarm(ctx, groupId);
+        // Plus cancela tray backup
+        try {
+            NotificationManagerCompat.from(ctx).cancel(groupId + BACKUP_OFFSET);
+            // Cancela também PendingIntent da AlarmManager pra prevent dispare
+            Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
+            PendingIntent pi = PendingIntent.getBroadcast(
+                ctx, groupId + BACKUP_OFFSET, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) am.cancel(pi);
+            pi.cancel();
+        } catch (Exception ignored) {}
+        Log.d(TAG, "cancelDoseAlarmAndBackup groupId=" + groupId);
+        return ok;
+    }
 
     /**
      * Schedule a critical alarm for the given trigger time + doses payload.
@@ -79,6 +436,17 @@ public class AlarmScheduler {
     }
 
     /**
+     * v0.2.3.1 A-03 Fix — Snooze persist: chamado por AlarmActionReceiver +
+     * AlarmActivity scheduleSnooze pra que BootReceiver re-agende no horário
+     * SNOOZED (não no original). Sem isso, reboot dentro 10min de snooze
+     * → BootReceiver lê SharedPreferences triggerAt antigo → alarme dispara
+     * no horário original.
+     */
+    public static void persistSnoozedAlarm(Context ctx, int id, long triggerAt, JSONArray doses) {
+        persistAlarm(ctx, id, triggerAt, doses);
+    }
+
+    /**
      * Persiste alarme no SharedPreferences pra sobreviver reboot (BootReceiver
      * lê dali) + idempotência: scheduling mesmo id 2x apenas atualiza.
      */
@@ -102,7 +470,10 @@ public class AlarmScheduler {
             entry.put("doses", doses);
             filtered.put(entry);
 
-            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync em vez de apply() async pra garantir
+            // durabilidade em snooze + reboot imediato (apply() async perdia dados se
+            // processo morresse antes flush).
+            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException e) {
             Log.w(TAG, "persistAlarm error: " + e.getMessage());
         }
@@ -143,7 +514,8 @@ public class AlarmScheduler {
                 JSONObject e = current.getJSONObject(i);
                 if (e.getInt("id") != id) filtered.put(e);
             }
-            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync.
+            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException e) {
             Log.w(TAG, "removePersisted error: " + e.getMessage());
         }
@@ -152,16 +524,19 @@ public class AlarmScheduler {
     /**
      * Determinístic id derivation from a stable string (e.g. concat of doseIds).
      * Used by DoseSyncWorker pra coincidir com ids do JS-side (groupKey hash).
+     *
+     * #220 v0.2.3.0 — alinhado com JS `doseIdToNumber` (src/services/notifications/prefs.js):
+     * ambos aplicam `Math.abs(h) % 1073741823` (2^30-1) pra garantir paridade
+     * cross-source + range tal que id + BACKUP_OFFSET ≤ Java MAX_INT.
+     * Antes Java só fazia `Math.abs(h)` — strings longas podiam divergir do JS.
+     * #215 fix overflow device-validation 2026-05-13: range 2^31-1 → 2^30-1.
      */
     public static int idFromString(String s) {
-        // Mesma fórmula do JS doseIdToNumber pra coincidir alarmes JS-scheduled
-        // com Worker-scheduled (idempotente). Ver src/services/notifications.js
-        // doseIdToNumber: int positivo via simple hash.
         int h = 0;
         for (int i = 0; i < s.length(); i++) {
             h = ((h << 5) - h) + s.charAt(i);
             h |= 0; // i32 cast
         }
-        return Math.abs(h);
+        return Math.abs(h) % 1073741823; // 2^30 - 1
     }
 }

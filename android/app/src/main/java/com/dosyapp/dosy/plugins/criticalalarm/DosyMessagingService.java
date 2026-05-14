@@ -29,8 +29,9 @@ import java.util.TreeMap;
  *
  * Comportamento:
  *   - data.action == "schedule_alarms" → processa silenciosamente:
- *     parseia lista de doses + chama AlarmScheduler.scheduleDose pra cada,
- *     reporta server-side via dose_alarms_scheduled, NÃO mostra notif
+ *     parseia lista de doses + chama AlarmScheduler.scheduleDoseAlarm
+ *     (helper unificado branch alarm/tray), NÃO mostra notif
+ *   - data.action == "cancel_alarms" → cancela alarme + tray local
  *   - qualquer outra mensagem → delega pra super (Capacitor processa
  *     normal: notif tray ou push handler JS)
  *
@@ -47,16 +48,18 @@ public class DosyMessagingService extends MessagingService {
         String action = data != null ? data.get("action") : null;
 
         if ("schedule_alarms".equals(action)) {
-            // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
-            SharedPreferences sp = getApplicationContext()
-                .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE);
-            boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
-            if (!criticalAlarmEnabled) {
-                Log.d(TAG, "critical alarm OFF — skip schedule_alarms (push tray covers)");
-                return;
-            }
+            // #215 v0.2.3.0 fix race-condition device-validation 2026-05-13:
+            // Edge payload agora inclui prefs do user (criticalAlarm, dndEnabled,
+            // dndStart, dndEnd). Java passa prefsOverride pra scheduleDoseAlarm
+            // ao invés de ler SharedPreferences (que pode estar stale se
+            // syncUserPrefs JS ainda não rodou).
             try {
-                handleScheduleAlarms(data.get("doses"));
+                JSONObject prefsOverride = null;
+                String prefsJson = data.get("prefs");
+                if (prefsJson != null) {
+                    try { prefsOverride = new JSONObject(prefsJson); } catch (Exception ignored) {}
+                }
+                handleScheduleAlarms(data.get("doses"), prefsOverride);
                 return;
             } catch (Exception e) {
                 Log.e(TAG, "schedule_alarms handler error: " + e.getMessage(), e);
@@ -89,7 +92,7 @@ public class DosyMessagingService extends MessagingService {
      *     ...
      *   ])
      */
-    private void handleScheduleAlarms(String dosesJson) throws JSONException {
+    private void handleScheduleAlarms(String dosesJson, JSONObject prefsOverride) throws JSONException {
         if (dosesJson == null) return;
 
         Context ctx = getApplicationContext();
@@ -134,30 +137,32 @@ public class DosyMessagingService extends MessagingService {
             String groupKey = String.join("|", sorted);
             int alarmId = AlarmScheduler.idFromString(groupKey);
 
-            if (AlarmScheduler.scheduleDose(ctx, alarmId, e.getKey(), e.getValue())) {
-                scheduled++;
-                // v0.2.2.4 (#214) — REMOVIDO reportAlarmScheduled (dose_alarms_scheduled
-                // órfã pós-#209). alarm_audit_log substitui rastreio.
-                // Audit per dose scheduled
-                for (int i = 0; i < e.getValue().length(); i++) {
-                    try {
-                        JSONObject doseEntry = e.getValue().getJSONObject(i);
-                        String doseId = doseEntry.getString("doseId");
-                        JSONObject meta = new JSONObject();
-                        meta.put("groupId", alarmId);
-                        meta.put("groupSize", e.getValue().length());
-                        meta.put("triggerAtMs", e.getKey());
-                        meta.put("kind", "critical_alarm");
-                        AlarmAuditLogger.logScheduled(
-                            ctx, "java_fcm_received",
-                            doseId,
-                            doseEntry.optString("scheduledAt", null),
-                            doseEntry.optString("patientName", null),
-                            doseEntry.optString("medName", null),
-                            meta
-                        );
-                    } catch (JSONException ignore) {}
-                }
+            // #215 v0.2.3.0 — delega ao helper unificado scheduleDoseAlarm.
+            // prefsOverride autoritativo do payload FCM (fix race condition
+            // device-validation 2026-05-13 — Edge envia prefs no payload).
+            AlarmScheduler.Branch branch = AlarmScheduler.scheduleDoseAlarm(ctx, alarmId, e.getKey(), e.getValue(), prefsOverride);
+            scheduled++;
+
+            // Audit per dose scheduled (incluindo branch escolhida)
+            for (int i = 0; i < e.getValue().length(); i++) {
+                try {
+                    JSONObject doseEntry = e.getValue().getJSONObject(i);
+                    String doseId = doseEntry.getString("doseId");
+                    JSONObject meta = new JSONObject();
+                    meta.put("groupId", alarmId);
+                    meta.put("groupSize", e.getValue().length());
+                    meta.put("triggerAtMs", e.getKey());
+                    meta.put("branch", branch.name().toLowerCase());
+                    meta.put("source_scenario", "fcm_schedule_alarms");
+                    AlarmAuditLogger.logScheduled(
+                        ctx, "java_fcm_received",
+                        doseId,
+                        doseEntry.optString("scheduledAt", null),
+                        doseEntry.optString("patientName", null),
+                        doseEntry.optString("medName", null),
+                        meta
+                    );
+                } catch (JSONException ignore) {}
             }
         }
 
@@ -173,36 +178,66 @@ public class DosyMessagingService extends MessagingService {
     }
 
     /**
-     * Item #209 v0.2.1.9 — handle cancel_alarms FCM action.
-     * Recebe doseIds CSV (ex: "uuid1,uuid2,uuid3"). Pra cada, calcula
-     * AlarmScheduler.idFromString (mesma fórmula usada no scheduling) e
-     * chama AlarmScheduler.cancelAlarm. Idempotente — id inexistente OK.
-     *
-     * NOTA: dose individual = group de 1 dose. ID derivado de doseId só.
-     * Groups multi-dose (mesmo minute key) — cancela só se TODOS doses do
-     * group estão cancelados. Conservador: cancelar individual com risk de
-     * leave group order. Aceito — server-side garante consistência.
+     * v0.2.3.1 Bloco 5 (Fix C + A-02) — handle cancel_alarms FCM action.
+     * Recebe doseIds CSV. Cancela:
+     *   1) Cada dose individualmente (cobre single-dose groups onde hash(doseId)
+     *      é o mesmo do scheduling)
+     *   2) Reconstroi hash do grupo (sortedDoseIds.join('|')) e cancela
+     *      tambem (cobre multi-dose groups que NAO matchavam por single hash)
+     * Idempotente — id inexistente OK.
      */
     private void handleCancelAlarms(String doseIdsCsv) {
         if (doseIdsCsv == null || doseIdsCsv.isEmpty()) return;
         Context ctx = getApplicationContext();
         String[] ids = doseIdsCsv.split(",");
         int cancelled = 0;
+
+        // 1) Cancel cada doseId individualmente (single-dose groups)
         for (String doseId : ids) {
             String trimmed = doseId.trim();
             if (trimmed.isEmpty()) continue;
             int alarmId = AlarmScheduler.idFromString(trimmed);
-            if (AlarmScheduler.cancelAlarm(ctx, alarmId)) {
+            if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, alarmId)) {
                 cancelled++;
-                // Audit cancelled
                 try {
                     JSONObject meta = new JSONObject();
                     meta.put("alarmId", alarmId);
-                    meta.put("reason", "fcm_cancel_action");
+                    meta.put("reason", "fcm_cancel_action_individual");
+                    meta.put("source_scenario", "fcm_cancel_alarms");
                     AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", trimmed, meta);
                 } catch (JSONException ignore) {}
             }
         }
+
+        // 2) v0.2.3.1 Fix C — reconstroi hash do grupo (sortedDoseIds.join('|'))
+        //    e cancela tambem. Multi-dose groups foram agendados com esse hash.
+        if (ids.length > 1) {
+            String[] sorted = new String[ids.length];
+            int j = 0;
+            for (String id : ids) {
+                String trimmed = id.trim();
+                if (!trimmed.isEmpty()) sorted[j++] = trimmed;
+            }
+            if (j > 1) {
+                String[] sortedFinal = new String[j];
+                System.arraycopy(sorted, 0, sortedFinal, 0, j);
+                java.util.Arrays.sort(sortedFinal);
+                String groupKey = String.join("|", sortedFinal);
+                int groupAlarmId = AlarmScheduler.idFromString(groupKey);
+                if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, groupAlarmId)) {
+                    cancelled++;
+                    try {
+                        JSONObject meta = new JSONObject();
+                        meta.put("alarmId", groupAlarmId);
+                        meta.put("groupKey", groupKey);
+                        meta.put("reason", "fcm_cancel_action_group");
+                        meta.put("source_scenario", "fcm_cancel_alarms_batch");
+                        AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", groupKey, meta);
+                    } catch (JSONException ignore) {}
+                }
+            }
+        }
+
         Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
     }
 

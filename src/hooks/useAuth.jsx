@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
-import { setSyncCredentials, clearSyncCredentials } from '../services/criticalAlarm'
+import { setSyncCredentials, clearSyncCredentials, syncUserPrefs } from '../services/criticalAlarm'
 import { logAuthEvent } from '../services/authTelemetry'
 
 const isNative = Capacitor.isNativePlatform()
@@ -163,6 +163,38 @@ export function AuthProvider({ children }) {
               schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
             }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
 
+            // #215 v0.2.3.0 fix bug device-validation 2026-05-13 (refinado): sincroniza
+            // user_prefs DB direto (NÃO cache localStorage que pode estar vazio em
+            // fresh install). Race condition prévia: useAuth listener dispara ANTES
+            // useUserPrefs queryFn fetchar DB → cache vazio → syncUserPrefs grava
+            // defaults (dndEnabled=false) → SharedPrefs Android sobrescrita errada
+            // → Java decide alarm_plus_push em vez de push_dnd.
+            //
+            // Solução: fetch DB user_prefs sync ANTES setSyncCredentials. SE DB
+            // tiver dnd_*, grava authoritative. Se DB falhar, fallback cache.
+            try {
+              const { data: prefsRow } = await supabase
+                .schema(import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol')
+                .from('user_prefs')
+                .select('prefs')
+                .eq('user_id', s.user.id)
+                .maybeSingle()
+              const dbPrefs = prefsRow?.prefs
+              const cachedPrefs = JSON.parse(localStorage.getItem('medcontrol_notif') || '{}')
+              // Merge: DB > cache. Se DB tem dndEnabled key (não-undefined), usa DB.
+              const resolved = (dbPrefs && Object.keys(dbPrefs).length > 0) ? dbPrefs : cachedPrefs
+              syncUserPrefs({
+                criticalAlarm: resolved.criticalAlarm !== false,
+                dndEnabled: !!resolved.dndEnabled,
+                dndStart: resolved.dndStart || '23:00',
+                dndEnd: resolved.dndEnd || '07:00'
+              }).catch((e) => console.warn('[useAuth] syncUserPrefs err:', e?.message))
+              // Plus atualiza cache localStorage pra coerência
+              if (dbPrefs && Object.keys(dbPrefs).length > 0) {
+                try { localStorage.setItem('medcontrol_notif', JSON.stringify(dbPrefs)) } catch { /* ignore */ }
+              }
+            } catch (e) { console.warn('[useAuth] syncUserPrefs DB fetch catch:', e?.message) }
+
             // Item #098 — re-bind FCM deviceToken cached ao novo user.
             // Listener PushNotifications 'registration' só dispara em install/
             // refresh do FCM token; troca de user (logout→login) não refire,
@@ -174,57 +206,62 @@ export function AuthProvider({ children }) {
               try {
                 const cachedToken = localStorage.getItem('dosy_fcm_token')
                 if (cachedToken) {
+                  // #226 v0.2.3.0 — passa device_id UUID estável
+                  const { getDeviceId } = await import('../services/criticalAlarm')
+                  let deviceIdUuid = null
+                  try { deviceIdUuid = await getDeviceId() } catch { /* fallback null */ }
                   supabase.schema('medcontrol').rpc('upsert_push_subscription', {
                     p_device_token: cachedToken,
                     p_platform: 'android',
                     p_advance_mins: 15,
                     p_user_agent: 'capacitor-android',
+                    p_device_id_uuid: deviceIdUuid,
                   }).then(({ error }) => {
                     if (error) console.warn('[useAuth] re-upsert push_sub err:', error.message)
-                    else console.log('[useAuth] push_sub re-bound to user', s.user.id)
+                    else console.log('[useAuth] push_sub re-bound to user', s.user.id, 'device_id_uuid:', deviceIdUuid)
                   })
                 }
               } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }
             }
           } else if (event === 'SIGNED_OUT') {
-            // Item #195 (release v0.2.1.5) — só DELETAR push_subscription se
-            // logout foi explícito (botão Sair). Antes deletava em qualquer
-            // SIGNED_OUT — quebrava reagendamento próximo cron schedule-alarms-fcm
-            // quando bug logout transient/spurious acontecia (combinado com #196
-            // protection acima, esse caminho só roda em logout REAL).
+            // #215 v0.2.3.0 fix falha de segurança device-validation 2026-05-13:
+            // SIGNED_OUT REAL (não-spurious, já filtrado linha ~102) sempre deleta
+            // push_subscription + clearSyncCredentials, independente da flag
+            // dosy_explicit_logout. Antes regra #195/v0.2.1.5 preservava push_sub
+            // se !explicitLogout — vazamento crítico: token órfão em DB recebe FCM
+            // forever, alarme/push de doses chega no device do user mesmo após
+            // logout (mesmo se device passou pra outro usuário OR user trocou conta
+            // sem clicar "Sair").
+            //
+            // SIGNED_OUT spurious já é capturado em #196 acima (linha ~102) — chega
+            // aqui APENAS quando sessão local foi de fato invalidada.
+            //
+            // Trade-off aceito: SIGNED_OUT real que não passa pelo path explicit
+            // (ex: JWT revoked server-side) também limpa push_sub. Próximo SIGNED_IN
+            // re-subscribe FCM automaticamente. Janela <1min sem alarme aceitável vs
+            // vazamento permanente.
             const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
-            // Item #201 — telemetria de logout REAL feita aqui (caminho
-            // SIGNED_OUT não-explícito = token revogado/inválido). Logout
-            // explícito é registrado dentro de signOut() ANTES de chamar
-            // supabase.auth.signOut(), pois aqui auth.uid() já é null e RPC
-            // log_auth_event falharia com AUTH_REQUIRED.
-            // NOTA: real_invalid_token NÃO consegue logar (sessão zerada).
-            // Trade-off aceito — caso raro e debugável via Sentry.
             if (!explicitLogout) {
-              console.warn('[useAuth] SIGNED_OUT real_invalid_token — telemetria não registrada (auth.uid() null)')
+              console.warn('[useAuth] SIGNED_OUT real (non-explicit, likely JWT revoked) — limpando push_sub + sync_credentials por segurança')
             }
-            if (explicitLogout) {
-              clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
-              // Item #098 — limpar push_subscription deste device do user que saiu
-              // (precisa rodar ANTES do auth.signOut completar o cache clear).
-              // Best-effort: se token cached + user atual disponível, delete sub.
-              try {
-                const cachedToken = localStorage.getItem('dosy_fcm_token')
-                if (cachedToken) {
-                  supabase.schema('medcontrol').from('push_subscriptions')
-                    .delete().eq('deviceToken', cachedToken)
-                    .then(({ error }) => {
-                      if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
-                    })
-                }
-              } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+            clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
-              // Limpa flag pra próximos eventos serem avaliados frescos
-              try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
-            } else {
-              console.warn('[useAuth] SIGNED_OUT without explicit logout flag — preserving push_subscription + sync credentials (extends #195)')
-            }
+            try {
+              const cachedToken = localStorage.getItem('dosy_fcm_token')
+              if (cachedToken) {
+                supabase.schema('medcontrol').from('push_subscriptions')
+                  .delete().eq('deviceToken', cachedToken)
+                  .then(({ error }) => {
+                    if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
+                    else console.log('[useAuth] push_sub deletado deviceToken=', cachedToken.slice(0, 12) + '...')
+                  })
+                // Limpa cache do token local — força re-register no próximo SIGNED_IN
+                try { localStorage.removeItem('dosy_fcm_token') } catch { /* ignore */ }
+              }
+            } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+
+            try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
           }
         })
         unsub = () => sub.subscription.unsubscribe()
@@ -418,6 +455,27 @@ export function AuthProvider({ children }) {
         new Promise((resolve) => setTimeout(resolve, 2000))  // timeout 2s
       ])
     } catch { /* fail-safe */ }
+
+    // #215 v0.2.3.0 fix security 2026-05-13: DELETE push_subscription ANTES
+    // supabase.auth.signOut() zerar JWT. Listener SIGNED_OUT roda APÓS signOut
+    // com anon JWT → 401 UNAUTHORIZED DELETE falha → push_sub fica órfão DB.
+    // Edge continua enviando FCM pra device deslogado = vazamento.
+    if (hasSupabase) {
+      try {
+        const cachedToken = localStorage.getItem('dosy_fcm_token')
+        if (cachedToken) {
+          await supabase.schema('medcontrol').from('push_subscriptions')
+            .delete().eq('deviceToken', cachedToken)
+          console.log('[useAuth.signOut] push_sub deletado ANTES signOut deviceToken=', cachedToken.slice(0, 12) + '...')
+        }
+        // Clear cache token local — força re-register próximo SIGNED_IN
+        try { localStorage.removeItem('dosy_fcm_token') } catch { /* ignore */ }
+        // Plus clearSyncCredentials Android (limpa SharedPreferences sensíveis)
+        try { await clearSyncCredentials() } catch (e) { console.warn('[useAuth.signOut] clearSyncCredentials err:', e?.message) }
+      } catch (e) {
+        console.warn('[useAuth.signOut] cleanup pre-signOut err:', e?.message)
+      }
+    }
 
     if (hasSupabase) await supabase.auth.signOut()
     else await mock.signOut()

@@ -1,6 +1,9 @@
 package com.dosyapp.dosy;
 
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -21,6 +24,34 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         handleAlarmAction(getIntent());
         enqueueDoseSyncWorker();
+        cleanupLegacyChannels();
+    }
+
+    /**
+     * Cleanup canais legados deletados (idempotente — no-op se não existir).
+     *
+     * Canais deletados:
+     *   - doses_v2          (LocalNotifications pré-#215)
+     *   - doses_critical_v2 (AlarmReceiver fallback pré-#215, renomeado dosy_alarm_fallback)
+     *   - dosy_tray_dnd     (Capacitor criou com som default por bug — substituído por dosy_tray_dnd_v2)
+     *
+     * Canais mantidos:
+     *   - doses_critical (AlarmService FG sound null — MediaPlayer drives loop)
+     *   - dosy_tray (Capacitor channels.js cria pra trays normais + daily summary)
+     *   - dosy_tray_dnd_v2 (Java AlarmScheduler.ensureTrayChannel cria sob-demand com sound:null)
+     *   - dosy_alarm_fallback (AlarmReceiver fallback path)
+     */
+    private void cleanupLegacyChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            nm.deleteNotificationChannel("doses_v2");
+            nm.deleteNotificationChannel("doses_critical_v2");
+            nm.deleteNotificationChannel("dosy_tray_dnd"); // v0.2.3.1 — Capacitor criou com som default
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "cleanupLegacyChannels failed: " + e.getMessage());
+        }
     }
 
     /**

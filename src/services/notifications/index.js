@@ -31,11 +31,7 @@ import { cancelAll } from './channels'
 import { rescheduleAll } from './scheduler'
 import { subscribeFcm, unsubscribeFcm, bindFcmListenersOnce } from './fcm'
 
-// Re-exports (back-compat com `import { rescheduleAll, inDnd, ... } from '../services/notifications'`)
-export { inDnd } from './prefs'
-export { cancelAll } from './channels'
-export { rescheduleAll } from './scheduler'
-export { subscribeFcm, unsubscribeFcm } from './fcm'
+// v0.2.3.1 — re-exports back-compat removidos (callers usam useNotifications hook).
 
 /**
  * Hook React — wrapper fino sobre as funções do módulo.

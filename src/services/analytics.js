@@ -133,18 +133,11 @@ export const EVENTS = {
   // Doses
   DOSE_CONFIRMED: 'dose_confirmed',
   DOSE_SKIPPED: 'dose_skipped',
-  DOSE_OVERDUE_DISMISSED: 'dose_overdue_dismissed',
   DOSE_UNDONE: 'dose_undone',
-
-  // Alarms
-  ALARM_FIRED: 'alarm_fired',
-  ALARM_DISMISSED: 'alarm_dismissed',
-  ALARM_SNOOZED: 'alarm_snoozed',
 
   // Notifications (push + local) — #007 telemetria delivery healthcare crítico
   NOTIFICATION_DELIVERED: 'notification_delivered', // FCM foreground OR LocalNotif fire
   NOTIFICATION_TAPPED: 'notification_tapped',       // user tap (push OR local)
-  NOTIFICATION_DISMISSED: 'notification_dismissed', // user swipe-away sem ação
 
   // Permissions
   NOTIF_PERM_GRANTED: 'notification_permission_granted',

@@ -1,60 +1,42 @@
 /**
  * notifications/scheduler.js — rescheduleAll + path web legacy.
- * #030 (release v0.2.0.11): split de notifications.js.
- * #207 (release v0.2.1.7): drop diff-and-apply, sempre full reschedule + Sentry breadcrumbs.
+ *
+ * #215 v0.2.3.0 — REFATORADO pra usar unifiedScheduler.js helper único 3-cenários.
+ * Antes lógica de decidir alarm vs tray vivia espalhada (advanceMins, criticalOn,
+ * canRingAlarm, dndWin checks). Agora delegado a `buildSchedulePayload` que
+ * retorna alarmPayload (opcional) + trayNotifPayload + metadata uniformizada.
+ *
+ * Throttle 30s + signature guard pós #211/#212 mantidos.
+ * Audit log enriquecido com `branch` + `horizon` + `source_scenario`.
  */
 
 import * as Sentry from '@sentry/react'
 import {
   scheduleCriticalAlarmGroup,
+  scheduleTrayGroup,
   isCriticalAlarmAvailable,
   checkCriticalAlarmEnabled
 } from '../criticalAlarm'
 import {
-  CHANNEL_ID,
   DAILY_SUMMARY_NOTIF_ID,
   isNative,
   loadPrefs,
-  doseIdToNumber,
-  inDnd,
   groupByMinute,
   filterUpcoming,
   enrichDose
 } from './prefs'
-import { ensureChannel, cancelAll, cancelGroup, loadScheduledState, saveScheduledState, clearScheduledState } from './channels'
+import {
+  ensureChannel,
+  cancelAll,
+  saveScheduledState,
+  clearScheduledState,
+  TRAY_CHANNEL_ID
+} from './channels'
 import { logAuditEventsBatch } from './auditLog'
+import { buildSchedulePayload, computeHorizon } from './unifiedScheduler'
 
-/**
- * Re-agenda baseado em doses + prefs atuais.
- *
- * Item #207 (release v0.2.1.7) — REVERTE diff-and-apply de #200.1.
- * Reasoning: idempotência via localStorage `dosy_scheduled_groups_v1` causa
- * drift silencioso quando OEM agressivo (Samsung One UI 7) mata AlarmManager
- * mas localStorage cache continua dizendo "agendado". Diff vazio → não re-agenda
- * → AlarmManager fica vazio → alarme NÃO TOCA. App de medicação não pode
- * tolerar essa janela de incerteza.
- *
- * Agora: SEMPRE full cancelAll + reschedule from scratch. Custo: ~200-2000ms
- * janela curta sem alarmes (mitigação: roda async em background event loop,
- * usuário não percebe). Garantia: AlarmManager state SEMPRE bate com doses
- * pendentes do DB no momento da execução.
- *
- * Item #207 — `advanceMins ?? 0` (alinha DEFAULT_PREFS useUserPrefs.js).
- * Antes: `?? 15` agendava alarme 15min ANTES do horário da dose se prefs
- * locais não tinham campo explícito. Causava alarmes prematuros + confusão
- * user. DEFAULT_PREFS sempre declara 0 (alarme exato no horário).
- *
- * @param {Object} params
- * @param {Array} params.doses — todas doses do user (filtra interna por status+window)
- * @param {Array} params.patients — pra enriquecer com patientName
- * @param {Object} [params.prefsOverride] — força prefs customizadas (default: lê do storage)
- */
-// v0.2.2.1 (#211) — throttle module-level. Realtime channel reconnect, useEffect
-// deps changing, watchdog 60s, e queries refetch convergem em rescheduleAll
-// frequente. Audit log v0.2.2.0 revelou 1+ batch/min com 100-400 inserts/min.
-// Throttle 30s acumula múltiplas invocações próximas em uma execução real
-// (skip + agenda single trailing run). Preserva updates real quando dose
-// muda (mutationRegistry chama scheduleDoses ao confirm/skip/undo).
+// #211 — throttle module-level. Realtime channel reconnect, useEffect deps changing,
+// watchdog 60s, e queries refetch convergem em rescheduleAll frequente.
 const RESCHEDULE_THROTTLE_MS = 30_000
 let _lastRunAt = 0
 let _pendingTrailing = null
@@ -68,7 +50,6 @@ export async function rescheduleAll(args = {}) {
   const now = Date.now()
   const elapsed = now - _lastRunAt
   if (elapsed < RESCHEDULE_THROTTLE_MS) {
-    // Within throttle window — schedule trailing run com last args
     _pendingArgs = args
     if (!_pendingTrailing) {
       const delay = RESCHEDULE_THROTTLE_MS - elapsed
@@ -83,7 +64,6 @@ export async function rescheduleAll(args = {}) {
     return { throttled: true }
   }
   _lastRunAt = now
-  // Clear pending trailing pois agora vamos executar
   if (_pendingTrailing) {
     clearTimeout(_pendingTrailing)
     _pendingTrailing = null
@@ -93,175 +73,154 @@ export async function rescheduleAll(args = {}) {
   return _rescheduleAllImpl(args)
 }
 
-async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = null } = {}) {
+/**
+ * #215 — Cenário 01: app open / update / mudança de pref.
+ * Reagenda TUDO from scratch (cancelAll + reschedule) baseado em doses + prefs atuais.
+ *
+ * @param {Object} params
+ * @param {Array}  params.doses        — todas doses do user (filtra interna)
+ * @param {Array}  params.patients     — pra enriquecer com patientName
+ * @param {Object} [params.prefsOverride] — força prefs customizadas (default: loadPrefs())
+ * @param {string} [params.sourceScenario] — 'app_open' | 'prefs_change' | 'manual'
+ */
+async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = null, sourceScenario = 'app_open' } = {}) {
   const prefs = prefsOverride || loadPrefs()
-  const adv = prefs.advanceMins ?? 0  // #207: alinha DEFAULT_PREFS (alarme exato)
-  const pushOn = prefs.push === true
-  const criticalOn = prefs.criticalAlarm !== false  // default true
   const summaryOn = prefs.dailySummary === true
 
-  // Item #207 — força full cancelAll SEMPRE (drop idempotência diff-and-apply
-  // de #200.1). Garante AlarmManager limpa state real antes re-agendar todos.
   Sentry.addBreadcrumb({
     category: 'alarm',
     message: 'rescheduleAll START',
     level: 'info',
-    data: { dosesCount: doses.length, patientsCount: patients.length }
+    data: { dosesCount: doses.length, patientsCount: patients.length, sourceScenario }
   })
-  console.log('[Notif] reschedule START — full cancelAll')
-  // v0.2.2.1 — Audit batched: acumula tudo + 1 insert no final.
-  // Antes: per-group insert (10-100 inserts/batch). Agora: 1 insert/batch.
+  console.log('[Notif] reschedule START — full cancelAll, sourceScenario:', sourceScenario)
+
   const auditAccumulator = []
   auditAccumulator.push({
     action: 'batch_start',
-    metadata: { dosesCount: doses.length, patientsCount: patients.length }
+    metadata: { dosesCount: doses.length, patientsCount: patients.length, source_scenario: sourceScenario }
   })
-  await cancelAll()
 
-  // Setup channel (idempotent, OK chamar sempre)
+  await cancelAll()
   await ensureChannel()
 
-  // Verificar capability de exact alarm (Android 12+)
+  // Verifica permission Android exact alarm (only relevant pra branch alarm_plus_push)
   let canExact = true
   try {
     const en = await checkCriticalAlarmEnabled()
     canExact = en?.canScheduleExact !== false
   } catch (e) { console.warn('[Notif] checkExact:', e?.message) }
-  const canRingAlarm = criticalOn && isCriticalAlarmAvailable() && canExact
+  const criticalEnabledNative = isCriticalAlarmAvailable() && canExact
 
-  console.log('[Notif] reschedule — push:', pushOn, 'critical:', criticalOn, 'dnd:', !!prefs.dndEnabled, 'summary:', summaryOn, 'advanceMins:', adv)
-
+  // Enriquece doses com patientName + filtra pending na janela 48h
   const patientsMap = new Map((patients || []).map(p => [p.id, p]))
   const enriched = (doses || []).map(d => enrichDose(d, patientsMap))
   const upcoming = filterUpcoming(enriched)
-  const groups = groupByMinute(upcoming)
 
-  // Item #207 — full reschedule (sem diff-and-apply). Calcula state desejado
-  // e agenda do zero. Estado persistido em localStorage só pra observabilidade
-  // (debug + telemetria), não pra controle de fluxo.
-  const desired = new Map() // groupId → { group, at, isDndWin, shouldRing, doseIdsCsv, hash }
-  if (pushOn) {
-    for (const [, group] of groups) {
-      const at = new Date(new Date(group[0].scheduledAt).getTime() - adv * 60000)
-      if (at.getTime() <= Date.now()) continue
-      const groupKey = group.map(d => d.id).sort().join('|')
-      const groupId = doseIdToNumber(groupKey)
-      const doseIdsCsv = group.map(d => d.id).join(',')
-      const isDndWin = inDnd(group[0].scheduledAt, prefs)
-      const shouldRing = canRingAlarm && !isDndWin
-      const hash = `${at.toISOString()}|${groupKey}|${shouldRing ? 'r' : 't'}|${group[0].scheduledAt}`
-      desired.set(groupId, { hash, group, at, isDndWin, shouldRing, doseIdsCsv })
-    }
-  }
+  // #215 decisão 8 — janela dinâmica baseada em projeção de itens
+  const { horizonMs, projectedItems } = computeHorizon(upcoming, prefs)
+  const horizonHours = Math.round(horizonMs / 3600000)
+  const horizonCutoff = Date.now() + horizonMs
+  const dosesInHorizon = upcoming.filter(d => new Date(d.scheduledAt).getTime() <= horizonCutoff)
 
-  console.log('[Notif] groups to schedule:', desired.size)
+  console.log(`[Notif] reschedule — push:${prefs.push} crit:${prefs.criticalAlarm} dnd:${!!prefs.dndEnabled} summary:${summaryOn} horizon:${horizonHours}h projected:${projectedItems}items`)
+
+  // Group by minute (doses no mesmo minuto compartilham mesma branch decision)
+  const groups = groupByMinute(dosesInHorizon)
 
   const localNotifs = []
   let alarmsScheduled = 0
-  let dndSkipped = 0
+  let trayScheduled = 0
+  let dndCount = 0
+  let criticalOffCount = 0
   const newState = {}
 
-  // Schedule todos
-  for (const [groupId, d] of desired) {
-    const { group, at, isDndWin, shouldRing, doseIdsCsv, hash } = d
+  // v0.2.3.1 Plano A — trays agendados em Java (TrayNotificationReceiver) via
+  // CriticalAlarm.scheduleTrayGroup. Capacitor LocalNotifications usado APENAS
+  // pra daily summary (caso especial repeat=day).
+  // Elimina dual tray race RC-1 (M2 Java + M3 Capacitor coexistindo).
+  for (const [, group] of groups) {
+    const payload = buildSchedulePayload(group, prefs)
+    if (!payload) continue
 
-    if (shouldRing) {
-      try {
-        await scheduleCriticalAlarmGroup({
-          id: groupId,
-          at: at.toISOString(),
-          doses: group.map(dose => ({
-            doseId: dose.id,
-            medName: dose.medName,
-            unit: dose.unit,
-            patientName: dose.patientName || '',
-            scheduledAt: dose.scheduledAt
-          }))
-        })
-        alarmsScheduled += group.length
-        newState[groupId] = hash
+    const { branch, groupId, alarmPayload, trayNotifPayload, metadata } = payload
+    const trayAt = trayNotifPayload.schedule.at
+    const trayChannelId = trayNotifPayload.channelId
 
-        // Audit acumula (flush no batch_end)
+    // Branch alarm_plus_push: alarme nativo + tray backup co-agendado (Java M2)
+    if (branch === 'alarm_plus_push') {
+      if (!criticalEnabledNative) {
+        // Permission negada (canScheduleExact=false) — degrade pra só tray Java
+        console.warn('[Notif] alarm_plus_push solicitado mas permission negada — fallback pra só tray Java')
+        try {
+          await scheduleTrayGroup({ id: groupId, at: trayAt, channelId: 'dosy_tray', doses: group })
+          trayScheduled++
+        } catch (e) { console.warn('[Notif] tray schedule fail:', e?.message) }
         for (const dose of group) {
           auditAccumulator.push({
-            action: 'scheduled',
-            doseId: dose.id,
-            scheduledAt: dose.scheduledAt,
-            patientName: dose.patientName || null,
-            medName: dose.medName || null,
-            metadata: {
-              groupId,
-              groupSize: group.length,
-              ringAt: at.toISOString(),
-              advanceMins: adv,
-              kind: 'critical_alarm'
-            }
+            action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+            patientName: dose.patientName || null, medName: dose.medName || null,
+            metadata: { ...metadata, branch: 'push_critical_off', degraded: true, reason: 'cannot_schedule_exact', source_scenario: sourceScenario, horizon: horizonHours }
           })
         }
-
-        // v0.2.2.4 (#214) — REMOVIDO dose_alarms_scheduled upsert.
-        // Tabela órfã pós-#209 (notify-doses-1min + schedule-alarms-fcm-6h crons
-        // removidos). alarm_audit_log v0.2.2.0 substitui completamente como
-        // rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia.
+        continue
+      }
+      try {
+        await scheduleCriticalAlarmGroup(alarmPayload)
+        alarmsScheduled += group.length
       } catch (e) {
         console.error('[Notif] alarm schedule fail at groupId', groupId, ':', e?.message || e)
       }
-    } else if (isDndWin && criticalOn) {
-      dndSkipped += group.length
-      newState[groupId] = hash
+      // Tray backup via Java (id = groupId + BACKUP_OFFSET, channel dosy_tray)
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+      } catch (e) { console.warn('[Notif] tray backup schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
       for (const dose of group) {
         auditAccumulator.push({
-          action: 'skipped',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
-          metadata: { groupId, reason: 'dnd_window' }
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
+          metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
         })
       }
     }
 
-    // Push notif (tray) — só se NÃO vai tocar alarme crítico.
-    if (!shouldRing) {
-      const title = group.length === 1 ? 'Dosy 💊' : `💊 ${group.length} doses agora`
-      const body = group.length === 1
-        ? `${group[0].medName} — ${group[0].unit}`
-        : group.map(dose => `${dose.medName} (${dose.unit})`).join(' · ')
-      localNotifs.push({
-        id: groupId,
-        title,
-        body,
-        largeBody: body,
-        summaryText: group.length === 1 ? undefined : `${group.length} doses`,
-        schedule: { at, allowWhileIdle: true },
-        extra: { type: 'dose', doseIds: doseIdsCsv, scheduledAt: group[0].scheduledAt, dnd: isDndWin },
-        channelId: CHANNEL_ID,
-        autoCancel: true
-      })
-      newState[groupId] = hash
-
-      // Audit acumula (flush no batch_end)
+    // Branch push_dnd: só tray Java (canal dosy_tray_dnd vibração leve)
+    else if (branch === 'push_dnd') {
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+        trayScheduled++
+        dndCount += group.length
+      } catch (e) { console.warn('[Notif] tray DnD schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
       for (const dose of group) {
         auditAccumulator.push({
-          action: 'scheduled',
-          doseId: dose.id,
-          scheduledAt: dose.scheduledAt,
-          patientName: dose.patientName || null,
-          medName: dose.medName || null,
-          metadata: {
-            groupId,
-            groupSize: group.length,
-            ringAt: at.toISOString(),
-            advanceMins: adv,
-            kind: 'local_notif',
-            dndWindow: isDndWin
-          }
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
+          metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
+        })
+      }
+    }
+
+    // Branch push_critical_off: só tray Java (canal dosy_tray)
+    else if (branch === 'push_critical_off') {
+      try {
+        await scheduleTrayGroup({ id: trayNotifPayload.id, at: trayAt, channelId: trayChannelId, doses: group })
+        trayScheduled++
+        criticalOffCount += group.length
+      } catch (e) { console.warn('[Notif] tray critical-off schedule fail:', e?.message) }
+      newState[groupId] = `${trayAt}|${branch}|${horizonHours}`
+      for (const dose of group) {
+        auditAccumulator.push({
+          action: 'scheduled', doseId: dose.id, scheduledAt: dose.scheduledAt,
+          patientName: dose.patientName || null, medName: dose.medName || null,
+          metadata: { ...metadata, source_scenario: sourceScenario, horizon: horizonHours }
         })
       }
     }
   }
 
-  // ─── DAILY SUMMARY (independente de push master) ────────────────────────────
+  // ─── DAILY SUMMARY (independente do refactor #215) ──────────────────────────
   if (summaryOn) {
     const [hh, mm] = (prefs.summaryTime || '07:00').split(':').map(Number)
     const nextFire = new Date()
@@ -284,47 +243,49 @@ async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = n
       title: '📅 Dosy — Resumo do dia',
       body,
       schedule: { at: nextFire, every: 'day', allowWhileIdle: true },
-      channelId: CHANNEL_ID,
+      channelId: TRAY_CHANNEL_ID,
       autoCancel: true,
       extra: { type: 'dailySummary' }
     })
   }
 
-  // ─── COMMIT LOCAL NOTIFS ────────────────────────────────────────────────────
+  // ─── COMMIT LocalNotifications ──────────────────────────────────────────────
   if (localNotifs.length === 0 && !summaryOn) {
-    // Item #207 — persiste state pra observabilidade (debug + getScheduledIds futuro).
     saveScheduledState(newState)
     console.log('[Notif] reschedule END — nothing to schedule')
     auditAccumulator.push({
       action: 'batch_end',
-      metadata: { alarmsScheduled, dndSkipped, localNotifs: 0, summary: false, reason: 'nothing_to_schedule' }
+      metadata: {
+        alarmsScheduled, trayScheduled, dndCount, criticalOffCount,
+        summary: false, horizon: horizonHours, projectedItems,
+        reason: 'nothing_to_schedule', source_scenario: sourceScenario
+      }
     })
     logAuditEventsBatch(auditAccumulator)
-    return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: false }
+    return { alarms: alarmsScheduled, trayScheduled, dndCount, criticalOffCount, summary: false, horizon: horizonHours }
   }
 
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
     if (localNotifs.length > 0) {
       const result = await LocalNotifications.schedule({ notifications: localNotifs })
-      console.log('[Notif] reschedule END — alarms:', alarmsScheduled, '/ dnd-skipped:', dndSkipped, '/ local:', result?.notifications?.length, '/ summary:', summaryOn)
-    } else {
-      console.log('[Notif] reschedule END — alarms:', alarmsScheduled, '/ dnd-skipped:', dndSkipped, '/ local: 0 / summary:', summaryOn)
+      console.log(`[Notif] reschedule END — alarms:${alarmsScheduled} tray:${trayScheduled} dnd:${dndCount} criticalOff:${criticalOffCount} local:${result?.notifications?.length} summary:${summaryOn} horizon:${horizonHours}h`)
     }
   } catch (e) {
     console.error('[Notif] LocalNotifications.schedule FAILED:', e?.message || e)
-    // Schedule batch falhou. Alarmes críticos podem estar agendados mas tray notifs não.
-    // Limpar state força próximo rescheduleAll fazer reset completo (safe fallback).
     clearScheduledState()
     auditAccumulator.push({
       action: 'batch_end',
-      metadata: { alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true, errorMsg: e?.message }
+      metadata: {
+        alarmsScheduled, trayScheduled, dndCount, criticalOffCount,
+        summary: summaryOn, horizon: horizonHours,
+        error: true, errorMsg: e?.message, source_scenario: sourceScenario
+      }
     })
     logAuditEventsBatch(auditAccumulator)
-    return { alarms: alarmsScheduled, dndSkipped, localNotifs: 0, summary: summaryOn, error: true }
+    return { alarms: alarmsScheduled, trayScheduled, dndCount, criticalOffCount, summary: summaryOn, horizon: horizonHours, error: true }
   }
 
-  // Persist state pra observabilidade.
   saveScheduledState(newState)
 
   Sentry.addBreadcrumb({
@@ -332,30 +293,23 @@ async function _rescheduleAllImpl({ doses = [], patients = [], prefsOverride = n
     message: 'rescheduleAll END',
     level: 'info',
     data: {
-      alarmsScheduled,
-      dndSkipped,
-      localNotifs: localNotifs.length,
-      summary: summaryOn,
-      advanceMins: adv,
-      groupsCount: desired.size
+      alarmsScheduled, trayScheduled, dndCount, criticalOffCount,
+      localNotifs: localNotifs.length, summary: summaryOn,
+      horizon: horizonHours, projectedItems, sourceScenario
     }
   })
 
-  // v0.2.2.1 — flush audit accumulator em 1 insert único (batch_start + N scheduled + batch_end).
   auditAccumulator.push({
     action: 'batch_end',
     metadata: {
-      alarmsScheduled,
-      dndSkipped,
-      localNotifs: localNotifs.length,
-      summary: summaryOn,
-      advanceMins: adv,
-      groupsCount: desired.size
+      alarmsScheduled, trayScheduled, dndCount, criticalOffCount,
+      localNotifs: localNotifs.length, summary: summaryOn,
+      horizon: horizonHours, projectedItems, source_scenario: sourceScenario
     }
   })
   logAuditEventsBatch(auditAccumulator)
 
-  return { alarms: alarmsScheduled, dndSkipped, localNotifs: localNotifs.length, summary: summaryOn }
+  return { alarms: alarmsScheduled, trayScheduled, dndCount, criticalOffCount, summary: summaryOn, horizon: horizonHours }
 }
 
 // ─── WEB PUSH LEGACY ──────────────────────────────────────────────────────────
@@ -364,7 +318,7 @@ export async function rescheduleAllWeb(doses, patients, prefsOverride) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
   if (Notification.permission !== 'granted') return
   const prefs = prefsOverride || loadPrefs()
-  const adv = prefs.advanceMins ?? 0  // #207: alinha DEFAULT_PREFS
+  const adv = prefs.advanceMins ?? 0
   const upcoming = filterUpcoming(doses)
   const reg = await navigator.serviceWorker.ready
   const sw = reg.active || reg.waiting || reg.installing

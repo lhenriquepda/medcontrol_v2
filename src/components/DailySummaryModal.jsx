@@ -20,16 +20,15 @@ export default function DailySummaryModal({ open, onClose }) {
   const in24h = new Date(now.getTime() + 24 * 3600 * 1000)
   const past30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000)
 
-  const { data: pending = [] } = useDoses({
-    from: now.toISOString(),
-    to: in24h.toISOString(),
-    status: 'pending'
-  })
-  const { data: overdue = [] } = useDoses({
+  // v0.2.3.1 Bloco 7 (B-02) — 1 query unica em vez de 2 (eram pending + overdue
+  // separados com filter client-side). Cada useDoses dispara round-trip DB.
+  // Janela ampla -30d/+24h cobre overdue + pending. Filter por status client-side.
+  const { data: doses = [] } = useDoses({
     from: past30.toISOString(),
-    to: now.toISOString(),
-    status: 'overdue'
+    to: in24h.toISOString()
   })
+  const pending = doses.filter(d => d.status === 'pending' && new Date(d.scheduledAt) >= now)
+  const overdue = doses.filter(d => d.status === 'overdue')
 
   const patientName = useMemo(() => {
     const map = new Map(patients.map(p => [p.id, p.name]))

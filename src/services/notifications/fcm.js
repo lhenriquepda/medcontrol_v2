@@ -92,8 +92,19 @@ export async function unsubscribeFcm() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          await supabase.schema('medcontrol').from('push_subscriptions')
+          // v0.2.3.2 #228 fix — filtra delete por device_id_uuid pra não apagar push_sub
+          // de OUTROS devices do mesmo user (multi-device cross-contamination bug).
+          // Fallback: se getDeviceId falha (legacy), deleta todos android (old behavior).
+          let deviceIdUuid = null
+          try {
+            const mod = await import('../criticalAlarm')
+            deviceIdUuid = await mod.getDeviceId()
+          } catch { /* fallback null → legacy delete-all */ }
+
+          let q = supabase.schema('medcontrol').from('push_subscriptions')
             .delete().eq('userId', user.id).eq('platform', 'android')
+          if (deviceIdUuid) q = q.eq('device_id_uuid', deviceIdUuid)
+          await q
         }
       } catch (e) { console.warn('[Notif] unsubscribe delete:', e?.message) }
     }
@@ -132,14 +143,24 @@ export async function bindFcmListenersOnce() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const advanceMins = loadPrefs().advanceMins ?? 15
+
+      // #226 v0.2.3.0 — passa device_id UUID pra RPC consistência cross-source.
+      // CriticalAlarmPlugin.getDeviceId retorna UUID estável de SharedPreferences.
+      let deviceIdUuid = null
+      try {
+        const mod = await import('../criticalAlarm')
+        deviceIdUuid = await mod.getDeviceId()
+      } catch { /* fallback null — server-side gen_random_uuid */ }
+
       const { error } = await supabase.schema('medcontrol').rpc('upsert_push_subscription', {
         p_device_token: deviceToken,
         p_platform: 'android',
         p_advance_mins: advanceMins,
-        p_user_agent: 'capacitor-android'
+        p_user_agent: 'capacitor-android',
+        p_device_id_uuid: deviceIdUuid
       })
       if (error) console.error('[FCM] upsert RPC FAILED:', error)
-      else console.log('[FCM] token persisted')
+      else console.log('[FCM] token persisted device_id_uuid:', deviceIdUuid)
     } catch (e) { console.error('[FCM] registration handler:', e) }
   })
 

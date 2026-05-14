@@ -24,7 +24,6 @@ public class AlarmActionReceiver extends BroadcastReceiver {
     public static final String ACTION_SNOOZE = "com.dosyapp.dosy.ALARM_SNOOZE";
     public static final String ACTION_IGNORE = "com.dosyapp.dosy.ALARM_IGNORE";
 
-    private static final int NOTIF_ID_OFFSET = 100_000_000;
     private static final int FS_NOTIF_OFFSET = 200_000_000;
 
     @Override
@@ -39,9 +38,8 @@ public class AlarmActionReceiver extends BroadcastReceiver {
         // Stop sound + vibration + FG service first
         AlarmService.stopActiveAlarm(context);
 
-        // Cancel any leftover notifs
+        // Cancel any leftover notifs (AlarmReceiver fallback fullscreen-intent notif)
         NotificationManagerCompat nm = NotificationManagerCompat.from(context);
-        nm.cancel(alarmId + NOTIF_ID_OFFSET);
         nm.cancel(alarmId + FS_NOTIF_OFFSET);
 
         // Also try to finish AlarmActivity if open (best-effort via close-system-dialogs broadcast)
@@ -89,6 +87,14 @@ public class AlarmActionReceiver extends BroadcastReceiver {
 
         try {
             am.setAlarmClock(new AlarmManager.AlarmClockInfo(snoozeAt, showPi), firePi);
+            // v0.2.3.1 A-03 Fix — persiste snoozeAt em SharedPreferences pra sobreviver reboot.
+            // Sem isso, BootReceiver lê triggerAt antigo + re-agenda no horário original.
+            try {
+                org.json.JSONArray doses = new org.json.JSONArray(dosesJson != null ? dosesJson : "[]");
+                AlarmScheduler.persistSnoozedAlarm(context, alarmId, snoozeAt, doses);
+            } catch (Exception persistErr) {
+                android.util.Log.w("AlarmActionReceiver", "persistSnoozedAlarm error: " + persistErr.getMessage());
+            }
         } catch (SecurityException ignored) {}
     }
 }

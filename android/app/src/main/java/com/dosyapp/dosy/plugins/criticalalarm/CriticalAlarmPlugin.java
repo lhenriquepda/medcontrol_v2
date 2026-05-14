@@ -45,35 +45,75 @@ public class CriticalAlarmPlugin extends Plugin {
     private static final String PREFS = "dosy_critical_alarms";
     private static final String KEY_SCHEDULED = "scheduled_alarms";
 
+    /**
+     * v0.2.3.1 Plano A — scheduleTrayGroup: agenda tray notification puro Java
+     * (sem alarme fullscreen). Substitui Capacitor LocalNotifications.schedule
+     * pra trays de dose. JS scheduler.js refactor unifica em Java pra eliminar
+     * dual tray race (M2 + M3 coexistindo).
+     */
     @PluginMethod
-    public void schedule(PluginCall call) {
+    public void scheduleTrayGroup(PluginCall call) {
         Integer id = call.getInt("id");
         String at = call.getString("at");
-        String doseId = call.getString("doseId");
-        String medName = call.getString("medName", "Dose");
-        String unit = call.getString("unit", "");
-        String patientName = call.getString("patientName", "");
-
-        if (id == null || at == null || doseId == null) {
-            call.reject("missing required: id, at, doseId");
+        String channelId = call.getString("channelId", "dosy_tray");
+        JSArray dosesArr = call.getArray("doses");
+        if (id == null || at == null || dosesArr == null) {
+            call.reject("missing required: id, at, doses[]");
             return;
         }
-
-        // Wrap single dose as a 1-element group for unified handling
-        JSONArray doses = new JSONArray();
+        long triggerAt;
         try {
-            JSONObject d = new JSONObject();
-            d.put("doseId", doseId);
-            d.put("medName", medName);
-            d.put("unit", unit);
-            d.put("patientName", patientName);
-            doses.put(d);
-        } catch (JSONException e) {
-            call.reject("json build error: " + e.getMessage());
+            triggerAt = java.time.Instant.parse(at).toEpochMilli();
+        } catch (Exception e) {
+            call.reject("invalid 'at': " + at);
             return;
         }
+        if (triggerAt <= System.currentTimeMillis()) {
+            call.reject("'at' must be in the future");
+            return;
+        }
+        JSONArray doses = new JSONArray();
+        for (int i = 0; i < dosesArr.length(); i++) {
+            try {
+                JSONObject src = dosesArr.getJSONObject(i);
+                JSONObject d = new JSONObject();
+                d.put("doseId", src.optString("doseId", ""));
+                d.put("medName", src.optString("medName", "Dose"));
+                d.put("unit", src.optString("unit", ""));
+                d.put("patientName", src.optString("patientName", ""));
+                d.put("scheduledAt", src.optString("scheduledAt", ""));
+                doses.put(d);
+            } catch (JSONException ignored) {}
+        }
+        AlarmScheduler.scheduleTrayGroup(getContext(), id, triggerAt, doses, channelId);
+        JSObject ret = new JSObject();
+        ret.put("scheduled", true);
+        ret.put("id", id);
+        ret.put("count", doses.length());
+        call.resolve(ret);
+    }
 
-        scheduleInternal(call, id, at, doses);
+    /**
+     * v0.2.3.1 Plano A — cancelTrayGroup: cancela tray PendingIntent + remove persisted.
+     */
+    @PluginMethod
+    public void cancelTrayGroup(PluginCall call) {
+        Integer id = call.getInt("id");
+        if (id == null) {
+            call.reject("id required");
+            return;
+        }
+        AlarmScheduler.cancelTrayGroup(getContext(), id);
+        call.resolve();
+    }
+
+    /**
+     * v0.2.3.1 Plano A — cancelAllTrays: rescheduleAll cleanup helper.
+     */
+    @PluginMethod
+    public void cancelAllTrays(PluginCall call) {
+        AlarmScheduler.cancelAllTrays(getContext());
+        call.resolve();
     }
 
     @PluginMethod
@@ -139,8 +179,7 @@ public class CriticalAlarmPlugin extends Plugin {
      * Chamado pelo JS após login (useAuth.jsx onAuthStateChange SIGNED_IN).
      *
      * Item #083.6 — adiciona device_id estável (UUID v4 gerado uma vez,
-     * persiste). Usado por DosyMessagingService.reportAlarmScheduled e
-     * notify-doses cron pra distinguir alarmes por device.
+     * persiste). Usado por AlarmAuditLogger.device_id cross-source consistency.
      */
     @PluginMethod
     public void setSyncCredentials(PluginCall call) {
@@ -171,12 +210,10 @@ public class CriticalAlarmPlugin extends Plugin {
             deviceId = java.util.UUID.randomUUID().toString();
         }
 
-        // Item #085 (release v0.1.7.3) — toggle Alarme Crítico do user.
-        // Se passado, atualiza SP. Senão, mantém valor existente (default true).
-        boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
-        if (call.hasOption("criticalAlarmEnabled")) {
-            criticalAlarmEnabled = call.getBoolean("criticalAlarmEnabled", true);
-        }
+        // v0.2.3.1 Bloco 6 (A-05) — REMOVIDO write critical_alarm_enabled em
+        // dosy_sync_credentials. Namespace consolidado: dosy_user_prefs (via syncUserPrefs).
+        // dosy_sync_credentials guarda apenas dados de auth (refresh_token, anon_key,
+        // access_token, schema, user_id, device_id).
 
         SharedPreferences.Editor ed = sp.edit()
             .putString("supabase_url", url)
@@ -184,11 +221,18 @@ public class CriticalAlarmPlugin extends Plugin {
             .putString("user_id", userId)
             .putString("refresh_token", refreshToken)
             .putString("schema", schema)
-            .putString("device_id", deviceId)
-            .putBoolean("critical_alarm_enabled", criticalAlarmEnabled);
+            .putString("device_id", deviceId);
         if (accessToken != null) ed.putString("access_token", accessToken);
         if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
         ed.apply();
+
+        // v0.2.3.1 — se criticalAlarmEnabled foi passado, sync pra namespace unificado.
+        // Mantem compat com chamadas legacy que enviam o campo.
+        if (call.hasOption("criticalAlarmEnabled")) {
+            getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("critical_alarm_enabled",
+                    call.getBoolean("criticalAlarmEnabled", true)).apply();
+        }
 
         JSObject ret = new JSObject();
         ret.put("deviceId", deviceId);
@@ -196,53 +240,41 @@ public class CriticalAlarmPlugin extends Plugin {
     }
 
     /**
-     * Item #205 (release v0.2.1.8) — atualiza apenas access_token + exp em
-     * SharedPreferences. Chamado pelo useAuth.jsx no listener TOKEN_REFRESHED.
+     * v0.2.3.1 Bloco 6 (A-05) — setCriticalAlarmEnabled REMOVIDO.
+     * Use syncUserPrefs({ criticalAlarm: bool }) que cobre namespace unificado.
+     */
+
+    /**
+     * #215 v0.2.3.0 — sincroniza prefs completas pro namespace `dosy_user_prefs`.
+     * Chamado pelo useUserPrefs.mutationFn sempre que prefs mudam.
+     * AlarmScheduler.scheduleDoseAlarm lê dali pra decidir branch.
      *
-     * Estratégia anti-storm xx:00: JS supabase-js é ÚNICA fonte de refresh.
-     * Native (DoseSyncWorker, DosyMessagingService) consome access_token cached
-     * via essa SharedPref. Sem isso, 3 fontes paralelas refresh chain → Supabase
-     * detecta token reuse → revoga chain → user re-login.
+     * Payload esperado:
+     *   { criticalAlarm: bool, dndEnabled: bool, dndStart: "HH:mm", dndEnd: "HH:mm" }
      */
     @PluginMethod
-    public void updateAccessToken(PluginCall call) {
-        String accessToken = call.getString("accessToken");
-        Long accessTokenExp = null;
-        if (call.hasOption("accessTokenExp")) {
-            try { accessTokenExp = call.getLong("accessTokenExp"); } catch (Exception ignored) {}
+    public void syncUserPrefs(PluginCall call) {
+        SharedPreferences sp = getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        SharedPreferences.Editor ed = sp.edit();
+        if (call.hasOption("criticalAlarm")) {
+            ed.putBoolean("critical_alarm_enabled", call.getBoolean("criticalAlarm", true));
         }
-        if (accessToken == null) {
-            call.reject("accessToken required");
-            return;
+        if (call.hasOption("dndEnabled")) {
+            ed.putBoolean("dnd_enabled", call.getBoolean("dndEnabled", false));
         }
-        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
-        SharedPreferences.Editor ed = sp.edit().putString("access_token", accessToken);
-        if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
+        if (call.hasOption("dndStart")) {
+            ed.putString("dnd_start", call.getString("dndStart", "23:00"));
+        }
+        if (call.hasOption("dndEnd")) {
+            ed.putString("dnd_end", call.getString("dndEnd", "07:00"));
+        }
         ed.apply();
         call.resolve();
     }
 
     /**
-     * Item #085 (release v0.1.7.3) — atualiza só o toggle Alarme Crítico em
-     * SharedPreferences. Chamado pelo useUserPrefs.mutationFn quando user
-     * mexe no toggle em Ajustes (sem precisar redo full setSyncCredentials).
-     * DoseSyncWorker + DosyMessagingService leem essa flag antes de agendar.
-     */
-    @PluginMethod
-    public void setCriticalAlarmEnabled(PluginCall call) {
-        Boolean enabled = call.getBoolean("enabled");
-        if (enabled == null) {
-            call.reject("enabled required (boolean)");
-            return;
-        }
-        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
-        sp.edit().putBoolean("critical_alarm_enabled", enabled).apply();
-        call.resolve();
-    }
-
-    /**
      * Item #083.6 — retorna device_id pra JS poder informar ao server
-     * (e.g. rescheduleAll upsert dose_alarms_scheduled).
+     * (alarm_audit_log device_id consistency cross-source).
      * Gera UUID se ausente (primeira chamada).
      */
     @PluginMethod
@@ -287,6 +319,17 @@ public class CriticalAlarmPlugin extends Plugin {
         am.cancel(pi);
         pi.cancel();
 
+        // #215 v0.2.3.0 fix device-validation 2026-05-13: cancela tray backup
+        // co-agendada (id + BACKUP_OFFSET). Mesma razão de cancelAll().
+        int trayId = id + AlarmScheduler.BACKUP_OFFSET;
+        Intent trayIntent = new Intent(ctx, TrayNotificationReceiver.class);
+        PendingIntent trayPi = PendingIntent.getBroadcast(
+            ctx, trayId, trayIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        am.cancel(trayPi);
+        trayPi.cancel();
+
         removePersisted(id);
 
         call.resolve();
@@ -303,6 +346,7 @@ public class CriticalAlarmPlugin extends Plugin {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 int id = obj.getInt("id");
+                // Cancela AlarmReceiver (alarme nativo fullscreen)
                 Intent intent = new Intent(ctx, AlarmReceiver.class);
                 PendingIntent pi = PendingIntent.getBroadcast(
                     ctx, id, intent,
@@ -310,6 +354,18 @@ public class CriticalAlarmPlugin extends Plugin {
                 );
                 am.cancel(pi);
                 pi.cancel();
+                // #215 v0.2.3.0 fix device-validation 2026-05-13: também cancela
+                // TrayNotificationReceiver backup co-agendada (id = groupId + BACKUP_OFFSET).
+                // Sem isso, toggle Critical Alarm OFF deixa tray pendente em AlarmManager
+                // → dispara junto com novo LocalNotification = 2 push duplicados.
+                int trayId = id + AlarmScheduler.BACKUP_OFFSET;
+                Intent trayIntent = new Intent(ctx, TrayNotificationReceiver.class);
+                PendingIntent trayPi = PendingIntent.getBroadcast(
+                    ctx, trayId, trayIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                );
+                am.cancel(trayPi);
+                trayPi.cancel();
             }
         } catch (JSONException ignored) {}
 

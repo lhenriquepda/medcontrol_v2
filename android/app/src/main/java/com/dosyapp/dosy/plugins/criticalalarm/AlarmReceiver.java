@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
@@ -30,12 +31,20 @@ import org.json.JSONObject;
  */
 public class AlarmReceiver extends BroadcastReceiver {
 
-    // Item #203 (release v0.2.1.5+) — bumped v2 pra forçar Android recriar
-    // canal com novo som customizado. Channel sound é immutable após criação,
-    // então update do som requer novo CHANNEL_ID. Antigo `doses_critical` fica
-    // órfão no device do user (pode ser limpo manualmente Settings → App).
-    private static final String CHANNEL_ID = "doses_critical_v2";
+    // v0.2.3.1 — canal renomeado pra `dosy_alarm_fallback` (era `doses_critical_v2`
+    // deletado por MainActivity.cleanupLegacyChannels = loop deleta-cria).
+    // Canal usado apenas pelo fallback path quando startForegroundService falha (raro).
+    // Mantém priority MAX + custom sound dosy_alarm.mp3 + bypassDND (alarme-like).
+    private static final String CHANNEL_ID = "dosy_alarm_fallback";
     private static final int FS_NOTIF_OFFSET = 200_000_000;
+
+    // #215 v0.2.3.0 — alinhado com src/services/notifications/unifiedScheduler.js BACKUP_OFFSET.
+    // Alarme nativo disparou OK → cancela LocalNotification backup co-agendada
+    // (anti-duplicate: user não vê alarme fullscreen + notif tray vibrando junto).
+    // Se startForegroundService falhar (catch block abaixo), backup CONTINUA agendada
+    // como fallback visual.
+    // Fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
+    private static final int BACKUP_OFFSET = 1073741824; // 2^30
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -49,6 +58,31 @@ public class AlarmReceiver extends BroadcastReceiver {
         int alarmId = intent.getIntExtra("id", 0);
         String dosesJson = intent.getStringExtra("doses");
         if (dosesJson == null) dosesJson = "[]";
+
+        // v0.2.3.1 Fix B — re-rota fire time. AlarmReceiver consulta prefs ATUAIS
+        // antes de fire alarme fullscreen. Se prefs mudaram entre agendamento e fire
+        // (ex: user toggle Critical OFF, DnD ON), re-rota pra TrayNotificationReceiver
+        // sem disparar AlarmService (sem som, sem fullscreen).
+        SharedPreferences spPrefs = context.getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        boolean criticalOn = spPrefs.getBoolean("critical_alarm_enabled", true);
+        boolean dndOn = spPrefs.getBoolean("dnd_enabled", false);
+        String dndStart = spPrefs.getString("dnd_start", "23:00");
+        String dndEnd = spPrefs.getString("dnd_end", "07:00");
+        long nowMs = System.currentTimeMillis();
+        boolean inDnd = dndOn && AlarmScheduler.isInDndWindowPublic(nowMs, dndStart, dndEnd);
+        if (!criticalOn || inDnd) {
+            String channelId = inDnd ? AlarmScheduler.TRAY_DND_CHANNEL_ID : AlarmScheduler.TRAY_CHANNEL_ID;
+            android.util.Log.d("AlarmReceiver", "Fix B re-rota fire time: criticalOn=" + criticalOn
+                + " inDnd=" + inDnd + " channel=" + channelId);
+            // Re-rota direto pra TrayNotificationReceiver sem AlarmService.
+            Intent trayIntent = new Intent(context, TrayNotificationReceiver.class);
+            trayIntent.putExtra("notifId", alarmId);
+            trayIntent.putExtra("doses", dosesJson);
+            trayIntent.putExtra("channelId", channelId);
+            context.sendBroadcast(trayIntent);
+            if (wl.isHeld()) wl.release();
+            return;
+        }
 
         // Audit: log fired event per dose (debug observability)
         try {
@@ -66,6 +100,27 @@ public class AlarmReceiver extends BroadcastReceiver {
                     d.optString("medName", null),
                     meta
                 );
+            }
+        } catch (Exception ignored) {}
+
+        // #215 v0.2.3.0 + v0.2.3.1 Fix B-01: anti-duplicate cancel cobrindo race
+        // mesmo timestamp. NotificationManagerCompat.cancel só cobre notif VISIVEL —
+        // não cancela PendingIntent pendente no AlarmManager. Sem este fix, se
+        // TrayNotificationReceiver dispara MS depois de AlarmReceiver (race no
+        // mesmo trigger), tray ainda aparece duplicado com alarme.
+        try {
+            // 1) Cancel notif visível (caso TrayNotificationReceiver já tenha postado)
+            NotificationManagerCompat.from(context).cancel(alarmId + BACKUP_OFFSET);
+            // 2) Cancel PendingIntent pendente do TrayNotificationReceiver (race fix)
+            Intent trayIntent = new Intent(context, TrayNotificationReceiver.class);
+            PendingIntent trayPi = PendingIntent.getBroadcast(
+                context, alarmId + BACKUP_OFFSET, trayIntent,
+                PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+            );
+            if (trayPi != null) {
+                android.app.AlarmManager am = (android.app.AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+                if (am != null) am.cancel(trayPi);
+                trayPi.cancel();
             }
         } catch (Exception ignored) {}
 
