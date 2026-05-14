@@ -8,9 +8,17 @@
 
 ## 🚧 Release v0.2.3.3 em curso
 
-### #release-v0.2.3.3 — Fix #231 layout AdMob banner safe-area-inset duplicado Android 15
-- **Status:** 🚧 a abrir branch `release/v0.2.3.3`. Bump vc 65→66, vn 0.2.3.2→0.2.3.3.
-- **Escopo único:** #231 P2 BUG layout — banner AdMob com gap peach vazio ~40px entre status bar e banner em emulator Android 15 sdk_gphone64 (Pixel 8). Pixel 9 Pro Android 17 sdk_gphone16k renderiza correto (banner colado abaixo status bar). Device físico real OK.
+### #release-v0.2.3.3 — Fix #231 + cost escala #163+#164+#165 + #110 native crashes + Sentry triage
+- **Status:** 🚧 branch `release/v0.2.3.3` aberta (commit `5487a30` bump vc 65→66). Esforço estimado 15-23h.
+- **Escopo expandido:**
+  - **#231 P2 BUG layout** — banner AdMob safe-area-inset duplicado Android 15 (detalhe abaixo)
+  - **#163 P1 cost escala** — RPC consolidado `get_dashboard_payload` (4 queries → 1, esperado -40% a -60% Dashboard egress)
+  - **#164 P1 cost escala** — Realtime broadcast em vez postgres_changes (retoma #157 disabled, esperado -80% a -90% Realtime egress + sync multi-device)
+  - **#165 P1 cost escala** — Delta sync doses + TanStack persist IndexedDB offline-first (esperado -70% a -90% reads steady state)
+  - **#110 P2 native crashes** — Sentry DOSY-3 REGRESSED + DOSY-7 (`art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown — investigação)
+  - **#232 P1 BUG ANR MainActivity.onCreate** (NOVO descoberto Sentry triage) — `WorkManager.enqueueUniquePeriodicWork` + `cleanupLegacyChannels` chamados sincronicamente em onCreate bloqueiam main thread. Fix: mover ambos pra background thread via Executor. ~30min.
+  - **Sentry triage** — varrer dashboard, fechar issues já corrigidas em releases anteriores OU marcar Ignored os que vamos pular, limpar backlog dashboard
+- **Detalhe #231 P2 BUG layout AdMob banner safe-area-inset duplicado Android 15:**
 - **Root cause provável:** `env(safe-area-inset-top)` duplicado WebView Android 15 + plugin Capacitor AdMob ambos aplicando padding-top.
 - **Plano investigação:**
   1. Identificar componente container do banner Ad em `src/` (provável `AdBanner` ou similar em layout principal)
