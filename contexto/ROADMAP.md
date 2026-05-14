@@ -150,21 +150,29 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.0` — v0.2.3.2 bug-fixes pós-validação device sessão Appium 2026-05-14. Bump vc 64→65 + versionName 0.2.3.1→0.2.3.2. Commits `1802853` fixes + `a1ea4cd` docs. Tag `v0.2.3.2` criada.
+**Branch ativa:** `master` (release/v0.2.3.0 merged via `c0cb372`). v0.2.3.2 shipped 2026-05-14.
 
-**Validação device 100% completa:**
-- Validar.md 62 [x] / 0 pending — todos FLUXOs v0.2.3.1 + legacy v0.2.2.x/v0.2.1.x/v0.2.0.x fechados
-- 4 bugs descobertos sessão + corrigidos + revalidados (#227 P1 RLS audit, #228 P1 multi-device push, #229 P1 snooze persist, #230 P2 Fix C batch=1)
-- Audit infrastructure 100% funcional (6 sources populando)
-- APK vc 65 build via Studio + instalado emulator-5556 (Pixel 8) e emulator-5554 (Pixel 10 Pro XL Teste Free)
+**Release v0.2.3.2 SHIPPED:**
+- ✅ AAB vc 65 build via CLI gradlew (33s autônomo) — root cause loopback descoberto + fix permanente
+- ✅ Play Console Internal Testing publicado 14/05 14:46 BRT (track: `https://play.google.com/apps/internaltest/4700769831647466031`)
+- ✅ Tag `v0.2.3.2` pushed origin (commit `e277aa6` master merge)
+- ✅ Master merge `c0cb372` pushed → Vercel auto-deploy prod dosymed.app
+- ✅ Validar.md 62 [x] / 0 pending — todos FLUXOs v0.2.3.1 + legacy fechados
+- ✅ 4 bugs P1/P2 fechados (#227 RLS audit, #228 multi-device push, #229 snooze persist, #230 batch=1)
+- ✅ Audit infrastructure 100% funcional (6 sources)
+- ✅ whatsnew-pt-BR atualizado v0.2.3.2
 
-**Pendentes release v0.2.3.2:**
-- 🧪 Build AAB Android Studio (Generate Signed App Bundle) vc 65 release variant `com.dosyapp.dosy`
-- 🚀 Upload Play Console Internal Testing (track ativo: `https://play.google.com/apps/internaltest/4700769831647466031`)
-- 🏷️ Push tag git `v0.2.3.2` p/ origin
-- 🔀 Merge `release/v0.2.3.0` → `master`
-- 🚀 Vercel deploy prod dosymed.app (auto via master push)
-- 📦 Updates log v0.2.3.2 fechada (`docs/updates/`)
+**CLI gradlew destravado v0.2.3.2 — bug Windows historicamente bloqueante:**
+- **Root cause definitivo:** filter driver (não identificado individualmente) bloqueia AF_UNIX especificamente em `C:\Users\<user>\AppData\Local\Temp`. JDK NIO `PipeImpl.LoopbackConnector` (init Selector) usa AF_UNIX nesse temp → `connect0` retorna "Invalid argument".
+- **Não é Kaspersky:** pausa total da proteção 1h não resolve. Falha persiste.
+- **Não é JDK:** testado JDK 21 + 23 + 25 Adoptium Temurin — mesmo erro.
+- **Fix:** redirect TEMP/TMP pra pasta sem filter driver (testado `C:\temp\gradle_tmp` OK). JDK 25 obrigatório (assertion mais nova, anteriores funcionam mas 25 alinhado AGP).
+- **Comando:** `TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease`
+- Documentado: `android/gradle.properties` (comment header), `contexto/README.md` §11.
+
+**Commits v0.2.3.2:** `1802853` fix #227-#230 + `a1ea4cd` docs Validar 100% + `2d460b4` docs ROADMAP §3+§6.3 + `e0fde9d` build CLI fix + release notes + AAB published + `c0cb372` merge master.
+
+**Próximo passo:** aguardar feedback testers Play Console Internal Testing. Próximas releases podem usar CLI direto (sem Studio GUI).
 
 **Refactor v0.2.3.1 — 4 auditorias + 7 blocos implementação (2026-05-13):**
 
@@ -646,7 +654,15 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 **Validar.md sweep:** 62 [x] / 0 [~] / 0 [ ] / 0 [skip]. Todos FLUXOs v0.2.3.1 A/B/C/D/E + audit fechados. Legacy v0.2.2.x/v0.2.1.x + 218.x/219.x/220.x fechados com observação direta OU code review + indirect evidence pós-deploy. Pull-to-refresh dashboard validated W3C Actions API gesture.
 
-**Commits:** `1802853` fix(v0.2.3.2): bug-fixes #227 #228 #229 #230 device validação + `a1ea4cd` docs(v0.2.3.2): valida Validar.md 100%. Tag `v0.2.3.2`.
+**CLI gradlew destravado (bonus técnico):** descoberto root cause definitivo do bug Windows que forçava builds via Studio GUI desde início projeto. **Filter driver bloqueia AF_UNIX especificamente em `C:\Users\<user>\AppData\Local\Temp`** — JDK NIO `PipeImpl.LoopbackConnector` (init Selector) usa AF_UNIX nesse temp → native `connect0` retorna `Invalid argument`. Não é Kaspersky (pausa total não resolve), não é JDK (testado 21+23+25 mesmo erro). Diagnóstico binário: bind+connect AF_UNIX OK em `C:\temp`, FAIL em `AppData\Local\Temp`. **Fix:** `TEMP/TMP` redirect pra `C:\temp\gradle_tmp` antes de `./gradlew`. JDK 25 Adoptium Temurin 25.0.3.9 instalado via winget. Build AAB CLI 33s autônomo (substitui Studio GUI manual). Documentado: `android/gradle.properties` header + `contexto/README.md` §11.
+
+**AAB v0.2.3.2 vc 65 published Play Console Internal Testing** 2026-05-14 14:46 BRT via Chrome MCP (§10 receita README). Drag-drop AAB → release notes pt-BR (`<pt-BR>` tag formato) → Salvar e publicar. Disponível ~1h pra ~12.169 dispositivos compatíveis (Telefone) + 6.318 (Tablet) + 8 (TV).
+
+**Commits:** `1802853` fix #227-#230 + `a1ea4cd` docs Validar 100% + `2d460b4` docs ROADMAP §3+§6.3 + `e0fde9d` build CLI fix + release notes + AAB published + `c0cb372` merge release/v0.2.3.0 → master. Tag `v0.2.3.2` em `e277aa6` (master HEAD).
+
+**Master merge:** `c0cb372` pushed origin → Vercel auto-deploy prod dosymed.app.
+
+**whatsnew-pt-BR atualizado:** `docs/play-store/whatsnew/whatsnew-pt-BR` — release notes pt-br user-facing (Soneca reboot + multi-dose 1 alarme + audit log + logout cross-device).
 
 **Counter:** 142+4 = 146 fechados / 78 abertos (4 código mergeado P1/P2 BUGS #227-#230 movidos pra ✅ fechados).
 

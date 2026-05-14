@@ -438,24 +438,15 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** Branch `release/v0.2.3.0` ativa (rebranded `v0.2.3.1` logicamente — vc 64, vn 0.2.3.1). AAB pendente Play Console + validação device 5 FLUXOS Validar.md.
-**Master @ tag:** `v0.2.2.4` (vc 62 Internal Testing 2026-05-13 16:48 BRT). Última release fechada estável.
-**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.2.4)
+**Versão atual:** master @ tag `v0.2.3.2` (vc 65, Play Console Internal Testing 2026-05-14 14:46 BRT). Branch `release/v0.2.3.0` mergeada via `c0cb372`. Sem release em curso.
+**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.2 via auto-deploy)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
-**Em curso — Release v0.2.3.1 (2026-05-13):**
-- 🚧 **Refactor Plano A + Fixes B/C** após 4 auditorias linha-por-linha revelando 4 root causes arquiteturais não cobertos por #215-#226 v0.2.3.0. 7 blocos implementados em 8 commits + bump vc 63→64:
-  - RC-1 dual tray race resolvido (Plano A unifica em Java M2 via `CriticalAlarm.scheduleTrayGroup`)
-  - RC-2 prefs fire time resolvido (Fix B AlarmReceiver consulta SharedPrefs antes de fire)
-  - RC-3 cancel group hash resolvido (Fix C reconstroi `sortedDoseIds.join('|')`)
-  - RC-4 5 paths coordenação resolvida (PendingIntent única AlarmManager)
-  - A-01..A-05 + B-01..B-03 fixados
-  - 23 itens código morto removidos
-- Backend: Edge dose-trigger-handler v20 (BATCH handlers) + 3 migrations applied
-- Docs: `docs/alarm-scheduling-v0.2.3.1.md` novo + `contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md` consolidado
-- Pendente: AAB vc 64 + validar 5 FLUXOS A-E em S25 Ultra (Validar.md)
-
 **Última release fechada master:**
+
+- ✅ v0.2.3.2 (2026-05-14) — **Bug-fixes #227-#230 + CLI gradlew destravado.** 4 bugs P1/P2 descobertos durante validação device v0.2.3.1 via Appium UiAutomator2 (Pixel 8 + Pixel 10 Pro XL): (a) **#227 P1** RLS audit log multi-policy fix — `alarm_audit_config` sem SELECT pra authenticated + `alarm_audit_log` sem SELECT own; 2 migrations applied, audit infrastructure 6 sources populando; (b) **#228 P1** `unsubscribeFcm` cross-device contamination — fix `fcm.js` filtra delete por `device_id_uuid`; (c) **#229 P1** snooze persist async race em reboot — fix `AlarmScheduler.java` 5 callsites `apply()` → `commit()` sync; (d) **#230 P2** Edge `dose-trigger-handler` v21 BATCH agrupa por (ownerId, patientId, minute_bucket) + query group siblings + CSV completo. **CLI gradlew destravado (bonus técnico):** root cause descoberto definitivo — filter driver bloqueia AF_UNIX especificamente em `C:\Users\<user>\AppData\Local\Temp` (não é Kaspersky, não é JDK, não é Winsock). Diagnóstico binário: bind+connect AF_UNIX OK em `C:\temp`, FAIL em `AppData\Local\Temp`. Fix `TEMP/TMP` redirect → `C:\temp\gradle_tmp` + JDK 25 Adoptium Temurin 25.0.3.9. AAB CLI 33s autônomo (substitui Studio GUI manual). Documentado `android/gradle.properties` + README §11. Validar.md 62 [x] / 0 pending. AAB vc 65 publicado Play Console Internal Testing 14:46 BRT. Master merge `c0cb372` → Vercel auto-deploy. Tag `v0.2.3.2` em `e277aa6`.
+
+**Releases anteriores fechadas master:**
 - ✅ v0.2.2.4 (2026-05-13) — **#214 P2 CLEANUP** Remove tabela `dose_alarms_scheduled` órfã (consumers — cron notify-doses-1min + schedule-alarms-fcm-6h — foram removidos em #209). 3 mudanças: (a) `scheduler.js` remove upsert + imports unused (`supabase`, `hasSupabase`, `getDeviceId`); (b) `DosyMessagingService.java` remove método `reportAlarmScheduled()` + call sites + imports HTTP unused; (c) Migration `drop_dose_alarms_scheduled_v0_2_2_4` aplicada. `alarm_audit_log` v0.2.2.0 substitui rastreio. Economia ~5-10 MB/dia/device egress + ~13k upserts/dia removidos. Validado Dosy-Dev Studio Run vc 62 — fluxo E2E 4 caminhos confirmados (JS App.jsx + Edge dose-trigger-handler + FCM + DosyMessagingService + AlarmScheduler nativo + audit log multi-source). Mark/skip/undo doses validados. AAB vc 62 publicado Internal Testing 2026-05-13 16:48 BRT. Tag `v0.2.2.4`.
 
 **Release anterior fechada master:**

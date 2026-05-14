@@ -6,10 +6,48 @@
 
 ---
 
-## 🚧 Refactor em curso v0.2.3.1
+## ✅ Release v0.2.3.2 SHIPPED 2026-05-14
+
+### #release-v0.2.3.2 — Bug-fixes #227-#230 + CLI gradlew destravado
+- **Status:** ✅ SHIPPED Play Console Internal Testing 14:46 BRT 2026-05-14. Master `c0cb372` pushed → Vercel auto-deploy. Tag `v0.2.3.2` em `e277aa6`.
+- **Bump:** vc 64→65 + versionName 0.2.3.1→0.2.3.2
+- **Bugs fechados (4):**
+  - **#227 P1** RLS audit log root cause múltiplo: `alarm_audit_config` sem policy SELECT pra authenticated + `alarm_audit_log` sem SELECT own. **2 migrations:** `alarm_audit_config_user_select_policy_v0_2_3_2` + `audit_log_policies_final_v0_2_3_2`. Validado SQL `SELECT DISTINCT source FROM alarm_audit_log` retorna 6 sources.
+  - **#228 P1** `unsubscribeFcm` cross-device contamination → fix `src/services/notifications/fcm.js` filtra delete por `device_id_uuid` (fallback legacy null).
+  - **#229 P1** snooze persist async race em reboot → fix `AlarmScheduler.java` 5 callsites `apply()` → `commit()` sync (persistAlarm + saveTrayEntries + persistTrayEntry + removePersistedTrayEntry + removePersisted). Runtime validado audit chain.
+  - **#230 P2** Edge `dose-trigger-handler` v21 ACTIVE: BATCH agrupa por (ownerId, patientId, minute_bucket) + query group siblings + envia CSV completo. Java reconstroi hash `sortedDoseIds.join('|')`.
+- **CLI gradlew destravado (bonus técnico):**
+  - **Root cause definitivo:** filter driver bloqueia AF_UNIX em `C:\Users\<user>\AppData\Local\Temp`. JDK NIO `PipeImpl.LoopbackConnector` (init Selector) usa AF_UNIX nesse temp → `connect0` retorna "Invalid argument".
+  - **Não é Kaspersky** (pausa total não resolve), **não é JDK** (testado 21+23+25 mesmo erro), **não é Winsock** (reset não resolve).
+  - Diagnóstico binário: bind+connect AF_UNIX OK em `C:\temp`, FAIL em `AppData\Local\Temp` (mesmo código + mesmo JDK).
+  - **Fix:** `TEMP/TMP` redirect → `C:\temp\gradle_tmp` antes `./gradlew`. JDK 25 Adoptium Temurin 25.0.3.9 (winget).
+  - Comando final: `TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease`
+  - **AAB CLI 33s autônomo** (substitui Studio GUI manual em todo flow futuro).
+- **Validar.md:** 62 [x] / 0 pending — TODOS FLUXOs v0.2.3.1 + legacy fechados antes bugs serem descobertos.
+- **Backend deployed:**
+  - Edge `dose-trigger-handler` v21 ACTIVE
+  - Migrations `alarm_audit_config_user_select_policy_v0_2_3_2` + `audit_log_policies_final_v0_2_3_2`
+- **Commits (cronológico):**
+  - `1802853` fix(v0.2.3.2): bug-fixes #227 #228 #229 #230 device validação
+  - `a1ea4cd` docs(v0.2.3.2): valida Validar.md 100% (62 [x] / 0 pending)
+  - `2d460b4` docs(v0.2.3.2): atualiza ROADMAP §3 + §6.2 counter + §6.3 Δ release log
+  - `e0fde9d` build(v0.2.3.2): CLI gradlew destravado + release notes + AAB Play Console
+  - `c0cb372` Merge release/v0.2.3.0 → master
+- **Docs atualizados:**
+  - `contexto/ROADMAP.md` §3 onde paramos (master) + §6.3 Δ release log entry expandido
+  - `contexto/Validar.md` topo SHIPPED status
+  - `contexto/CHECKLIST.md` (esta entrada)
+  - `contexto/README.md` §11 fluxo CLI documentado
+  - `android/gradle.properties` header CLI workaround
+  - `docs/play-store/whatsnew/whatsnew-pt-BR` release notes pt-br user-facing
+- **Counter:** 142+4 = 146 fechados / 78 abertos
+
+---
+
+## 🚧 Refactor v0.2.3.1 (mergeado em v0.2.3.2)
 
 ### #refactor-v0.2.3.1 — Plano A + Fixes B/C alarme/push (consolidação 4 auditorias)
-- **Status:** 🚧 Código mergeado release/v0.2.3.0 (8 commits, bump vc 63→64). AAB + validação device pendentes.
+- **Status:** ✅ Mergeado v0.2.3.2 SHIPPED. AAB vc 65 Play Console Internal Testing.
 - **Origem:** 4 auditorias linha-por-linha 2026-05-13 revelando 4 root causes arquiteturais não cobertos por #215-#226 v0.2.3.0
 - **Esforço:** ~10h dedicadas (4 auditorias + 7 blocos implementação)
 - **Branch:** `release/v0.2.3.0` (renomeada logicamente v0.2.3.1)

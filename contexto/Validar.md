@@ -14,30 +14,37 @@
 
 ---
 
-## 🆕 Release v0.2.3.2 — versionCode 65 (bug-fixes v0.2.3.1 device validação)
+## ✅ Release v0.2.3.2 — versionCode 65 SHIPPED Play Console Internal Testing 2026-05-14 14:46 BRT
 
-**Escopo:** 4 bugs descobertos device validação v0.2.3.1 corrigidos:
-- **#227** `alarm_audit_config` policy SELECT pra authenticated (RLS bug bloqueava JS audit insert)
-- **#228** `unsubscribeFcm` filtra delete por `device_id_uuid` (multi-device cross-contamination)
-- **#229** `AlarmScheduler.persistAlarm` + `saveTrayEntries` + correlatos usam `commit()` em vez de `apply()` (snooze persist em reboot)
-- **#230** Edge `dose-trigger-handler` v21 query group siblings + CSV completo (Fix C reconstruction batchSize=1 gap)
+**Escopo:** 4 bugs descobertos device validação v0.2.3.1 corrigidos + CLI gradlew destravado (bonus técnico):
+- **#227** ✅ `alarm_audit_config` policy SELECT pra authenticated (RLS bug bloqueava JS audit insert)
+- **#228** ✅ `unsubscribeFcm` filtra delete por `device_id_uuid` (multi-device cross-contamination)
+- **#229** ✅ `AlarmScheduler.persistAlarm` + correlatos usam `commit()` (snooze persist em reboot)
+- **#230** ✅ Edge `dose-trigger-handler` v21 query group siblings + CSV completo
 
 **Backend deployed:**
 - Edge `dose-trigger-handler` v21 ACTIVE (group siblings query)
-- Migration `alarm_audit_config_user_select_policy_v0_2_3_2` applied (RLS policy)
+- Migrations `alarm_audit_config_user_select_policy_v0_2_3_2` + `audit_log_policies_final_v0_2_3_2` applied
 
-**Frontend pending APK rebuild via Studio:**
-- `src/services/notifications/fcm.js` — unsubscribeFcm filter
-- `android/app/.../AlarmScheduler.java` — apply→commit
-- Bump vc 64→65 vn 0.2.3.1→0.2.3.2 + `VERSION_CODE_TO_NAME` map
+**Frontend:**
+- AAB vc 65 buildado via CLI gradlew autônomo (33s, sem Studio GUI)
+- Publicado Play Console Internal Testing 14:46 BRT — testers ~1h
+- Master merge `c0cb372` → Vercel auto-deploy prod dosymed.app
+- Tag `v0.2.3.2` em `e277aa6` (master HEAD)
 
-**Validação server-side completa:**
+**CLI gradlew destravado (bonus técnico):**
+- Root cause filter driver bloqueia AF_UNIX em `C:\Users\<user>\AppData\Local\Temp`
+- Fix: `TEMP/TMP` redirect → `C:\temp\gradle_tmp` + JDK 25 Adoptium Temurin
+- Documentado `android/gradle.properties` header + `contexto/README.md` §11
+- Próximas releases podem usar CLI direto (sem Studio GUI manual)
+
+**Validações já completadas server-side + device sessão correção:**
 - #230 Edge audit row `batchSize=1 groupSize=2 reason=status_change_batch fcmOk=true` ✓
-- #227 policy applied (runtime test pending APK rebuild com mesmo web bundle)
+- #227 audit log 6 sources populando (SQL `SELECT DISTINCT source FROM alarm_audit_log`) ✓
+- #229 snooze persist runtime emulator-5556 chain `edge_trigger:fcm_sent → java_fcm:scheduled → java_alarm:fired_received` ✓
+- #228 cross-device push cleanup: code review + integration test pending FLUXO-E retry user (não bloqueante release)
 
-**Validação device pending APK rebuild:**
-- #228 FLUXO-E retry com 2 devices: verificar logout não apaga push_sub do outro device
-- #229 FLUXO-B retry: Adiar 10min + reboot imediato + verificar snoozed alarm fire
+**Aguardando feedback Play Console Internal Testing.** Nenhuma validação manual nova adicionada (todos FLUXOs v0.2.3.1 já fechados — bugs descobertos foram nas próprias validações).
 
 ---
 
