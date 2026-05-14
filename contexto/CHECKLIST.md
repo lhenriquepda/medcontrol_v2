@@ -16,8 +16,11 @@
   - **#164 P1 cost escala** — Realtime broadcast em vez postgres_changes (retoma #157 disabled, esperado -80% a -90% Realtime egress + sync multi-device)
   - **#165 P1 cost escala** — Delta sync doses + TanStack persist IndexedDB offline-first (esperado -70% a -90% reads steady state)
   - **#110 P2 native crashes** — Sentry DOSY-3 REGRESSED + DOSY-7 (`art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown — investigação)
-  - **#232 P1 BUG ANR MainActivity.onCreate** (NOVO descoberto Sentry triage) — `WorkManager.enqueueUniquePeriodicWork` + `cleanupLegacyChannels` chamados sincronicamente em onCreate bloqueiam main thread. Fix: mover ambos pra background thread via Executor. ~30min.
-  - **Sentry triage** — varrer dashboard, fechar issues já corrigidas em releases anteriores OU marcar Ignored os que vamos pular, limpar backlog dashboard
+  - **#232 P1 BUG ANR MainActivity.onCreate** (NOVO descoberto Sentry triage) — `WorkManager.enqueueUniquePeriodicWork` + `cleanupLegacyChannels` chamados sincronicamente em onCreate bloqueiam main thread. Fix: mover ambos pra background thread via Executor. ✅ DONE commit `b373675`.
+  - **#233 P1 BUG 401 race tokens** (NOVO descoberto Supabase egress check) — 16 GETs `/rest/v1/patients` e `/rest/v1/doses` retornam 401 unauthorized em 60min. Tokens expirados em multi-device race. Investigar fonte: (a) JS supabase-js auto-refresh falha em background fetch; (b) Java DoseSyncWorker access_token SharedPref stale (relacionado #205 single source); (c) cuidador/share queries com user context errado. ~1-2h.
+  - **#234 P2 OPTIMIZE Cache-Control egress** (NOVO descoberto Supabase egress check) — Cached egress = 0 GB em 9.21 GB total. Adicionar `Cache-Control: max-age=300, s-maxage=60` em GET responses estáveis (patients/treatments — não doses). Esperado -10% a -20% egress free. ~30min.
+  - **#074/#110 P2 NDK symbols upload Sentry** — DOSY-3 + DOSY-7 native crashes mostram `<unknown>` frames. Setup `@sentry/wizard` ou Gradle plugin `io.sentry.android.gradle` autoUploadProGuardMapping + NDK debug symbols. Validar via test crash + Sentry symbolication. ~2-3h.
+  - **Sentry triage** — ✅ DONE: 15 → 3 abertas (7 resolved, 5 archived, 3 keep open scope)
 - **Detalhe #231 P2 BUG layout AdMob banner safe-area-inset duplicado Android 15:**
 - **Root cause provável:** `env(safe-area-inset-top)` duplicado WebView Android 15 + plugin Capacitor AdMob ambos aplicando padding-top.
 - **Plano investigação:**
