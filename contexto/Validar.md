@@ -14,316 +14,284 @@
 
 ---
 
-## 🆕 Release v0.2.3.0 — versionCode 63 (AAB Internal Testing pendente)
+## 🆕 Release v0.2.3.1 — versionCode 64 (refactor alarme/push Plano A + Fixes B/C)
 
-**Escopo:** #215 P0 TURNAROUND refactor scheduler unificado 3-cenários + push backup co-agendado. Cobre B-01 DnD silêncio total + B-02 criticalAlarm-off silêncio + arquitetura single-file. Plus #217 (drift Edge source) + #220 (hash JS↔Java) + #221 (cancel_alarms server) + #222 (channels + cleanup AlarmActivity) + #223 (del usePushNotifications) + #224 (BootReceiver 2h) + #225 (FCM chunking) incluídos.
+**Escopo:** refactor v0.2.3.1 em 7 blocos consolida sistema alarme/push. Substitui v0.2.3.0 (#215) que tinha 5 caminhos com dual tray race. Agora 5 caminhos convergem em 1 mecanismo Java (Plano A).
 
-**Decisões user consolidadas:** margem boot 2h, push DnD vibração leve 200ms, cuidador sempre alarme cheio + respeita DnD próprio, janela dinâmica 24h/48h, audit log enriquecido.
+**Root causes resolvidos:**
+- **RC-1** (dual tray Java M2 + Capacitor M3 race) — Plano A unifica tudo em Java
+- **RC-2** (prefs fire time) — Fix B AlarmReceiver consulta SharedPrefs antes de fire
+- **RC-3** (cancel group hash) — Fix C reconstroi hash sortedDoseIds em multi-dose groups
+- **RC-4** (5 paths sem coordenação) — todos convergem em PendingIntent única Java
+
+**Achados pontuais corrigidos:**
+- **A-01** doc recomputeOverdue · **A-02** cancelFutureDoses UPDATE batch (não DELETE 360 trigger fires)
+- **A-03** snooze persist em reboot · **A-04** janela useDoses unificada · **A-05** SharedPrefs consolida
+- **B-01** AlarmReceiver cancela tray PendingIntent (não só notif visível) · **B-02** DailySummary 1 query
 
 **Backend deployed via MCP:**
-- Edge `dose-trigger-handler` v18 ACTIVE
-- Edge `daily-alarm-sync` v3 ACTIVE
-- Edge `notify-doses` v20 deprecated 410 Gone + verify_jwt:true (#216 + #219)
-- Edge `schedule-alarms-fcm` v16 deprecated 410 Gone + verify_jwt:true (#219)
-- Migration `expand_dose_change_notify_to_delete_v0_2_3_0` applied
-- Migration `add_device_id_uuid_to_push_subscriptions_v0_2_3_0` applied (#226)
+- Edge `dose-trigger-handler` v20 ACTIVE (BATCH_UPDATE/BATCH_DELETE handlers)
+- Migration `cleanup_orphan_dose_notifications_v0_2_3_1` applied (DROP tabela órfã)
+- Migration `dose_change_batch_trigger_v0_2_3_1` applied (trigger statement-level batch)
+- Migration `add_cancelled_status_to_doses_v0_2_3_1` applied (status='cancelled')
 
-**Validação web Chrome MCP 2026-05-13 (eu, parcial):**
+**Cleanup repo:**
+- Edge functions deprecated removidas do repo (notify-doses + schedule-alarms-fcm)
+- 23 itens código morto removidos (JS exports + Java methods + imports + comentários estale)
 
-- ✅ `unifiedScheduler.decideBranch` retorna 3 branches corretas (alarm_plus_push | push_dnd | push_critical_off)
-- ✅ `unifiedScheduler.computeHorizon` janela dinâmica 48h se ≤400 itens, 24h se >400
-- ✅ `unifiedScheduler.buildSchedulePayload` group de 3 doses → groupId hash determinístico + trayId = groupId + BACKUP_OFFSET (700_000_000)
-- ✅ DnD cross-midnight (22:00→07:00): dose 3am=push_dnd, dose 14h=alarm_plus_push
-- ✅ Trigger DB `dose_change_notify` AFTER INSERT/UPDATE/DELETE — testado mock dose pra teste-plus:
-  - INSERT pending +2h → Edge `dose-trigger-handler` v18 fires + audit log `source=edge_trigger_handler action=skipped metadata.kind=fcm_schedule_alarms source_scenario=dose_inserted_or_updated`
-  - UPDATE pending→done → Edge fires + audit `action=cancelled metadata.reason=status_change source_scenario=status_change newStatus=done`
-- ✅ Edges `notify-doses` v20 + `schedule-alarms-fcm` v16 deprecated: anon 401 (verify_jwt:true bloqueia)
-- ✅ Schema `push_subscriptions.device_id_uuid text NULL` + RPC `upsert_push_subscription(p_device_token, p_platform, p_advance_mins, p_user_agent, p_device_id_uuid)` 5 args
-- ✅ admin.dosymed.app `/alarm-audit` painel funcional: filtros (email/origem/ação/dose/período/limite) + tradução PT-BR ("Servidor (alteração em tempo real)" pra edge_trigger_handler, "1 alarme(s) cancelado(s)" pra action=cancelled)
-
-**Pendente device (você emulador + Dosy-Dev):** 13 cenários listados abaixo cobrem TUDO o que web não consegue (alarme nativo dispara, channels Android, FCM data DosyMessagingService, WorkManager 6h, BootReceiver 2h, Samsung OEM fallback).
+**Pendente device:** 5 fluxos longos (A-E) cobrem TUDO. Cada fluxo executa várias ações em sequência validando múltiplos cenários de uma vez.
 
 ---
 
-### #215.v230.1 — Cenário 01 (App abre/atualiza)
+### #v0.2.3.1.FLUXO-A — Branches scheduling + duplicate tray race + Fix B fire time
 
-#### `[ ]` 230.1.1 — Caso normal (criticalAlarm ON + DnD OFF) → alarme + push backup co-agendados
+**Cobre:** 230.1.1 + 230.1.2 + 230.1.3 + 230.1.4 + B-01 + RC-1 + Fix B
+
+#### `[ ]` A — Toggle prefs entre cadastros + valida 3 branches sem duplicate
 
 **Como fazer:**
-1. Instalar vc 63 + login `teste-plus@teste.com`.
-2. Ajustes → Alarme Crítico ON + Não Perturbe OFF.
-3. Cadastrar dose +5min via TreatmentForm.
-4. Bloquear celular + aguardar.
+1. Instalar vc 64 (`adb install -r app-debug.apk`) + login `teste-plus@teste.com`.
+2. Ajustes → confirmar Alarme Crítico ON + DnD OFF.
+3. Cadastrar dose A **+5min** (Crítico ON, fora DnD).
+4. **Sem fechar app:** Ajustes → Alarme Crítico **OFF**.
+5. Cadastrar dose B **+10min** (Crítico OFF).
+6. **Sem fechar app:** Ajustes → Alarme Crítico ON + DnD ON (23:00–07:00).
+7. Cadastrar dose C **+15min** (Crítico ON + DnD janela conforme horário cadastro).
+8. Bloquear celular + aguardar dose A.
+9. Logcat: `adb logcat -s "AlarmReceiver" "AlarmScheduler" "TrayNotificationReceiver" "DosyMessagingService"`.
 
 **O que esperar:**
-- Alarme fullscreen toca normalmente.
-- LocalNotification backup foi cancelada antes (anti-duplicate) — não vê tray vibrando junto.
-- SQL `/alarm-audit` últimas 24h: `branch=alarm_plus_push source_scenario=app_open horizon=48`.
+- **Dose A (+5min):** alarme fullscreen toca + 1 tray. **ZERO** notif duplicada.
+- **Dose B (+10min):** SÓ tray notif canal `dosy_tray` (som default). **ZERO** alarme fullscreen.
+- **Dose C (+15min):** se horário cair janela DnD → tray silencioso canal `dosy_tray_dnd` vibração 200ms; se fora janela → alarme fullscreen.
+- SQL `/alarm-audit` últimas 24h: 3 batches com `branch=alarm_plus_push` + `branch=push_critical_off` + `branch=push_dnd` (ou alarm_plus_push se fora DnD).
+- Logcat AlarmReceiver dose A: linha `Cancel tray PendingIntent pendente (race fix)` antes de startForegroundService.
 
 **Se falhar:**
-- Tray notif vibra junto com alarme fullscreen → AlarmReceiver não cancelou backup.
-- Audit log sem entrada `branch=alarm_plus_push` → helper unificado não chamado.
+- Dose A com 2 notifs (fullscreen + tray separada) → B-01 fix não pegou (cancel só notif visível, PendingIntent pendente AlarmManager dispara).
+- Dose B com alarme fullscreen → toggle OFF não disparou rescheduleAll.
+- Dose C com som default em janela DnD → channelId errado.
 
----
-
-#### `[ ]` 230.1.2 — Branch push_dnd (criticalAlarm ON + dose em janela DnD)
+#### `[ ]` A.bonus — Fix B re-rota fire time (toggle entre agendamento e fire)
 
 **Como fazer:**
-1. Ajustes → Alarme Crítico ON + Não Perturbe 22:00–07:00 ON.
-2. Cadastrar dose dentro janela DnD (ex: 23:30) — pode ser pra hoje mesmo OR amanhã.
-3. Reabrir app → trigger rescheduleAll.
+1. Critical ON, cadastrar dose +5min → branch=alarm_plus_push agendado.
+2. **Imediatamente** (antes do alarme tocar): Ajustes → Critical Alarm OFF.
+3. **NÃO triggar rescheduleAll** — fechar app antes do toggle disparar Settings.updateNotif.
+4. Aguardar dose tocar.
 
 **O que esperar:**
-- ZERO alarme nativo agendado pra dose 23:30 (canal `dosy_critical` sem schedule).
-- LocalNotification tray agendada canal `dosy_tray_dnd` — vibração leve 200ms + sem som.
-- Quando horário chegar: notif aparece na barra, vibração leve, SEM tela cheia, SEM despertador.
-- audit log: `branch=push_dnd`.
+- Mesmo com alarme nativo agendado, AlarmReceiver.onReceive consulta SharedPrefs `dosy_user_prefs.critical_alarm_enabled=false` → re-rota direto pra TrayNotificationReceiver.
+- Tray notif aparece em vez de alarme fullscreen.
+- Logcat: `Fix B re-rota fire time: criticalOn=false inDnd=false channel=dosy_tray`.
 
 **Se falhar:**
-- Alarme fullscreen tocou 23:30 → branch decision errada.
-- Tray com som default → canal `dosy_tray` (não `dosy_tray_dnd`).
+- Alarme fullscreen tocou mesmo com Critical OFF → Fix B SharedPrefs consulta não rodou.
 
 ---
 
-#### `[ ]` 230.1.3 — Branch push_critical_off (Alarme Crítico OFF)
+### #v0.2.3.1.FLUXO-B — Snooze persist em reboot + status change cancel
+
+**Cobre:** A-03 + 230.2.1 + 230.2.2 + RC-3 cancel idempotente
+
+#### `[ ]` B — Snooze + reboot + Ciente + Desfazer
 
 **Como fazer:**
-1. Ajustes → toggle Alarme Crítico **OFF**.
-2. Cadastrar dose +3min.
-3. Bloquear celular + aguardar.
+1. Critical ON, criar dose **+10min**.
+2. Aguardar alarme fullscreen tocar.
+3. Click **"Adiar 10min"** no AlarmActivity.
+4. Imediatamente: `adb reboot` (force reboot device).
+5. Aguardar device ligar (~30s) + esperar total snoozeAt chegar (10min total desde click Adiar).
+6. Quando alarme tocar (deveria ser horário snoozed):
+   - Click **"Ciente"** → app abre → modal aparece com dose.
+   - Marcar **"Tomada"**.
+7. Voltar Dashboard, achar dose marcada Tomada.
+8. Click dose → **"Desfazer"** no DoseModal.
+9. Logcat completo desde reboot.
 
 **O que esperar:**
-- ZERO alarme fullscreen.
-- LocalNotification tray (canal `dosy_tray`) com som default + vibração normal.
-- audit log: `branch=push_critical_off source_scenario=app_open`.
+- Alarme dispara em **horário snoozed** (não original). Logcat BootReceiver:
+  ```
+  triggerAt=<snoozeAt epoch ms> (não triggerAt original)
+  ```
+- Click Ciente → MainActivity recebe `openDoseIds=<uuid>` → app abre modal.
+- Marcar Tomada → confirmMut → trigger DB UPDATE → Edge BATCH_UPDATE (statement-level) → FCM cancel_alarms → DosyMessagingService cancela alarme.
+- SQL `/alarm-audit` últimas 5min:
+  - `action=fired_received source=java_alarm_scheduler` (alarme disparou)
+  - `action=cancelled source=edge_trigger_handler reason=status_change_batch` (cancel cross-device)
+- Click Desfazer → undoMut → status=pending → trigger INSERT-like → alarme reagendado.
 
 **Se falhar:**
-- Alarme nativo tocou → toggle OFF não respeitado.
-- Notif silenciosa (sem som) → canal errado.
+- Alarme tocou no horário ORIGINAL (não snoozed) → A-03 fix não pegou. BootReceiver leu triggerAt antigo de SharedPreferences.
+- Cancel não disparou pós-Tomada → trigger batch não fired OR DosyMessagingService não recebeu FCM.
 
 ---
 
-#### `[ ]` 230.1.4 — Toggle Alarme Crítico ON→OFF cancela alarmes pendentes
+### #v0.2.3.1.FLUXO-C — Pausar tratamento batch + multi-dose group + cuidador compartilhado
 
-**Como fazer:**
-1. Com criticalAlarm ON, cadastrar dose +30min → alarme + backup agendados.
-2. Logcat `AlarmManager` confirmar agendado.
-3. Ajustes → toggle OFF.
-4. Logcat novamente.
+**Cobre:** A-02 + RC-3 + 230.2.3 + 230.2.4 + 230.2.5 + Fix C
+
+#### `[ ]` C — Tratamento 28 doses + multi-dose group + caregiver + pause batch
+
+**Setup:**
+1. Login `teste-plus@teste.com` no device A.
+2. Login `teste-free@teste.com` no device B (segundo emulador OR Chrome admin).
+3. teste-plus: criar paciente Maria + compartilhar com teste-free (Pacientes → Maria → Compartilhar → email teste-free).
+4. teste-free: aceitar convite (verificar Pacientes mostra Maria).
+
+**Multi-dose group + caregiver:**
+5. teste-plus: criar tratamento Dipirona 7 dias × 4 doses/dia = 28 doses pra Maria.
+6. teste-plus: criar tratamento Paracetamol pra Maria, **primeira dose no MESMO MINUTO da próxima dose Dipirona** (multi-dose group).
+7. Aguardar próxima dose multi-dose chegar.
+   - **AMBOS devices** devem mostrar alarme fullscreen.
+   - Modal abre com **2 doses** listadas (Dipirona + Paracetamol).
+8. teste-plus: marcar SÓ Dipirona Tomada (não Paracetamol).
+9. **Esperado:** alarme nativo cancelado (Fix C reconstroi hash multi-dose group via `sortedDoseIds.join('|')`). Paracetamol fica pendente até user marcar.
+
+**Caregiver DnD:**
+10. teste-free Ajustes → DnD ON 22:00–07:00.
+11. teste-plus: criar dose **23:30** pra Maria.
+12. **Esperado:**
+    - teste-plus 23:30: alarme fullscreen normal (sem DnD).
+    - teste-free 23:30: tray silencioso canal `dosy_tray_dnd` (DnD ON).
+
+**Pausar tratamento batch:**
+13. teste-plus: pausar tratamento Dipirona 7-day via TreatmentList → Pausar.
+14. SQL imediato:
+    ```sql
+    SELECT count(*), source, action, metadata->>'reason'
+    FROM medcontrol.alarm_audit_log
+    WHERE user_id IN (<plus_id>, <free_id>)
+      AND created_at > now() - interval '1 minute'
+    GROUP BY 2,3,4 ORDER BY 1 DESC;
+    ```
 
 **O que esperar:**
-- Pós-toggle OFF: alarme nativo cancelado + LocalNotification recadastrada canal `dosy_tray`.
-- SQL `alarm_audit_log WHERE source_scenario='prefs_change'` mostra batch novo.
-- Dose +30min recebe SÓ push tray no horário.
+- ~28 doses Dipirona pending → UPDATE batch status='cancelled' em 1 query.
+- Trigger `dose_change_notify_update_batch` statement-level fires **1 vez** (não 28).
+- Edge `BATCH_UPDATE` recebe `old_rows` array de 28 doseIds.
+- Edge envia **1 FCM por device** (teste-plus + teste-free) com action=cancel_alarms + doseIds=CSV completo.
+- DosyMessagingService.handleCancelAlarms cancela individual cada doseId + reconstrói hash grupo (Fix C).
+- SQL retorna: `count=28 source=edge_trigger_handler action=cancelled metadata.reason=status_change_batch` (× 2 devices = 56 audit rows).
+- **Ambos devices param de receber alarmes Dipirona**. Paracetamol single-dose continua.
 
 **Se falhar:**
-- Alarme fullscreen toca mesmo com toggle OFF → rescheduleAll não disparou no toggle.
+- 28 trigger fires individuais em logcat → trigger ainda FOR EACH ROW (migration não aplicou).
+- Multi-dose group Paracetamol cancelado junto com Dipirona → hash multi-dose calculado errado.
+- teste-free não recebeu cancel_alarms → patient_shares lookup falhou.
 
 ---
 
-### #215.v230.2 — Cenário 02 (Status change dose)
+### #v0.2.3.1.FLUXO-D — Boot recovery + WorkManager + daily-alarm-sync
 
-#### `[ ]` 230.2.1 — Mark Tomada cancela alarme + push local + outros aparelhos via FCM
+**Cobre:** 230.3.1 + 230.3.2 + 230.4.1 + Plano A persistência tray pós-reboot
 
-**Como fazer:**
-1. Dose +30min agendada (criticalAlarm ON).
-2. Mark Tomada via Dashboard.
-3. Logcat filter `AlarmManager` + `DosyMessagingService`.
-4. SQL `alarm_audit_log WHERE action='cancelled' ORDER BY created_at DESC LIMIT 5`.
-
-**O que esperar:**
-- Local: AlarmScheduler.cancelDoseAlarmAndBackup cancela alarme + tray backup <2s.
-- FCM data `cancel_alarms` enviado pra TODOS aparelhos via dose-trigger-handler v18.
-- audit log: 2 entries — `source=js_scheduler source_scenario=mark_dose` + `source=edge_trigger_handler reason=status_change`.
-
-**Se falhar:**
-- Alarme toca mesmo pós-Tomada → cancelDoseAlarmAndBackup não rodou OR cancel_alarms FCM não chegou.
-
----
-
-#### `[ ]` 230.2.2 — Desfazer pra pending reagenda alarme + push
+#### `[ ]` D — Reboot + worker + cron 5am
 
 **Como fazer:**
-1. Dose Tomada (status='done').
-2. Mark Desfazer via DoseModal.
-3. Logcat.
-
-**O que esperar:**
-- AlarmScheduler.scheduleDoseAlarm chamado branch=alarm_plus_push (se config normal).
-- audit log: `branch=alarm_plus_push source_scenario=undo_dose`.
-
----
-
-#### `[ ]` 230.2.3 — Cuidador compartilhado recebe alarme cheio em paralelo
-
-**Como fazer:**
-1. User A (`teste-plus`) compartilha paciente Maria com User B (`teste-free`) via /pacientes/X/compartilhar.
-2. User A cadastra dose Maria +5min.
-3. Aguardar com AMBOS aparelhos abertos.
-
-**O que esperar:**
-- Ambos aparelhos recebem alarme fullscreen 5min depois (alarme cheio).
-- audit log mostra duas entries source=`edge_trigger_handler` recipients=2.
-
-**Se falhar:**
-- User B não recebeu → `getRecipientUserIds` não lookup patient_shares.
-
----
-
-#### `[ ]` 230.2.4 — Cuidador com DnD próprio recebe só push silencioso
-
-**Como fazer:**
-1. Mesmo setup 230.2.3 (paciente compartilhado).
-2. User B configurar DnD 22:00–07:00 ON.
-3. User A cadastrar dose Maria 23:30.
-
-**O que esperar:**
-- User A (sem DnD): alarme fullscreen 23:30.
-- User B (com DnD): SÓ push tray vibração leve canal `dosy_tray_dnd`.
-- audit log User B device: `branch=push_dnd`.
-
-**Se falhar:**
-- User B recebeu fullscreen → branch decision não respeitou DnD próprio do User B.
-
----
-
-#### `[ ]` 230.2.5 — Delete tratamento dispara cancel_alarms cross-device
-
-**Como fazer:**
-1. Tratamento com 5 doses pending futuras.
-2. Excluir tratamento via TreatmentForm.
-3. Logcat outros aparelhos do user.
-
-**O que esperar:**
-- Trigger DB `dose_change_notify` AFTER DELETE → Edge dose-trigger-handler v18 dispara cancel_alarms.
-- Cada device cancela 5 alarmes + 5 backups.
-- audit log: 5 entries `action=cancelled reason=dose_deleted`.
-
----
-
-### #215.v230.3 — Cenário 03 (Manutenção automática)
-
-#### `[ ]` 230.3.1 — WorkManager 6h reagenda app fechado
-
-**Como fazer:**
-1. Force-stop app via Settings → Apps → Dosy → Force stop.
-2. Esperar 6h (ou trigger via `adb shell cmd jobscheduler run -f com.dosyapp.dosy 0`).
-3. Logcat `DoseSyncWorker`.
-
-**O que esperar:**
-- Worker dispara em ~6h mesmo com app force-stop.
-- audit log: `source=java_worker source_scenario=workmanager_6h`.
-
----
-
-#### `[ ]` 230.3.2 — Cron 5am BRT FCM data chunking
-
-**Como fazer:**
-1. Aguardar próximo 5am BRT (cron `daily-alarm-sync-5am`).
-2. Logcat `DosyMessagingService` durante a noite.
-3. SQL `alarm_audit_log WHERE source='edge_daily_sync' AND created_at > now() - interval '1 day'`.
-
-**O que esperar:**
-- Device recebe FCM data ~5am com payload chunking 30 doses/message.
-- audit log: source=edge_daily_sync com metadata `chunks=N` + `horizon=48` ou `24`.
-
----
-
-#### `[ ]` 230.3.3 — Samsung One UI 7 SEM battery whitelist (fallback push backup)
-
-**Como fazer:**
-1. Settings → Apps → Dosy → Bateria → **Não otimizado** OFF (volta otimização).
-2. Cadastrar dose +30min.
-3. Bloquear celular, NÃO interagir.
-
-**O que esperar:**
-- OEM pode matar AlarmManager.
-- **Mas LocalNotification backup** (canal `dosy_tray`, allowWhileIdle) ainda dispara ~30min depois.
-- User vê push tray com som + vibração — sem fullscreen mas alerta visível.
-
-**Se falhar:**
-- Nem alarme nem push → backup não foi agendado OR OEM matou também.
-
----
-
-### #215.v230.4 — Boot recovery + Limite dinâmico
-
-#### `[ ]` 230.4.1 — Boot recovery margem 2h (#224)
-
-**Como fazer:**
-1. Cadastrar dose +30min.
-2. **Desligar** celular físico antes do horário.
-3. Aguardar 1h30 (dose passou ~1h atrás).
-4. Ligar celular.
-
-**O que esperar:**
-- BootReceiver detecta `(now - triggerAt) < 2h` → dispara alarme imediato com flag `lateRecovery=true`.
-- AlarmActivity mostra badge "Atrasada — celular estava desligado".
-
-**Se falhar:**
-- Nenhum alarme pós-boot → BootReceiver pulou (margem errada).
-
----
-
-#### `[ ]` 230.4.2 — Janela dinâmica 24h se > 400 itens projetados
-
-**Como fazer:**
-1. SQL seed paciente com 50 doses/dia × 2 dias = 100 doses pending no horizon 48h.
-   ```sql
-   -- (usar admin RPC seed_test_doses ou INSERT direto pra criar 100 pending futuras)
+1. Critical ON, DnD OFF, criar dose **+2h** (futura).
+2. Aguardar 10min → confirmar via logcat `AlarmScheduler scheduled id=` (alarme + tray Java persisted em `dosy_user_prefs` SharedPrefs).
+3. SQL verificar SharedPrefs Java (via `adb shell run-as com.dosyapp.dosy.dev cat shared_prefs/dosy_tray_scheduled.xml`):
+   - Esperar entry com `notifId`, `triggerAt`, `channelId="dosy_tray"`.
+4. **Force reboot:** `adb reboot`.
+5. Após device ligar (~30s): aguardar dose tocar no horário ORIGINAL.
+6. Logcat pós-boot:
    ```
-2. Trigger rescheduleAll (reabrir app).
-3. SQL `alarm_audit_log WHERE source_scenario='app_open' ORDER BY created_at DESC LIMIT 5`.
+   adb logcat -s "BootReceiver" "AlarmScheduler" "DoseSyncWorker" "DosyMessagingService"
+   ```
+7. Force-stop app pós-alarme: `adb shell am force-stop com.dosyapp.dosy.dev`.
+8. Aguardar próximo trigger WorkManager (6h periodic) — OR forçar: `adb shell cmd jobscheduler run -f com.dosyapp.dosy.dev 0`.
+9. Aguardar próximo 5am BRT (cron daily-alarm-sync).
 
 **O que esperar:**
-- 100 doses × 2 itens (alarm + push) = 200 itens. Below 400 threshold.
-- Horizon mantém 48h.
-- Se aumentar pra 250 doses (500 itens projetados > 400): horizon cai pra 24h.
-- audit log: `horizon=24` registrado em metadata batch_end.
+- **Boot:** BootReceiver re-agenda:
+  - Alarme AlarmReceiver (de `dosy_critical_alarms` SharedPrefs).
+  - Tray TrayNotificationReceiver (de `dosy_tray_scheduled` SharedPrefs — novo v0.2.3.1).
+- Dose toca no horário ORIGINAL com alarme fullscreen + tray (não duplicated).
+- **WorkManager:** logcat `DoseSyncWorker doWork` → `sync ok: fetched=N scheduled=M`.
+- SQL `alarm_audit_log` source='java_worker' source_scenario='workmanager_6h' nas últimas 6h.
+- **Cron 5am:** logcat madrugada `DosyMessagingService schedule_alarms: N doses` ~5am.
+- SQL source='edge_daily_sync' metadata `chunks=N horizon=48` (ou 24 se projectedItems > 400).
+
+**Se falhar:**
+- Pós-reboot SÓ alarme tocou (sem tray) → BootReceiver não re-agendou trays (Plano A persistência falhou).
+- Pós-reboot NADA tocou → ambos PendingIntents perdidos (SharedPrefs corrupt OR migration nova não aplicou).
+- Worker não disparou → battery optimization matando WorkManager.
 
 ---
 
-### #215.v230.5 — Audit consistência admin /alarm-audit
+### #v0.2.3.1.FLUXO-E — Logout multi-device + push_subscriptions cleanup
 
-#### `[ ]` 230.5.1 — Todos 5 sources populam alarm_audit_log
+**Cobre:** logout security + cleanup push_sub + multi-device FCM routing
+
+#### `[ ]` E — 2 devices same user + logout device A
 
 **Como fazer:**
-1. Após 1 dia uso normal vc 63.
-2. SQL:
+1. Device A: login `teste-plus@teste.com` → ativar push (Ajustes → toggle Notificações).
+2. Device B (segundo emulador OR Chrome admin): login mesmo teste-plus → ativar push.
+3. SQL antes do logout:
+   ```sql
+   SELECT id, "deviceToken", "userId", device_id_uuid, "createdAt"
+   FROM medcontrol.push_subscriptions
+   WHERE "userId" = '<teste-plus-uuid>'
+   ORDER BY "createdAt" DESC;
+   ```
+   Esperar **2 rows** (1 per device).
+4. Device A: cadastrar dose +30min.
+5. **AMBOS devices** devem receber FCM (logcat DosyMessagingService).
+6. Device A: Ajustes → **Sair**.
+7. SQL imediato pós-logout:
+   ```sql
+   SELECT id, "deviceToken", "userId", "createdAt"
+   FROM medcontrol.push_subscriptions
+   WHERE "userId" = '<teste-plus-uuid>';
+   ```
+8. Device A: cadastrar dose +5min (logado teste-free OR sem login).
+9. Aguardar 5min.
+10. Logcat Device A.
+
+**O que esperar:**
+- **Pós-logout Device A:**
+  - push_subscriptions row do Device A **DELETED**. SQL retorna 1 row (só Device B).
+  - localStorage Device A: `dosy_fcm_token` removed.
+  - SharedPreferences Device A `dosy_sync_credentials`: cleared.
+- **Dose criada pós-logout NÃO chega Device A**:
+  - Logcat Device A: ZERO `DosyMessagingService schedule_alarms`.
+  - Edge dose-trigger-handler envia FCM SÓ pra deviceToken Device B (push_subscriptions filtra Device A out).
+- Device B continua recebendo FCM normalmente.
+
+**Se falhar:**
+- push_subscriptions Device A ainda existe pós-logout → race fix b4e879f+663cdef regrediu.
+- Device A recebe FCM mesmo deslogado → token cache não limpo OR push_sub não deletada (vazamento security).
+
+---
+
+### #v0.2.3.1.audit — Verificação geral admin /alarm-audit
+
+#### `[ ]` audit — Todos 5 sources populam alarm_audit_log + admin painel funcional
+
+**Como fazer:**
+1. Após executar FLUXOS A-E acima:
    ```sql
    SELECT source, count(*)
    FROM medcontrol.alarm_audit_log
-   WHERE user_id = '<your-uuid>'
+   WHERE user_id = '<teste-plus-uuid>'
      AND created_at > now() - interval '24 hours'
    GROUP BY source ORDER BY source;
    ```
+2. Navegar `https://admin.dosymed.app/alarm-audit`.
+3. Filtrar por email `teste-plus@teste.com`.
 
 **O que esperar:**
 - 5 sources com entries:
-  - `js_scheduler` (Cenário 01 app foreground)
-  - `java_worker` (Cenário 03a WorkManager 6h)
-  - `java_fcm_received` (Cenário 03b cron 5am OR Cenário 02 trigger handler)
-  - `edge_daily_sync` (cron 5am)
-  - `edge_trigger_handler` (Cenário 02 INSERT/UPDATE/DELETE)
-- Metadata jsonb com `branch`, `horizon`, `source_scenario`, `criticalAlarmEnabled`, `dndEnabled`, `inDndWindow`.
-
----
-
-#### `[ ]` 230.5.2 — admin.dosymed.app `/alarm-audit` página funcional
-
-**Como fazer:**
-1. Navegar `https://admin.dosymed.app/alarm-audit`.
-2. Filtrar por user_id teste-plus.
-3. Click linha → modal detalhes.
-
-**O que esperar:**
-- Lista carrega com entries últimas 24h.
-- Filtros funcionam (user/origem/ação/dose/período).
-- Modal mostra metadata `branch + horizon + source_scenario` legível PT-BR.
-
-**Se falhar:**
-- Página vazia → audit log não populado.
-- Metadata sem campos `branch` → helper unificado JS/Java não passou metadata.
+  - `js_scheduler` (FLUXO A foreground reschedule)
+  - `java_alarm_scheduler` (FLUXO B alarme fires)
+  - `java_worker` (FLUXO D WorkManager 6h)
+  - `java_fcm_received` (FLUXO C cancel batch + FLUXO D cron 5am)
+  - `edge_daily_sync` (FLUXO D cron 5am)
+  - `edge_trigger_handler` (FLUXO C cancel + FLUXO A INSERT)
+- Metadata jsonb mostra `branch`, `horizon`, `source_scenario`, `criticalAlarmEnabled`, `dndEnabled`, `inDndWindow`.
+- Admin painel: lista carrega + filtros funcionam + modal detalhes traduzido PT-BR.
 
 ---
 
