@@ -209,44 +209,44 @@ export function AuthProvider({ children }) {
               } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }
             }
           } else if (event === 'SIGNED_OUT') {
-            // Item #195 (release v0.2.1.5) — só DELETAR push_subscription se
-            // logout foi explícito (botão Sair). Antes deletava em qualquer
-            // SIGNED_OUT — quebrava reagendamento próximo cron schedule-alarms-fcm
-            // quando bug logout transient/spurious acontecia (combinado com #196
-            // protection acima, esse caminho só roda em logout REAL).
+            // #215 v0.2.3.0 fix falha de segurança device-validation 2026-05-13:
+            // SIGNED_OUT REAL (não-spurious, já filtrado linha ~102) sempre deleta
+            // push_subscription + clearSyncCredentials, independente da flag
+            // dosy_explicit_logout. Antes regra #195/v0.2.1.5 preservava push_sub
+            // se !explicitLogout — vazamento crítico: token órfão em DB recebe FCM
+            // forever, alarme/push de doses chega no device do user mesmo após
+            // logout (mesmo se device passou pra outro usuário OR user trocou conta
+            // sem clicar "Sair").
+            //
+            // SIGNED_OUT spurious já é capturado em #196 acima (linha ~102) — chega
+            // aqui APENAS quando sessão local foi de fato invalidada.
+            //
+            // Trade-off aceito: SIGNED_OUT real que não passa pelo path explicit
+            // (ex: JWT revoked server-side) também limpa push_sub. Próximo SIGNED_IN
+            // re-subscribe FCM automaticamente. Janela <1min sem alarme aceitável vs
+            // vazamento permanente.
             const explicitLogout = localStorage.getItem('dosy_explicit_logout') === '1'
-            // Item #201 — telemetria de logout REAL feita aqui (caminho
-            // SIGNED_OUT não-explícito = token revogado/inválido). Logout
-            // explícito é registrado dentro de signOut() ANTES de chamar
-            // supabase.auth.signOut(), pois aqui auth.uid() já é null e RPC
-            // log_auth_event falharia com AUTH_REQUIRED.
-            // NOTA: real_invalid_token NÃO consegue logar (sessão zerada).
-            // Trade-off aceito — caso raro e debugável via Sentry.
             if (!explicitLogout) {
-              console.warn('[useAuth] SIGNED_OUT real_invalid_token — telemetria não registrada (auth.uid() null)')
+              console.warn('[useAuth] SIGNED_OUT real (non-explicit, likely JWT revoked) — limpando push_sub + sync_credentials por segurança')
             }
-            if (explicitLogout) {
-              clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
-              // Item #098 — limpar push_subscription deste device do user que saiu
-              // (precisa rodar ANTES do auth.signOut completar o cache clear).
-              // Best-effort: se token cached + user atual disponível, delete sub.
-              try {
-                const cachedToken = localStorage.getItem('dosy_fcm_token')
-                if (cachedToken) {
-                  supabase.schema('medcontrol').from('push_subscriptions')
-                    .delete().eq('deviceToken', cachedToken)
-                    .then(({ error }) => {
-                      if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
-                    })
-                }
-              } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+            clearSyncCredentials().catch((e) => console.warn('[useAuth] clearSyncCredentials err:', e?.message))
 
-              // Limpa flag pra próximos eventos serem avaliados frescos
-              try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
-            } else {
-              console.warn('[useAuth] SIGNED_OUT without explicit logout flag — preserving push_subscription + sync credentials (extends #195)')
-            }
+            try {
+              const cachedToken = localStorage.getItem('dosy_fcm_token')
+              if (cachedToken) {
+                supabase.schema('medcontrol').from('push_subscriptions')
+                  .delete().eq('deviceToken', cachedToken)
+                  .then(({ error }) => {
+                    if (error) console.warn('[useAuth] cleanup push_sub err:', error.message)
+                    else console.log('[useAuth] push_sub deletado deviceToken=', cachedToken.slice(0, 12) + '...')
+                  })
+                // Limpa cache do token local — força re-register no próximo SIGNED_IN
+                try { localStorage.removeItem('dosy_fcm_token') } catch { /* ignore */ }
+              }
+            } catch (e) { console.warn('[useAuth] cleanup push_sub catch:', e?.message) }
+
+            try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
           }
         })
         unsub = () => sub.subscription.unsubscribe()
