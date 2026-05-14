@@ -33,11 +33,12 @@ public class MainActivity extends BridgeActivity {
      *
      * Canais removidos:
      *   - doses_v2          (LocalNotifications pré-#215, substituído por dosy_tray)
-     *   - doses_critical_v2 (AlarmReceiver fallback pré-#215, substituído por dosy_tray)
+     *   - doses_critical_v2 (AlarmReceiver fallback pré-#215, renomeado pra dosy_alarm_fallback v0.2.3.1)
      *
      * Canais mantidos:
      *   - doses_critical (AlarmService FG sound null — MediaPlayer drives loop)
      *   - dosy_tray + dosy_tray_dnd (criados via Capacitor channels.js)
+     *   - dosy_alarm_fallback (AlarmReceiver fallback path, criado em AlarmReceiver.ensureChannel)
      */
     private void cleanupLegacyChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;

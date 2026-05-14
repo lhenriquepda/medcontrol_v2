@@ -29,8 +29,9 @@ import java.util.TreeMap;
  *
  * Comportamento:
  *   - data.action == "schedule_alarms" → processa silenciosamente:
- *     parseia lista de doses + chama AlarmScheduler.scheduleDose pra cada,
- *     reporta server-side via dose_alarms_scheduled, NÃO mostra notif
+ *     parseia lista de doses + chama AlarmScheduler.scheduleDoseAlarm
+ *     (helper unificado branch alarm/tray), NÃO mostra notif
+ *   - data.action == "cancel_alarms" → cancela alarme + tray local
  *   - qualquer outra mensagem → delega pra super (Capacitor processa
  *     normal: notif tray ou push handler JS)
  *

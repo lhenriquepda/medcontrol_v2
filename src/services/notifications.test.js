@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { inDnd } from './notifications'
+import { inDnd } from './notifications/prefs'
 
 describe('notifications', () => {
   describe('inDnd', () => {

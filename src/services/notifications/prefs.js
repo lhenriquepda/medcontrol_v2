@@ -16,7 +16,6 @@ export const PREFS_LOCAL_KEY = 'medcontrol_notif'
 // Cron 5am + Worker 6h + dose-trigger real-time mantêm janela rolling.
 // v0.2.2.1: comentário atualizado pra refletir valor real (era 48 no plan mas 168 hardcoded).
 export const SCHEDULE_WINDOW_MS = 48 * 3600 * 1000 // 48h
-export const CHANNEL_ID = 'doses_v2'
 export const DAILY_SUMMARY_NOTIF_ID = 999000001
 export const isNative = Capacitor.isNativePlatform()
 

@@ -30,11 +30,11 @@ import org.json.JSONObject;
  */
 public class AlarmReceiver extends BroadcastReceiver {
 
-    // Item #203 (release v0.2.1.5+) — bumped v2 pra forçar Android recriar
-    // canal com novo som customizado. Channel sound é immutable após criação,
-    // então update do som requer novo CHANNEL_ID. Antigo `doses_critical` fica
-    // órfão no device do user (pode ser limpo manualmente Settings → App).
-    private static final String CHANNEL_ID = "doses_critical_v2";
+    // v0.2.3.1 — canal renomeado pra `dosy_alarm_fallback` (era `doses_critical_v2`
+    // deletado por MainActivity.cleanupLegacyChannels = loop deleta-cria).
+    // Canal usado apenas pelo fallback path quando startForegroundService falha (raro).
+    // Mantém priority MAX + custom sound dosy_alarm.mp3 + bypassDND (alarme-like).
+    private static final String CHANNEL_ID = "dosy_alarm_fallback";
     private static final int FS_NOTIF_OFFSET = 200_000_000;
 
     // #215 v0.2.3.0 — alinhado com src/services/notifications/unifiedScheduler.js BACKUP_OFFSET.

@@ -18,13 +18,6 @@ let cacheExpiry = 0
 let cachedUserId = null
 let cachedDeviceId = null
 
-export function _resetAuditCache() {
-  cachedEnabled = null
-  cacheExpiry = 0
-  cachedUserId = null
-  cachedDeviceId = null
-}
-
 async function getUserId() {
   if (cachedUserId) return cachedUserId
   try {
@@ -67,46 +60,7 @@ async function isEnabled() {
 }
 
 /**
- * Loga evento. Silent-fail garantido.
- *
- * @param {Object} ev
- * @param {string} ev.action — 'scheduled' | 'cancelled' | 'fcm_sent' | 'fired_received' | 'skipped' | 'batch_start' | 'batch_end'
- * @param {string} [ev.doseId]
- * @param {string} [ev.scheduledAt] ISO timestamp da dose
- * @param {string} [ev.patientName]
- * @param {string} [ev.medName]
- * @param {Object} [ev.metadata] — campo livre debug
- */
-export async function logAuditEvent(ev) {
-  try {
-    if (!ev || !ev.action) return
-    if (!(await isEnabled())) return
-    const userId = await getUserId()
-    if (!userId) return
-    const deviceId = await getDeviceIdLazy()
-
-    const row = {
-      user_id: userId,
-      device_id: deviceId,
-      dose_id: ev.doseId || null,
-      source: ev.source || SOURCE,
-      action: ev.action,
-      scheduled_at: ev.scheduledAt || null,
-      patient_name: ev.patientName || null,
-      med_name: ev.medName || null,
-      metadata: ev.metadata || {}
-    }
-    const { error } = await supabase.from('alarm_audit_log').insert(row)
-    if (error && import.meta.env?.DEV) {
-      console.warn('[AuditLog] insert error:', error.message)
-    }
-  } catch (e) {
-    if (import.meta.env?.DEV) console.warn('[AuditLog] silent fail:', e?.message)
-  }
-}
-
-/**
- * Loga vários eventos em batch (insert único).
+ * Loga vários eventos em batch (insert único). Silent-fail garantido.
  * @param {Array} events
  */
 export async function logAuditEventsBatch(events) {

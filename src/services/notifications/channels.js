@@ -3,8 +3,8 @@
  * #030 (release v0.2.0.11): split de notifications.js.
  */
 
-import { CHANNEL_ID, isNative } from './prefs'
-import { cancelAllCriticalAlarms, cancelCriticalAlarm } from '../criticalAlarm'
+import { isNative } from './prefs'
+import { cancelAllCriticalAlarms } from '../criticalAlarm'
 
 // #215 v0.2.3.0 — canais unificados pra refactor scheduler 3-cenários.
 // `dosy_tray`     — push tray normal (Alarme Crítico OFF) com som default + vibração
@@ -42,17 +42,8 @@ export async function ensureChannel() {
       lights: false,
       sound: null           // explicit sem som
     })
-    // Compat: cria também canal legado pra LocalNotifications agendadas pré-#215.
-    // Pode ser removido após 1-2 releases (todas notifs antigas drained).
-    await LocalNotifications.createChannel({
-      id: CHANNEL_ID,
-      name: 'Doses de Medicação (legado)',
-      description: 'Canal legado pré-v0.2.3.0',
-      importance: 5,
-      visibility: 1,
-      vibration: true,
-      lights: true
-    })
+    // v0.2.3.1 — canal legado `doses_v2` removido (deletado por MainActivity.cleanupLegacyChannels).
+    // Loop deleta-cria a cada boot eliminado.
   } catch (e) { console.warn('[Notif] createChannel:', e?.message || e) }
 }
 
@@ -105,41 +96,10 @@ export async function cancelAll() {
 }
 
 /**
- * Item #200.1 (release v0.2.1.5) — cancela 1 grupo específico.
- * Cobre tanto critical alarm (id grupo) quanto LocalNotification tray
- * (mesmo id grupo — vide doseIdToNumber em scheduler.js que gera id estável).
- *
- * Usado pelo rescheduleAll diff-and-apply: alarmes não-modificados ficam,
- * só os removidos/alterados são cancelados.
- */
-export async function cancelGroup(groupId) {
-  if (!isNative || groupId == null) return
-  try { await cancelCriticalAlarm(groupId) } catch (e) { console.warn('[Notif] cancelGroup alarm:', groupId, e?.message) }
-  try {
-    const { LocalNotifications } = await import('@capacitor/local-notifications')
-    await LocalNotifications.cancel({ notifications: [{ id: groupId }] })
-  } catch (e) { console.warn('[Notif] cancelGroup local:', groupId, e?.message) }
-}
-
-/**
- * Item #200.1 — state tracker em localStorage pra diff-and-apply.
- * Map<groupId, hash> permite detectar groups removidos/alterados/novos
- * sem precisar consultar SharedPreferences nativo.
+ * State tracker em localStorage pra diff-and-apply.
+ * Map<groupId, hash> permite detectar groups removidos/alterados/novos.
  */
 const SCHEDULED_STATE_KEY = 'dosy_scheduled_groups_v1'
-
-export function loadScheduledState() {
-  try {
-    const raw = localStorage.getItem(SCHEDULED_STATE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return typeof parsed === 'object' && parsed !== null ? parsed : {}
-  } catch (e) {
-    console.warn('[Notif] loadScheduledState corrupted, resetting:', e?.message)
-    try { localStorage.removeItem(SCHEDULED_STATE_KEY) } catch { /* ignore */ }
-    return {}
-  }
-}
 
 export function saveScheduledState(map) {
   try {

@@ -16,24 +16,6 @@ export function isCriticalAlarmAvailable() {
 }
 
 /**
- * Schedule a critical alarm.
- * @param {Object} params
- * @param {number} params.id — alarm id (use stable hash from doseId)
- * @param {string} params.at — ISO timestamp (must be in future)
- * @param {string} params.doseId
- * @param {string} params.medName
- * @param {string} params.unit
- * @param {string} [params.patientName]
- */
-export async function scheduleCriticalAlarm({ id, at, doseId, medName, unit, patientName }) {
-  if (!isCriticalAlarmAvailable()) {
-    console.warn('[CriticalAlarm] not available on this platform')
-    return null
-  }
-  return CriticalAlarm.schedule({ id, at, doseId, medName, unit, patientName: patientName || '' })
-}
-
-/**
  * Schedule a grouped critical alarm (multiple doses at same trigger time).
  * @param {Object} params
  * @param {number} params.id — group id (use stable hash from concatenated doseIds)
@@ -110,16 +92,6 @@ export async function openAppNotificationSettings() {
 }
 
 /**
- * Item #207 (release v0.2.1.7) — battery optimization whitelist check.
- * Retorna { ignoring: boolean }. true = app na whitelist (alarmes garantidos
- * mesmo em deep sleep). false = OEM pode matar background activity.
- */
-export async function isIgnoringBatteryOptimizations() {
-  if (!isCriticalAlarmAvailable()) return { ignoring: false }
-  return CriticalAlarm.isIgnoringBatteryOptimizations()
-}
-
-/**
  * Item #207 — solicita user adicionar Dosy à whitelist battery optimization.
  * Abre dialog system Sim/Não. Crítico Samsung One UI 7 + Xiaomi MIUI.
  */
@@ -163,29 +135,6 @@ export async function setSyncCredentials({ supabaseUrl, anonKey, userId, refresh
 }
 
 /**
- * Item #205 (release v0.2.1.8) — atualiza apenas access_token + exp.
- * Chamado pelo useAuth.jsx no listener TOKEN_REFRESHED + INITIAL_SESSION.
- * Lightweight: não toca refresh_token, anon_key, schema etc.
- */
-export async function updateAccessToken({ accessToken, accessTokenExp }) {
-  if (!isCriticalAlarmAvailable()) return null
-  if (!accessToken) return null
-  const payload = { accessToken }
-  if (typeof accessTokenExp === 'number' && accessTokenExp > 0) payload.accessTokenExp = accessTokenExp
-  return CriticalAlarm.updateAccessToken(payload)
-}
-
-/**
- * Item #085 — atualização incremental do toggle Alarme Crítico no
- * SharedPreferences Android. Chamado pelo useUserPrefs.mutationFn quando
- * user mexe no toggle em Ajustes. Sem precisar redo full sync de creds.
- */
-export async function setCriticalAlarmEnabled(enabled) {
-  if (!isCriticalAlarmAvailable()) return null
-  return CriticalAlarm.setCriticalAlarmEnabled({ enabled: enabled !== false })
-}
-
-/**
  * #215 v0.2.3.0 — sincroniza prefs (criticalAlarm + DnD) pro SharedPreferences
  * `dosy_user_prefs` Android. AlarmScheduler.scheduleDoseAlarm (helper unificado
  * usado por DoseSyncWorker + DosyMessagingService) lê dali pra decidir branch.
@@ -209,8 +158,7 @@ export async function clearSyncCredentials() {
 
 /**
  * Item #083.6 — device_id estável (UUID v4 gerado pelo plugin uma vez,
- * persistido). Usado por rescheduleAll() pra reportar dose_alarms_scheduled
- * cross-device, e por notify-doses cron pra skip push redundante.
+ * persistido). Usado por alarm_audit_log device_id cross-source consistency.
  */
 export async function getDeviceId() {
   if (!isCriticalAlarmAvailable()) return null

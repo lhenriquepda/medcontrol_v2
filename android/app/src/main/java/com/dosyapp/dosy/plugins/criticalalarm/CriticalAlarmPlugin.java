@@ -46,37 +46,6 @@ public class CriticalAlarmPlugin extends Plugin {
     private static final String KEY_SCHEDULED = "scheduled_alarms";
 
     @PluginMethod
-    public void schedule(PluginCall call) {
-        Integer id = call.getInt("id");
-        String at = call.getString("at");
-        String doseId = call.getString("doseId");
-        String medName = call.getString("medName", "Dose");
-        String unit = call.getString("unit", "");
-        String patientName = call.getString("patientName", "");
-
-        if (id == null || at == null || doseId == null) {
-            call.reject("missing required: id, at, doseId");
-            return;
-        }
-
-        // Wrap single dose as a 1-element group for unified handling
-        JSONArray doses = new JSONArray();
-        try {
-            JSONObject d = new JSONObject();
-            d.put("doseId", doseId);
-            d.put("medName", medName);
-            d.put("unit", unit);
-            d.put("patientName", patientName);
-            doses.put(d);
-        } catch (JSONException e) {
-            call.reject("json build error: " + e.getMessage());
-            return;
-        }
-
-        scheduleInternal(call, id, at, doses);
-    }
-
-    @PluginMethod
     public void scheduleGroup(PluginCall call) {
         Integer id = call.getInt("id");
         String at = call.getString("at");
@@ -139,8 +108,7 @@ public class CriticalAlarmPlugin extends Plugin {
      * Chamado pelo JS após login (useAuth.jsx onAuthStateChange SIGNED_IN).
      *
      * Item #083.6 — adiciona device_id estável (UUID v4 gerado uma vez,
-     * persiste). Usado por DosyMessagingService.reportAlarmScheduled e
-     * notify-doses cron pra distinguir alarmes por device.
+     * persiste). Usado por AlarmAuditLogger.device_id cross-source consistency.
      */
     @PluginMethod
     public void setSyncCredentials(PluginCall call) {
@@ -193,33 +161,6 @@ public class CriticalAlarmPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("deviceId", deviceId);
         call.resolve(ret);
-    }
-
-    /**
-     * Item #205 (release v0.2.1.8) — atualiza apenas access_token + exp em
-     * SharedPreferences. Chamado pelo useAuth.jsx no listener TOKEN_REFRESHED.
-     *
-     * Estratégia anti-storm xx:00: JS supabase-js é ÚNICA fonte de refresh.
-     * Native (DoseSyncWorker, DosyMessagingService) consome access_token cached
-     * via essa SharedPref. Sem isso, 3 fontes paralelas refresh chain → Supabase
-     * detecta token reuse → revoga chain → user re-login.
-     */
-    @PluginMethod
-    public void updateAccessToken(PluginCall call) {
-        String accessToken = call.getString("accessToken");
-        Long accessTokenExp = null;
-        if (call.hasOption("accessTokenExp")) {
-            try { accessTokenExp = call.getLong("accessTokenExp"); } catch (Exception ignored) {}
-        }
-        if (accessToken == null) {
-            call.reject("accessToken required");
-            return;
-        }
-        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
-        SharedPreferences.Editor ed = sp.edit().putString("access_token", accessToken);
-        if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
-        ed.apply();
-        call.resolve();
     }
 
     /**
@@ -277,7 +218,7 @@ public class CriticalAlarmPlugin extends Plugin {
 
     /**
      * Item #083.6 — retorna device_id pra JS poder informar ao server
-     * (e.g. rescheduleAll upsert dose_alarms_scheduled).
+     * (alarm_audit_log device_id consistency cross-source).
      * Gera UUID se ausente (primeira chamada).
      */
     @PluginMethod

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { hasSupabase, supabase } from '../services/supabase'
-import { setCriticalAlarmEnabled, syncUserPrefs } from '../services/criticalAlarm'
+import { syncUserPrefs } from '../services/criticalAlarm'
 
 /**
  * User-wide notification + UX preferences. Stored in DB (medcontrol.user_prefs)
@@ -67,12 +67,10 @@ export function useUserPrefs() {
         const merged = { ...DEFAULT_PREFS, ...(data?.prefs || readLocal()) }
         // Sync local cache so usePushNotifications.scheduleDoses sees DB state
         writeLocal(merged)
-        // Item #085 — sincroniza toggle pro SharedPreferences Android no carregamento
-        // (best-effort — Android nativo lê flag em DoseSyncWorker + DosyMessagingService)
-        setCriticalAlarmEnabled(merged.criticalAlarm !== false).catch(() => {})
-        // #215 v0.2.3.0 — sincroniza prefs completas (criticalAlarm + DnD) pro
-        // namespace `dosy_user_prefs` consumido por AlarmScheduler.scheduleDoseAlarm
-        // helper unificado.
+        // v0.2.3.1 — namespace unificado `dosy_user_prefs` (consolidação A-05).
+        // Antes 2 chamadas paralelas (setCriticalAlarmEnabled + syncUserPrefs) escrevendo
+        // mesmos campos em namespaces diferentes (dosy_sync_credentials + dosy_user_prefs).
+        // Agora 1 chamada syncUserPrefs cobre tudo.
         syncUserPrefs({
           criticalAlarm: merged.criticalAlarm !== false,
           dndEnabled: !!merged.dndEnabled,
@@ -119,18 +117,7 @@ export function useUpdateUserPrefs() {
       }
       console.log('[useUserPrefs] saved to DB:', Object.keys(patch).join(','))
 
-      // Item #085 (release v0.1.7.3) — propaga toggle Alarme Crítico pro
-      // SharedPreferences Android quando flag muda. DoseSyncWorker (background)
-      // e DosyMessagingService (FCM receiver) leem flag pra decidir agendar
-      // alarme nativo. Best-effort (isNative-only, falha silenciosa em web).
-      if ('criticalAlarm' in patch) {
-        setCriticalAlarmEnabled(merged.criticalAlarm !== false).catch(e =>
-          console.warn('[useUserPrefs] setCriticalAlarmEnabled fail:', e?.message)
-        )
-      }
-      // #215 v0.2.3.0 — sincroniza prefs completas pro namespace unificado se
-      // qualquer pref relacionada a alarme/DnD mudou. AlarmScheduler.scheduleDoseAlarm
-      // helper unificado lê dali.
+      // v0.2.3.1 — namespace unificado (A-05). Apenas syncUserPrefs.
       if ('criticalAlarm' in patch || 'dndEnabled' in patch || 'dndStart' in patch || 'dndEnd' in patch) {
         syncUserPrefs({
           criticalAlarm: merged.criticalAlarm !== false,
