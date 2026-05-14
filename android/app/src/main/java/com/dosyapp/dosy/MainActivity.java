@@ -15,6 +15,7 @@ import com.dosyapp.dosy.plugins.criticalalarm.AlarmService;
 import com.dosyapp.dosy.plugins.criticalalarm.DoseSyncWorker;
 import com.getcapacitor.BridgeActivity;
 
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
@@ -23,8 +24,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(CriticalAlarmPlugin.class);
         super.onCreate(savedInstanceState);
         handleAlarmAction(getIntent());
-        enqueueDoseSyncWorker();
-        cleanupLegacyChannels();
+        // v0.2.3.3 #232 fix — WorkManager.enqueueUniquePeriodicWork pode bloquear main thread
+        // durante init Room DB (Sentry DOSY-M ANR `java.lang.Object.wait` em onCreate). Mover
+        // enqueue + cleanupChannels pra background thread. Idempotente, sem dependência síncrona.
+        Executors.newSingleThreadExecutor().execute(() -> {
+            enqueueDoseSyncWorker();
+            cleanupLegacyChannels();
+        });
     }
 
     /**

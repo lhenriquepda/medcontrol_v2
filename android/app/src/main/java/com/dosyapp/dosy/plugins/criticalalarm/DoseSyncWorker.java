@@ -61,9 +61,14 @@ public class DoseSyncWorker extends Worker {
     // Cron diário 5am cobre janela 48h (margem 24h até próximo cron). Worker
     // periodic 6h funciona como defense-in-depth caso FCM falhe entrega.
     private static final long HORIZON_HOURS = 48L;
-    // Item #205 — margem de segurança expiry. Se faltam <60s pra expirar, considera
-    // já expirado (evita race entre check local e request HTTP).
-    private static final long EXP_SAFETY_MARGIN_MS = 60_000L;
+    // Item #205 — margem de segurança expiry.
+    // v0.2.3.3 #233 — bump 60s → 300s pra antecipar skip em clock skew device físico
+    // (Supabase API Gateway observability 14/05 revelou 16 401s em 60min — JWT exp check
+    // local vs server clock pode ter drift até 2-3min em devices Android). Worker pula
+    // rodada mais cedo, JS app foreground refresca token, próxima rodada periódica 6h
+    // pega token fresco. Trade-off: ligeiro atraso ao acordar pós-suspensão longa, mas
+    // elimina 401 noise na API + economiza ~500 bytes egress por rodada falha.
+    private static final long EXP_SAFETY_MARGIN_MS = 300_000L;
 
     public DoseSyncWorker(@NonNull Context ctx, @NonNull WorkerParameters params) {
         super(ctx, params);

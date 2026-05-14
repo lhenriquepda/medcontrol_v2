@@ -1,6 +1,6 @@
-v0.2.3.2 — Alarmes ainda mais confiáveis
+v0.2.3.3 — Mais leve, mais rápido, sem travadas
 
-• Soneca não perde mais o alarme após reiniciar o celular
-• Doses múltiplas no mesmo horário disparam um único alarme (sem duplicidade)
-• Histórico de alarmes registrado corretamente para diagnóstico
-• Logout em um aparelho não desativa notificações nos outros
+• App abre mais rápido — fim das travadas na hora de iniciar
+• Banner alinhado corretamente nas versões mais novas do Android
+• Menos erros de conexão silenciosos durante a sincronização
+• Diagnóstico técnico de crashes melhorado para correções mais ágeis

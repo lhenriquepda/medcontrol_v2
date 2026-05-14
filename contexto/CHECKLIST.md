@@ -6,6 +6,44 @@
 
 ---
 
+## 🚧 Release v0.2.3.3 em curso
+
+### #release-v0.2.3.3 — Fix #231 + cost escala #163+#164+#165 + #110 native crashes + Sentry triage
+- **Status:** 🚧 branch `release/v0.2.3.3` aberta (commit `5487a30` bump vc 65→66). Esforço estimado 15-23h.
+- **Escopo expandido:**
+  - **#231 P2 BUG layout** — banner AdMob safe-area-inset duplicado Android 15 (detalhe abaixo)
+  - **#163 P1 cost escala** — RPC consolidado `get_dashboard_payload` (4 queries → 1, esperado -40% a -60% Dashboard egress)
+  - **#164 P1 cost escala** — Realtime broadcast em vez postgres_changes (retoma #157 disabled, esperado -80% a -90% Realtime egress + sync multi-device)
+  - **#165 P1 cost escala** — Delta sync doses + TanStack persist IndexedDB offline-first (esperado -70% a -90% reads steady state)
+  - **#110 P2 native crashes** — Sentry DOSY-3 REGRESSED + DOSY-7 (`art::ArtMethod::Invoke` IllegalInstruction + Segfault unknown — investigação)
+  - **#232 P1 BUG ANR MainActivity.onCreate** (NOVO descoberto Sentry triage) — `WorkManager.enqueueUniquePeriodicWork` + `cleanupLegacyChannels` chamados sincronicamente em onCreate bloqueiam main thread. Fix: mover ambos pra background thread via Executor. ✅ DONE commit `b373675`.
+  - **#233 P1 BUG 401 race tokens** (NOVO descoberto Supabase egress check) — 16 GETs `/rest/v1/patients` e `/rest/v1/doses` retornam 401 unauthorized em 60min. Tokens expirados em multi-device race. Investigar fonte: (a) JS supabase-js auto-refresh falha em background fetch; (b) Java DoseSyncWorker access_token SharedPref stale (relacionado #205 single source); (c) cuidador/share queries com user context errado. ~1-2h.
+  - **#234 P2 OPTIMIZE Cache-Control egress** (NOVO descoberto Supabase egress check) — Cached egress = 0 GB em 9.21 GB total. Adicionar `Cache-Control: max-age=300, s-maxage=60` em GET responses estáveis (patients/treatments — não doses). Esperado -10% a -20% egress free. ~30min.
+  - **#074/#110 P2 NDK symbols upload Sentry** — DOSY-3 + DOSY-7 native crashes mostram `<unknown>` frames. Setup `@sentry/wizard` ou Gradle plugin `io.sentry.android.gradle` autoUploadProGuardMapping + NDK debug symbols. Validar via test crash + Sentry symbolication. ~2-3h.
+  - **Sentry triage** — ✅ DONE: 15 → 3 abertas (7 resolved, 5 archived, 3 keep open scope)
+- **Detalhe #231 P2 BUG layout AdMob banner safe-area-inset duplicado Android 15:**
+- **Root cause provável:** `env(safe-area-inset-top)` duplicado WebView Android 15 + plugin Capacitor AdMob ambos aplicando padding-top.
+- **Plano investigação:**
+  1. Identificar componente container do banner Ad em `src/` (provável `AdBanner` ou similar em layout principal)
+  2. DevTools Chrome emulator-5554 (Pixel 8) — `chrome://inspect` + WebView `chrome://devtools`
+  3. Inspecionar computed styles `padding-top` / `env(safe-area-inset-top)` no container Ad + body + #root
+  4. Comparar com Pixel 9 Pro emulator-5556 mesma inspeção
+  5. Identificar onde inset aplicado em duplicidade
+- **Fix opções (escolher após investigação):**
+  - (a) CSS override: `body { padding-top: 0 !important; }` quando banner Ad ativo (delegar inset só pro content abaixo)
+  - (b) Detectar `Capacitor.getPlatform()==='android'` + `statusBarHeight` runtime + zerar via classe condicional
+  - (c) `@capacitor-community/admob` config `position=TOP_CENTER` + `margin=0` explícito (se ainda não está)
+- **Esforço:** 2-4h investigação + fix + validação 2 emulators + device físico.
+- **Aceitação:**
+  - ✅ Pixel 8 emulator-5554 Android 15 — banner colado imediatamente abaixo status bar (sem gap peach)
+  - ✅ Pixel 9 Pro emulator-5556 Android 17 — banner continua correto (não regrediu)
+  - ✅ Device físico real (user testa) — banner correto
+  - ✅ Screenshot before/after Pixel 8 anexado no CHECKLIST/Validar.md
+- **Arquivos prováveis:** `src/components/AdBanner*.{jsx,tsx,jsx,js,css}` OR `src/layouts/*` OR `index.css` (`env(safe-area-inset-top)` usage), `capacitor.config.ts` ou `.json` (AdMob plugin config).
+- **Backend:** zero impacto (mudança CSS/JS frontend only).
+
+---
+
 ## ✅ Release v0.2.3.2 SHIPPED 2026-05-14
 
 ### #release-v0.2.3.2 — Bug-fixes #227-#230 + CLI gradlew destravado

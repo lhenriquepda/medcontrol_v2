@@ -1,4 +1,27 @@
 apply plugin: 'com.android.application'
+// v0.2.3.3 #074/#110 — Sentry Gradle plugin auto-upload NDK debug symbols + ProGuard mapping
+apply plugin: 'io.sentry.android.gradle'
+
+// v0.2.3.3 #074/#110 — Sentry symbol upload SÓ release builds + se token presente.
+// Debug builds skip totalmente (faster local dev). Release builds tentam upload — se token
+// vazio, plugin tasks fail mas build segue (uploadNativeSymbols.onlyIf condicional via ext).
+def sentryToken = System.getenv("SENTRY_AUTH_TOKEN") ?: ""
+
+sentry {
+    org = "lhp-tech"
+    projectName = "dosy"
+    authToken = sentryToken
+
+    // Upload NDK debug symbols (resolve DOSY-3 art::ArtMethod::Invoke + DOSY-7 Segfault `<unknown>`)
+    uploadNativeSymbols = !sentryToken.isEmpty()
+    includeNativeSources = false
+
+    // Auto-upload ProGuard/R8 mapping em release builds → Sentry symbolicates JS stack traces
+    autoUploadProguardMapping = !sentryToken.isEmpty()
+
+    // Skip debug variant upload (só release ships pra Play Console)
+    ignoredVariants = ["debug"]
+}
 
 android {
     namespace = "com.dosyapp.dosy"
@@ -7,8 +30,8 @@ android {
         applicationId "com.dosyapp.dosy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 65
-        versionName "0.2.3.2"
+        versionCode 66
+        versionName "0.2.3.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
