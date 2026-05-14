@@ -150,13 +150,21 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.0` (renomeada logicamente como v0.2.3.1) — refactor completo Alarme + Push aplicado em 7 blocos (commits `0ef1eac` → `ba346ce`). Bump vc 63→64 + versionName 0.2.3.0→0.2.3.1. Pushed `origin/release/v0.2.3.0`. AAB pendente + validação device 5 FLUXOS A-E (Validar.md).
+**Branch ativa:** `release/v0.2.3.0` — v0.2.3.2 bug-fixes pós-validação device sessão Appium 2026-05-14. Bump vc 64→65 + versionName 0.2.3.1→0.2.3.2. Commits `1802853` fixes + `a1ea4cd` docs. Tag `v0.2.3.2` criada.
 
-**Pendentes release v0.2.3.1:**
-- 🧪 Build AAB Android Studio vc 64 + valida 5 FLUXOS LONGOS device S25 Ultra (Validar.md FLUXO-A a FLUXO-E + audit)
-- 🚀 Upload Play Console Internal Testing
-- 🏷️ Tag git `v0.2.3.1` + merge master + Vercel deploy prod
-- 📦 Updates log v0.2.3.1 fechada
+**Validação device 100% completa:**
+- Validar.md 62 [x] / 0 pending — todos FLUXOs v0.2.3.1 + legacy v0.2.2.x/v0.2.1.x/v0.2.0.x fechados
+- 4 bugs descobertos sessão + corrigidos + revalidados (#227 P1 RLS audit, #228 P1 multi-device push, #229 P1 snooze persist, #230 P2 Fix C batch=1)
+- Audit infrastructure 100% funcional (6 sources populando)
+- APK vc 65 build via Studio + instalado emulator-5556 (Pixel 8) e emulator-5554 (Pixel 10 Pro XL Teste Free)
+
+**Pendentes release v0.2.3.2:**
+- 🧪 Build AAB Android Studio (Generate Signed App Bundle) vc 65 release variant `com.dosyapp.dosy`
+- 🚀 Upload Play Console Internal Testing (track ativo: `https://play.google.com/apps/internaltest/4700769831647466031`)
+- 🏷️ Push tag git `v0.2.3.2` p/ origin
+- 🔀 Merge `release/v0.2.3.0` → `master`
+- 🚀 Vercel deploy prod dosymed.app (auto via master push)
+- 📦 Updates log v0.2.3.2 fechada (`docs/updates/`)
 
 **Refactor v0.2.3.1 — 4 auditorias + 7 blocos implementação (2026-05-13):**
 
@@ -597,7 +605,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 ### 6.2 📊 Counter
 
-**Total:** ~226 itens · ✅ **142 fechados** · ⏳ 68 abertos · 🚧 12 (#170 + #215 #216 #217 #218 #219 #220 #221 #222 #223 #224 #225 #226 código mergeado release/v0.2.3.0 aguardando validação device) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount 2026-05-13, +12 NOVOS items #215-#226 auditoria Alarme + Push — TODOS 12 código mergeado)
+**Total:** ~230 itens · ✅ **146 fechados** · ⏳ 64 abertos · 🚧 11 (#170 + #215 #216 #217 #218 #219 #220 #221 #222 #223 #224 #225 #226 código mergeado release/v0.2.3.0 + v0.2.3.1 aguardando validação device — #227 #228 #229 #230 FECHADOS v0.2.3.2 2026-05-14) · 🚨 0 BLOQUEADOS · 🚫 3 cancelados (recount 2026-05-14 pós-v0.2.3.2 +4 fixes)
 
 **Abertos por categoria × prioridade:**
 
@@ -605,9 +613,9 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 |---|---|---|---|---|---|
 | 🚀 IMPLEMENTAÇÃO | 6 (#006 #131 #132 #133 #192 #193) | 10 (#021 #169-#171 #173-#177 #188) | 3 (#047 #155 #172) | 0 | 19 |
 | ✨ MELHORIAS | 2 (#191 #194) | 3 (#163-#165) | 16 (#035 #038 #039 #042 #043 #049 #166-#168 #178-#181 #183 #222 #225) | 31 (P3 originais + #182 #184-#187 + #223 #226) | 52 |
-| 🐛 BUGS | 0 | 6 (#216-#221) | 3 (#101-followup #110 #224) | 0 | 9 |
+| 🐛 BUGS | 0 | 6 (#216-#221) | 2 (#101-followup #110 #224) | 0 | 8 |
 | 🔄 TURNAROUND | 1 (#215) | 0 | 0 | 0 | 1 |
-| **Total abertos** | **10** | **19** | **22** | **31** | **82** |
+| **Total abertos** | **10** | **19** | **21** | **31** | **80** |
 
 **Δ 2026-05-11 v0.2.1.8 FECHADA (master @ tag `v0.2.1.8` commit `b7b5c71`; AAB vc 56 Internal Testing 22:45 BRT; Vercel prod 2026-05-12 01:50 UTC):** +**#205 NOVO P0** Single source refresh token — storm xx:00 fix. Investigação SQL `auth.refresh_tokens` durante session lifecycle do user lhenrique.pda revelou pattern: 100% das storms top-of-hour (xx:00:0X), JWT exp default 3600s. 3 fontes paralelas chamando `/auth/v1/token?grant_type=refresh_token`: JS supabase-js auto-refresh + `DoseSyncWorker.refreshAccessToken()` Android WorkManager + `DosyMessagingService.refreshAccessToken()` FCM data handler. Mesmo `refresh_token` SharedPref persisted compartilhado entre 3 contextos → race condition `sp.edit().putString("refresh_token", newRefresh).apply()` corrompe estado → Supabase detecta token reuse → revoga chain inteira → user re-login forçado a cada 9-12h. Logs: 20+ refreshes em 7s mesma session `89867645-...` em 2026-05-11 00:00, session lifespan 16min (vs healthy 1-3h). 8 sessões S25 Ultra em 72h indicando re-login 6×. Fix arquitetura: JS supabase-js é **ÚNICA fonte de refresh**; useAuth.jsx propaga `access_token` + `expires_at` ms → plugin `updateAccessToken` SharedPref `access_token`+`access_token_exp_ms`. DoseSyncWorker + DosyMessagingService.reportAlarmScheduled removem chamadas `refreshAccessToken()` — leem `access_token` cached, verificam exp local com margem 60s, se expirado skip rodada (next periodic run pega token fresco pós-JS refresh em foreground). Plus continuação #204 fixes A1/A2/B/C identificados via logcat S25 Ultra debug session: Fix B (`await Network.getStatus()` bloqueante pré-React mount evita race rehydrate); Fix C (`onlineManager.setEventListener` Capacitor única fonte substitui default TanStack que disparava espúrio em Capacitor WebView Android); Fix A1 (createPatient onSuccess marca `_tempIdSource`; createTreatment mutationFn resolve temp `patientId`→real lookup cache — antes drain failureCount=4 status=error); Fix A2 (createTreatment onMutate gera doses optimistic local via `generateDoses` → Dashboard renderiza + AlarmScheduler agenda offline). Plus optimistic CRUD completos: updatePatient + updateTreatment + pauseTreatment + resumeTreatment + endTreatment + registerSos cada com onMutate cache patch + onError rollback + onSuccess invalidate. Forms edit path PatientForm + TreatmentForm detect offline + close imediato. Novo `useOfflineGuard` hook + `OfflineNotice` component pra features FORA queue (Settings LGPD export/delete, SharePatientSheet, SOS rules saveRule, TreatmentForm saveAsTemplate offline) — bloqueio explícito + toast "Sem conexão — requer internet" + banner contextual. Bump vc 55→56, vn 0.2.1.7→0.2.1.8. AAB pendente publish Internal Testing. Validação device acumulada [`Validar.md`](Validar.md) 22 checks (12 #204 v218.x + 10 #207 v0.2.1.7).
 
@@ -629,6 +637,18 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 > Counter atualizado release v0.2.1.4 (2026-05-06). Recompor exato via `grep -cE "^- (✅\|⏳\|🚨\|🚫) " ROADMAP.md` ou auditoria semestral cross-ref ROADMAP × CHECKLIST. Origem itens: [Plan.md] · [Auditoria] · [BUG-XXX user-reported] · [Sentry] · [Sessão YYYY-MM-DD].
 
 ### 6.3 Δ Release log (cronológico)
+
+**Δ 2026-05-14 release/v0.2.3.2 (bug-fixes device validação v0.2.3.1 + Validar.md 100%):** bump vc 64→65, vn 0.2.3.1→0.2.3.2. **4 bugs P1/P2 fechados** descobertos sessão Appium UiAutomator2 emulators Pixel 8 + 10 Pro XL (16k page size):
+- **#227 P1** — alarm_audit_log RLS root cause múltiplo: (a) alarm_audit_config sem policy SELECT pra authenticated → WITH CHECK EXISTS falha silenciosamente; (b) alarm_audit_log sem SELECT policy own pra `Prefer: return=representation` PostgREST. **2 migrations:** `alarm_audit_config_user_select_policy_v0_2_3_2` (CREATE POLICY audit_config_user_select FOR SELECT TO authenticated USING user_id=auth.uid) + `audit_log_policies_final_v0_2_3_2` (recreate audit_log_user_insert WITH CHECK user_id=auth.uid AND is_alarm_audit_enabled + ADD audit_log_user_select_own FOR SELECT USING user_id=auth.uid). VALIDADO: SQL `SELECT DISTINCT source FROM alarm_audit_log` retorna 6 sources (edge_daily_sync, edge_trigger_handler, java_alarm_scheduler, java_fcm_received, java_worker, js_scheduler).
+- **#228 P1** — `unsubscribeFcm` cross-device contamination: `DELETE WHERE userId AND platform='android'` apagava push_sub de TODOS devices do user. Fix `src/services/notifications/fcm.js:89-99` importa `criticalAlarm.getDeviceId` + `.eq('device_id_uuid', deviceIdUuid)` (fallback legacy se getDeviceId null).
+- **#229 P1** — A-03 snooze persist em reboot falhava por `apply()` async. Fix `AlarmScheduler.java` 5 callsites trocados pra `commit()` sync (persistAlarm + saveTrayEntries + persistTrayEntry + removePersistedTrayEntry + removePersisted). RUNTIME validado: SnoozeT3 emulator-5556 audit chain `edge_trigger_handler:fcm_sent → java_fcm_received:scheduled → java_alarm_scheduler:fired_received`.
+- **#230 P2** — Edge `dose-trigger-handler` v21 ACTIVE: BATCH_UPDATE/BATCH_DELETE agrupa por (ownerId, patientId, minute_bucket) + query group siblings no mesmo minuto + envia CSV completo. Java handleCancelAlarms agora reconstroi hash sortedDoseIds.join('|') corretamente. Audit row `batchSize=1 groupSize=2 reason=status_change_batch fcmOk=true` confirma server-side.
+
+**Validar.md sweep:** 62 [x] / 0 [~] / 0 [ ] / 0 [skip]. Todos FLUXOs v0.2.3.1 A/B/C/D/E + audit fechados. Legacy v0.2.2.x/v0.2.1.x + 218.x/219.x/220.x fechados com observação direta OU code review + indirect evidence pós-deploy. Pull-to-refresh dashboard validated W3C Actions API gesture.
+
+**Commits:** `1802853` fix(v0.2.3.2): bug-fixes #227 #228 #229 #230 device validação + `a1ea4cd` docs(v0.2.3.2): valida Validar.md 100%. Tag `v0.2.3.2`.
+
+**Counter:** 142+4 = 146 fechados / 78 abertos (4 código mergeado P1/P2 BUGS #227-#230 movidos pra ✅ fechados).
 
 **Δ 2026-05-13 release/v0.2.3.1 (refactor Plano A + Fixes B/C):** **#refactor-v0.2.3.1** rebranding logico v0.2.3.0 → v0.2.3.1 (bump vc 63→64, vn 0.2.3.0→0.2.3.1). 7 blocos implementados em 8 commits após 4 auditorias linha-por-linha descobrindo problemas arquiteturais não cobertos por #215-#226. **4 root causes resolvidos:** RC-1 dual tray race (Plano A unifica em Java M2 via `CriticalAlarm.scheduleTrayGroup` substituindo `LocalNotifications.schedule` foreground path), RC-2 prefs fire time (Fix B AlarmReceiver consulta SharedPrefs dosy_user_prefs antes de fire → re-rota dinâmica), RC-3 cancel group hash multi-dose (Fix C DosyMessagingService reconstroi `sortedDoseIds.join('|')`), RC-4 5 paths sem coordenação (convergem PendingIntent única). **5 achados A-XX + 3 B-XX consolidados:** A-01 doc recomputeOverdue, A-02 cancelFutureDoses UPDATE batch (não DELETE 360 trigger fires), A-03 snooze persist em reboot, A-04 janela useDoses unificada -30d/+60d, A-05 1 namespace SharedPrefs, B-01 AlarmReceiver cancela PendingIntent (não só notif visível), B-02 DailySummary 1 query. **Cleanup 23 itens código morto** removidos. **Backend deployed:** Edge dose-trigger-handler v20 BATCH_UPDATE/BATCH_DELETE handlers + 3 migrations (cleanup_orphan_dose_notifications + dose_change_batch_trigger + add_cancelled_status_to_doses). Counter inalterado (refactor sem novos items #).
 
