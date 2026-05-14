@@ -231,6 +231,10 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 - Commit message via HEREDOC + `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`
 - Pre-commit hook DEVE passar (não `--no-verify`)
 
+> 🛑 **Após cada fix commit em release com escopo múltiplo (>1 item):** STOP, reportar `fix #XXX aplicado + validado runtime` + perguntar `"Continuamos #YYY? OU pivota?"`. NÃO emendar próximo fix automaticamente. User pode querer empilhar bug novo, descobrir issue durante validação, ou alterar prioridade.
+>
+> Exceção: escopo único 1-item release pode prosseguir Passos 9-14 direto sem stop.
+
 ## Passo 9 — Sync docs (4 arquivos OBRIGATÓRIO)
 - `ROADMAP.md` §3 "Onde paramos" + §6.2 counter + §6.3 Δ release log + §6.4-6.7 entry status
 - `CHECKLIST.md` entry detalhado item `#XXX` (status + implementação fechada + auditoria egress se aplicável)
@@ -242,7 +246,26 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 git push origin release/v{X.Y.Z}
 ```
 
-## Passo 11 — Build + Upload Play Store (se release pronto pra teste)
+## ⚠️ Passo 10.5 — STOP OBRIGATÓRIO antes Build AAB
+
+**REGRA CRÍTICA — NUNCA fechar release sem autorização explícita do user.**
+
+Antes de qualquer comando `bundleRelease`, `cap sync`, AAB upload, tag git, OR merge master, **PARE** e reporte:
+
+1. **Resumo do que foi feito** nesta sessão (commits aplicados, items fechados)
+2. **Pendências de validação** que IA não executou autonomamente
+3. **Sugestões pra empilhar** mais coisas antes ship (Sentry triage extra, bugs descobertos durante development, etc)
+4. **Pergunta explícita:** `"Posso gerar o AAB v{X.Y.Z} agora?"` OR `"Quer empilhar mais alguma coisa antes do ship?"`
+
+**ESPERAR resposta afirmativa explícita** (ex: "sim, gera o AAB", "pode subir", "ok ship").
+
+> 🛑 **"Continue" / "Segue" / "OK" sozinhos NÃO autorizam ship.** User precisa dizer explicitamente "gera AAB", "sobe Play", OR "fecha release".
+
+Após autorização explícita: prosseguir Passo 11 sem nova interrupção até Passo 14 (STOP final).
+
+---
+
+## Passo 11 — Build + Upload Play Store (SÓ após autorização Passo 10.5)
 - Bump `versionCode + 1` em `android/app/build.gradle`
 - Build AAB via CLI (autônomo, sem Studio GUI):
   ```bash
@@ -446,8 +469,10 @@ Cenários device-only que IA NÃO consegue autonomous:
 2. Validar TUDO que cabe web via Chrome MCP (§12a)
 3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§12b)
 4. Reportar resultado §12a+§12b pro user
-5. **Atualizar [`contexto/Validar.md`](Validar.md)** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §12a+§12b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
+5. **Atualizar [`contexto/Validar.md`](Validar.md) OBRIGATÓRIO** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §12a+§12b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
 6. Pedir validação manual ao user, apontando pra `Validar.md`
+
+> 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os bugs foram cobertos §12a+§12b runtime, criar entry vazia com nota `**Validação device:** TODOS cenários cobertos autonomous §12a+§12b — nada pra user fazer.`. NUNCA pular esse passo — Validar.md é histórico/auditoria.
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release

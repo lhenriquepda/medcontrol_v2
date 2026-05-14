@@ -14,6 +14,32 @@
 
 ---
 
+## 🆕 Release v0.2.3.3 — versionCode 66 (em curso, AAB pendente autorização user)
+
+**Escopo:** fixes consolidados + Sentry triage + admin/Supabase egress check:
+- **#231** P2 BUG layout — patch-package `@capacitor-community/admob` plugin Android 15 topInset duplicado. Validado runtime emulator Pixel 8 (Android 15 sdk_gphone64) + Pixel 9 Pro (Android 17 sdk_gphone16k) — banner agora colado abaixo status bar nos dois. Device físico real Android 14 não afetado (branch só Android 15+).
+- **#232** P1 BUG ANR `MainActivity.onCreate` — WorkManager.enqueueUniquePeriodicWork + cleanupChannels síncronos bloqueavam main thread. Fix: ambos movidos pra `Executors.newSingleThreadExecutor().execute()`. NÃO validado runtime — auto-resolve no release ship via Sentry release tracking.
+- **#233** P1 BUG 401 race tokens — Java DoseSyncWorker `EXP_SAFETY_MARGIN_MS` 60s→300s pra tolerar clock skew Android. NÃO validado runtime — comportamento só observável em devices com clock drift real, próximos 24-72h pós-deploy via Supabase API Gateway observability deve mostrar 401 errors ↓.
+- **#074/#110** P2 Sentry Gradle Plugin 4.14.1 setup — NDK debug symbols + ProGuard mapping upload condicional ao SENTRY_AUTH_TOKEN env var. NÃO validado upload (token vazio em local build) — precisa setar token + rebuild AAB OR rodar `./gradlew uploadSentryNativeSymbolsForRelease` separate com token.
+- **Sentry triage 15→3 abertas:** 7 resolved (postgres_changes + weight.replace) + 5 archived (ANR syscall + Keyboard NPE + broadcast + auth lock) + 3 keep open (DOSY-M auto-resolve, DOSY-7/3 #110 aguardando NDK symbols).
+- **Admin /alarm-audit:** zero bugs encontrados, 6 sources PT-BR mapped, flow E2E confirmado runtime.
+- **Supabase egress:** 9.21 GB / 250 GB (4%) 10 dias. Storm 05 May 7.2 GB já mitigado por #211/#212/#213 fixes. Steady ~0.2 GB/dia healthy. 16 erros 401 60min addressed por #233.
+
+**Movidos pra release/v0.2.3.4 próxima** (refactor cost escala dedicado 10-15h):
+- #163 P1 RPC consolidado Dashboard
+- #164 P1 Realtime broadcast (retoma #157)
+- #165 P1 Delta sync + TanStack persist IndexedDB
+- #235 P2 monetização Free tier bottom banner (5-8h) OR Native Ads inline (10-15h)
+
+**Validação device pendente user (pós-AAB ship):**
+
+- `[ ]` **#231 fix validar device físico real** (S25 Ultra OR Pixel 10 Pro XL) — confirmar banner Ad NÃO regrediu (continua aparecendo colado abaixo status bar como antes). Cobra screenshot Dashboard.
+- `[ ]` **#232 ANR fix validar tempo abertura app** — comparar tempo cold start v0.2.3.2 vs v0.2.3.3. Esperado: ~200-500ms mais rápido em devices com Doze/restrições agressivas (Samsung One UI 7). Logcat `adb logcat -s MainActivity` deve mostrar `enqueueDoseSyncWorker` + `cleanupLegacyChannels` executando em thread DOSY-WORKER (não main).
+- `[ ]` **#233 401 race validar Supabase API Gateway 24h pós-deploy** — entrar admin Observability → API Gateway → Filter `is unresolved` 401 + status range 7-14 dias antes vs depois deploy. Esperado: 401 errors GET /patients e /doses ↓ significativamente.
+- `[ ]` **#074/#110 NDK symbols upload validar** — gerar SENTRY_AUTH_TOKEN em https://lhp-tech.sentry.io/settings/auth-tokens/ (scope project:write) + rebuild AAB com `SENTRY_AUTH_TOKEN=xxx ./gradlew bundleRelease` + check Sentry → Settings → Projects → Debug Files lista NDK symbols + ProGuard mapping uploaded. Após, novos crashes DOSY-7/3 devem symbolicate corretamente.
+
+---
+
 ## ✅ Release v0.2.3.2 — versionCode 65 SHIPPED Play Console Internal Testing 2026-05-14 14:46 BRT
 
 **Escopo:** 4 bugs descobertos device validação v0.2.3.1 corrigidos + CLI gradlew destravado (bonus técnico):
