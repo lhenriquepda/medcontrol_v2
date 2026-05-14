@@ -244,7 +244,16 @@ git push origin release/v{X.Y.Z}
 
 ## Passo 11 — Build + Upload Play Store (se release pronto pra teste)
 - Bump `versionCode + 1` em `android/app/build.gradle`
-- Build AAB local Android Studio (workaround `gradlew.bat` loopback Win11)
+- Build AAB via CLI (autônomo, sem Studio GUI):
+  ```bash
+  cd android
+  TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+    JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+    PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease
+  ```
+  - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
+  - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
+  - Output: `android/app/build/outputs/bundle/release/app-release.aab`
 - Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
 - **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
 - Internal Testing track ativa em ~1h
