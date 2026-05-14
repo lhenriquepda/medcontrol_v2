@@ -6,6 +6,33 @@
 
 ---
 
+## 🚧 Release v0.2.3.3 em curso
+
+### #release-v0.2.3.3 — Fix #231 layout AdMob banner safe-area-inset duplicado Android 15
+- **Status:** 🚧 a abrir branch `release/v0.2.3.3`. Bump vc 65→66, vn 0.2.3.2→0.2.3.3.
+- **Escopo único:** #231 P2 BUG layout — banner AdMob com gap peach vazio ~40px entre status bar e banner em emulator Android 15 sdk_gphone64 (Pixel 8). Pixel 9 Pro Android 17 sdk_gphone16k renderiza correto (banner colado abaixo status bar). Device físico real OK.
+- **Root cause provável:** `env(safe-area-inset-top)` duplicado WebView Android 15 + plugin Capacitor AdMob ambos aplicando padding-top.
+- **Plano investigação:**
+  1. Identificar componente container do banner Ad em `src/` (provável `AdBanner` ou similar em layout principal)
+  2. DevTools Chrome emulator-5554 (Pixel 8) — `chrome://inspect` + WebView `chrome://devtools`
+  3. Inspecionar computed styles `padding-top` / `env(safe-area-inset-top)` no container Ad + body + #root
+  4. Comparar com Pixel 9 Pro emulator-5556 mesma inspeção
+  5. Identificar onde inset aplicado em duplicidade
+- **Fix opções (escolher após investigação):**
+  - (a) CSS override: `body { padding-top: 0 !important; }` quando banner Ad ativo (delegar inset só pro content abaixo)
+  - (b) Detectar `Capacitor.getPlatform()==='android'` + `statusBarHeight` runtime + zerar via classe condicional
+  - (c) `@capacitor-community/admob` config `position=TOP_CENTER` + `margin=0` explícito (se ainda não está)
+- **Esforço:** 2-4h investigação + fix + validação 2 emulators + device físico.
+- **Aceitação:**
+  - ✅ Pixel 8 emulator-5554 Android 15 — banner colado imediatamente abaixo status bar (sem gap peach)
+  - ✅ Pixel 9 Pro emulator-5556 Android 17 — banner continua correto (não regrediu)
+  - ✅ Device físico real (user testa) — banner correto
+  - ✅ Screenshot before/after Pixel 8 anexado no CHECKLIST/Validar.md
+- **Arquivos prováveis:** `src/components/AdBanner*.{jsx,tsx,jsx,js,css}` OR `src/layouts/*` OR `index.css` (`env(safe-area-inset-top)` usage), `capacitor.config.ts` ou `.json` (AdMob plugin config).
+- **Backend:** zero impacto (mudança CSS/JS frontend only).
+
+---
+
 ## ✅ Release v0.2.3.2 SHIPPED 2026-05-14
 
 ### #release-v0.2.3.2 — Bug-fixes #227-#230 + CLI gradlew destravado

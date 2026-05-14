@@ -172,7 +172,7 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 **Commits v0.2.3.2:** `1802853` fix #227-#230 + `a1ea4cd` docs Validar 100% + `2d460b4` docs ROADMAP §3+§6.3 + `e0fde9d` build CLI fix + release notes + AAB published + `c0cb372` merge master.
 
-**Próximo passo:** aguardar feedback testers Play Console Internal Testing. Próximas releases podem usar CLI direto (sem Studio GUI).
+**Próximo passo:** abrir `release/v0.2.3.3` (bump vc 65→66, vn 0.2.3.2→0.2.3.3) — escopo único fix #231 P2 BUG layout AdMob banner safe-area-inset duplicado Android 15 emulator. Investigar DOM padding + plugin Capacitor AdMob config. Testar antes/depois Pixel 8 (Android 15 sdk_gphone64) vs Pixel 9 Pro (Android 17 sdk_gphone16k) — após fix ambos devem render banner colado abaixo status bar.
 
 **Pós-ship sessão validação emulator autônoma 2026-05-14 ~18:10 UTC (Pixel8_Test AVD criado via avdmanager CLI):**
 - ✅ Setup completo CLI autônomo: AVD criado, emulator boot, APK debug install, login UI via ADB input + uiautomator dump
