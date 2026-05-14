@@ -163,22 +163,37 @@ export function AuthProvider({ children }) {
               schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
             }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
 
-            // #215 v0.2.3.0 fix bug device-validation 2026-05-13: sincroniza
-            // user_prefs (DnD + criticalAlarm) pro plugin Android SharedPreferences
-            // `dosy_user_prefs` em TODA mudança de auth. Antes só useUserPrefs.queryFn
-            // chamava, race condition deixava SharedPrefs sem dnd_* keys quando
-            // FCM data chegava → branch decision Java errada → alarme nativo
-            // mesmo em janela DnD. Lê cache localStorage `medcontrol_notif`
-            // (que useUserPrefs writeLocal grava).
+            // #215 v0.2.3.0 fix bug device-validation 2026-05-13 (refinado): sincroniza
+            // user_prefs DB direto (NÃO cache localStorage que pode estar vazio em
+            // fresh install). Race condition prévia: useAuth listener dispara ANTES
+            // useUserPrefs queryFn fetchar DB → cache vazio → syncUserPrefs grava
+            // defaults (dndEnabled=false) → SharedPrefs Android sobrescrita errada
+            // → Java decide alarm_plus_push em vez de push_dnd.
+            //
+            // Solução: fetch DB user_prefs sync ANTES setSyncCredentials. SE DB
+            // tiver dnd_*, grava authoritative. Se DB falhar, fallback cache.
             try {
+              const { data: prefsRow } = await supabase
+                .schema(import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol')
+                .from('user_prefs')
+                .select('prefs')
+                .eq('user_id', s.user.id)
+                .maybeSingle()
+              const dbPrefs = prefsRow?.prefs
               const cachedPrefs = JSON.parse(localStorage.getItem('medcontrol_notif') || '{}')
+              // Merge: DB > cache. Se DB tem dndEnabled key (não-undefined), usa DB.
+              const resolved = (dbPrefs && Object.keys(dbPrefs).length > 0) ? dbPrefs : cachedPrefs
               syncUserPrefs({
-                criticalAlarm: cachedPrefs.criticalAlarm !== false,
-                dndEnabled: !!cachedPrefs.dndEnabled,
-                dndStart: cachedPrefs.dndStart || '23:00',
-                dndEnd: cachedPrefs.dndEnd || '07:00'
+                criticalAlarm: resolved.criticalAlarm !== false,
+                dndEnabled: !!resolved.dndEnabled,
+                dndStart: resolved.dndStart || '23:00',
+                dndEnd: resolved.dndEnd || '07:00'
               }).catch((e) => console.warn('[useAuth] syncUserPrefs err:', e?.message))
-            } catch (e) { console.warn('[useAuth] syncUserPrefs init catch:', e?.message) }
+              // Plus atualiza cache localStorage pra coerência
+              if (dbPrefs && Object.keys(dbPrefs).length > 0) {
+                try { localStorage.setItem('medcontrol_notif', JSON.stringify(dbPrefs)) } catch { /* ignore */ }
+              }
+            } catch (e) { console.warn('[useAuth] syncUserPrefs DB fetch catch:', e?.message) }
 
             // Item #098 — re-bind FCM deviceToken cached ao novo user.
             // Listener PushNotifications 'registration' só dispara em install/
