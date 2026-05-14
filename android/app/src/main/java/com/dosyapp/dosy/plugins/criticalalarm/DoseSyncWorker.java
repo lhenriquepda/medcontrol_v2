@@ -86,13 +86,25 @@ public class DoseSyncWorker extends Worker {
             return Result.success(); // não retry — user ainda não logou
         }
 
-        // Item #085 (release v0.1.7.3) — respeita toggle Alarme Crítico do user.
-        // Se OFF, skip scheduling (notify-doses cron mandará push tray).
-        // Default true se SP ausente (alarme ON pre-existing behavior).
-        boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
+        // v0.2.3.1 Bloco 6 (A-05) — le do namespace unificado dosy_user_prefs.
+        // Antes lia de dosy_sync_credentials.critical_alarm_enabled (legacy) +
+        // useUserPrefs JS escrevia em DOIS namespaces. Agora apenas dosy_user_prefs
+        // gravado pelo syncUserPrefs.
+        // Fallback legacy mantido pra usuarios que ainda nao re-logaram pos refactor.
+        SharedPreferences spPrefs = ctx.getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
+        boolean criticalAlarmEnabled;
+        if (spPrefs.contains("critical_alarm_enabled")) {
+            criticalAlarmEnabled = spPrefs.getBoolean("critical_alarm_enabled", true);
+        } else {
+            criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
+        }
+        // v0.2.3.1 Fix B-like — NOTA: NAO returna early pra critical OFF.
+        // Worker delega scheduling decision pro helper AlarmScheduler.scheduleDoseAlarm
+        // que decide branch (alarm/tray) por dose via prefsOverride. Mas pra economizar
+        // bateria + egress, se critical OFF + DnD OFF, ainda processa pra agendar trays.
+        // Se critical OFF E user nao quer trays nenhum, push pref master deveria estar OFF.
         if (!criticalAlarmEnabled) {
-            Log.d(TAG, "critical alarm OFF — skip schedule (push tray covers)");
-            return Result.success();
+            Log.d(TAG, "critical alarm OFF — Worker continua pra agendar trays (Plano A unificado)");
         }
 
         // Item #205 — verifica access_token local + exp. NÃO chama refresh endpoint.

@@ -1,7 +1,14 @@
 import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
 
-// Marca doses pendentes cujo horário já passou como 'overdue' (apenas no mock).
+// Marca doses pendentes cujo horário já passou como 'overdue' (mock + cliente Supabase).
+//
+// v0.2.3.1 Bloco 6 (A-01) NOTE: cada chamada listDoses retorna NEW array refs
+// pra doses que passaram horário (clone via spread). DB ainda persiste status='pending'.
+// App.jsx dosesSignature inclui d.status → flippa quando dose passa horário → dispara
+// scheduleDoses (throttled 30s) → rescheduleAll roda cancelAll + reagenda. Comportamento
+// CORRETO mas pode parecer storm em logcat. filterUpcoming filtra status !== 'pending'
+// → overdue dose já passada NÃO é re-agendada (correto).
 function recomputeOverdue(rows) {
   const now = new Date()
   return rows.map((d) => {

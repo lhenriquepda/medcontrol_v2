@@ -210,12 +210,10 @@ public class CriticalAlarmPlugin extends Plugin {
             deviceId = java.util.UUID.randomUUID().toString();
         }
 
-        // Item #085 (release v0.1.7.3) — toggle Alarme Crítico do user.
-        // Se passado, atualiza SP. Senão, mantém valor existente (default true).
-        boolean criticalAlarmEnabled = sp.getBoolean("critical_alarm_enabled", true);
-        if (call.hasOption("criticalAlarmEnabled")) {
-            criticalAlarmEnabled = call.getBoolean("criticalAlarmEnabled", true);
-        }
+        // v0.2.3.1 Bloco 6 (A-05) — REMOVIDO write critical_alarm_enabled em
+        // dosy_sync_credentials. Namespace consolidado: dosy_user_prefs (via syncUserPrefs).
+        // dosy_sync_credentials guarda apenas dados de auth (refresh_token, anon_key,
+        // access_token, schema, user_id, device_id).
 
         SharedPreferences.Editor ed = sp.edit()
             .putString("supabase_url", url)
@@ -223,11 +221,18 @@ public class CriticalAlarmPlugin extends Plugin {
             .putString("user_id", userId)
             .putString("refresh_token", refreshToken)
             .putString("schema", schema)
-            .putString("device_id", deviceId)
-            .putBoolean("critical_alarm_enabled", criticalAlarmEnabled);
+            .putString("device_id", deviceId);
         if (accessToken != null) ed.putString("access_token", accessToken);
         if (accessTokenExp != null) ed.putLong("access_token_exp_ms", accessTokenExp);
         ed.apply();
+
+        // v0.2.3.1 — se criticalAlarmEnabled foi passado, sync pra namespace unificado.
+        // Mantem compat com chamadas legacy que enviam o campo.
+        if (call.hasOption("criticalAlarmEnabled")) {
+            getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("critical_alarm_enabled",
+                    call.getBoolean("criticalAlarmEnabled", true)).apply();
+        }
 
         JSObject ret = new JSObject();
         ret.put("deviceId", deviceId);
@@ -235,29 +240,9 @@ public class CriticalAlarmPlugin extends Plugin {
     }
 
     /**
-     * Item #085 (release v0.1.7.3) — atualiza só o toggle Alarme Crítico em
-     * SharedPreferences. Chamado pelo useUserPrefs.mutationFn quando user
-     * mexe no toggle em Ajustes (sem precisar redo full setSyncCredentials).
-     * DoseSyncWorker + DosyMessagingService leem essa flag antes de agendar.
-     *
-     * #215 v0.2.3.0 — também grava em `dosy_user_prefs` SharedPreferences
-     * (namespace separado) pra AlarmScheduler.scheduleDoseAlarm helper unificado ler.
+     * v0.2.3.1 Bloco 6 (A-05) — setCriticalAlarmEnabled REMOVIDO.
+     * Use syncUserPrefs({ criticalAlarm: bool }) que cobre namespace unificado.
      */
-    @PluginMethod
-    public void setCriticalAlarmEnabled(PluginCall call) {
-        Boolean enabled = call.getBoolean("enabled");
-        if (enabled == null) {
-            call.reject("enabled required (boolean)");
-            return;
-        }
-        // Legacy namespace (consumido por DoseSyncWorker + DosyMessagingService)
-        SharedPreferences sp = getContext().getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
-        sp.edit().putBoolean("critical_alarm_enabled", enabled).apply();
-        // #215 namespace unificado (consumido por AlarmScheduler.scheduleDoseAlarm)
-        SharedPreferences spPrefs = getContext().getSharedPreferences("dosy_user_prefs", Context.MODE_PRIVATE);
-        spPrefs.edit().putBoolean("critical_alarm_enabled", enabled).apply();
-        call.resolve();
-    }
 
     /**
      * #215 v0.2.3.0 — sincroniza prefs completas pro namespace `dosy_user_prefs`.
