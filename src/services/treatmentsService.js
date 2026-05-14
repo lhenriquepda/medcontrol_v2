@@ -88,25 +88,31 @@ export async function deleteTreatment(id) {
   mock.remove('treatments', id)
 }
 
-/** Cancel all pending future doses (scheduledAt > now). Used when pausing/ending. */
+/** Cancel all pending future doses (scheduledAt > now). Used when pausing/ending.
+ * v0.2.3.1 Bloco 5 (A-02) — UPDATE em vez de DELETE.
+ * Antes: DELETE batch fazia trigger fires FOR EACH ROW × N → N FCMs spam.
+ * Agora: UPDATE batch dispara trigger FOR EACH STATEMENT que agrega doseIds
+ * → 1 FCM por device com CSV (DosyMessagingService reconstroi hash do grupo).
+ * Preserva historico das doses (status='cancelled' em vez de DELETE).
+ */
 async function cancelFutureDoses(treatmentId) {
   if (hasSupabase) {
     const nowIso = new Date().toISOString()
     const { error } = await supabase
       .from('doses')
-      .delete()
+      .update({ status: 'cancelled' })
       .eq('treatmentId', treatmentId)
       .eq('status', 'pending')
       .gt('scheduledAt', nowIso)
     if (error) throw error
     return
   }
-  // Mock: filter out future pending doses
+  // Mock: marca cancelled local
   const all = mock.list('doses', { treatmentId })
   const nowMs = Date.now()
   for (const d of all) {
     if (d.status === 'pending' && new Date(d.scheduledAt).getTime() > nowMs) {
-      mock.remove('doses', d.id)
+      mock.update('doses', d.id, { status: 'cancelled' })
     }
   }
 }

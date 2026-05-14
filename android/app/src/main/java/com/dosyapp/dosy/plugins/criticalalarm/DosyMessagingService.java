@@ -178,37 +178,66 @@ public class DosyMessagingService extends MessagingService {
     }
 
     /**
-     * Item #209 v0.2.1.9 — handle cancel_alarms FCM action.
-     * Recebe doseIds CSV (ex: "uuid1,uuid2,uuid3"). Pra cada, calcula
-     * AlarmScheduler.idFromString (mesma fórmula usada no scheduling) e
-     * chama AlarmScheduler.cancelAlarm. Idempotente — id inexistente OK.
-     *
-     * NOTA: dose individual = group de 1 dose. ID derivado de doseId só.
-     * Groups multi-dose (mesmo minute key) — cancela só se TODOS doses do
-     * group estão cancelados. Conservador: cancelar individual com risk de
-     * leave group order. Aceito — server-side garante consistência.
+     * v0.2.3.1 Bloco 5 (Fix C + A-02) — handle cancel_alarms FCM action.
+     * Recebe doseIds CSV. Cancela:
+     *   1) Cada dose individualmente (cobre single-dose groups onde hash(doseId)
+     *      é o mesmo do scheduling)
+     *   2) Reconstroi hash do grupo (sortedDoseIds.join('|')) e cancela
+     *      tambem (cobre multi-dose groups que NAO matchavam por single hash)
+     * Idempotente — id inexistente OK.
      */
     private void handleCancelAlarms(String doseIdsCsv) {
         if (doseIdsCsv == null || doseIdsCsv.isEmpty()) return;
         Context ctx = getApplicationContext();
         String[] ids = doseIdsCsv.split(",");
         int cancelled = 0;
+
+        // 1) Cancel cada doseId individualmente (single-dose groups)
         for (String doseId : ids) {
             String trimmed = doseId.trim();
             if (trimmed.isEmpty()) continue;
             int alarmId = AlarmScheduler.idFromString(trimmed);
-            // #215 v0.2.3.0 — cancela alarme nativo + LocalNotification backup co-agendada
             if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, alarmId)) {
                 cancelled++;
                 try {
                     JSONObject meta = new JSONObject();
                     meta.put("alarmId", alarmId);
-                    meta.put("reason", "fcm_cancel_action");
+                    meta.put("reason", "fcm_cancel_action_individual");
                     meta.put("source_scenario", "fcm_cancel_alarms");
                     AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", trimmed, meta);
                 } catch (JSONException ignore) {}
             }
         }
+
+        // 2) v0.2.3.1 Fix C — reconstroi hash do grupo (sortedDoseIds.join('|'))
+        //    e cancela tambem. Multi-dose groups foram agendados com esse hash.
+        if (ids.length > 1) {
+            String[] sorted = new String[ids.length];
+            int j = 0;
+            for (String id : ids) {
+                String trimmed = id.trim();
+                if (!trimmed.isEmpty()) sorted[j++] = trimmed;
+            }
+            if (j > 1) {
+                String[] sortedFinal = new String[j];
+                System.arraycopy(sorted, 0, sortedFinal, 0, j);
+                java.util.Arrays.sort(sortedFinal);
+                String groupKey = String.join("|", sortedFinal);
+                int groupAlarmId = AlarmScheduler.idFromString(groupKey);
+                if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, groupAlarmId)) {
+                    cancelled++;
+                    try {
+                        JSONObject meta = new JSONObject();
+                        meta.put("alarmId", groupAlarmId);
+                        meta.put("groupKey", groupKey);
+                        meta.put("reason", "fcm_cancel_action_group");
+                        meta.put("source_scenario", "fcm_cancel_alarms_batch");
+                        AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", groupKey, meta);
+                    } catch (JSONException ignore) {}
+                }
+            }
+        }
+
         Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
     }
 

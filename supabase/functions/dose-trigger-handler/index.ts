@@ -62,10 +62,10 @@ async function getFcmAccessToken(): Promise<string> {
 }
 
 interface WebhookPayload {
-  type: 'INSERT' | 'UPDATE' | 'DELETE'
+  type: 'INSERT' | 'UPDATE' | 'DELETE' | 'BATCH_UPDATE' | 'BATCH_DELETE'
   table: string
   schema: string
-  record: {
+  record?: {
     id: string
     userId: string
     patientId: string
@@ -82,6 +82,14 @@ interface WebhookPayload {
     status: string
     [key: string]: unknown
   } | null
+  // v0.2.3.1 Bloco 5 — batch trigger envia array de old rows
+  old_rows?: Array<{
+    id: string
+    userId: string
+    patientId: string
+    status: string
+    [key: string]: unknown
+  }>
 }
 
 /**
@@ -142,7 +150,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400 })
   }
 
-  const { type, table, record, old_record } = payload
+  const { type, table, record, old_record, old_rows } = payload
 
   if (table !== 'doses') {
     return new Response(JSON.stringify({ ok: true, skipped: 'not-doses' }))
@@ -150,6 +158,66 @@ Deno.serve(async (req) => {
 
   const auditEnabledUsers = await getEnabledAuditUsers(supabase)
   const auditRows: AuditRow[] = []
+
+  // v0.2.3.1 Bloco 5 — BATCH_UPDATE / BATCH_DELETE: agrega doseIds + envia 1 FCM
+  // por device com CSV. DosyMessagingService reconstroi hash do grupo.
+  if (type === 'BATCH_UPDATE' || type === 'BATCH_DELETE') {
+    if (!old_rows || old_rows.length === 0) {
+      return new Response(JSON.stringify({ ok: true, skipped: 'no-old-rows' }))
+    }
+    // Agrupa por (ownerId, patientId) — cada grupo recebe 1 FCM com CSV
+    const groups = new Map<string, { ownerId: string; patientId: string; doseIds: string[] }>()
+    for (const row of old_rows) {
+      const key = `${row.userId}|${row.patientId}`
+      if (!groups.has(key)) {
+        groups.set(key, { ownerId: String(row.userId), patientId: String(row.patientId), doseIds: [] })
+      }
+      groups.get(key)!.doseIds.push(String(row.id))
+    }
+
+    let totalSent = 0, totalErrors = 0
+    for (const { ownerId, patientId, doseIds } of groups.values()) {
+      const recipients = await getRecipientUserIds(patientId, ownerId)
+      const reason = type === 'BATCH_DELETE' ? 'dose_deleted_batch' : 'status_change_batch'
+      const doseIdsCsv = doseIds.join(',')
+
+      for (const userId of recipients) {
+        const { data: subs } = await supabase
+          .from('push_subscriptions')
+          .select('deviceToken')
+          .eq('userId', userId)
+          .not('deviceToken', 'is', null)
+        if (!subs?.length) continue
+
+        for (const sub of subs) {
+          const ok = await sendFcmTo(sub.deviceToken, {
+            action: 'cancel_alarms',
+            doseIds: doseIdsCsv,
+            source_scenario: reason,
+            count: String(doseIds.length)
+          })
+          if (ok) totalSent++; else totalErrors++
+
+          if (auditEnabledUsers.has(userId)) {
+            for (const did of doseIds) {
+              auditRows.push({
+                user_id: userId, source: SOURCE, action: 'cancelled',
+                dose_id: did,
+                device_id: sub.deviceToken.slice(-12),
+                metadata: { reason, source_scenario: reason, batchSize: doseIds.length, fcmOk: ok }
+              })
+            }
+          }
+        }
+      }
+    }
+
+    await logAuditBatch(supabase, auditRows)
+    console.log(`[dose-trigger] ${type} groups=${groups.size} totalDoses=${old_rows.length} sent=${totalSent} errors=${totalErrors}`)
+    return new Response(JSON.stringify({ ok: true, action: 'cancel_alarms_batch', sent: totalSent, errors: totalErrors }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
 
   // #221 — DELETE: dispara cancel_alarms cross-device
   if (type === 'DELETE') {
