@@ -42,7 +42,8 @@ public class AlarmReceiver extends BroadcastReceiver {
     // (anti-duplicate: user não vê alarme fullscreen + notif tray vibrando junto).
     // Se startForegroundService falhar (catch block abaixo), backup CONTINUA agendada
     // como fallback visual.
-    private static final int BACKUP_OFFSET = 700_000_000;
+    // Fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
+    private static final int BACKUP_OFFSET = 1073741824; // 2^30
 
     @Override
     public void onReceive(Context context, Intent intent) {

@@ -37,14 +37,19 @@ export function urlBase64ToUint8Array(b64) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
 }
 
-// Hash UUID -> int32 positivo. ID estável LocalNotification + alarm
+// Hash UUID -> int positivo range [0, 2^30-1].
+// #215 v0.2.3.0 fix overflow device-validation 2026-05-13: range reduzido
+// pra que groupId + BACKUP_OFFSET (2^30) ≤ Java MAX_INT (2^31 - 1).
+// Antes: hash % 2147483647 + BACKUP_OFFSET 700M = overflow no Capacitor
+// LocalNotifications.schedule (rejeita ID > MAX_INT). Java aceita silent
+// com overflow negativo → TrayNotificationReceiver agendado órfão.
 export function doseIdToNumber(uuid) {
   let h = 0
   for (let i = 0; i < uuid.length; i++) {
     h = ((h << 5) - h) + uuid.charCodeAt(i)
     h |= 0
   }
-  return Math.abs(h) % 2147483647
+  return Math.abs(h) % 1073741823  // 2^30 - 1
 }
 
 /**

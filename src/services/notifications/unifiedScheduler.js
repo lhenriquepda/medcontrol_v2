@@ -23,7 +23,12 @@ import { doseIdToNumber, inDnd, SCHEDULE_WINDOW_MS } from './prefs'
 // AlarmManager IDs e LocalNotification IDs vivem em namespaces distintos mas
 // usamos offset alto pra garantir zero colisão também com DAILY_SUMMARY_NOTIF_ID
 // (999000001) que ocupa o topo.
-export const BACKUP_OFFSET = 700_000_000
+// #215 v0.2.3.0 fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
+// doseIdToNumber range agora [0, 2^30-1]. groupId + BACKUP_OFFSET ≤ 2^31-1 = Java MAX_INT.
+// Antes: groupId 1.69B + 700M = 2.39B overflow → Capacitor LocalNotifications.schedule
+// rejeita silent ("identifier should be Java int") + Java AlarmScheduler aceita overflow
+// negativo → TrayNotificationReceiver órfão pendente AlarmManager → 2 push duplicados.
+export const BACKUP_OFFSET = 1073741824 // 2^30
 
 // Janela dinâmica — Android limit ~500 itens (alarmes + notificações) por app.
 // Margem 100 → threshold 400. Acima → cai horizon pra 24h.

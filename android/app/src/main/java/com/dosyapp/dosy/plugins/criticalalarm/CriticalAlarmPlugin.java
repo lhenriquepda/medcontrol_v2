@@ -322,6 +322,17 @@ public class CriticalAlarmPlugin extends Plugin {
         am.cancel(pi);
         pi.cancel();
 
+        // #215 v0.2.3.0 fix device-validation 2026-05-13: cancela tray backup
+        // co-agendada (id + BACKUP_OFFSET). Mesma razão de cancelAll().
+        int trayId = id + AlarmScheduler.BACKUP_OFFSET;
+        Intent trayIntent = new Intent(ctx, TrayNotificationReceiver.class);
+        PendingIntent trayPi = PendingIntent.getBroadcast(
+            ctx, trayId, trayIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        am.cancel(trayPi);
+        trayPi.cancel();
+
         removePersisted(id);
 
         call.resolve();
@@ -338,6 +349,7 @@ public class CriticalAlarmPlugin extends Plugin {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 int id = obj.getInt("id");
+                // Cancela AlarmReceiver (alarme nativo fullscreen)
                 Intent intent = new Intent(ctx, AlarmReceiver.class);
                 PendingIntent pi = PendingIntent.getBroadcast(
                     ctx, id, intent,
@@ -345,6 +357,18 @@ public class CriticalAlarmPlugin extends Plugin {
                 );
                 am.cancel(pi);
                 pi.cancel();
+                // #215 v0.2.3.0 fix device-validation 2026-05-13: também cancela
+                // TrayNotificationReceiver backup co-agendada (id = groupId + BACKUP_OFFSET).
+                // Sem isso, toggle Critical Alarm OFF deixa tray pendente em AlarmManager
+                // → dispara junto com novo LocalNotification = 2 push duplicados.
+                int trayId = id + AlarmScheduler.BACKUP_OFFSET;
+                Intent trayIntent = new Intent(ctx, TrayNotificationReceiver.class);
+                PendingIntent trayPi = PendingIntent.getBroadcast(
+                    ctx, trayId, trayIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                );
+                am.cancel(trayPi);
+                trayPi.cancel();
             }
         } catch (JSONException ignored) {}
 

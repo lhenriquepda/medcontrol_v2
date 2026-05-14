@@ -43,7 +43,12 @@ public class AlarmScheduler {
     private static final String KEY_SCHEDULED = "scheduled_alarms";
 
     // #215 v0.2.3.0 — paridade com src/services/notifications/unifiedScheduler.js
-    public static final int BACKUP_OFFSET = 700_000_000;
+    // Fix overflow device-validation 2026-05-13: 700M → 2^30 (1073741824).
+    // groupId range [0, 2^30-1] + BACKUP_OFFSET 2^30 ≤ MAX_INT (2^31-1).
+    // Antes: groupId 1.69B + 700M = 2.39B → overflow Java int → Capacitor
+    // LocalNotifications.schedule rejeita silent + TrayNotificationReceiver
+    // pendente AlarmManager (overflow negativo aceito) → 2 push duplicados.
+    public static final int BACKUP_OFFSET = 1073741824; // 2^30
     public static final String TRAY_CHANNEL_ID = "dosy_tray";
     public static final String TRAY_DND_CHANNEL_ID = "dosy_tray_dnd";
 
@@ -382,8 +387,10 @@ public class AlarmScheduler {
      * Used by DoseSyncWorker pra coincidir com ids do JS-side (groupKey hash).
      *
      * #220 v0.2.3.0 — alinhado com JS `doseIdToNumber` (src/services/notifications/prefs.js):
-     * ambos aplicam `Math.abs(h) % 2147483647` pra garantir paridade cross-source.
+     * ambos aplicam `Math.abs(h) % 1073741823` (2^30-1) pra garantir paridade
+     * cross-source + range tal que id + BACKUP_OFFSET ≤ Java MAX_INT.
      * Antes Java só fazia `Math.abs(h)` — strings longas podiam divergir do JS.
+     * #215 fix overflow device-validation 2026-05-13: range 2^31-1 → 2^30-1.
      */
     public static int idFromString(String s) {
         int h = 0;
@@ -391,6 +398,6 @@ public class AlarmScheduler {
             h = ((h << 5) - h) + s.charAt(i);
             h |= 0; // i32 cast
         }
-        return Math.abs(h) % 2147483647;
+        return Math.abs(h) % 1073741823; // 2^30 - 1
     }
 }
