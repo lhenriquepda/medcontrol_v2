@@ -79,7 +79,16 @@ public class AlarmScheduler {
      */
     public static Branch scheduleDoseAlarm(Context ctx, int groupId, long triggerAtEpochMs, JSONArray doses) {
         SharedPreferences sp = ctx.getSharedPreferences(USER_PREFS, Context.MODE_PRIVATE);
+        // #215 fix bug device-validation 2026-05-13: legacy fallback ler de
+        // dosy_sync_credentials.critical_alarm_enabled (setSyncCredentials grava
+        // antes do syncUserPrefs novo rodar). Garante critical_alarm respeitado
+        // mesmo se syncUserPrefs JS ainda não disparou (login fresh, dose insert
+        // antes de Ajustes touch).
         boolean criticalOn = sp.getBoolean(KEY_CRITICAL_ALARM, true);
+        if (!sp.contains(KEY_CRITICAL_ALARM)) {
+            SharedPreferences spLegacy = ctx.getSharedPreferences("dosy_sync_credentials", Context.MODE_PRIVATE);
+            criticalOn = spLegacy.getBoolean("critical_alarm_enabled", true);
+        }
         boolean dndOn = sp.getBoolean(KEY_DND_ENABLED, false);
 
         boolean inDnd = false;
@@ -88,6 +97,7 @@ public class AlarmScheduler {
             String dndEnd = sp.getString(KEY_DND_END, "07:00");
             inDnd = isInDndWindow(triggerAtEpochMs, dndStart, dndEnd);
         }
+        Log.d(TAG, "scheduleDoseAlarm prefs: criticalOn=" + criticalOn + " dndOn=" + dndOn + " inDnd=" + inDnd);
 
         Branch branch;
         if (!criticalOn) {

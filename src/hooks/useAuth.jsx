@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
 import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
-import { setSyncCredentials, clearSyncCredentials } from '../services/criticalAlarm'
+import { setSyncCredentials, clearSyncCredentials, syncUserPrefs } from '../services/criticalAlarm'
 import { logAuthEvent } from '../services/authTelemetry'
 
 const isNative = Capacitor.isNativePlatform()
@@ -162,6 +162,23 @@ export function AuthProvider({ children }) {
               accessTokenExp: expiresAt,
               schema: import.meta.env.VITE_SUPABASE_SCHEMA || 'medcontrol'
             }).catch((e) => console.warn('[useAuth] setSyncCredentials err:', e?.message))
+
+            // #215 v0.2.3.0 fix bug device-validation 2026-05-13: sincroniza
+            // user_prefs (DnD + criticalAlarm) pro plugin Android SharedPreferences
+            // `dosy_user_prefs` em TODA mudança de auth. Antes só useUserPrefs.queryFn
+            // chamava, race condition deixava SharedPrefs sem dnd_* keys quando
+            // FCM data chegava → branch decision Java errada → alarme nativo
+            // mesmo em janela DnD. Lê cache localStorage `medcontrol_notif`
+            // (que useUserPrefs writeLocal grava).
+            try {
+              const cachedPrefs = JSON.parse(localStorage.getItem('medcontrol_notif') || '{}')
+              syncUserPrefs({
+                criticalAlarm: cachedPrefs.criticalAlarm !== false,
+                dndEnabled: !!cachedPrefs.dndEnabled,
+                dndStart: cachedPrefs.dndStart || '23:00',
+                dndEnd: cachedPrefs.dndEnd || '07:00'
+              }).catch((e) => console.warn('[useAuth] syncUserPrefs err:', e?.message))
+            } catch (e) { console.warn('[useAuth] syncUserPrefs init catch:', e?.message) }
 
             // Item #098 — re-bind FCM deviceToken cached ao novo user.
             // Listener PushNotifications 'registration' só dispara em install/
