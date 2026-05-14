@@ -747,6 +747,14 @@ public class AlarmActivity extends Activity {
         );
 
         am.setAlarmClock(new AlarmManager.AlarmClockInfo(snoozeAt, showPi), pi);
+        // v0.2.3.1 A-03 Fix — persiste snoozeAt em SharedPreferences pra sobreviver reboot.
+        try {
+            String dosesJson = getIntent().getStringExtra("doses");
+            JSONArray doses = new JSONArray(dosesJson != null ? dosesJson : "[]");
+            AlarmScheduler.persistSnoozedAlarm(this, alarmId, snoozeAt, doses);
+        } catch (Exception persistErr) {
+            android.util.Log.w("AlarmActivity", "persistSnoozedAlarm error: " + persistErr.getMessage());
+        }
     }
 
     @Override

@@ -87,6 +87,14 @@ public class AlarmActionReceiver extends BroadcastReceiver {
 
         try {
             am.setAlarmClock(new AlarmManager.AlarmClockInfo(snoozeAt, showPi), firePi);
+            // v0.2.3.1 A-03 Fix — persiste snoozeAt em SharedPreferences pra sobreviver reboot.
+            // Sem isso, BootReceiver lê triggerAt antigo + re-agenda no horário original.
+            try {
+                org.json.JSONArray doses = new org.json.JSONArray(dosesJson != null ? dosesJson : "[]");
+                AlarmScheduler.persistSnoozedAlarm(context, alarmId, snoozeAt, doses);
+            } catch (Exception persistErr) {
+                android.util.Log.w("AlarmActionReceiver", "persistSnoozedAlarm error: " + persistErr.getMessage());
+            }
         } catch (SecurityException ignored) {}
     }
 }

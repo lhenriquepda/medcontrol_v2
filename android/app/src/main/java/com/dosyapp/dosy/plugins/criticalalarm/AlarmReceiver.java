@@ -77,14 +77,25 @@ public class AlarmReceiver extends BroadcastReceiver {
             }
         } catch (Exception ignored) {}
 
-        // #215 v0.2.3.0 — anti-duplicate: cancela LocalNotification backup antes
-        // de start service. Se startForegroundService falhar (catch block abaixo),
-        // backup continua disponível como fallback visual mesmo cancelado aqui
-        // (LocalNotifications.cancel não previne dispare se já agendada — só remove
-        // do tray quando visível). Aceitável — o objetivo é evitar tray duplicado
-        // QUANDO alarme funcionou.
+        // #215 v0.2.3.0 + v0.2.3.1 Fix B-01: anti-duplicate cancel cobrindo race
+        // mesmo timestamp. NotificationManagerCompat.cancel só cobre notif VISIVEL —
+        // não cancela PendingIntent pendente no AlarmManager. Sem este fix, se
+        // TrayNotificationReceiver dispara MS depois de AlarmReceiver (race no
+        // mesmo trigger), tray ainda aparece duplicado com alarme.
         try {
+            // 1) Cancel notif visível (caso TrayNotificationReceiver já tenha postado)
             NotificationManagerCompat.from(context).cancel(alarmId + BACKUP_OFFSET);
+            // 2) Cancel PendingIntent pendente do TrayNotificationReceiver (race fix)
+            Intent trayIntent = new Intent(context, TrayNotificationReceiver.class);
+            PendingIntent trayPi = PendingIntent.getBroadcast(
+                context, alarmId + BACKUP_OFFSET, trayIntent,
+                PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+            );
+            if (trayPi != null) {
+                android.app.AlarmManager am = (android.app.AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+                if (am != null) am.cancel(trayPi);
+                trayPi.cancel();
+            }
         } catch (Exception ignored) {}
 
         // Primary path (Android 8+): start foreground service → service launches AlarmActivity.

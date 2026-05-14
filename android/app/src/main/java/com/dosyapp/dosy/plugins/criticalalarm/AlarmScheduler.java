@@ -307,6 +307,17 @@ public class AlarmScheduler {
     }
 
     /**
+     * v0.2.3.1 A-03 Fix — Snooze persist: chamado por AlarmActionReceiver +
+     * AlarmActivity scheduleSnooze pra que BootReceiver re-agende no horário
+     * SNOOZED (não no original). Sem isso, reboot dentro 10min de snooze
+     * → BootReceiver lê SharedPreferences triggerAt antigo → alarme dispara
+     * no horário original.
+     */
+    public static void persistSnoozedAlarm(Context ctx, int id, long triggerAt, JSONArray doses) {
+        persistAlarm(ctx, id, triggerAt, doses);
+    }
+
+    /**
      * Persiste alarme no SharedPreferences pra sobreviver reboot (BootReceiver
      * lê dali) + idempotência: scheduling mesmo id 2x apenas atualiza.
      */
