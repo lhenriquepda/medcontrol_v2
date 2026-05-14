@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, onlineManager } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+// v0.2.3.4 #165 — IndexedDB persister via idb-keyval (async, sem limit ~5MB localStorage)
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
 import { Capacitor } from '@capacitor/core'
 import * as Sentry from '@sentry/react'
 import * as SentryCapacitor from '@sentry/capacitor'
@@ -130,12 +133,26 @@ if (Capacitor.isNativePlatform()) {
 // Web: TanStack default subscriber já cobre (navigator.onLine + online/offline events).
 
 // Persist React Query cache → fast re-open + offline last-known data.
-// Native: localStorage (Capacitor WebView storage); Web: localStorage.
-const persister = createSyncStoragePersister({
-  storage: typeof window !== 'undefined' ? window.localStorage : null,
-  key: 'dosy-query-cache',
-  throttleTime: 1000
-})
+// v0.2.3.4 #165 — IndexedDB via idb-keyval (async, sem limit ~5MB localStorage).
+// Antes: localStorage sync block main thread em write + max ~5MB (quota varia browser).
+// Agora: IDB async + suporta GB-scale + write off-main-thread.
+// Fallback localStorage se IDB indisponível (Safari private mode raro).
+const idbAvailable = typeof window !== 'undefined' && 'indexedDB' in window
+const persister = idbAvailable
+  ? createAsyncStoragePersister({
+      storage: {
+        getItem: (key) => idbGet(key),
+        setItem: (key, value) => idbSet(key, value),
+        removeItem: (key) => idbDel(key),
+      },
+      key: 'dosy-query-cache',
+      throttleTime: 1000
+    })
+  : createSyncStoragePersister({
+      storage: typeof window !== 'undefined' ? window.localStorage : null,
+      key: 'dosy-query-cache',
+      throttleTime: 1000
+    })
 
 // Native StatusBar overlay config one-time. Style + background color são
 // sincronizados dinamicamente pelo ThemeProvider conforme theme light/dark.
