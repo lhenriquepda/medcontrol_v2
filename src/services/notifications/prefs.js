@@ -86,15 +86,22 @@ export function groupByMinute(doses) {
 // MultiDose busca id no cache + temp não existe mais → modal não abre.
 // Solução: aguardar server confirm + onSuccess invalidate ['doses'] →
 // rescheduleAll re-roda com IDs reais.
+//
+// v0.2.3.1 A-01: race overdue/pending — recomputeOverdue em dosesService
+// pode lag 1-2s vs filterUpcoming check. Se status='pending' mas scheduledAt
+// passou <10s, ainda agenda (provavelmente vai virar overdue na proxima
+// recompute, dose pode disparar com pequeno delay vs nunca).
 export function filterUpcoming(doses) {
   const now = Date.now()
   const end = now + SCHEDULE_WINDOW_MS
+  const racePastWindowMs = 10_000 // 10s graceful overdue/pending race
   return (doses || []).filter((d) => {
     if (d.status !== 'pending') return false
     if (d._optimistic) return false
     if (typeof d.id === 'string' && d.id.startsWith('temp-')) return false
     const t = new Date(d.scheduledAt).getTime()
-    return t >= now && t <= end
+    // Race graceful: doses pending com scheduledAt no passado <10s ainda contam.
+    return t >= (now - racePastWindowMs) && t <= end
   })
 }
 

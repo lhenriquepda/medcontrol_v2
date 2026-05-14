@@ -53,10 +53,11 @@
         />
 
         <!-- Alarme Crítico: Activity full-screen + Receiver -->
+        <!-- v0.2.3.1 B-03: removido android:showOnLockScreen (atributo invalido nao-spec).
+             showWhenLocked + turnScreenOn (Android 8.1+) cobrem corretamente. -->
         <activity
             android:name=".plugins.criticalalarm.AlarmActivity"
             android:exported="false"
-            android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:showWhenLocked="true"
             android:excludeFromRecents="true"
