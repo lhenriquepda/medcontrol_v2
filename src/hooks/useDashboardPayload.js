@@ -36,6 +36,16 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     queryFn: () => getDashboardPayload({ from, to, daysAhead }),
     staleTime: 2 * 60_000,
     refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+    // v0.2.3.4 #237 fix — user reportou Dashboard skeleton infinito pós-resume longo.
+    // Causa: RPC consolidado falhar silentemente (401 token expirado, network drop) →
+    // query stays isError=true SEM placeholderData → Dashboard só checa isLoading →
+    // SkeletonList eterno. Fix: keepPreviousData mantém último payload visible enquanto
+    // refetch executa. Plus retry 5 vezes com exponential backoff cobre transient errors.
+    placeholderData: (previousData) => previousData,
+    retry: 5,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30_000),
   })
 
   // Side-effect: popula caches individuais quando payload chega.

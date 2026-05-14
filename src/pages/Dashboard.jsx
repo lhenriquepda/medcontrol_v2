@@ -87,7 +87,7 @@ export default function Dashboard() {
   // (usePatients + useTreatments + useDoses) + 1 RPC (extend_continuous_treatments) por
   // single round-trip. Hook popula caches individuais via qc.setQueryData side-effect,
   // outras telas (Patients, DoseHistory, Reports) continuam usando hooks separados sem regressão.
-  const { data: payload, isLoading } = useDashboardPayload(baseWindow)
+  const { data: payload, isLoading, isError, error, refetch } = useDashboardPayload(baseWindow)
   const allDosesRaw = payload?.doses || []
   const patients = payload?.patients || []
   // Filter client-side por patientId (era passado pra useDoses query antes)
@@ -310,7 +310,24 @@ export default function Dashboard() {
 
         <AdBanner />
 
-        {isLoading ? <SkeletonList count={4} /> : (
+        {isError && !payload ? (
+          // v0.2.3.4 #237 fix — error state explícito ao invés de skeleton infinito.
+          // Quando RPC falha (401, network) sem placeholderData prévia disponível,
+          // mostrar UI com retry ao invés de SkeletonList eterno.
+          <Card padding={20} style={{ marginTop: 8, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, color: 'var(--dosy-fg-muted)', marginBottom: 12 }}>
+              Não consegui carregar suas doses. Verifique sua conexão.
+            </div>
+            <Button variant="primary" onClick={() => refetch()}>
+              Tentar de novo
+            </Button>
+            {error?.message && (
+              <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', marginTop: 8, opacity: 0.6 }}>
+                {error.message.slice(0, 80)}
+              </div>
+            )}
+          </Card>
+        ) : isLoading ? <SkeletonList count={4} /> : (
           patients.length === 0 ? (
             <Card padding={20} style={{ marginTop: 8 }}>
               <div style={{

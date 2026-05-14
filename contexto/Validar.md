@@ -16,19 +16,25 @@
 
 ## 🆕 Release v0.2.3.4 — versionCode 67 (em curso, AAB pendente autorização user)
 
-**Escopo:** refactor cost escala focado #163 + #165 (-40% a -60% Dashboard egress + -70% a -90% reads steady state combinado).
+**Escopo:** refactor cost escala focado #163 + #165 + 2 BUG UX user-reported (#236 #237).
 
-- **#163** P1 RPC consolidado Dashboard — `medcontrol.get_dashboard_payload(p_from, p_to, p_days_ahead)` JSON consolidado patients + treatments + doses + extend_result + metadata. SECURITY DEFINER + auth.uid() user_id filter + GRANT EXECUTE authenticated. Hook `useDashboardPayload` substitui 3 hooks separados em Dashboard.jsx + popula caches via setQueryData side-effect. Outras telas (Patients, DoseHistory, Reports) hooks separados continuam.
-- **#165** P1 Delta sync + TanStack persist IndexedDB — migrado `createSyncStoragePersister` (localStorage ~5MB sync) → `createAsyncStoragePersister` + `idb-keyval` (IndexedDB async GB-scale). Plus staleTime usePatients/useTreatments 5min→30min combinado com persist offline-first.
-- **#164** P1 Realtime broadcast — 🚫 PARKED (análise ROI baixo 2026-05-14: FCM cobre 95% sync cross-device em ~1-3s, histórico storms eleva risk regression. Reabrir só com escala 1000+ MAU OU fluxo web sério).
-- **#235** P2 monetização Free bottom banner — DEFERIDO v0.2.3.5 (escopo 5-8h patch plugin singleton state).
+- **#163** P1 RPC consolidado Dashboard — RPC JSON consolidado patients + treatments + doses + extend_result. Hook `useDashboardPayload` substitui 3 hooks separados + popula caches via setQueryData side-effect.
+- **#165** P1 IndexedDB persist via idb-keyval + staleTime usePatients/useTreatments 5min→30min combinado com persist offline-first.
+- **#236** P1 BUG UpdateBanner versionName incorrect — reorder fallback chain: Play Core → VERSION_CODE_TO_NAME local map → Vercel /version.json → "versão N". Antes Vercel lag deploy mostrava "atualizar 0.2.3.2" quando AAB real era 0.2.3.3.
+- **#237** P1 BUG Dashboard skeleton infinito pós-resume — useDashboardPayload `placeholderData: prev` + `retry: 5` exponential backoff + Dashboard.jsx error UI explícita com botão "Tentar de novo" quando isError && !payload.
+- **#164** Realtime broadcast — 🚫 PARKED (ROI baixo, FCM cobre 95% sync).
+- **#235** Free bottom banner — DEFERIDO v0.2.3.5 (5-8h patch plugin singleton).
 
 **Validação autônoma:**
 
-- `[x]` **#163 RPC runtime** — emulator Pixel 8 vc 67 instalado, Sentry breadcrumb `POST /rest/v1/rpc/get_dashboard_payload status_code:200` em cold start. Sem TypeError. Dashboard UI carrega normal com cache populado (1 round-trip ao invés de 4).
-- `[x]` **#165 IDB persist** — build OK, app rodando, sem erro IndexedDB no logcat. Persister async funcional (cache local sobrevive cold start).
-- `[ ]` **#163 egress observation 24-48h pós-deploy** — Supabase API Gateway Observability comparar 4 routes patients+treatments+doses+extend × N requests antes vs `rpc/get_dashboard_payload` × 1 request × N depois. Esperado -40% a -60% Dashboard egress.
-- `[ ]` **#165 IDB persist persistence cross-restart device** — instalar device físico real → abrir app → criar paciente → fechar app force-kill → reabrir → verificar paciente aparece instant (cache IDB hidratado) sem refetch.
+- `[x]` **#163 RPC runtime** — Pixel 8 emulator vc 67 Sentry breadcrumb POST /rpc/get_dashboard_payload status 200 cold start. Dashboard UI normal.
+- `[x]` **#165 IDB persist build+runtime** — build OK, app rodando sem erro IndexedDB.
+- `[x]` **#236 fallback chain reorder** — code review: VERSION_CODE_TO_NAME map antes do Vercel. Runtime validation precisa Play Console mock OR aguardar próxima atualização real (user reverifica banner texto pós-deploy v0.2.3.5+).
+- `[x]` **#237 placeholderData + error UI** — build OK. Runtime cobertura: (a) placeholderData testado quando cache hidratado IDB (#165) — comportamento esperado; (b) Error UI mostra "Tentar de novo" quando RPC fail + sem cache — testado mockando RPC error via Network throttling DevTools.
+- `[ ]` **#163 egress observation 24-48h pós-deploy** — Supabase API Gateway Observability comparar antes/depois `rpc/get_dashboard_payload` count.
+- `[ ]` **#165 IDB persist persistence cross-restart device físico** — force-kill app + reabrir → paciente aparece instant sem refetch.
+- `[ ]` **#236 banner texto validação real** — próxima atualização Play Console v0.2.3.5+ → user verifica banner mostra versão correta (não obsoleta).
+- `[ ]` **#237 reproduzir bug original device físico** — app aberto 1h+ → background → foreground → confirmar não trava em skeleton, mostra dados last-known OR error UI.
 
 ---
 
