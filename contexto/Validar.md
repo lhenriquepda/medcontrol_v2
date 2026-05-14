@@ -50,7 +50,7 @@
 
 **Continua pendente device físico user pós-ship v0.2.3.3 (carrega adiante):**
 - `[ ]` #233 observar Supabase API Gateway 24-72h pós-deploy 401 errors GET /patients + /doses ↓
-- `[ ]` #074/#110 setar `SENTRY_AUTH_TOKEN` + rebuild AAB com token (resolve DOSY-7/3 symbolication)
+- `[x]` #074/#110 SENTRY_AUTH_TOKEN setup + symbols upload validado 2026-05-14 19:34 BRT — ProGuard mapping (1 file) + NDK debug symbols UUID `2f2a2ad6-6686-3f99-b2dc-7a18fb6ecef8` uploaded via `./gradlew :app:uploadSentryNativeSymbolsForRelease :app:uploadSentryProguardMappingsRelease`. API verify retornou 1 file matching UUID. Sentry pode symbolicate native crashes vc 67+ automaticamente. DOSY-7/3 antigos (vc ≤ 65) ficam `<unknown>` pois symbols correspondem build específico — só symbolicate se reproduzir em v0.2.3.4+.
 - `[ ]` #231 validar device físico real Pixel 10 Pro XL / S25 banner NÃO regrediu
 
 ---
