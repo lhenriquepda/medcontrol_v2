@@ -456,6 +456,27 @@ export function AuthProvider({ children }) {
       ])
     } catch { /* fail-safe */ }
 
+    // #215 v0.2.3.0 fix security 2026-05-13: DELETE push_subscription ANTES
+    // supabase.auth.signOut() zerar JWT. Listener SIGNED_OUT roda APÓS signOut
+    // com anon JWT → 401 UNAUTHORIZED DELETE falha → push_sub fica órfão DB.
+    // Edge continua enviando FCM pra device deslogado = vazamento.
+    if (hasSupabase) {
+      try {
+        const cachedToken = localStorage.getItem('dosy_fcm_token')
+        if (cachedToken) {
+          await supabase.schema('medcontrol').from('push_subscriptions')
+            .delete().eq('deviceToken', cachedToken)
+          console.log('[useAuth.signOut] push_sub deletado ANTES signOut deviceToken=', cachedToken.slice(0, 12) + '...')
+        }
+        // Clear cache token local — força re-register próximo SIGNED_IN
+        try { localStorage.removeItem('dosy_fcm_token') } catch { /* ignore */ }
+        // Plus clearSyncCredentials Android (limpa SharedPreferences sensíveis)
+        try { await clearSyncCredentials() } catch (e) { console.warn('[useAuth.signOut] clearSyncCredentials err:', e?.message) }
+      } catch (e) {
+        console.warn('[useAuth.signOut] cleanup pre-signOut err:', e?.message)
+      }
+    }
+
     if (hasSupabase) await supabase.auth.signOut()
     else await mock.signOut()
     // Limpar dados locais sensíveis ao sair
