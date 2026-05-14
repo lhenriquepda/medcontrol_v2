@@ -18,48 +18,22 @@ import PatientAvatar from '../components/PatientAvatar'
 import { HeroGauge } from '../components/dosy/HeroGauge'
 import { MiniStat } from '../components/dosy/MiniStat'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
-import { useDoses, useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
+import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
-import { usePatients } from '../hooks/usePatients'
+import { useDashboardPayload } from '../hooks/useDashboardPayload'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { data: patients = [] } = usePatients()
   const confirmMut = useConfirmDose()
   const skipMut = useSkipDose()
   const undoMut = useUndoDose()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Item #014 (release v0.1.7.4) — RPC extend_continuous_treatments recriada.
-  // Rolling 5-day horizon for continuous treatments. RPC idempotente + cheap.
-  //
-  // #148 (release v0.2.0.11) — Debounce 60s via module-scope flag.
-  // AnimatePresence popLayout mantém old + new Dashboard durante exit anim
-  // (~600ms) → 2 mounts → 2× rpc call. Idempotente mas dobra egress.
-  // Plus mount/unmount/mount via SPA navegando rotas é fluxo normal user.
-  // Skip se fired nos últimos 60s.
-  useEffect(() => {
-    if (!hasSupabase) return
-    const lastCall = window.__dosyExtendContinuousAt || 0
-    if (Date.now() - lastCall < 60_000) return
-    window.__dosyExtendContinuousAt = Date.now()
-    supabase
-      .schema('medcontrol')
-      .rpc('extend_continuous_treatments', { p_days_ahead: 5 })
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn('[Dashboard] extend_continuous_treatments rpc error:', error.message)
-          return
-        }
-        if (data?.dosesAdded > 0) {
-          console.log('[Dashboard] extend_continuous: added', data.dosesAdded, 'doses across', data.treatmentsExtended, 'treatments')
-          qc.invalidateQueries({ queryKey: ['doses'] })
-        }
-      })
-      .catch(err => console.warn('[Dashboard] extend_continuous_treatments exception:', err?.message))
-  }, [qc])
+  // v0.2.3.4 #163 — extend_continuous_treatments agora roda dentro do RPC consolidado
+  // get_dashboard_payload (chamado pelo useDashboardPayload hook abaixo). Side-effect
+  // separado removido. extend_result fica no payload se caller precisar inspecionar.
   const [filters, setFilters] = useState({ range: '12h', patientId: null, status: null, type: null })
 
   // Notif-tap → IDs pra abrir em modal multi-dose
@@ -106,13 +80,21 @@ export default function Dashboard() {
     return {
       from: past.toISOString(),
       to: future.toISOString(),
-      patientId: filters.patientId
     }
-  }, [tick, filters.patientId])
-  // #151 (v0.2.0.11) — Dashboard é único caller que opta-in pra refetchInterval.
-  // Outros (Settings 48h, DoseHistory 7d, Reports 30d) refetch só on mount +
-  // Realtime + invalidate explícito. Fallback caso websocket morra: 15min.
-  const { data: allDoses = [], isLoading } = useDoses(baseWindow, { pollIntervalMs: 15 * 60_000 })
+  }, [tick])
+
+  // v0.2.3.4 #163 — RPC consolidado get_dashboard_payload substitui 3 queries paralelas
+  // (usePatients + useTreatments + useDoses) + 1 RPC (extend_continuous_treatments) por
+  // single round-trip. Hook popula caches individuais via qc.setQueryData side-effect,
+  // outras telas (Patients, DoseHistory, Reports) continuam usando hooks separados sem regressão.
+  const { data: payload, isLoading } = useDashboardPayload(baseWindow)
+  const allDosesRaw = payload?.doses || []
+  const patients = payload?.patients || []
+  // Filter client-side por patientId (era passado pra useDoses query antes)
+  const allDoses = useMemo(() => {
+    if (!filters.patientId) return allDosesRaw
+    return allDosesRaw.filter(d => d.patientId === filters.patientId)
+  }, [allDosesRaw, filters.patientId])
 
   // Visualização principal — aplica range/status/type sobre allDoses
   const { from: rangeFrom, to: rangeTo } = useMemo(() => rangeNow(filters.range), [filters.range])
