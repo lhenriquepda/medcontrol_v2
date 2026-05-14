@@ -14,29 +14,44 @@
 
 ---
 
-## 🆕 Release v0.2.3.3 — versionCode 66 (em curso, AAB pendente autorização user)
+## 🆕 Release v0.2.3.4 — versionCode 67 (em curso, AAB pendente autorização user)
 
-**Escopo:** fixes consolidados + Sentry triage + admin/Supabase egress check:
-- **#231** P2 BUG layout — patch-package `@capacitor-community/admob` plugin Android 15 topInset duplicado. Validado runtime emulator Pixel 8 (Android 15 sdk_gphone64) + Pixel 9 Pro (Android 17 sdk_gphone16k) — banner agora colado abaixo status bar nos dois. Device físico real Android 14 não afetado (branch só Android 15+).
-- **#232** P1 BUG ANR `MainActivity.onCreate` — WorkManager.enqueueUniquePeriodicWork + cleanupChannels síncronos bloqueavam main thread. Fix: ambos movidos pra `Executors.newSingleThreadExecutor().execute()`. NÃO validado runtime — auto-resolve no release ship via Sentry release tracking.
-- **#233** P1 BUG 401 race tokens — Java DoseSyncWorker `EXP_SAFETY_MARGIN_MS` 60s→300s pra tolerar clock skew Android. NÃO validado runtime — comportamento só observável em devices com clock drift real, próximos 24-72h pós-deploy via Supabase API Gateway observability deve mostrar 401 errors ↓.
-- **#074/#110** P2 Sentry Gradle Plugin 4.14.1 setup — NDK debug symbols + ProGuard mapping upload condicional ao SENTRY_AUTH_TOKEN env var. NÃO validado upload (token vazio em local build) — precisa setar token + rebuild AAB OR rodar `./gradlew uploadSentryNativeSymbolsForRelease` separate com token.
-- **Sentry triage 15→3 abertas:** 7 resolved (postgres_changes + weight.replace) + 5 archived (ANR syscall + Keyboard NPE + broadcast + auth lock) + 3 keep open (DOSY-M auto-resolve, DOSY-7/3 #110 aguardando NDK symbols).
-- **Admin /alarm-audit:** zero bugs encontrados, 6 sources PT-BR mapped, flow E2E confirmado runtime.
-- **Supabase egress:** 9.21 GB / 250 GB (4%) 10 dias. Storm 05 May 7.2 GB já mitigado por #211/#212/#213 fixes. Steady ~0.2 GB/dia healthy. 16 erros 401 60min addressed por #233.
+**Escopo:** refactor cost escala focado #163 + #165 + 2 BUG UX user-reported (#236 #237).
 
-**Movidos pra release/v0.2.3.4 próxima** (refactor cost escala dedicado 10-15h):
-- #163 P1 RPC consolidado Dashboard
-- #164 P1 Realtime broadcast (retoma #157)
-- #165 P1 Delta sync + TanStack persist IndexedDB
-- #235 P2 monetização Free tier bottom banner (5-8h) OR Native Ads inline (10-15h)
+- **#163** P1 RPC consolidado Dashboard — RPC JSON consolidado patients + treatments + doses + extend_result. Hook `useDashboardPayload` substitui 3 hooks separados + popula caches via setQueryData side-effect.
+- **#165** P1 IndexedDB persist via idb-keyval + staleTime usePatients/useTreatments 5min→30min combinado com persist offline-first.
+- **#236** P1 BUG UpdateBanner versionName incorrect — reorder fallback chain: Play Core → VERSION_CODE_TO_NAME local map → Vercel /version.json → "versão N". Antes Vercel lag deploy mostrava "atualizar 0.2.3.2" quando AAB real era 0.2.3.3.
+- **#237** P1 BUG Dashboard skeleton infinito pós-resume — useDashboardPayload `placeholderData: prev` + `retry: 5` exponential backoff + Dashboard.jsx error UI explícita com botão "Tentar de novo" quando isError && !payload.
+- **#164** Realtime broadcast — 🚫 PARKED (ROI baixo, FCM cobre 95% sync).
+- **#235** Free bottom banner — DEFERIDO v0.2.3.5 (5-8h patch plugin singleton).
 
-**Validação status (autônomo runtime emulator):**
+**Validação autônoma:**
 
-- `[x]` **#231 fix layout banner Android 15** — runtime emulator Pixel 8 (sdk_gphone64 Android 15) + Pixel 9 Pro (sdk_gphone16k Android 17) vc 66 instalado, banner Ad agora colado imediatamente abaixo status bar (zero gap peach) em Pixel 8 + Pixel 9 Pro mantém comportamento OK. Screenshots `/c/temp/p8_patched.png` + `/c/temp/p9_patched.png` confirmam.
-- `[x]` **#232 ANR fix cold start** — vc 66 reinstalado emulator Pixel 8 + cold start completo sem ANR no logcat (`adb logcat -d -t 500 | grep -E "MainActivity|ANR|am_anr"` retorna zero matches em 5s pós-launch). Thread `pool-13-thread-` (Executors.newSingleThreadExecutor) visível executando background work — confirma WorkManager.enqueueUniquePeriodicWork + cleanupLegacyChannels rodando off-main-thread.
-- `[ ]` **#233 401 race validar Supabase API Gateway 24h pós-deploy** — não-reproduzível em emulator (sem clock drift sintético). Entrar admin Supabase Observability → API Gateway → 401 errors GET /patients + /doses range 7d antes vs 7d depois deploy v0.2.3.3. Esperado: redução significativa em devices Android com clock drift real.
-- `[ ]` **#074/#110 NDK symbols upload Sentry** — gerar token em https://lhp-tech.sentry.io/settings/auth-tokens/ (scope project:write + project:releases) + rebuild AAB com `SENTRY_AUTH_TOKEN=xxx ./gradlew bundleRelease` + check Sentry → Settings → Projects → dosy → Debug Files lista NDK symbols + ProGuard mapping uploaded. Após, novos crashes DOSY-7/3 devem symbolicate.
+- `[x]` **#163 RPC runtime** — Pixel 8 emulator vc 67 Sentry breadcrumb POST /rpc/get_dashboard_payload status 200 cold start. Dashboard UI normal.
+- `[x]` **#165 IDB persist build+runtime** — build OK, app rodando sem erro IndexedDB.
+- `[x]` **#236 fallback chain reorder** — code review: VERSION_CODE_TO_NAME map antes do Vercel. Runtime validation precisa Play Console mock OR aguardar próxima atualização real (user reverifica banner texto pós-deploy v0.2.3.5+).
+- `[x]` **#237 placeholderData + error UI** — build OK. Runtime cobertura: (a) placeholderData testado quando cache hidratado IDB (#165) — comportamento esperado; (b) Error UI mostra "Tentar de novo" quando RPC fail + sem cache — testado mockando RPC error via Network throttling DevTools.
+- `[ ]` **#163 egress observation 24-48h pós-deploy** — Supabase API Gateway Observability comparar antes/depois `rpc/get_dashboard_payload` count.
+- `[ ]` **#165 IDB persist persistence cross-restart device físico** — force-kill app + reabrir → paciente aparece instant sem refetch.
+- `[ ]` **#236 banner texto validação real** — próxima atualização Play Console v0.2.3.5+ → user verifica banner mostra versão correta (não obsoleta).
+- `[ ]` **#237 reproduzir bug original device físico** — app aberto 1h+ → background → foreground → confirmar não trava em skeleton, mostra dados last-known OR error UI.
+
+---
+
+## ✅ Release v0.2.3.3 — versionCode 66 SHIPPED Play Console Internal Testing 2026-05-14 17:34 BRT
+
+**Escopo aplicado e shipped:**
+- #231 patch-package AdMob plugin Android 15 topInset duplicado (commit ce7d4c9)
+- #232 ANR MainActivity.onCreate WorkManager+cleanupChannels Executor background (b373675)
+- #233 DoseSyncWorker EXP_SAFETY_MARGIN 60s→300s clock skew tolerance (33be160)
+- #074/#110 Sentry Gradle Plugin 4.14.1 setup NDK + ProGuard upload condicional (0b7360b)
+- Sentry triage 15→3 abertas + admin /alarm-audit review + Supabase egress check
+- Tag git `v0.2.3.3` + master merge `167bf47` pushed → Vercel auto-deploy
+
+**Continua pendente device físico user pós-ship v0.2.3.3 (carrega adiante):**
+- `[ ]` #233 observar Supabase API Gateway 24-72h pós-deploy 401 errors GET /patients + /doses ↓
+- `[ ]` #074/#110 setar `SENTRY_AUTH_TOKEN` + rebuild AAB com token (resolve DOSY-7/3 symbolication)
+- `[ ]` #231 validar device físico real Pixel 10 Pro XL / S25 banner NÃO regrediu
 
 ---
 

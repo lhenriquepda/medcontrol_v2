@@ -108,6 +108,7 @@ export function useAppUpdate() {
     64: '0.2.3.1',
     65: '0.2.3.2',
     66: '0.2.3.3',
+    67: '0.2.3.4',
     // adicionar próximas releases aqui (sync map a CADA release no Passo 11 README)
   }
   const checkNative = useCallback(async () => {
@@ -126,15 +127,19 @@ export function useAppUpdate() {
       // updateAvailability: 1=NOT_AVAILABLE, 2=UPDATE_AVAILABLE, 3=DEVELOPER_TRIGGERED_IN_PROGRESS
       // installStatus: 0=UNKNOWN, 1=PENDING, 2=DOWNLOADING, 11=DOWNLOADED, 4=INSTALLED, 5=FAILED, 6=CANCELED
       if (info?.updateAvailability === 2 && info.flexibleUpdateAllowed) {
-        // Triple fallback chain pra resolver versionName user-friendly:
+        // v0.2.3.4 #236 fix — reorder fallback chain:
         // 1. Play Core availableVersion (versionName) — primary
-        // 2. version.json Vercel (canônico web) — secondary
-        // 3. Local map versionCode → versionName — tertiary
+        // 2. **VERSION_CODE_TO_NAME local map** — secondary (movido pra cima — mais
+        //    confiável que Vercel /version.json que reflete WEB bundle, pode lag
+        //    Vercel deploy vs Android Play Console AAB publish — user reportou
+        //    banner "atualizar 0.2.3.2" mas AAB real era 0.2.3.3 quando map vc 66
+        //    ainda não estava no Vercel /version.json mas já estava no local map).
+        // 3. version.json Vercel (canônico web — fallback se vc não mapeado)
         // 4. PT-BR friendly "versão N" — final fallback (vs ugly "code N")
         const version =
           info.availableVersion
-          ?? versionData?.version
           ?? VERSION_CODE_TO_NAME[info.availableVersionCode]
+          ?? versionData?.version
           ?? `versão ${info.availableVersionCode}`
         setLatest({ version, source: 'play' })
       } else {

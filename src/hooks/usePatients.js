@@ -9,8 +9,10 @@ export function usePatients() {
     // mas o servidor ainda não deletou. staleTime cobre a janela pra evitar
     // refetch on mount que traria o paciente "morto" de volta visualmente.
     // #092 (v0.1.7.5): pacientes mudam raramente, staleTime 6s → 5min.
-    // Realtime + invalidate em mutations cobrem updates cross-device.
-    staleTime: 5 * 60_000,
+    // v0.2.3.4 #165: 5min → 30min combinado com IDB persist (main.jsx). App abre renderiza
+    // cache local instant + background refetch só se >30min stale. Realtime + invalidate
+    // em mutations cobrem updates cross-device pra cenários < 30min staleness.
+    staleTime: 30 * 60_000,
     refetchOnMount: false,
   })
 }

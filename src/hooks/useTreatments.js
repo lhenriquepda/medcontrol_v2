@@ -10,7 +10,8 @@ export function useTreatments(filter = {}) {
   return useQuery({
     queryKey: ['treatments', filter],
     queryFn: () => listTreatments(filter),
-    staleTime: 5 * 60_000,
+    // v0.2.3.4 #165: 5min → 30min combinado com IDB persist (main.jsx)
+    staleTime: 30 * 60_000,
     refetchOnMount: false,
     initialData: () => {
       const queries = qc.getQueryCache().findAll({ queryKey: ['treatments'] })

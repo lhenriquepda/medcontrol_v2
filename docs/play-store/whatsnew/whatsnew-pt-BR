@@ -1,6 +1,6 @@
-v0.2.3.3 — Mais leve, mais rápido, sem travadas
+v0.2.3.4 — App mais rápido e econômico
 
-• App abre mais rápido — fim das travadas na hora de iniciar
-• Banner alinhado corretamente nas versões mais novas do Android
-• Menos erros de conexão silenciosos durante a sincronização
-• Diagnóstico técnico de crashes melhorado para correções mais ágeis
+• Dashboard carrega mais rápido — consolidamos 4 chamadas de rede em 1
+• Lista de medicamentos e pacientes abre instantâneo após reabrir o app
+• Reduz consumo de internet — ideal para quem usa 3G/4G limitado
+• Cache mais inteligente: app pronto antes mesmo de conectar
