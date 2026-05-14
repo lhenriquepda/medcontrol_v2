@@ -1,0 +1,30 @@
+diff --git a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
+index c629139..931dc34 100644
+--- a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
++++ b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
+@@ -104,19 +104,20 @@ public class BannerExecutor extends Executor {
+             }
+ 
+             // set Safe Area only for Android 15+
++            // dosy v0.2.3.3 #231 — Plugin double-adds topInset when StatusBar.overlaysWebView=false
++            // is configured (WebView already starts below status bar physically, plugin then
++            // pushes banner down by topInset = ~40px gap). Skip TOP_CENTER inset application;
++            // keep BOTTOM_CENTER inset (gesture nav bar handling intact for apps using bottom banner).
+             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                 View rootView = activitySupplier.get().getWindow().getDecorView();
+                 rootView.setOnApplyWindowInsetsListener((v, insets) -> {
+                     int bottomInset = insets.getSystemWindowInsetBottom();
+-                    int topInset = insets.getSystemWindowInsetTop();
+ 
+-                    if ("TOP_CENTER".equals(adOptions.position)) {
+-                        mAdViewLayoutParams.setMargins(0, topInset, 0, 0);
+-                    } else {
++                    if (!"TOP_CENTER".equals(adOptions.position)) {
+                         mAdViewLayoutParams.setMargins(0, 0, 0, bottomInset);
++                        mAdViewLayout.setLayoutParams(mAdViewLayoutParams);
+                     }
+ 
+-                    mAdViewLayout.setLayoutParams(mAdViewLayoutParams);
+                     return insets;
+                 });
+             }
