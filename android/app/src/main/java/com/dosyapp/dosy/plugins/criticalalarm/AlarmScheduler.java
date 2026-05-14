@@ -48,7 +48,11 @@ public class AlarmScheduler {
     // pendente AlarmManager (overflow negativo aceito) → 2 push duplicados.
     public static final int BACKUP_OFFSET = 1073741824; // 2^30
     public static final String TRAY_CHANNEL_ID = "dosy_tray";
-    public static final String TRAY_DND_CHANNEL_ID = "dosy_tray_dnd";
+    // v0.2.3.1 — bump dosy_tray_dnd -> dosy_tray_dnd_v2: canal anterior criado por
+    // Capacitor LocalNotifications.createChannel com sound default (bug Capacitor
+    // ignora sound:null). Channel immutable pós-criação. Forçar novo ID com
+    // sound:null criado por Java side (ensureTrayChannel).
+    public static final String TRAY_DND_CHANNEL_ID = "dosy_tray_dnd_v2";
 
     // Prefs SharedPreferences (gravadas pelo JS via setSyncCredentials + plugin updateUserPrefs futuro)
     private static final String USER_PREFS = "dosy_user_prefs";
@@ -212,7 +216,8 @@ public class AlarmScheduler {
             entry.put("doses", doses);
             entry.put("channelId", channelId);
             filtered.put(entry);
-            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync pra garantir durabilidade snooze+reboot.
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException e) {
             Log.w(TAG, "persistTrayEntry error: " + e.getMessage());
         }
@@ -236,8 +241,9 @@ public class AlarmScheduler {
      * v0.2.3.1 — BootReceiver atualiza tray entries (remove expirados).
      */
     public static void saveTrayEntries(Context ctx, JSONArray entries) {
+        // v0.2.3.2 #229 fix — commit() sync (mesma razão de persistAlarm).
         ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_TRAY_SCHEDULED, entries.toString()).apply();
+            .edit().putString(KEY_TRAY_SCHEDULED, entries.toString()).commit();
     }
 
     /**
@@ -254,7 +260,8 @@ public class AlarmScheduler {
                 JSONObject e = current.getJSONObject(i);
                 if (e.optInt("notifId", -1) != notifId) filtered.put(e);
             }
-            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync.
+            sp.edit().putString(KEY_TRAY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException ignored) {}
     }
 
@@ -463,7 +470,10 @@ public class AlarmScheduler {
             entry.put("doses", doses);
             filtered.put(entry);
 
-            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync em vez de apply() async pra garantir
+            // durabilidade em snooze + reboot imediato (apply() async perdia dados se
+            // processo morresse antes flush).
+            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException e) {
             Log.w(TAG, "persistAlarm error: " + e.getMessage());
         }
@@ -504,7 +514,8 @@ public class AlarmScheduler {
                 JSONObject e = current.getJSONObject(i);
                 if (e.getInt("id") != id) filtered.put(e);
             }
-            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).apply();
+            // v0.2.3.2 #229 fix — commit() sync.
+            sp.edit().putString(KEY_SCHEDULED, filtered.toString()).commit();
         } catch (JSONException e) {
             Log.w(TAG, "removePersisted error: " + e.getMessage());
         }

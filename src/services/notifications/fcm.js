@@ -92,8 +92,19 @@ export async function unsubscribeFcm() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          await supabase.schema('medcontrol').from('push_subscriptions')
+          // v0.2.3.2 #228 fix — filtra delete por device_id_uuid pra não apagar push_sub
+          // de OUTROS devices do mesmo user (multi-device cross-contamination bug).
+          // Fallback: se getDeviceId falha (legacy), deleta todos android (old behavior).
+          let deviceIdUuid = null
+          try {
+            const mod = await import('../criticalAlarm')
+            deviceIdUuid = await mod.getDeviceId()
+          } catch { /* fallback null → legacy delete-all */ }
+
+          let q = supabase.schema('medcontrol').from('push_subscriptions')
             .delete().eq('userId', user.id).eq('platform', 'android')
+          if (deviceIdUuid) q = q.eq('device_id_uuid', deviceIdUuid)
+          await q
         }
       } catch (e) { console.warn('[Notif] unsubscribe delete:', e?.message) }
     }

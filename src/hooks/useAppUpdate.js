@@ -105,6 +105,8 @@ export function useAppUpdate() {
     61: '0.2.2.3',
     62: '0.2.2.4',
     63: '0.2.3.0',
+    64: '0.2.3.1',
+    65: '0.2.3.2',
     // adicionar próximas releases aqui (sync map a CADA release no Passo 11 README)
   }
   const checkNative = useCallback(async () => {

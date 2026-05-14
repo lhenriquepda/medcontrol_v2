@@ -6,22 +6,23 @@
 import { isNative } from './prefs'
 import { cancelAllCriticalAlarms, cancelAllTrays } from '../criticalAlarm'
 
-// #215 v0.2.3.0 — canais unificados pra refactor scheduler 3-cenários.
-// `dosy_tray`     — push tray normal (Alarme Crítico OFF) com som default + vibração
-// `dosy_tray_dnd` — push tray dentro DnD com vibração leve 200ms + SEM som
-//
-// Channel sound + vibration são immutable após criação Android — precisa novo ID
-// pra mudar comportamento. Antigos `doses_v2` (LocalNotifications), `doses_critical`
-// (AlarmService FG), `doses_critical_v2` (AlarmReceiver fallback) ficam órfãos —
-// cleanup migration code em MainActivity boot (#222).
+// v0.2.3.1 — canais unificados pra Plano A (Java AlarmScheduler.ensureTrayChannel cria com config correto).
+// `dosy_tray`        — push tray normal (Alarme Crítico OFF) com som default + vibração
+// `dosy_tray_dnd_v2` — push tray dentro DnD com vibração leve 200ms + SEM som
+//   v2 forced rename: Capacitor LocalNotifications.createChannel ignora `sound:null`
+//   e criava `dosy_tray_dnd` com som default. Channel immutable pós-criação → bump
+//   ID força Android criar novo channel com config correto via Java side.
+// v0.2.3.1 Plano A — Capacitor LocalNotifications.createChannel REMOVIDO pra trays.
+// Java AlarmScheduler.ensureTrayChannel cria channel sob-demand com sound:null pra DnD.
+// Daily summary ainda usa Capacitor mas channel TRAY_CHANNEL_ID (dosy_tray) compartilhado.
 export const TRAY_CHANNEL_ID = 'dosy_tray'
-export const TRAY_DND_CHANNEL_ID = 'dosy_tray_dnd'
+export const TRAY_DND_CHANNEL_ID = 'dosy_tray_dnd_v2'
 
 export async function ensureChannel() {
   if (!isNative) return
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    // Canal `dosy_tray` — push tray normal (caso Alarme Crítico OFF)
+    // Canal `dosy_tray` — push tray normal + daily summary (Plano A mantém Capacitor pra daily summary)
     await LocalNotifications.createChannel({
       id: TRAY_CHANNEL_ID,
       name: 'Lembretes de Dose',
@@ -31,19 +32,8 @@ export async function ensureChannel() {
       vibration: true,
       lights: true
     })
-    // Canal `dosy_tray_dnd` — push silencioso dentro DnD (vibração leve)
-    await LocalNotifications.createChannel({
-      id: TRAY_DND_CHANNEL_ID,
-      name: 'Lembretes — Não Perturbe',
-      description: 'Lembretes silenciosos dentro da janela Não Perturbe',
-      importance: 3,        // IMPORTANCE_DEFAULT (sem heads-up + sem som)
-      visibility: 1,        // VISIBILITY_PUBLIC
-      vibration: true,      // vibração leve definida no schedule (pattern via Notification)
-      lights: false,
-      sound: null           // explicit sem som
-    })
-    // v0.2.3.1 — canal legado `doses_v2` removido (deletado por MainActivity.cleanupLegacyChannels).
-    // Loop deleta-cria a cada boot eliminado.
+    // Canal `dosy_tray_dnd_v2` é criado por Java AlarmScheduler.ensureTrayChannel sob-demand
+    // (Capacitor LocalNotifications.createChannel ignora sound:null — bug Capacitor).
   } catch (e) { console.warn('[Notif] createChannel:', e?.message || e) }
 }
 
@@ -65,15 +55,12 @@ export async function ensureFcmChannel() {
 }
 
 /**
- * #222 v0.2.3.0 — cleanup canais legados (doses_v2, doses_critical_v2).
- * Channel `doses_critical` permanece (usado AlarmService FG sound null — MediaPlayer drives).
- * Chamado em MainActivity onCreate / boot do app uma vez por install fresh.
- *
- * Nota: Capacitor LocalNotifications/PushNotifications plugins não expõem
- * `deleteChannel` API. Cleanup precisa ser feito Java-side via
- * NotificationManager.deleteNotificationChannel — implementado em MainActivity.
+ * Cleanup canais legados deletados em MainActivity.cleanupLegacyChannels:
+ *   doses_v2 (LocalNotifications pré-#215)
+ *   doses_critical_v2 (AlarmReceiver fallback pré-#215)
+ *   dosy_tray_dnd (Capacitor criou com som default por bug — substituído por dosy_tray_dnd_v2)
  */
-export const LEGACY_CHANNELS_TO_DELETE = ['doses_v2', 'doses_critical_v2']
+export const LEGACY_CHANNELS_TO_DELETE = ['doses_v2', 'doses_critical_v2', 'dosy_tray_dnd']
 
 /**
  * Cancela TODOS critical alarms + LocalNotifications pendentes.

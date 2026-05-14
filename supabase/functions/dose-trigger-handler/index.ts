@@ -165,20 +165,50 @@ Deno.serve(async (req) => {
     if (!old_rows || old_rows.length === 0) {
       return new Response(JSON.stringify({ ok: true, skipped: 'no-old-rows' }))
     }
-    // Agrupa por (ownerId, patientId) — cada grupo recebe 1 FCM com CSV
-    const groups = new Map<string, { ownerId: string; patientId: string; doseIds: string[] }>()
+    // v0.2.3.2 #230 fix — agrupa por (ownerId, patientId, minute_bucket) pra cobrir
+    // grupos multi-dose. Edge envia CSV com TODOS doseIds do grupo no minuto pra
+    // Java reconstruir hash sortedDoseIds.join('|') corretamente (Fix C path).
+    type GroupKey = string  // `${userId}|${patientId}|${minute_iso}`
+    const groups = new Map<GroupKey, {
+      ownerId: string
+      patientId: string
+      minuteIso: string
+      changedIds: Set<string>
+    }>()
     for (const row of old_rows) {
-      const key = `${row.userId}|${row.patientId}`
+      const scheduledAt = row.scheduledAt ?? row.scheduled_at
+      if (!scheduledAt) continue
+      const minuteIso = new Date(scheduledAt).toISOString().slice(0, 16) + ':00.000Z'
+      const key = `${row.userId}|${row.patientId}|${minuteIso}`
       if (!groups.has(key)) {
-        groups.set(key, { ownerId: String(row.userId), patientId: String(row.patientId), doseIds: [] })
+        groups.set(key, {
+          ownerId: String(row.userId),
+          patientId: String(row.patientId),
+          minuteIso,
+          changedIds: new Set()
+        })
       }
-      groups.get(key)!.doseIds.push(String(row.id))
+      groups.get(key)!.changedIds.add(String(row.id))
     }
 
     let totalSent = 0, totalErrors = 0
-    for (const { ownerId, patientId, doseIds } of groups.values()) {
+    for (const { ownerId, patientId, minuteIso, changedIds } of groups.values()) {
       const recipients = await getRecipientUserIds(patientId, ownerId)
       const reason = type === 'BATCH_DELETE' ? 'dose_deleted_batch' : 'status_change_batch'
+      // Query ALL doses (incl. changed + siblings ainda pending) no mesmo minuto bucket
+      // pra reconstruir group hash que AlarmScheduler usou ao agendar.
+      const minStart = minuteIso
+      const minEnd = new Date(new Date(minuteIso).getTime() + 60000).toISOString()
+      const { data: groupSiblings } = await supabase
+        .from('doses')
+        .select('id, status')
+        .eq('userId', ownerId)
+        .eq('patientId', patientId)
+        .gte('scheduledAt', minStart)
+        .lt('scheduledAt', minEnd)
+      const allGroupIds = new Set<string>(Array.from(changedIds))
+      for (const s of (groupSiblings ?? [])) allGroupIds.add(String(s.id))
+      const doseIds = Array.from(allGroupIds)
       const doseIdsCsv = doseIds.join(',')
 
       for (const userId of recipients) {
@@ -199,12 +229,13 @@ Deno.serve(async (req) => {
           if (ok) totalSent++; else totalErrors++
 
           if (auditEnabledUsers.has(userId)) {
-            for (const did of doseIds) {
+            // v0.2.3.2 #230 — audit só changed doses (não siblings do grupo que não mudaram)
+            for (const did of changedIds) {
               auditRows.push({
                 user_id: userId, source: SOURCE, action: 'cancelled',
                 dose_id: did,
                 device_id: sub.deviceToken.slice(-12),
-                metadata: { reason, source_scenario: reason, batchSize: doseIds.length, fcmOk: ok }
+                metadata: { reason, source_scenario: reason, batchSize: changedIds.size, groupSize: doseIds.length, fcmOk: ok }
               })
             }
           }
@@ -213,7 +244,7 @@ Deno.serve(async (req) => {
     }
 
     await logAuditBatch(supabase, auditRows)
-    console.log(`[dose-trigger] ${type} groups=${groups.size} totalDoses=${old_rows.length} sent=${totalSent} errors=${totalErrors}`)
+    console.log(`[dose-trigger] ${type} groups=${groups.size} changedDoses=${old_rows.length} sent=${totalSent} errors=${totalErrors}`)
     return new Response(JSON.stringify({ ok: true, action: 'cancel_alarms_batch', sent: totalSent, errors: totalErrors }), {
       headers: { 'Content-Type': 'application/json' }
     })

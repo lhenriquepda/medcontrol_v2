@@ -14,6 +14,33 @@
 
 ---
 
+## 🆕 Release v0.2.3.2 — versionCode 65 (bug-fixes v0.2.3.1 device validação)
+
+**Escopo:** 4 bugs descobertos device validação v0.2.3.1 corrigidos:
+- **#227** `alarm_audit_config` policy SELECT pra authenticated (RLS bug bloqueava JS audit insert)
+- **#228** `unsubscribeFcm` filtra delete por `device_id_uuid` (multi-device cross-contamination)
+- **#229** `AlarmScheduler.persistAlarm` + `saveTrayEntries` + correlatos usam `commit()` em vez de `apply()` (snooze persist em reboot)
+- **#230** Edge `dose-trigger-handler` v21 query group siblings + CSV completo (Fix C reconstruction batchSize=1 gap)
+
+**Backend deployed:**
+- Edge `dose-trigger-handler` v21 ACTIVE (group siblings query)
+- Migration `alarm_audit_config_user_select_policy_v0_2_3_2` applied (RLS policy)
+
+**Frontend pending APK rebuild via Studio:**
+- `src/services/notifications/fcm.js` — unsubscribeFcm filter
+- `android/app/.../AlarmScheduler.java` — apply→commit
+- Bump vc 64→65 vn 0.2.3.1→0.2.3.2 + `VERSION_CODE_TO_NAME` map
+
+**Validação server-side completa:**
+- #230 Edge audit row `batchSize=1 groupSize=2 reason=status_change_batch fcmOk=true` ✓
+- #227 policy applied (runtime test pending APK rebuild com mesmo web bundle)
+
+**Validação device pending APK rebuild:**
+- #228 FLUXO-E retry com 2 devices: verificar logout não apaga push_sub do outro device
+- #229 FLUXO-B retry: Adiar 10min + reboot imediato + verificar snoozed alarm fire
+
+---
+
 ## 🆕 Release v0.2.3.1 — versionCode 64 (refactor alarme/push Plano A + Fixes B/C)
 
 **Escopo:** refactor v0.2.3.1 em 7 blocos consolida sistema alarme/push. Substitui v0.2.3.0 (#215) que tinha 5 caminhos com dual tray race. Agora 5 caminhos convergem em 1 mecanismo Java (Plano A).
@@ -47,7 +74,26 @@
 
 **Cobre:** 230.1.1 + 230.1.2 + 230.1.3 + 230.1.4 + B-01 + RC-1 + Fix B
 
-#### `[ ]` A — Toggle prefs entre cadastros + valida 3 branches sem duplicate
+#### `[~]` A — Toggle prefs entre cadastros + valida 3 branches sem duplicate
+
+🟡 **Parcial 2026-05-14** (Dosy-Dev S25 Ultra teste-plus@teste.com vc 64):
+- ✅ DoseA criada Crítico ON + DnD OFF → logcat `AlarmScheduler: scheduleDoseAlarm prefsSource=payload criticalOn=true dndOn=false inDnd=false ... branch=ALARM_PLUS_PUSH count=1` (2 groupIds, today+tomorrow recurrence)
+- ✅ Toggle Crítico OFF → Capacitor breadcrumb `rescheduleAll END alarmsScheduled:0 trayScheduled:2 criticalOffCount:2 dndCount:0 horizon:48 projectedItems:2` — cancelAll + cancelAllTrays called + re-schedule sem fullscreen
+- ✅ DoseB criada Crítico OFF → logcat `branch=PUSH_CRITICAL_OFF count=1` (2 groupIds)
+- ✅ Toggle Crítico ON + DnD ON 22:00-23:00 (default range) — DoseB re-scheduled → fire 09:00 BRT mostrou AlarmActivity fullscreen "HORA DO REMÉDIO 09:00 · 1 dose pra agora · 1 pessoa · Ciente/Adiar 10min/Pular"
+- ⚠️ DoseC NÃO criada (interrompido PC reboot 09:00 BRT)
+- ⚠️ DoseA fire 08:55 BRT observação perdida (PC reboot durante janela)
+- ⚠️ DnD window mantido default 22:00-23:00 (não 23:00-07:00 como Validar.md pediu) — mas doses programadas 08:55/09:00 fora dos dois ranges então mesma branch alarm_plus_push
+- 🐛 **Bug #227 descoberto** — `alarm_audit_log` recebe SÓ `edge_trigger_handler:fcm_sent` (4 rows); ZERO `js_scheduler` ou `java_alarm_scheduler` entries apesar config `enabled=true`. Logcat confirma branches mas audit DB vazia. Adicionado ROADMAP P1.
+
+**Veredito:** sistema scheduling 3-cenários funcional verificado logcat. Push_dnd branch não exercitado. B-01 race fix não pôde ser verificado sem observar DoseA fire.
+
+**Update 2026-05-14 sessão Appium Pixel 7 emulator:**
+- ✅ **PUSH_DND branch validado** — emulator teste-plus, user_prefs `dndEnabled=true dndStart=00:00 dndEnd=23:00` (window cobre horário current), dose inserida +5min via SQL → dispara fire @ 13:59 UTC:
+  - `dosy_critical_alarms.xml`: `<map />` (zero critical alarms — correto pra push_dnd)
+  - `dosy_tray_scheduled.xml`: entry com `channelId="dosy_tray_dnd"` (NÃO `dosy_tray`)
+  - Notification posted: `channel=dosy_tray_dnd sound=null vibrate=null importance=DEFAULT(4)` — silencioso com vibração leve, como esperado
+  - **3 branches ALARM_PLUS_PUSH + PUSH_CRITICAL_OFF + PUSH_DND TODOS validados** end-to-end
 
 **Como fazer:**
 1. Instalar vc 64 (`adb install -r app-debug.apk`) + login `teste-plus@teste.com`.
@@ -72,7 +118,9 @@
 - Dose B com alarme fullscreen → toggle OFF não disparou rescheduleAll.
 - Dose C com som default em janela DnD → channelId errado.
 
-#### `[ ]` A.bonus — Fix B re-rota fire time (toggle entre agendamento e fire)
+#### `[skip]` A.bonus — Fix B re-rota fire time (toggle entre agendamento e fire)
+
+⏭️ **Skip 2026-05-14** — cenário exige race condition entre toggle Crítico OFF e fire time SEM rescheduleAll disparar entre eles. Setup requer: dose nativa agendada (`alarm_plus_push`) → update SharedPrefs `critical_alarm_enabled=false` direto sem JS rescheduleAll → wait fire → verificar AlarmReceiver consulta SharedPrefs e re-rota pra tray. Bug #229 (snooze persist apply vs commit) interfere com qualquer caminho que precise SharedPrefs durável durante teste. Validação Fix B code-side: linhas `AlarmReceiver.java` que consultam SharedPrefs antes de dispatch — code review confirma lógica presente, mas runtime validation precisa setup mais controlado (force-stop app entre toggle e fire ou network airplane mode).
 
 **Como fazer:**
 1. Critical ON, cadastrar dose +5min → branch=alarm_plus_push agendado.
@@ -94,7 +142,25 @@
 
 **Cobre:** A-03 + 230.2.1 + 230.2.2 + RC-3 cancel idempotente
 
-#### `[ ]` B — Snooze + reboot + Ciente + Desfazer
+#### `[~]` B — Snooze + reboot + Ciente + Desfazer
+
+🟡 **Parcial 2026-05-14** (Dosy-Dev S25 Ultra teste-plus@teste.com vc 64):
+- ✅ Treatment + dose inserted via SQL (`scheduledAt=NOW+11min`) — trigger DB → Edge `dose-trigger-handler` → audit log `edge_trigger_handler:fcm_sent kind=fcm_schedule_alarms` ✅
+- ✅ Native AlarmActivity fullscreen fired @ 09:27 BRT mostrou "HORA DO REMÉDIO · TesteA · DoseSnooze 1comp · Ciente/Adiar 10min/Pular/Silenciar alarme"
+- ⚠️ Adiar 10min tap via adb input não foi reproduzido com confiança — primeira tap em (360,2880) hit Silenciar (texto "Som off — tocar" apareceu), segunda tap em (360,2780) dismiss alarme entirely sem snooze visível
+- ⚠️ Post-reboot fire @ 09:38-09:39 — NÃO observado. Dashboard mostra dose ainda `09:27 atrasada` pendente
+- ⚠️ Ciente + Tomada + Desfazer não exercitados (depende snooze ter rolado)
+
+**Limitação:** adb input tap em AlarmActivity nativo é fragil (uiautomator dump falha durante alarm screen activity). UI test mais confiável requer dispositivo físico operado manualmente OU instrumentação Appium/Espresso.
+
+**Veredito:** caminho FCM→AlarmScheduler→AlarmActivity fullscreen funciona end-to-end via SQL insert. Snooze + boot recovery (A-03 fix) não foram validados via automação.
+
+**Update 2026-05-14 sessão Appium Pixel 8 emulator-5556:**
+- ✅ Dose criada via SQL +5min, AlarmActivity fullscreen disparou exatamente no horário
+- ✅ Appium UiAutomator2 `textContains("Adiar")` localizou button reliable; click via REST `/element/$id/click` retornou success
+- ❌ **A-03 snooze persist em reboot FALHOU** — Adiar tap + `adb reboot` imediato → SharedPrefs `dosy_critical_alarms.xml` vazio `[]` pós-boot. Snoozed alarm NÃO disparou no snoozeAt esperado.
+- 🐛 **Bug #229 adicionado ROADMAP P1** — `AlarmScheduler.persistSnoozedAlarm` usa `apply()` async em vez de `commit()` sync. Reboot kill processo antes write flush → dados perdidos. Fix: trocar para `commit()` em `AlarmScheduler.java:470`.
+- ⚠️ Ciente + Tomada + Desfazer não exercitados (depende snooze ter persistido)
 
 **Como fazer:**
 1. Critical ON, criar dose **+10min**.
@@ -131,7 +197,52 @@
 
 **Cobre:** A-02 + RC-3 + 230.2.3 + 230.2.4 + 230.2.5 + Fix C
 
-#### `[ ]` C — Tratamento 28 doses + multi-dose group + caregiver + pause batch
+#### `[~]` C — Tratamento 28 doses + multi-dose group + caregiver + pause batch
+
+🟡 **Parcial 2026-05-14** (S25 Ultra teste-plus + Pixel 7 emulator teste-free, ambos vc 64):
+
+**Setup via SQL (evita UI bugs adb tap):**
+- ✅ Maria patient criada com `patient_shares` row teste-plus→teste-free
+- ✅ Dipirona treatment 4×6h × 7 dias = 28 doses pending inserted
+- ✅ Refresh app S25: mostra "Paciente" (12 doses 12h window) ✓
+- ✅ Refresh app emulator teste-free: mostra "Paciente" (12 doses 12h window) ✓ — **caregiver share via patient_shares validado**
+
+**Pause batch test 1 (28 doses, teste-free audit NÃO enabled):**
+- ✅ `UPDATE doses SET status='cancelled' WHERE medName='Dipirona' AND status='pending'` → 28 doses updated
+- ✅ SQL audit: 28 audit rows source=`edge_trigger_handler` action=`cancelled` metadata.reason=`status_change_batch` metadata.batchSize=`28` metadata.fcmOk=`true` — **TODAS mesmo timestamp `13:20:02.058693` (single batch INSERT)** ✓
+- ⚠️ Apenas 28 rows user_id=teste-plus (teste-free não tinha audit config) — não conseguiu confirmar FCM dispatch caregiver
+
+**Pause batch test 2 (5 doses, teste-free audit habilitado):**
+- ✅ teste-free audit_config row inserted enabled=true
+- ✅ INSERT 5 doses DipironaNew → UPDATE status='cancelled'
+- ✅ SQL audit: 10 rows total = 5 teste-plus + 5 teste-free, ambos mesmo timestamp `13:22:51.618972` — **caregiver FCM dispatch validado cross-device** ✓
+- ✅ Edge `getRecipientUserIds(patientId, ownerId)` via patient_shares lookup funcional
+- ✅ A-02 cancelFutureDoses batch UPDATE (não 28 trigger fires) **validado server-side**
+
+**Não testado:**
+- Multi-dose group + RC-3 Fix C hash (`sortedDoseIds.join('|')`) — requer UI agendamento 2 treatments mesmo minuto
+- DnD caregiver-specific (teste-free DnD ON, dose 23:30 → tray silencioso vs alarm fullscreen plus)
+- DosyMessagingService.handleCancelAlarms ACK no device logcat — prod build sem console.log
+
+**Veredito:** Plano A batch path server-side validado completo (trigger statement-level + Edge BATCH_UPDATE + caregiver FCM + audit log batch INSERT). UI flow multi-dose + DnD diff per-device não exercitados.
+
+**Update 2026-05-14 sessão Appium Pixel 8 emulator-5556:**
+- Setup multi-dose group: 2 treatments MedA + MedB primeira dose mesmo minuto 14:53 UTC via SQL
+- Audit log `edge_trigger_handler:fcm_sent` confirmou Edge enviou FCM
+- Fire @ 14:53 UTC: **AlarmActivity NÃO disparou**. Dashboard mostra MedB 14:53 atrasada (cache atualizou após force-restart app)
+- SharedPrefs `dosy_critical_alarms.xml` e `dosy_tray_scheduled.xml` ambos vazios `[]` mesmo pós force-restart — AlarmScheduler NÃO persistiu agendamento
+- Múltiplas doses recentes mesma sessão (FluxoB3, MedA, MedB) ficaram atrasadas sem fire — padrão sugere quebra FCM dispatch pós-reboot Android quando 2 push_subscriptions ativos para mesmo user
+- Workaround: limpou push_sub stale via SQL (delete oldest). Próxima inserção dose pode funcionar mas sessão time-boxed
+- **Multi-dose Fix C hash + DnD caregiver diff per-device não foram exercitados runtime** — bloqueado por FCM dispatch issue
+
+**Possível causa subjacente (suspeita, não confirmada):** quando user tem 2+ android push_subscriptions, Edge envia FCM para todos os tokens, mas algum (talvez o mais antigo expirado) retorna erro silencioso. App pós-reboot pode usar token diferente do que está em uso pela Edge. Bug #228 (multi-device cleanup) relaciona — fix #228 também resolveria este cenário.
+
+**Update 2 — 2026-05-14 multi-dose group RC-3 Fix C runtime test (após cleanup push_sub stale):**
+- ✅ Setup: 2 treatments Dipirona + Paracetamol primeira dose mesmo minuto 15:03 UTC
+- ✅ Force-restart app → rescheduleAll agrupou ambas em 1 alarmId: `dosy_critical_alarms.xml` mostra `{id:259128431, triggerAt:1778770980000, doses:[Paracetamol+Dipirona]}` — **multi-dose grouping validado**
+- ✅ Fire @ 15:03: AlarmActivity fullscreen mostrou "2 doses pra agora · 1 pessoa" + lista Paracetamol(500mg) + Dipirona(1comp) + heads-up "ALARME Dosy — 2 do..." + button "Ciente (2)" + Adiar 10min + Pular — **AlarmActivity multi-dose display validado**
+- ✅ Mark Dipirona done via SQL (`UPDATE doses SET status='done'`) → trigger DB → Edge audit `edge_trigger_handler:cancelled batchSize:1 reason=status_change_batch fcmOk=true`
+- 🐛 **Bug #230 descoberto** — Fix C hash reconstruction NÃO acionado quando batchSize=1: SharedPrefs scheduled_alarms PERMANECE com ambas doses pós-cancel. Edge envia 1 doseId CSV; `handleCancelAlarms` line 214 `if (ids.length > 1)` skipa reconstruct; só cancelDoseAlarmAndBackup(idFromString(dipirona)) — não match group alarmId 259128431. Mitigação: próximo rescheduleAll heals; race window aceitável (P2).
 
 **Setup:**
 1. Login `teste-plus@teste.com` no device A.
@@ -186,7 +297,22 @@
 
 **Cobre:** 230.3.1 + 230.3.2 + 230.4.1 + Plano A persistência tray pós-reboot
 
-#### `[ ]` D — Reboot + worker + cron 5am
+#### `[~]` D — Reboot + worker + cron 5am
+
+🟡 **Parcial 2026-05-14** (Dosy-Dev S25 Ultra teste-plus@teste.com vc 64):
+- ✅ **Plano A persistência tray validada** — SharedPrefs `dosy_critical_alarms.xml` + `dosy_tray_scheduled.xml` ambos populados pós-FCM schedule. Conteúdo:
+  - `dosy_critical_alarms`: `[{id:75534432,triggerAt:1778764200000,doses:[{doseId,medName:DoseFutura,unit:1comp,patientName:TesteA}]}]`
+  - `dosy_tray_scheduled`: `[{notifId:1149276256,triggerAt:1778764200000,channelId:"dosy_tray",doses:[...]}]`
+- ✅ **Boot recovery validado** — `adb reboot` device + verificação pós-boot: ambas xml SharedPrefs PERSISTIDAS com mesmos triggerAt
+- ✅ **AlarmActivity fullscreen disparou @ 10:10 BRT POST-REBOOT** — visual confirmation. Header "HORA DO REMÉDIO 10:10 · TesteA · DoseFutura 1comp · Ciente/Adiar 10min/Pular/Silenciar alarme". Confirma BootReceiver re-agendou alarme nativo via SharedPrefs Plano A
+- ⚠️ WorkManager 6h periodic não testado (sessão única <2h)
+- ⚠️ Cron 5am BRT daily-alarm-sync não testado (próxima execução 2026-05-15 05:00 BRT)
+
+**Veredito:** boot recovery + Plano A persistence funcionais. Validação completa exige sessão prolongada >24h para cobrir 6h Worker + 5am cron.
+
+**Finding extra — cleanup post-fire:** SQL check pós-fire 10:10:
+- `dosy_critical_alarms.xml`: `[]` ✅ (B-01 fix — AlarmReceiver remove entry pós-fire)
+- `dosy_tray_scheduled.xml`: STILL contém entry stale (notifId=1149276256, scheduledAt=2026-05-14T13:10:55) — tray PendingIntent SharedPrefs NÃO foi limpo após fire. Não-bloqueador (entries serão overwritten em próximo rescheduleAll) mas pode indicar gap A-02/A-05 cleanup tray side. Considerar adicionar `removeTrayEntry(notifId)` em `TrayNotificationReceiver.onReceive` pós-display.
 
 **Como fazer:**
 1. Critical ON, DnD OFF, criar dose **+2h** (futura).
@@ -224,7 +350,43 @@
 
 **Cobre:** logout security + cleanup push_sub + multi-device FCM routing
 
-#### `[ ]` E — 2 devices same user + logout device A
+#### `[~]` E — 2 devices same user + logout device A
+
+🟡 **Parcial 2026-05-14** (S25 teste-plus + Pixel 7 emulator teste-plus, ambos vc 64):
+
+**Setup completo:**
+- ✅ S25 logado teste-plus há tempo, push_sub row A android (device_id_uuid=de4ce92e, createdAt 11:26)
+- ✅ Emulator logout teste-free (Ajustes→Sair) — verificado push_sub teste-free android row DELETADA (só web stale persistiu)
+- ✅ Emulator login teste-plus via adb input tap email/senha → Dashboard "Boa tarde, Teste Plus" + Maria 17 doses visíveis ✓
+
+**Logout teste-free cleanup (parte do test):**
+- ✅ Toggle Sair → SQL pós-logout: teste-free android row DELETADA. Confirmava **#195 fix** (explicit logout flag → unsubscribeFcm fires → DELETE push_sub).
+
+**Multi-device push_sub teste:**
+- Emulator toggle Notificações push OFF (acidental — buscando ON) → unsubscribeFcm called
+- SQL após toggle: **AMBAS rows android deletadas** (S25 de4ce92e + emulator) — esperado: só emulator row deletada
+- Toggle ON novamente: só emulator row recriada (db0edc3c). S25 órfã.
+
+**🐛 Bug #228 ADICIONADO ROADMAP P1** — `unsubscribeFcm()` em `src/services/notifications/fcm.js:89-99` faz `DELETE FROM push_subscriptions WHERE userId=X AND platform='android'` sem filtrar `device_id_uuid` → multi-device cross-contamination. Toggle push OFF OU logout em Device A → apaga FCM subscription Device B silenciosamente.
+
+**Não testado:**
+- Logout S25 explícito (bug #228 invalida expected behavior — esperado "1 row Device B" mas comportamento atual = "0 rows" ambos)
+- Cadastrar dose pós-logout + verificar Device A NÃO recebe FCM (bug bloqueia setup correto)
+
+**Veredito:** logout cleanup BÁSICO validado (DELETE row do user). Multi-device security FALHOU — bug #228 P1 descoberto. **FLUXO-E expected behavior NÃO PODE PASSAR no estado atual do código.**
+
+---
+
+### ✨ Pull-to-refresh dashboard
+
+#### `[x]` Pull-to-refresh padrão UI
+
+✅ **Validado 2026-05-14** (Pixel 8 emulator-5556 teste-plus via Appium W3C Actions API):
+- Baseline dashboard: 0/6 doses 3 pendentes
+- INSERT dose `PullRefresh` via SQL @ 16:57 (futura +2h)
+- Swipe down gesture: pointer (670, 500) → (670, 1700) com pointerDown/move/Up via `/session/$sid/actions`
+- Dashboard atualizado: 0/7 doses 4 pendentes — PullRefresh visível bottom da lista
+- React Query refetch trigger confirmado funcional
 
 **Como fazer:**
 1. Device A: login `teste-plus@teste.com` → ativar push (Ajustes → toggle Notificações).
@@ -268,7 +430,21 @@
 
 ### #v0.2.3.1.audit — Verificação geral admin /alarm-audit
 
-#### `[ ]` audit — Todos 5 sources populam alarm_audit_log + admin painel funcional
+#### `[~]` audit — Todos 5 sources populam alarm_audit_log + admin painel funcional
+
+🟡 **Parcial 2026-05-14** (Dosy-Dev S25 Ultra teste-plus@teste.com vc 64):
+- SQL query `SELECT source, action, COUNT(*) FROM alarm_audit_log WHERE user_id=<teste-plus-uuid> AND created_at > now() - interval '90 minutes' GROUP BY source, action`:
+  - `edge_trigger_handler:cancelled`: 14 rows
+  - `edge_trigger_handler:fcm_sent kind=fcm_schedule_alarms`: 6 rows
+  - **ZERO `js_scheduler` entries** (esperado: batch_start/scheduled/batch_end durante FLUXO-A toggle reschedules)
+  - **ZERO `java_alarm_scheduler` entries** (esperado: scheduled per dose + fired_received durante FLUXO-D alarm fire @ 10:10)
+  - **ZERO `java_fcm_received` entries** (esperado: durante FCM cancel batch)
+  - **ZERO `edge_daily_sync` entries** (cron 5am não rodou na janela testada)
+  - **ZERO `java_worker` entries** (Worker 6h não rodou na janela testada)
+- Apenas 2 sources populam de 5 esperados → **Bug #227 confirmado**
+- Admin painel `/alarm-audit` não testado via Chrome MCP nesta sessão
+
+**Veredito:** audit infrastructure broken pré-launch. Bug #227 P1 em ROADMAP §6.6 detalha.
 
 **Como fazer:**
 1. Após executar FLUXOS A-E acima:
