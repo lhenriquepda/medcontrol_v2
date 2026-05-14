@@ -134,10 +134,15 @@ export default function App() {
     const t = setInterval(() => setHourTick(Math.floor(Date.now() / 3600_000)), 3600_000)
     return () => clearInterval(t)
   }, [])
+  // v0.2.3.1 Bloco 7 (A-04) — janela unificada com Dashboard (-30d/+60d).
+  // Antes: App.jsx -1d/+14d + Dashboard -30d/+60d = 2 queries TanStack distintas
+  // mesmo data overlapping = duas round-trip ao DB + 2x refetch a cada mutation.
+  // Agora: filter.patientId=undefined → mesma queryKey que Dashboard sem filter
+  // patient = cache compartilhado.
   const alarmWindow = useMemo(() => {
     const now = new Date(hourTick * 3600_000)
-    const past = new Date(now); past.setDate(past.getDate() - 1)
-    const future = new Date(now); future.setDate(future.getDate() + 14)
+    const past = new Date(now); past.setDate(past.getDate() - 30)
+    const future = new Date(now); future.setDate(future.getDate() + 60)
     return { from: past.toISOString(), to: future.toISOString() }
   }, [hourTick])
   const { data: allDoses = [], isSuccess: dosesLoaded } = useDoses(alarmWindow)
