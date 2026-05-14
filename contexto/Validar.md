@@ -20,7 +20,7 @@
 
 - **#163** P1 RPC consolidado Dashboard — `medcontrol.get_dashboard_payload(p_from, p_to, p_days_ahead)` JSON consolidado patients + treatments + doses + extend_result + metadata. SECURITY DEFINER + auth.uid() user_id filter + GRANT EXECUTE authenticated. Hook `useDashboardPayload` substitui 3 hooks separados em Dashboard.jsx + popula caches via setQueryData side-effect. Outras telas (Patients, DoseHistory, Reports) hooks separados continuam.
 - **#165** P1 Delta sync + TanStack persist IndexedDB — migrado `createSyncStoragePersister` (localStorage ~5MB sync) → `createAsyncStoragePersister` + `idb-keyval` (IndexedDB async GB-scale). Plus staleTime usePatients/useTreatments 5min→30min combinado com persist offline-first.
-- **#164** P1 Realtime broadcast — DEFERIDO v0.2.3.5 (escopo 4-6h refactor Edge function + cliente broadcast subscribe + cache patch + risk produção).
+- **#164** P1 Realtime broadcast — 🚫 PARKED (análise ROI baixo 2026-05-14: FCM cobre 95% sync cross-device em ~1-3s, histórico storms eleva risk regression. Reabrir só com escala 1000+ MAU OU fluxo web sério).
 - **#235** P2 monetização Free bottom banner — DEFERIDO v0.2.3.5 (escopo 5-8h patch plugin singleton state).
 
 **Validação autônoma:**
