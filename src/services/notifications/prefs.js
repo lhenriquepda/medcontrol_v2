@@ -73,12 +73,22 @@ export function groupByMinute(doses) {
   return groups
 }
 
-// Filtra apenas pending na janela 48h
+// Filtra apenas pending na janela 48h.
+// #215 v0.2.3.0 fix bug device-validation 2026-05-13: skip doses optimistic
+// (id começa `temp-` OR _optimistic=true). Doses temp são criadas pelo
+// mutationRegistry onMutate antes do server responder. Se agendar alarme
+// nativo com hash(temp-id), AlarmActivity passa `openDoseIds=temp-...`
+// pra MainActivity, mas onSuccess substituiu temp por UUID real → modal
+// MultiDose busca id no cache + temp não existe mais → modal não abre.
+// Solução: aguardar server confirm + onSuccess invalidate ['doses'] →
+// rescheduleAll re-roda com IDs reais.
 export function filterUpcoming(doses) {
   const now = Date.now()
   const end = now + SCHEDULE_WINDOW_MS
   return (doses || []).filter((d) => {
     if (d.status !== 'pending') return false
+    if (d._optimistic) return false
+    if (typeof d.id === 'string' && d.id.startsWith('temp-')) return false
     const t = new Date(d.scheduledAt).getTime()
     return t >= now && t <= end
   })
