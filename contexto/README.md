@@ -325,33 +325,129 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 > - Capacitor.Network bridge → onlineManager só ativa em `Capacitor.isNativePlatform()` — fluxo nativo não testável web.
 > - FCM background, AlarmManager, plugin nativo CriticalAlarm — tudo Android-only.
 
-### 12b — Validação device (somente o que web não cobre)
+### 12b — Validação device AUTÔNOMA via emulator CLI (NOVO v0.2.3.2+)
 
-Apenas pra features Capacitor nativas que não rodam no browser:
-- Plugin `CriticalAlarm` nativo (AlarmManager, lockscreen overlay, full-screen intent, foreground service)
-- `BootReceiver` re-schedule pós reboot
-- `DoseSyncWorker` periodic WorkManager
-- `DosyMessagingService` FCM data handler
-- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` Samsung One UI 7 / Xiaomi MIUI
-- Push FCM real (background delivery não captura JS)
-- StatusBar overlay native, AdMob banner real, Biometric auth
-- SecureStorage Android KeyStore
-- Capacitor In-App Updates (Google Play flexible)
-- Privacy screen (FLAG_SECURE recents blur)
-- BackButton handler nativo
+> **Comprovado v0.2.3.2 2026-05-14:** fluxo end-to-end zero GUI Studio. IA roda sozinha sem user na máquina pra maioria validações device. Use SEMPRE este fluxo antes de §12c (user manual).
 
-**Receita validação device:**
+**Stack autônoma:**
+- **avdmanager CLI** cria AVDs (`$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager.bat create avd -n <Name> -k "system-images;android-35;google_apis_playstore;x86_64" -d <device>`)
+- **emulator.exe** launch headless (`emulator -avd <Name> -no-snapshot -port <5554|5556>`) — run_in_background, wait `getprop sys.boot_completed`
+- **gradlew CLI** build debug/release APK (TEMP redirect — ver §11 release flow)
+- **ADB** install (`adb install -r -t app-debug.apk`) + launch (`am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity`)
+- **uiautomator dump** + `MSYS_NO_PATHCONV=1 adb pull '//data/local/tmp/ui.xml' 'C:\temp\ui.xml'` → parsing XML pra bounds + text content
+- **ADB input** tap/swipe/keyevent — exec UI actions sem touchscreen
+- **logcat** monitoring via `Monitor` tool (linha-buffer grep) — captura AlarmScheduler / DosyMessagingService / FCM events runtime
+- **Supabase MCP** `execute_sql` — INSERT dose direto DB pra triggerar Edge → FCM → device; SELECT alarm_audit_log validar 6 sources populando; check push_subscriptions device_id_uuid
+- **Chrome MCP** Play Console upload + admin.dosymed.app `/alarm-audit` painel
+
+**Receita validação autônoma (executar via §12a primeiro web, depois emulator se device-only):**
+
+1. **Setup AVDs (1× por device target):**
+   ```bash
+   # cmdline-tools instalar se faltar:
+   curl -sL -o /tmp/clt.zip "https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip"
+   unzip -q -o /tmp/clt.zip -d $ANDROID_HOME/cmdline-tools/
+   mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+   ```
+   ```bash
+   # AVD criação (escolher device pra cenário):
+   echo "no" | avdmanager create avd -n Pixel8_Test -k "system-images;android-35;google_apis_playstore;x86_64" -d "pixel_8"
+   echo "no" | avdmanager create avd -n Pixel9Pro_Test -k "system-images;android-35;google_apis_playstore;x86_64" -d "pixel_9_pro"
+   ```
+
+2. **Start emulator headless + wait boot:**
+   ```bash
+   $ANDROID_HOME/emulator/emulator.exe -avd Pixel8_Test -no-snapshot -port 5554 &  # run_in_background
+   until [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
+   ```
+
+3. **Build APK CLI + install:**
+   ```bash
+   cd android
+   TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+     JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+     PATH="$JAVA_HOME/bin:$PATH" ./gradlew assembleDebug
+   adb -s emulator-5554 install -r -t app/build/outputs/apk/debug/app-debug.apk
+   adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST_NOTIFICATIONS
+   adb -s emulator-5554 shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity
+   ```
+
+4. **UI interaction via uiautomator dump → tap por bounds:**
+   ```bash
+   MSYS_NO_PATHCONV=1 adb shell uiautomator dump /data/local/tmp/ui.xml
+   MSYS_NO_PATHCONV=1 adb pull '//data/local/tmp/ui.xml' 'C:\temp\ui.xml'
+   # parse bounds=[x1,y1][x2,y2] → center (x1+x2)/2, (y1+y2)/2
+   adb shell input tap CENTER_X CENTER_Y
+   adb shell input text "valor"  # text fields normais OK; password fields falham (limitação known) — usar Studio embedded HUD OU Appium W3C Actions
+   ```
+
+5. **Trigger backend events via Supabase MCP:**
+   ```sql
+   -- Insert dose +3min — dispara dose_change_trigger → Edge v21 → FCM → AlarmScheduler
+   WITH u AS (SELECT id FROM auth.users WHERE email='teste-plus@teste.com')
+   INSERT INTO medcontrol.doses (id, "userId", ...) SELECT gen_random_uuid(), u.id, ... FROM u;
+
+   -- Validar audit log populando
+   SELECT source, action, created_at FROM medcontrol.alarm_audit_log
+   WHERE user_id=(SELECT id FROM auth.users WHERE email='teste-plus@teste.com')
+   AND created_at > NOW() - INTERVAL '5 minutes' ORDER BY created_at DESC;
+   ```
+
+6. **Monitor runtime logcat (Monitor tool):**
+   ```bash
+   adb logcat -T '01-01 00:00:00.000' | grep --line-buffered -iE "AlarmScheduler|DosyMessagingService|FCM|fired|trigger_handler"
+   ```
+
+7. **Screenshot evidência:**
+   ```bash
+   MSYS_NO_PATHCONV=1 adb shell screencap -p /data/local/tmp/dash.png
+   MSYS_NO_PATHCONV=1 adb pull '//data/local/tmp/dash.png' 'C:\temp\dash.png'
+   # Read C:\temp\dash.png pra visualizar
+   ```
+
+**Coverage autônoma comprovada v0.2.3.2:**
+- ✅ App launch + dashboard render
+- ✅ Login UI flow (email/senha — exceto password field via ADB, ver limite abaixo)
+- ✅ Plugin `CriticalAlarm` end-to-end: FCM receive → AlarmScheduler.scheduleDoseAlarm → fired via logcat
+- ✅ `DosyMessagingService` FCM data handler (audit `java_fcm_received` rows)
+- ✅ `alarm_audit_log` 6 sources runtime (js_scheduler + edge_trigger_handler + java_fcm_received + java_alarm_scheduler + java_worker + edge_daily_sync)
+- ✅ `push_subscriptions` device_id_uuid filter (multi-device coexistência)
+- ✅ Dose flow E2E: SQL INSERT → trigger → Edge → FCM → Java → fire
+- ✅ UI layout cross-emulator (Pixel 8 vs Pixel 9 Pro — bug #231 layout detectado via comparação visual screenshots)
+
+**Limites known autônoma:**
+- ⚠️ **Password field via ADB `input text`** — falha em campos `password=true`. Workarounds: (a) usar emulator EMBEDDED na HUD Studio (teclado físico funciona) — pedir user abrir Studio + selecionar AVD em Device Manager + Run Embedded; (b) Appium W3C Actions API com server local; (c) pedir user logar manual 1× depois IA continua sozinha.
+- ⚠️ Toggle prefs SharedPrefs avançados via emulator settings — algumas screens Settings exigem deep tap sequence, pode ser frágil. Validar via SQL `user_prefs` table direto.
+- ⚠️ Reboot test (`adb reboot`) takes ~30-60s emulator restart.
+- ⚠️ Push FCM real (não data-only) — emulator Google Play Services OK, mas FCM token diferente device físico (test token).
+
+### 12c — Validação device manual (fallback user-driven)
+
+> Usar APENAS quando §12b não cobre (Samsung One UI quirks, AdMob real PROD ad units, biometric, Privacy Screen FLAG_SECURE recents, In-App Updates Play Core flexible flow).
+
+Cenários device-only que IA NÃO consegue autonomous:
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` Samsung One UI 7 / Xiaomi MIUI behaviour
+- StatusBar overlay native em hardware real (vs emulator notch sim)
+- Biometric auth (sensor real)
+- AdMob banner PROD ad units (sandbox-only emulator)
+- SecureStorage Android KeyStore (hardware-backed real)
+- Capacitor In-App Updates flexible flow Play Core
+- Privacy screen FLAG_SECURE recents blur
+- BackButton handler nativo em multi-task switcher real
+
+**Receita validação device manual:**
 1. User instala via link Internal Testing no S25 Ultra (ou device principal)
 2. Checklist específico do item em `CHECKLIST.md §#XXX` seção "Validação device"
 3. User captura Logcat se item envolveu plugin nativo (`adb logcat -s {tag}`)
 4. IA verifica Sentry breadcrumbs/issues 24h pós-install + painel admin
 
-**Antes de pedir validação device, IA:**
-1. Listar itens da release que precisam device-only (vs web-validável)
-2. Validar TUDO que cabe web via Chrome MCP
-3. Reportar resultado web pro user
-4. **Atualizar [`contexto/Validar.md`](Validar.md)** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo todos os itens device-only pendentes em formato checklist `[ ]`. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**. Ver template em `Validar.md` da release v0.2.1.7.
-5. Pedir validação manual ao user, apontando pra `Validar.md`
+**Antes de pedir validação device manual, IA:**
+1. Listar itens da release que precisam device-only (vs §12a web-validável OR §12b emulator-autônomo)
+2. Validar TUDO que cabe web via Chrome MCP (§12a)
+3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§12b)
+4. Reportar resultado §12a+§12b pro user
+5. **Atualizar [`contexto/Validar.md`](Validar.md)** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §12a+§12b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
+6. Pedir validação manual ao user, apontando pra `Validar.md`
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
