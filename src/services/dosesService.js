@@ -144,15 +144,17 @@ export async function undoDose(id) {
   return mock.update('doses', id, { status: 'pending', actualTime: null })
 }
 
-export async function registerSos({ patientId, medName, unit, scheduledAt, observation }) {
+export async function registerSos({ patientId, medName, unit, scheduledAt, observation, force = false }) {
   if (hasSupabase) {
-    // Usa RPC server-side: valida regras SOS (minIntervalHours, maxDosesIn24h) antes de inserir
+    // v0.2.3.6: param `p_force` skip server-side over-limit validation quando
+    // user já confirmou ConfirmDialog cliente-side (decisão clínica do user).
     const { data, error } = await supabase.rpc('register_sos_dose', {
       p_patient_id:   patientId,
       p_med_name:     medName,
       p_unit:         unit,
       p_scheduled_at: scheduledAt || new Date().toISOString(),
-      p_observation:  observation || ''
+      p_observation:  observation || '',
+      p_force:        force
     })
     if (error) throw error
     return data

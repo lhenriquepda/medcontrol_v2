@@ -125,10 +125,11 @@ export default function SOS() {
       setOverLimitConfirm({ payload, reason: v.reason, nextHint })
       return
     }
-    await doSubmit(payload)
+    await doSubmit(payload, false)
   }
 
-  async function doSubmit(payload, overLimit = false) {
+  async function doSubmit(payload, overLimit) {
+    const finalPayload = overLimit ? { ...payload, force: true } : payload
     if (overLimit) {
       toast.show({
         message: `Dose registrada acima do limite. ${overLimitConfirm?.reason || ''}`,
@@ -136,11 +137,11 @@ export default function SOS() {
       })
     }
     if (!onlineManager.isOnline()) {
-      register.mutate(payload)
+      register.mutate(finalPayload)
       toast.show({ message: 'Dose S.O.S salva offline — sincroniza ao reconectar.', kind: 'info' })
     } else {
       try {
-        await register.mutateAsync(payload)
+        await register.mutateAsync(finalPayload)
         toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
       } catch (e) {
         toast.show({ message: 'Erro ao registrar: ' + (e?.message || 'desconhecido'), kind: 'error' })
@@ -568,8 +569,9 @@ export default function SOS() {
           if (payload) await doSubmit(payload, true)
         }}
         onClose={() => {
+          // ConfirmDialog dispara onConfirm() + onClose() no confirm path.
+          // Sem toast aqui: user que clicou Cancelar sabe que cancelou.
           setOverLimitConfirm(null)
-          toast.show({ message: 'Registro cancelado.', kind: 'info' })
         }}
       />
     </motion.div>
