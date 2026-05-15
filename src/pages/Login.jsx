@@ -48,12 +48,9 @@ export default function Login() {
     try {
       if (mode === 'signin') await signInEmail(email, password)
       else if (mode === 'signup') {
-        // v0.2.3.5 #254 — flag pra criar paciente self pós session active.
-        // useAuth SIGNED_IN listener consome flag + cria patient + limpa.
-        if (createSelfPatient && name.trim()) {
-          try { localStorage.setItem('dosy_pending_self_patient', name.trim()) } catch { /* ignore */ }
-        }
-        const res = await signUpEmail(email, password, name)
+        // v0.2.3.5 #254 — flag self-patient passada via user_metadata (cross-device).
+        // useAuth SIGNED_IN listener consome flag user_metadata pós-confirmação email.
+        const res = await signUpEmail(email, password, name, { createSelfPatient })
         // v0.2.3.5 #252 — pending email confirm → tela explicativa em vez de toast.
         if (res?.pendingConfirmation) {
           setPendingEmail(email)

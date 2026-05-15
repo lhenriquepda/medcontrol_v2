@@ -127,28 +127,40 @@ export function AuthProvider({ children }) {
           if (event === 'SIGNED_IN') {
             try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
             // v0.2.3.5 #254 — checkbox "criar paciente com meu nome" no signup.
-            // Login.jsx grava flag em localStorage com o nome digitado.
-            // Aqui (1º SIGNED_IN pós-confirmação email) consome flag + cria patient.
-            // Try/catch isolado pra não quebrar fluxo signup se falhar (logs warn).
+            // v0.2.3.5 #254b fix: flag em user_metadata (cross-device) em vez de
+            // localStorage (per-device — email confirm em phone outro browser → flag missing).
+            // Plus session-scoped mutex (selfPatientCreating) previne race entre 2
+            // SIGNED_IN consecutivos (INITIAL_SESSION + signed_in) que duplicava INSERT.
+            // updateUser limpa flag pós-criação evitando re-criação em logins futuros.
             try {
-              const pendingName = localStorage.getItem('dosy_pending_self_patient')
-              if (pendingName && s?.user?.id) {
-                localStorage.removeItem('dosy_pending_self_patient')
-                // Check se já existe paciente (idempotência — usuário pode logar 2x antes patient_limit insert).
+              const meta = s?.user?.user_metadata || {}
+              const pendingName = meta.create_self_patient_name
+              if (pendingName && s?.user?.id && !window.__dosySelfPatientCreating) {
+                window.__dosySelfPatientCreating = true
                 const { data: existing } = await supabase
                   .from('patients')
                   .select('id')
                   .eq('userId', s.user.id)
                   .limit(1)
                 if (!existing || existing.length === 0) {
-                  await supabase.from('patients').insert({
+                  const { error: insErr } = await supabase.from('patients').insert({
                     userId: s.user.id,
                     name: pendingName,
                     avatar: '🙂',
                   })
+                  if (!insErr) {
+                    // Invalida cache pra UI atualizar sem reload
+                    qc.invalidateQueries({ queryKey: ['patients'] })
+                  }
                 }
+                // Limpa flag user_metadata pra não re-criar em logins futuros
+                await supabase.auth.updateUser({
+                  data: { create_self_patient_name: null }
+                })
+                window.__dosySelfPatientCreating = false
               }
             } catch (e) {
+              window.__dosySelfPatientCreating = false
               console.warn('[useAuth #254] self patient creation failed:', e?.message || e)
             }
           }
@@ -318,11 +330,16 @@ export function AuthProvider({ children }) {
     await mock.signInLocal(email, password)
   }
 
-  async function signUpEmail(email, password, name = '') {
+  async function signUpEmail(email, password, name = '', opts = {}) {
     if (hasSupabase) {
+      const userData = { name: name.trim() || null }
+      // v0.2.3.5 #254 — flag self-patient via user_metadata (cross-device).
+      if (opts.createSelfPatient && name.trim()) {
+        userData.create_self_patient_name = name.trim()
+      }
       const { data, error } = await supabase.auth.signUp({
         email, password,
-        options: { data: { name: name.trim() || null } }
+        options: { data: userData }
       })
       if (error) throw new Error(traduzirErro(error))
       // Detecção de email duplicado: Supabase retorna user sem identidades em vez de erro.
