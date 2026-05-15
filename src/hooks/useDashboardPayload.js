@@ -41,9 +41,20 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     // v0.2.3.4 #237 fix — user reportou Dashboard skeleton infinito pós-resume longo.
     // Causa: RPC consolidado falhar silentemente (401 token expirado, network drop) →
     // query stays isError=true SEM placeholderData → Dashboard só checa isLoading →
-    // SkeletonList eterno. Fix: keepPreviousData mantém último payload visible enquanto
-    // refetch executa. Plus retry 5 vezes com exponential backoff cobre transient errors.
-    placeholderData: (previousData) => previousData,
+    // SkeletonList eterno.
+    //
+    // v0.2.3.6 #267 fix — placeholderData precisa cobrir TROCA de queryKey (hora muda
+    // de 19→20 cria nova query, previousData é undefined). Fallback: pega data mais
+    // recente de QUALQUER ['dashboard-payload', *] do cache. Cobre tanto same-key
+    // refetch (previousData) quanto cross-key transition (hour boundary, filter change).
+    placeholderData: (previousData) => {
+      if (previousData) return previousData
+      const all = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+      const withData = all.filter((q) => q.state.data)
+      if (withData.length === 0) return undefined
+      withData.sort((a, b) => (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0))
+      return withData[0].state.data
+    },
     retry: 5,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30_000),
   })
