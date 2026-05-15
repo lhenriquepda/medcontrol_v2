@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { Search, X as XIcon, Check, ChevronDown, User } from 'lucide-react'
+import PatientAvatar from './PatientAvatar'
 
 /**
  * PatientPicker — dropdown searchable Dosy-styled.
@@ -67,8 +68,6 @@ export default function PatientPicker({
     ? selected.name
     : (allowAll && value === null) ? 'Todos pacientes' : placeholder
 
-  const triggerEmoji = selected ? selected.avatar : null
-
   return (
     <div ref={wrapRef} style={{ position: 'relative', fontFamily: 'var(--dosy-font-body)' }}>
       <button
@@ -78,7 +77,7 @@ export default function PatientPicker({
         style={{
           width: '100%',
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '12px 14px',
+          padding: '10px 14px',
           fontSize: 14, textAlign: 'left',
           background: 'var(--dosy-bg-elevated)',
           color: selected || (allowAll && value === null) ? 'var(--dosy-fg)' : 'var(--dosy-fg-tertiary)',
@@ -89,11 +88,7 @@ export default function PatientPicker({
         }}
       >
         {selected ? (
-          triggerEmoji ? (
-            <span style={{ fontSize: 18, flexShrink: 0 }}>{triggerEmoji}</span>
-          ) : (
-            <User size={16} strokeWidth={1.75} style={{ flexShrink: 0, color: 'var(--dosy-fg-secondary)' }}/>
-          )
+          <PatientAvatar patient={selected} size={28} />
         ) : null}
         <span style={{
           flex: 1, minWidth: 0,
@@ -175,9 +170,7 @@ export default function PatientPicker({
                 <Option
                   active={value === null}
                   onClick={() => pick(null)}
-                  emoji={null}
                   label="Todos pacientes"
-                  hint="·"
                 />
               </li>
             )}
@@ -193,7 +186,7 @@ export default function PatientPicker({
                 <Option
                   active={p.id === value}
                   onClick={() => pick(p.id)}
-                  emoji={p.avatar}
+                  patient={p}
                   label={p.name}
                 />
               </li>
@@ -205,17 +198,17 @@ export default function PatientPicker({
   )
 }
 
-function Option({ active, onClick, emoji, label, hint }) {
+function Option({ active, onClick, patient, label }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
         width: '100%', textAlign: 'left',
-        padding: '10px 14px',
+        padding: '8px 12px',
         display: 'flex', alignItems: 'center', gap: 10,
         background: active ? 'var(--dosy-peach-100)' : 'transparent',
-        color: active ? 'var(--dosy-fg)' : 'var(--dosy-fg)',
+        color: 'var(--dosy-fg)',
         fontWeight: active ? 700 : 500,
         fontSize: 14,
         border: 'none', cursor: 'pointer',
@@ -229,12 +222,18 @@ function Option({ active, onClick, emoji, label, hint }) {
         if (!active) e.currentTarget.style.background = 'transparent'
       }}
     >
-      <span style={{
-        width: 24, textAlign: 'center', flexShrink: 0, fontSize: 18,
-        color: 'var(--dosy-fg-secondary)',
-      }}>
-        {emoji || hint || <User size={14} strokeWidth={1.75}/>}
-      </span>
+      {patient ? (
+        <PatientAvatar patient={patient} size={28} />
+      ) : (
+        <span style={{
+          width: 28, height: 28, borderRadius: 9999,
+          background: 'var(--dosy-bg-sunken)',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, color: 'var(--dosy-fg-secondary)',
+        }}>
+          <User size={14} strokeWidth={1.75}/>
+        </span>
+      )}
       <span style={{
         flex: 1, minWidth: 0,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',

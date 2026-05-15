@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listDoses, listSosRules, upsertSosRule } from '../services/dosesService'
+import { listDoses, listSosRules, upsertSosRule, deleteSosRule } from '../services/dosesService'
 
 // #092 (release v0.1.7.5) — queryKey timestamp normalization.
 // Callers tipicamente passam `new Date().toISOString()` em filter.from/to,
@@ -74,6 +74,13 @@ export function useUpsertSosRule() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: upsertSosRule,
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['sos_rules', vars.patientId] })
+  })
+}
+export function useDeleteSosRule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }) => deleteSosRule(id),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['sos_rules', vars.patientId] })
   })
 }

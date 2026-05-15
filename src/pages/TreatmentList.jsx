@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Pill, Search, Pause, Play, StopCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pill, Search, Pause, Play, StopCircle, ChevronDown, ChevronUp, Filter, X } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import { Card, IconButton, Button, Input, StatusPill } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
+import PatientAvatar from '../components/PatientAvatar'
 import { SkeletonList } from '../components/Skeleton'
 import {
   useTreatments,
@@ -17,14 +18,9 @@ import { usePatients } from '../hooks/usePatients'
 import { useToast } from '../hooks/useToast'
 import { formatDate } from '../utils/dateUtils'
 
-// Logica:
-// - active     : doses futuras agendadas, alarmes disparam
-// - paused     : doses futuras canceladas, alarmes parados, REVERSIVEL via Retomar
-// - ended      : doses futuras canceladas permanentemente, sem retomada
-// - auto-ended : status='active' mas endDate < now → finalizado por data (visual)
-//
-// Sort: createdAt asc (mais antigo primeiro = sequencia cronologica natural).
-// Sections: Ativos / Pausados / Encerrados (collapsable).
+// v0.2.3.5 #240 — Treatments redesign: filtro paciente chips + Ativos collapsable +
+// cards visuais com avatar paciente + ícone pill colorido + hero stats compactos.
+// Mantém logic effectiveStatus + status config + actions handlers.
 
 function endDateOf(t) {
   if (t.isContinuous) return null
@@ -37,7 +33,6 @@ function endDateOf(t) {
 function effectiveStatus(t) {
   if (t.status === 'paused') return 'paused'
   if (t.status === 'ended') return 'ended'
-  // active: check if endDate passed
   const ed = endDateOf(t)
   if (ed && ed.getTime() < Date.now()) return 'auto-ended'
   return 'active'
@@ -55,21 +50,23 @@ const BY_CREATED_ASC = (a, b) => (a.createdAt || '').localeCompare(b.createdAt |
 export default function TreatmentList() {
   const { data: patients = [] } = usePatients()
   const [q, setQ] = useState('')
+  const [patientFilter, setPatientFilter] = useState(null)
   const { data: all = [], isLoading: loadingTreatments } = useTreatments()
   const pauseMut = usePauseTreatment()
   const resumeMut = useResumeTreatment()
   const endMut = useEndTreatment()
   const toast = useToast()
 
-  // Section collapse persistence (lightweight)
-  const [collapsed, setCollapsed] = useState({ paused: false, ended: true })
+  // Section collapse — Ativos default expandido, Pausados expandido, Encerrados colapsado.
+  // v0.2.3.5 #240: Ativos agora também collapsable.
+  const [collapsed, setCollapsed] = useState({ active: false, paused: false, ended: true })
   const toggleSection = (k) => setCollapsed((s) => ({ ...s, [k]: !s[k] }))
 
-  // Filtered + grouped
   const groups = useMemo(() => {
     const term = q.trim().toLowerCase()
     const filtered = all.filter((t) => {
       if (t.isTemplate) return false
+      if (patientFilter && t.patientId !== patientFilter) return false
       if (!term) return true
       return t.medName.toLowerCase().includes(term)
     })
@@ -79,12 +76,13 @@ export default function TreatmentList() {
       const s = effectiveStatus(t)
       if (s === 'active') out.active.push(t)
       else if (s === 'paused') out.paused.push(t)
-      else out.ended.push(t) // ended + auto-ended both go to encerrados section
+      else out.ended.push(t)
     }
     return out
-  }, [all, q])
+  }, [all, q, patientFilter])
 
   function patientName(id) { return patients.find((p) => p.id === id)?.name || '—' }
+  function patientById(id) { return patients.find((p) => p.id === id) }
 
   async function handlePause(t) {
     try {
@@ -113,6 +111,7 @@ export default function TreatmentList() {
   }
 
   const total = groups.active.length + groups.paused.length + groups.ended.length
+  const hasFilter = q || patientFilter
 
   return (
     <div style={{ paddingBottom: 110 }}>
@@ -129,15 +128,77 @@ export default function TreatmentList() {
       <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
 
-        <Input
-          icon={Search}
-          placeholder="Buscar por medicamento…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        {/* HERO STATS COMPACT — only when data exists */}
+        {!loadingTreatments && all.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: TIMING.base, ease: EASE.inOut }}
+            style={{
+              background: 'var(--dosy-gradient-sunset)',
+              borderRadius: 20,
+              padding: 16,
+              color: 'white',
+              boxShadow: '0 8px 24px -6px rgba(255, 107, 91, 0.35)',
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
+            }}
+          >
+            <StatBox label="Ativos" value={groups.active.length} />
+            <StatBox label="Pausados" value={groups.paused.length} />
+            <StatBox label="Encerrados" value={groups.ended.length} />
+          </motion.div>
+        )}
+
+        {/* SEARCH + PATIENT FILTER */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Input
+            icon={Search}
+            placeholder="Buscar por medicamento…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+
+          {patients.length > 0 && (
+            <div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, paddingLeft: 4,
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                color: 'var(--dosy-fg-secondary)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}>
+                <Filter size={11} strokeWidth={2.5} /> Filtrar por paciente
+              </div>
+              <div style={{
+                display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4,
+                scrollbarWidth: 'none', msOverflowStyle: 'none',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setPatientFilter(null)}
+                  style={chipStyle(patientFilter === null)}
+                >
+                  Todos
+                </button>
+                {patients.map((p) => {
+                  const active = patientFilter === p.id
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPatientFilter(active ? null : p.id)}
+                      style={{ ...chipStyle(active), paddingLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <PatientAvatar patient={p} size={22} />
+                      <span style={{ paddingRight: 4 }}>{p.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
 
         {loadingTreatments ? (
-          // #036 skeleton: evita flash empty state durante initial fetch
           <SkeletonList count={3} />
         ) : total === 0 ? (
           <Card padding={28} style={{
@@ -156,22 +217,37 @@ export default function TreatmentList() {
               fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
               fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
               margin: 0,
-            }}>Nenhum tratamento</h3>
+            }}>{hasFilter ? 'Nenhum resultado' : 'Nenhum tratamento'}</h3>
             <p style={{
               fontSize: 14, color: 'var(--dosy-fg-secondary)',
               lineHeight: 1.5, margin: 0,
-            }}>Crie um novo tratamento pelo botão +</p>
+            }}>
+              {hasFilter
+                ? 'Tente ajustar busca ou filtro de paciente'
+                : 'Crie um novo tratamento pelo botão +'}
+            </p>
+            {hasFilter && (
+              <Button kind="secondary" size="sm" onClick={() => { setQ(''); setPatientFilter(null) }} icon={X}>
+                Limpar filtros
+              </Button>
+            )}
           </Card>
         ) : (
           <>
-            {/* Ativos */}
             {groups.active.length > 0 && (
-              <Section title="Ativos" count={groups.active.length} kind="success">
+              <CollapsibleSection
+                title="Ativos"
+                count={groups.active.length}
+                kind="success"
+                collapsed={collapsed.active}
+                onToggle={() => toggleSection('active')}
+              >
                 {groups.active.map((t, i) => (
                   <TreatmentCard
                     key={t.id}
                     t={t}
                     i={i}
+                    patient={patientById(t.patientId)}
                     patientName={patientName(t.patientId)}
                     actions={[
                       { kind: 'secondary', icon: Pause, label: 'Pausar', onClick: () => handlePause(t), disabled: pauseMut.isPending },
@@ -179,10 +255,9 @@ export default function TreatmentList() {
                     ]}
                   />
                 ))}
-              </Section>
+              </CollapsibleSection>
             )}
 
-            {/* Pausados */}
             {groups.paused.length > 0 && (
               <CollapsibleSection
                 title="Pausados"
@@ -196,6 +271,7 @@ export default function TreatmentList() {
                     key={t.id}
                     t={t}
                     i={i}
+                    patient={patientById(t.patientId)}
                     patientName={patientName(t.patientId)}
                     actions={[
                       { kind: 'primary', icon: Play, label: 'Retomar', onClick: () => handleResume(t), disabled: resumeMut.isPending },
@@ -206,7 +282,6 @@ export default function TreatmentList() {
               </CollapsibleSection>
             )}
 
-            {/* Encerrados */}
             {groups.ended.length > 0 && (
               <CollapsibleSection
                 title="Encerrados"
@@ -220,6 +295,7 @@ export default function TreatmentList() {
                     key={t.id}
                     t={t}
                     i={i}
+                    patient={patientById(t.patientId)}
                     patientName={patientName(t.patientId)}
                     readOnly
                   />
@@ -233,15 +309,33 @@ export default function TreatmentList() {
   )
 }
 
-function Section({ title, count, kind, children }) {
+function StatBox({ label, value }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <SectionHeader title={title} count={count} kind={kind}/>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {children}
-      </div>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        fontSize: 24, fontWeight: 800, lineHeight: 1,
+        fontFamily: 'var(--dosy-font-display)',
+      }}>{value}</div>
+      <div style={{
+        fontSize: 10, fontWeight: 600, opacity: 0.9, marginTop: 4,
+        letterSpacing: '0.06em', textTransform: 'uppercase',
+      }}>{label}</div>
     </div>
   )
+}
+
+function chipStyle(active) {
+  return {
+    flexShrink: 0,
+    padding: '6px 12px',
+    borderRadius: 999,
+    background: active ? 'var(--dosy-primary)' : 'var(--dosy-bg-elevated)',
+    color: active ? 'white' : 'var(--dosy-fg)',
+    border: active ? 'none' : '1.5px solid var(--dosy-border)',
+    fontSize: 13, fontWeight: 600,
+    cursor: 'pointer', transition: 'all 180ms',
+    boxShadow: active ? '0 4px 10px -2px rgba(255,107,91,0.4)' : 'var(--dosy-shadow-xs)',
+  }
 }
 
 function CollapsibleSection({ title, count, kind, collapsed, onToggle, children }) {
@@ -292,43 +386,77 @@ function SectionHeader({ title, count, kind }) {
   )
 }
 
-function TreatmentCard({ t, i, patientName, actions = [], readOnly }) {
+function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
   const eff = effectiveStatus(t)
   const cfg = STATUS_CONFIG[eff]
   const ed = endDateOf(t)
+  const isInactive = eff === 'paused' || eff === 'ended' || eff === 'auto-ended'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: TIMING.base, ease: EASE.out, delay: Math.min(i * TIMING.stagger, 0.3) }}
     >
-      <Card padding={16}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <Card padding={14} style={isInactive ? { opacity: 0.78 } : undefined}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          {/* PILL ICON LEFT */}
+          <div style={{
+            width: 42, height: 42, flexShrink: 0,
+            borderRadius: 14,
+            background: eff === 'active'
+              ? 'var(--dosy-peach-100, #FEE0D6)'
+              : 'var(--dosy-bg)',
+            color: eff === 'active' ? 'var(--dosy-primary)' : 'var(--dosy-fg-tertiary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Pill size={20} strokeWidth={2} />
+          </div>
+
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontFamily: 'var(--dosy-font-display)',
-              fontWeight: 700, fontSize: 15.5,
-              letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{t.medName}</div>
-            <div style={{
-              fontSize: 12.5, color: 'var(--dosy-fg-secondary)', marginTop: 2,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {patientName} · {t.unit} · {t.intervalHours ? `${t.intervalHours}h` : 'horários'}
-              {t.isContinuous ? ' · ♾ Contínuo' : ` · ${t.durationDays} dias`}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 700, fontSize: 15.5,
+                  letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{t.medName}</div>
+                <div style={{
+                  fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 2,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {patient && <PatientAvatar patient={patient} size={16} />}
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {patientName}
+                  </span>
+                </div>
+              </div>
+              <StatusPill label={cfg.label} kind={cfg.kind}/>
             </div>
+
+            <div style={{
+              fontSize: 11.5, color: 'var(--dosy-fg-secondary)', marginTop: 6,
+              display: 'flex', flexWrap: 'wrap', gap: 8,
+            }}>
+              <span>{t.unit}</span>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span>{t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'}</span>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span>{t.isContinuous ? '♾ contínuo' : `${t.durationDays} dias`}</span>
+            </div>
+
             {ed && (
               <div style={{
-                fontSize: 11, color: 'var(--dosy-fg-tertiary)', marginTop: 4,
+                fontSize: 11, color: 'var(--dosy-fg-tertiary)', marginTop: 6,
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 {eff === 'auto-ended' ? `Encerrado em ${formatDate(ed.toISOString())}` : `Termina em ${formatDate(ed.toISOString())}`}
               </div>
             )}
           </div>
-          <StatusPill label={cfg.label} kind={cfg.kind}/>
         </div>
+
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link to={`/tratamento/${t.id}`} style={{ textDecoration: 'none', flex: 1 }}>
             <Button kind="secondary" size="sm" full>{readOnly ? 'Ver detalhes' : 'Editar'}</Button>

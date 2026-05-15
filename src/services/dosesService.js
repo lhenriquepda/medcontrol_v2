@@ -184,11 +184,24 @@ export async function upsertSosRule({ id, ...payload }) {
       const { data, error } = await supabase.from('sos_rules').update(payload).eq('id', id).select().single()
       if (error) throw error; return data
     }
-    const { data, error } = await supabase.from('sos_rules').insert(payload).select().single()
+    // v0.2.3.5 #238 fix — RLS WITH CHECK exige userId=auth.uid() em INSERT. Sem userId no
+    // payload, insert era silenciosamente bloqueado. Pega user atual via supabase.auth.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Não autenticado')
+    const { data, error } = await supabase.from('sos_rules').insert({ ...payload, userId: user.id }).select().single()
     if (error) throw error; return data
   }
   if (id) return mock.update('sos_rules', id, payload)
   return mock.insert('sos_rules', payload)
+}
+
+export async function deleteSosRule(id) {
+  if (hasSupabase) {
+    const { error } = await supabase.from('sos_rules').delete().eq('id', id)
+    if (error) throw error
+    return true
+  }
+  return mock.delete('sos_rules', id)
 }
 
 export function validateSos({ rules, history, medName, scheduledAt }) {

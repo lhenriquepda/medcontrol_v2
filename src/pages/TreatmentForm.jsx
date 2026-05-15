@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ClipboardList, Plus, X as XIcon } from 'lucide-react'
+import { ClipboardList, Plus, X as XIcon, Pill, User, CalendarClock, CalendarRange, Sparkles, Infinity as InfinityIcon } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -320,66 +320,102 @@ export default function TreatmentForm() {
       >
         <AdBanner />
 
-        {/* Paciente picker */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <label style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
-            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
-            fontFamily: 'var(--dosy-font-display)',
-          }}>Paciente <span style={{ color: 'var(--dosy-danger)' }}>*</span></label>
-          <PatientPicker
-            patients={patients}
-            value={form.patientId || null}
-            onChange={(id) => set('patientId', id || '')}
-            placeholder="Selecione…"
+        {/* HERO sunset card — contexto + preview agregado */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: TIMING.base, ease: EASE.inOut }}
+          style={{
+            background: 'var(--dosy-gradient-sunset)',
+            borderRadius: 24,
+            padding: 18,
+            color: 'var(--dosy-fg-on-sunset)',
+            boxShadow: '0 12px 32px -8px rgba(255,107,91,0.35)',
+            display: 'flex', alignItems: 'center', gap: 14,
+            position: 'relative', overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: -30, right: -30, width: 140, height: 140,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }}/>
+          <div style={{
+            width: 56, height: 56, borderRadius: 18,
+            background: 'rgba(255,255,255,0.22)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Pill size={28} strokeWidth={2}/>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', opacity: 0.85,
+              fontFamily: 'var(--dosy-font-display)',
+            }}>{editing ? 'Editando' : 'Novo tratamento'}</div>
+            <div style={{
+              fontFamily: 'var(--dosy-font-display)',
+              fontSize: 18, fontWeight: 800, marginTop: 2, lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{form.medName || 'Sem nome'}</div>
+            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>{preview}</div>
+          </div>
+        </motion.div>
+
+        {/* STEP 1 — Paciente + Medicamento + Dose */}
+        <SectionHeader number={1} icon={User} title="Quem e o quê" />
+        <Card padding={16} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <FieldLabel required>Paciente</FieldLabel>
+            <PatientPicker
+              patients={patients}
+              value={form.patientId || null}
+              onChange={(id) => set('patientId', id || '')}
+              placeholder="Selecione…"
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <FieldLabel required>Medicamento</FieldLabel>
+            <MedNameInput value={form.medName} onChange={(v) => { set('medName', v); if (errors.medName) setErrors({ ...errors, medName: undefined }) }} />
+            {errors.medName && <FieldError>{errors.medName}</FieldError>}
+          </div>
+
+          <Input
+            label="Dose / unidade"
+            required
+            value={form.unit}
+            onChange={(e) => { set('unit', e.target.value); if (errors.unit) setErrors({ ...errors, unit: undefined }) }}
+            placeholder="Ex: 1 comprimido, 15 gotas"
+            error={errors.unit}
           />
-        </div>
+        </Card>
 
-        {/* Medicamento (autocomplete custom) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <label style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
-            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
-            fontFamily: 'var(--dosy-font-display)',
-          }}>Medicamento <span style={{ color: 'var(--dosy-danger)' }}>*</span></label>
-          <MedNameInput value={form.medName} onChange={(v) => { set('medName', v); if (errors.medName) setErrors({ ...errors, medName: undefined }) }} />
-          {errors.medName && (
-            <p style={{
-              fontSize: 11.5, color: 'var(--dosy-danger)',
-              margin: '2px 0 0 4px',
-              fontFamily: 'var(--dosy-font-body)',
-            }}>{errors.medName}</p>
-          )}
-        </div>
-
-        <Input
-          label="Dose / unidade"
-          required
-          value={form.unit}
-          onChange={(e) => { set('unit', e.target.value); if (errors.unit) setErrors({ ...errors, unit: undefined }) }}
-          placeholder="Ex: 1 comprimido, 15 gotas"
-          error={errors.unit}
-        />
-
-        {/* Mode + frequency card */}
+        {/* STEP 2 — Agendamento */}
+        <SectionHeader number={2} icon={CalendarClock} title="Quando tomar" />
         <Card padding={16}>
           <p style={{
             fontSize: 11, fontWeight: 700,
             letterSpacing: '0.08em', textTransform: 'uppercase',
             color: 'var(--dosy-fg-secondary)',
-            margin: '0 0 12px 0',
+            margin: '0 0 10px 0',
             fontFamily: 'var(--dosy-font-display)',
-          }}>Modo de agendamento</p>
+          }}>Modo</p>
 
-          {/* Segmented mode picker */}
+          {/* Segmented mode picker — sunset quando active */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
             background: 'var(--dosy-bg-sunken)',
             padding: 4, borderRadius: 14, marginBottom: 14,
           }}>
             {[
-              { id: 'interval', label: 'Intervalo fixo' },
-              { id: 'times',    label: 'Horários' },
+              { id: 'interval', label: 'Intervalo fixo', hint: 'A cada X horas' },
+              { id: 'times',    label: 'Horários',       hint: 'Dia: 8h, 14h, 20h' },
             ].map((opt) => {
               const active = form.mode === opt.id
               return (
@@ -391,14 +427,15 @@ export default function TreatmentForm() {
                   style={{
                     border: 'none', cursor: 'pointer',
                     padding: '10px 6px', borderRadius: 10,
-                    background: active ? 'var(--dosy-bg)' : 'transparent',
-                    color: active ? 'var(--dosy-fg)' : 'var(--dosy-fg-secondary)',
-                    boxShadow: active ? 'var(--dosy-shadow-sm)' : 'none',
-                    fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em',
+                    background: active ? 'var(--dosy-gradient-sunset)' : 'transparent',
+                    color: active ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg-secondary)',
+                    boxShadow: active ? '0 4px 12px -2px rgba(255,107,91,0.35)' : 'none',
                     fontFamily: 'var(--dosy-font-display)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                   }}
                 >
-                  {opt.label}
+                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>{opt.label}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, opacity: active ? 0.85 : 0.7 }}>{opt.hint}</span>
                 </button>
               )
             })}
@@ -488,19 +525,35 @@ export default function TreatmentForm() {
           )}
         </Card>
 
-        {/* Duration / continuous + start */}
+        {/* STEP 3 — Duração */}
+        <SectionHeader number={3} icon={CalendarRange} title="Por quanto tempo" />
         <Card padding={16}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 14,
+            marginBottom: form.isContinuous ? 14 : 14,
+            padding: form.isContinuous ? '10px 12px' : '0',
+            background: form.isContinuous ? 'var(--dosy-gradient-sunset-muted)' : 'transparent',
+            borderRadius: form.isContinuous ? 14 : 0,
+            transition: 'all 200ms',
           }}>
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
-                fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)',
-                fontFamily: 'var(--dosy-font-display)',
-              }}>Uso contínuo ♾</div>
-              <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 2 }}>
-                Sem data de fim
+                width: 36, height: 36, borderRadius: 12,
+                background: form.isContinuous ? 'rgba(255,255,255,0.22)' : 'var(--dosy-peach-100)',
+                color: form.isContinuous ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-primary)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <InfinityIcon size={18} strokeWidth={2.25}/>
+              </div>
+              <div>
+                <div style={{
+                  fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)',
+                  fontFamily: 'var(--dosy-font-display)',
+                }}>Uso contínuo</div>
+                <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 2 }}>
+                  Sem data de fim
+                </div>
               </div>
             </div>
             <Toggle
@@ -536,15 +589,16 @@ export default function TreatmentForm() {
                     style={{
                       flex: 1,
                       padding: '8px 12px', borderRadius: 9999,
-                      fontSize: 13, fontWeight: 600,
-                      fontFamily: 'var(--dosy-font-body)',
-                      border: '1px solid var(--dosy-border)',
+                      fontSize: 13, fontWeight: 700,
+                      fontFamily: 'var(--dosy-font-display)',
+                      border: form.durationUnit === unit ? 'none' : '1px solid var(--dosy-border)',
                       background: form.durationUnit === unit
-                        ? 'var(--dosy-primary)'
+                        ? 'var(--dosy-gradient-sunset)'
                         : 'var(--dosy-bg-elevated)',
                       color: form.durationUnit === unit
-                        ? '#fff'
+                        ? 'var(--dosy-fg-on-sunset)'
                         : 'var(--dosy-fg)',
+                      boxShadow: form.durationUnit === unit ? '0 4px 10px -2px rgba(255,107,91,0.35)' : 'none',
                       cursor: 'pointer',
                     }}
                   >
@@ -609,34 +663,63 @@ export default function TreatmentForm() {
           </div>
         )}
 
-        <p style={{
-          fontSize: 12.5, color: 'var(--dosy-fg-secondary)',
-          textAlign: 'center', margin: 0, fontFamily: 'var(--dosy-font-body)',
-        }}>{preview}</p>
+        {/* Preview muted card */}
+        <Card padding={14} muted style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 12,
+            background: 'rgba(255,255,255,0.15)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0, color: 'var(--dosy-fg)',
+          }}>
+            <Sparkles size={18} strokeWidth={2}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{
+              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>Resumo</div>
+            <div style={{
+              fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)',
+              fontFamily: 'var(--dosy-font-display)', marginTop: 2,
+            }}>{preview}</div>
+          </div>
+        </Card>
 
         {!editing && (
-          <Card padding={16}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: form.saveAsTemplate ? 12 : 0,
-            }}>
-              <span style={{
-                fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)',
-              }}>Salvar como modelo</span>
-              <Toggle
-                value={form.saveAsTemplate}
-                onChange={(v) => set('saveAsTemplate', v)}
-                ariaLabel="Salvar como modelo"
-              />
-            </div>
-            {form.saveAsTemplate && (
-              <Input
-                value={form.templateName}
-                onChange={(e) => set('templateName', e.target.value)}
-                placeholder="Nome do modelo (ex: Analgésico padrão)"
-              />
-            )}
-          </Card>
+          <>
+            <SectionHeader number={4} icon={ClipboardList} title="Salvar como modelo (opcional)" />
+            <Card padding={16}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: form.saveAsTemplate ? 12 : 0,
+              }}>
+                <div>
+                  <div style={{
+                    fontSize: 14, fontWeight: 700, color: 'var(--dosy-fg)',
+                    fontFamily: 'var(--dosy-font-display)',
+                  }}>Salvar como modelo</div>
+                  <div style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 2 }}>
+                    Reutilizar config em tratamentos futuros
+                  </div>
+                </div>
+                <Toggle
+                  value={form.saveAsTemplate}
+                  onChange={(v) => set('saveAsTemplate', v)}
+                  ariaLabel="Salvar como modelo"
+                />
+              </div>
+              {form.saveAsTemplate && (
+                <Input
+                  value={form.templateName}
+                  onChange={(e) => set('templateName', e.target.value)}
+                  placeholder="Nome do modelo (ex: Analgésico padrão)"
+                />
+              )}
+            </Card>
+          </>
         )}
 
         <Button
@@ -701,5 +784,56 @@ export default function TreatmentForm() {
         </div>
       </Sheet>
     </motion.div>
+  )
+}
+
+// v0.2.3.5 #247 — helpers visuais: SectionHeader numerado + FieldLabel + FieldError
+function SectionHeader({ number, icon: Icon, title }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '4px 4px 0',
+    }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 9999,
+        background: 'var(--dosy-gradient-sunset)',
+        color: 'var(--dosy-fg-on-sunset)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 12, fontWeight: 800,
+        fontFamily: 'var(--dosy-font-display)',
+        boxShadow: '0 4px 10px -2px rgba(255,107,91,0.35)',
+        flexShrink: 0,
+      }}>{number}</div>
+      <Icon size={14} strokeWidth={2.25} style={{ color: 'var(--dosy-primary)', flexShrink: 0 }}/>
+      <span style={{
+        fontFamily: 'var(--dosy-font-display)',
+        fontWeight: 800, fontSize: 13, letterSpacing: '-0.01em',
+        color: 'var(--dosy-fg)',
+        textTransform: 'uppercase',
+      }}>{title}</span>
+    </div>
+  )
+}
+
+function FieldLabel({ children, required }) {
+  return (
+    <label style={{
+      fontSize: 11.5, fontWeight: 700, color: 'var(--dosy-fg-secondary)',
+      letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: 4,
+      fontFamily: 'var(--dosy-font-display)',
+    }}>
+      {children}
+      {required && <span style={{ color: 'var(--dosy-danger)' }}> *</span>}
+    </label>
+  )
+}
+
+function FieldError({ children }) {
+  return (
+    <p style={{
+      fontSize: 11.5, color: 'var(--dosy-danger)',
+      margin: '2px 0 0 4px',
+      fontFamily: 'var(--dosy-font-body)',
+    }}>{children}</p>
   )
 }

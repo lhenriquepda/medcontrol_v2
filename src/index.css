@@ -173,7 +173,8 @@ a:focus-visible,
     box-shadow: 0 0 0 3px var(--color-brand-100);
   }
   html.dark .input:focus {
-    box-shadow: 0 0 0 3px rgba(47, 145, 255, 0.2);
+    /* v0.2.3.5 #245 — focus ring warm peach (antes: azul slate 47,145,255) */
+    box-shadow: 0 0 0 3px rgba(255, 107, 91, 0.22);
   }
 
 

@@ -34,6 +34,13 @@
   --dosy-gradient-sunset: linear-gradient(135deg, #FF3D7F 0%, #FF6B5B 50%, #FFA56B 100%);
   --dosy-gradient-sunset-soft: linear-gradient(135deg, #FFD0DC 0%, #FFD4C2 50%, #FFE5D6 100%);
   --dosy-gradient-sunset-radial: radial-gradient(circle at 30% 20%, #FFA56B 0%, #FF6B5B 45%, #FF3D7F 100%);
+  /* v0.2.3.5 #244 — sunset-muted: variante discreta pra cards secundários.
+     Mistura 32% sunset sobre bg-elevated → adapta auto light/dark, mantém
+     leitura WCAG AA em texto fg-primary (white em dark, near-black em light). */
+  --dosy-gradient-sunset-muted: linear-gradient(135deg,
+    color-mix(in oklab, #FF3D7F 32%, var(--dosy-bg-elevated)) 0%,
+    color-mix(in oklab, #FF6B5B 32%, var(--dosy-bg-elevated)) 50%,
+    color-mix(in oklab, #FFA56B 32%, var(--dosy-bg-elevated)) 100%);
 
   /* RGB triplets (Tailwind opacity modifier — bg-dosy-sunset-1/40) */
   --dosy-sunset-1-rgb:  255 61 127;

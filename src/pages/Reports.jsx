@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { motion } from 'framer-motion'
-import { FileText, BarChart3, Lock, Loader2 } from 'lucide-react'
+import { FileText, BarChart3, Lock, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, Pill, Calendar, TrendingUp } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
-import PatientPicker from '../components/PatientPicker'
+import PatientAvatar from '../components/PatientAvatar'
 import { Card, Button, Input } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
@@ -52,19 +52,38 @@ export default function Reports() {
   const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30)
   const [from, setFrom] = useState(toDateInput(monthAgo.toISOString()))
   const [to, setTo] = useState(toDateInput(now.toISOString()))
+  // v0.2.3.5 #242 — preset período rápido: 7d/10d/30d/365d + 'custom' libera date pickers
+  const [periodPreset, setPeriodPreset] = useState('30')
+  function applyPreset(days) {
+    setPeriodPreset(String(days))
+    const today = new Date()
+    const start = new Date(); start.setDate(start.getDate() - days)
+    setFrom(toDateInput(start.toISOString()))
+    setTo(toDateInput(today.toISOString()))
+  }
   const toast = useToast()
   const isPro = useIsPro()
   const [paywall, setPaywall] = useState(false)
   const [exporting, setExporting] = useState(null) // 'pdf' | 'csv' | null
   const gate = (fn) => () => { if (!isPro) { setPaywall(true); return } fn() }
 
-  const { data: doses = [] } = useDoses({
+  const { data: doses = [], isPending, isFetching } = useDoses({
     patientId: patientId || undefined,
     from: dateInputToIsoStart(from),
     to: dateInputToIsoEnd(to),
     // #138: export PDF/CSV inclui observation
     withObservation: true,
   })
+  // v0.2.3.5 #243 — distingue loading de vazio real (antes: refetch mostrava "Sem doses" falsamente)
+  const isLoading = isPending || (isFetching && doses.length === 0)
+
+  // v0.2.3.5 #243 — formatDate(YYYY-MM-DD) parseia UTC e shifta -1 dia em BRT.
+  // Helper local que renderiza date-string sem TZ shift.
+  function fmtDateInput(s) {
+    if (!s) return ''
+    const [y, m, d] = s.split('-')
+    return `${d}/${m}/${y}`
+  }
 
   const patient = patients.find((p) => p.id === patientId)
 
@@ -199,7 +218,7 @@ export default function Reports() {
     </div>
     <div class="header-meta">
       <strong>${esc(patient?.name || 'Todos os pacientes')}</strong>
-      ${formatDate(from)} → ${formatDate(to)}<br/>
+      ${fmtDateInput(from)} → ${fmtDateInput(to)}<br/>
       Gerado em ${formatDate(new Date().toISOString())}
     </div>
   </div>
@@ -338,6 +357,31 @@ export default function Reports() {
     ? Math.round((doses.filter((d) => d.status === 'done').length / doses.length) * 100)
     : null
 
+  // v0.2.3.5 #242 — stats agregados pro hero + distribuição
+  const stats = (() => {
+    const total = doses.length
+    const done = doses.filter(d => d.status === 'done').length
+    const skipped = doses.filter(d => d.status === 'skipped').length
+    const overdue = doses.filter(d => d.status === 'overdue').length
+    const pending = doses.filter(d => d.status === 'pending').length
+    return { total, done, skipped, overdue, pending }
+  })()
+
+  // Top 5 medicamentos do período (count + done count)
+  const topMeds = (() => {
+    const map = new Map()
+    for (const d of doses) {
+      const m = map.get(d.medName) || { count: 0, done: 0 }
+      m.count += 1
+      if (d.status === 'done') m.done += 1
+      map.set(d.medName, m)
+    }
+    return [...map.entries()]
+      .map(([name, m]) => ({ name, ...m, pct: m.count ? Math.round(m.done / m.count * 100) : 0 }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  })()
+
   return (
     <motion.div
       style={{ paddingBottom: 110 }}
@@ -350,35 +394,249 @@ export default function Reports() {
       <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <label style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
-            letterSpacing: '0.04em', textTransform: 'uppercase', paddingLeft: 4,
+        {/* PATIENT FILTER chips — padrão Tratamentos/Analytics */}
+        {patients.length > 0 && (
+          <div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, paddingLeft: 4,
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: 'var(--dosy-fg-secondary)',
+              fontFamily: 'var(--dosy-font-display)',
+            }}>
+              Paciente
+            </div>
+            <div style={{
+              display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4,
+              scrollbarWidth: 'none', msOverflowStyle: 'none',
+            }}>
+              <button
+                type="button"
+                onClick={() => setPatientId('')}
+                style={chipStyle(!patientId)}
+              >
+                Todos
+              </button>
+              {patients.map((p) => {
+                const active = patientId === p.id
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPatientId(active ? '' : p.id)}
+                    style={{ ...chipStyle(active), paddingLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <PatientAvatar patient={p} size={22} />
+                    <span style={{ paddingRight: 4 }}>{p.name.split(' ')[0]}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* PERÍODO — chips presets + Definir custom */}
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, paddingLeft: 4,
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+            color: 'var(--dosy-fg-secondary)',
             fontFamily: 'var(--dosy-font-display)',
-          }}>Paciente</label>
-          <PatientPicker
-            patients={patients}
-            value={patientId || null}
-            onChange={(v) => setPatientId(v || '')}
-            allowAll
-            placeholder="Todos pacientes"
-          />
+          }}>
+            Período
+          </div>
+          <div style={{
+            display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4,
+            scrollbarWidth: 'none', msOverflowStyle: 'none',
+          }}>
+            <button type="button" onClick={() => applyPreset(7)} style={chipStyle(periodPreset === '7')}>7 dias</button>
+            <button type="button" onClick={() => applyPreset(10)} style={chipStyle(periodPreset === '10')}>10 dias</button>
+            <button type="button" onClick={() => applyPreset(30)} style={chipStyle(periodPreset === '30')}>30 dias</button>
+            <button type="button" onClick={() => applyPreset(365)} style={chipStyle(periodPreset === '365')}>1 ano</button>
+            <button type="button" onClick={() => setPeriodPreset('custom')} style={chipStyle(periodPreset === 'custom')}>Definir</button>
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <Input
-            label="De"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-          <Input
-            label="Até"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </div>
+        {/* DATE PICKERS — só visível em 'custom' */}
+        {periodPreset === 'custom' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.2 }}
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}
+          >
+            <Input
+              label="De"
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <Input
+              label="Até"
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </motion.div>
+        )}
+
+        {/* PERÍODO ATUAL display read-only quando não-custom */}
+        {periodPreset !== 'custom' && (
+          <div style={{
+            fontSize: 12, color: 'var(--dosy-fg-secondary)', textAlign: 'center',
+            padding: '4px 8px',
+          }}>
+            {fmtDateInput(from)} → {fmtDateInput(to)}
+          </div>
+        )}
+
+        {/* HERO RESUMO — gradient peach gauge + sub-stats */}
+        {stats.total > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: TIMING.base, ease: EASE.inOut }}
+            style={{
+              background: 'var(--dosy-gradient-sunset)',
+              borderRadius: 24,
+              padding: 20,
+              color: 'white',
+              boxShadow: '0 12px 32px -8px rgba(255, 107, 91, 0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <ReportGauge percent={adherencePct ?? 0} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', opacity: 0.9, marginBottom: 4,
+                }}>
+                  {patient?.name || 'Todos pacientes'}
+                </div>
+                <div style={{
+                  fontSize: 22, fontWeight: 800, lineHeight: 1.1,
+                  fontFamily: 'var(--dosy-font-display)', marginBottom: 6,
+                }}>
+                  Adesão {adherencePct}%
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.85 }}>
+                  {stats.done} de {stats.total} doses
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              marginTop: 16, paddingTop: 14,
+              borderTop: '1px solid rgba(255,255,255,0.22)',
+              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6,
+            }}>
+              <HeroStatBox icon={CheckCircle2} value={stats.done} label="Tomadas"/>
+              <HeroStatBox icon={XCircle} value={stats.skipped} label="Puladas"/>
+              <HeroStatBox icon={AlertCircle} value={stats.overdue} label="Atrasadas"/>
+              <HeroStatBox icon={Clock} value={stats.pending} label="Pendentes"/>
+            </div>
+          </motion.div>
+        )}
+
+        {/* DISTRIBUIÇÃO — stacked horizontal bar visual */}
+        {stats.total > 0 && (
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+            <Card padding={16}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 12,
+              }}>
+                <h3 style={{
+                  fontFamily: 'var(--dosy-font-display)',
+                  fontWeight: 700, fontSize: 14, margin: 0,
+                  color: 'var(--dosy-fg)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <BarChart3 size={14} strokeWidth={2.25} style={{ color: 'var(--dosy-primary)' }}/>
+                  Distribuição
+                </h3>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: 'var(--dosy-fg-secondary)',
+                }}>{stats.total} doses</span>
+              </div>
+              <div style={{
+                display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden',
+                background: 'var(--dosy-bg-sunken)', marginBottom: 12,
+              }}>
+                {stats.done > 0 && <div style={{ width: `${(stats.done/stats.total)*100}%`, background: '#3F9E7E' }}/>}
+                {stats.skipped > 0 && <div style={{ width: `${(stats.skipped/stats.total)*100}%`, background: '#C5841A' }}/>}
+                {stats.overdue > 0 && <div style={{ width: `${(stats.overdue/stats.total)*100}%`, background: 'var(--dosy-danger)' }}/>}
+                {stats.pending > 0 && <div style={{ width: `${(stats.pending/stats.total)*100}%`, background: 'var(--dosy-fg-tertiary)' }}/>}
+              </div>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+                fontSize: 11,
+              }}>
+                <LegendRow color="#3F9E7E" label="Tomadas" value={stats.done} pct={stats.total ? Math.round(stats.done/stats.total*100) : 0}/>
+                <LegendRow color="#C5841A" label="Puladas" value={stats.skipped} pct={stats.total ? Math.round(stats.skipped/stats.total*100) : 0}/>
+                <LegendRow color="var(--dosy-danger)" label="Atrasadas" value={stats.overdue} pct={stats.total ? Math.round(stats.overdue/stats.total*100) : 0}/>
+                <LegendRow color="var(--dosy-fg-tertiary)" label="Pendentes" value={stats.pending} pct={stats.total ? Math.round(stats.pending/stats.total*100) : 0}/>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* TOP MEDS RANKING */}
+        {topMeds.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+            <Card padding={16}>
+              <h3 style={{
+                fontFamily: 'var(--dosy-font-display)',
+                fontWeight: 700, fontSize: 14, margin: '0 0 12px 0',
+                color: 'var(--dosy-fg)',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <Pill size={14} strokeWidth={2.25} style={{ color: 'var(--dosy-primary)' }}/>
+                Top medicamentos
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {topMeds.map((m, i) => (
+                  <div key={m.name} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 10,
+                      background: 'var(--dosy-peach-100, #FEE0D6)',
+                      color: 'var(--dosy-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 800,
+                      fontFamily: 'var(--dosy-font-display)',
+                      flexShrink: 0,
+                    }}>{i + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>{m.name}</div>
+                      <div style={{
+                        height: 4, borderRadius: 999, marginTop: 4,
+                        background: 'var(--dosy-bg-sunken)', overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          background: m.pct >= 80 ? '#3F9E7E' : m.pct >= 50 ? '#F2B441' : 'var(--dosy-danger)',
+                          width: `${m.pct}%`,
+                        }}/>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{
+                        fontSize: 14, fontWeight: 800, color: 'var(--dosy-fg)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontFamily: 'var(--dosy-font-display)',
+                      }}>{m.count}</div>
+                      <div style={{ fontSize: 10, color: 'var(--dosy-fg-tertiary)' }}>{m.pct}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
         <Card padding={0}>
           <div style={{
@@ -390,7 +648,7 @@ export default function Reports() {
               fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
               textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
               fontFamily: 'var(--dosy-font-display)',
-            }}>{doses.length} dose(s)</span>
+            }}>Detalhamento ({doses.length})</span>
             {adherencePct != null && (
               <span style={{
                 fontSize: 12, fontWeight: 800,
@@ -400,49 +658,100 @@ export default function Reports() {
               }}>{adherencePct}% adesão</span>
             )}
           </div>
-          {doses.length === 0 ? (
-            <p style={{
-              padding: '20px 16px', textAlign: 'center',
-              fontSize: 13, color: 'var(--dosy-fg-tertiary)', margin: 0,
-            }}>Nenhuma dose no período.</p>
+          {isLoading ? (
+            <div style={{
+              padding: '32px 16px', textAlign: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            }}>
+              <Loader2 size={28} strokeWidth={1.75} className="animate-spin" style={{ color: 'var(--dosy-primary)' }}/>
+              <p style={{ fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: 0 }}>Carregando doses…</p>
+            </div>
+          ) : doses.length === 0 ? (
+            <div style={{
+              padding: '32px 16px', textAlign: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16,
+                background: 'var(--dosy-peach-100, #FEE0D6)',
+                color: 'var(--dosy-primary)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Calendar size={28} strokeWidth={1.75}/>
+              </div>
+              <p style={{
+                fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)',
+                margin: 0, fontFamily: 'var(--dosy-font-display)',
+              }}>Sem doses no período</p>
+              <p style={{
+                fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: 0,
+                maxWidth: 240, lineHeight: 1.4,
+              }}>Tente um período mais amplo ou outro paciente</p>
+            </div>
           ) : (
             <ul style={{
-              maxHeight: 256, overflowY: 'auto',
+              maxHeight: 320, overflowY: 'auto',
               listStyle: 'none', margin: 0, padding: 0,
             }}>
               {doses.slice(0, 50).map((d, i) => {
                 const p = patients.find((x) => x.id === d.patientId)
+                const statusColor = STATUS_DOSY_COLOR[d.status] || 'var(--dosy-fg-secondary)'
+                const statusBg = d.status === 'done' ? '#DDF1E8'
+                  : d.status === 'skipped' ? '#FCEFCF'
+                  : d.status === 'overdue' ? '#FCE6E2'
+                  : 'var(--dosy-bg-sunken)'
                 return (
                   <li key={d.id} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 16px',
+                    padding: '12px 16px',
                     borderTop: i === 0 ? 'none' : '1px solid var(--dosy-divider)',
                   }}>
+                    {!patientId && p && (
+                      <PatientAvatar patient={p} size={28} />
+                    )}
+                    {(patientId || !p) && (
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 10,
+                        background: 'var(--dosy-peach-100, #FEE0D6)',
+                        color: 'var(--dosy-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <Pill size={14} strokeWidth={2.25}/>
+                      </div>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 13, fontWeight: 600, margin: 0,
+                      <div style={{
+                        fontSize: 13, fontWeight: 700, margin: 0,
                         color: 'var(--dosy-fg)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: 'flex', alignItems: 'center', gap: 6,
                       }}>
-                        {d.medName}
-                        {!patientId && p && (
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.medName}</span>
+                        {d.type === 'sos' && (
                           <span style={{
-                            marginLeft: 6, fontSize: 11, fontWeight: 500,
-                            color: 'var(--dosy-fg-tertiary)',
-                          }}>· {p.name.split(' ')[0]}</span>
+                            fontSize: 9, fontWeight: 800, letterSpacing: '0.05em',
+                            padding: '1px 6px', borderRadius: 999,
+                            background: 'var(--dosy-danger)', color: 'white',
+                            flexShrink: 0,
+                          }}>SOS</span>
                         )}
-                      </p>
-                      <p style={{
+                      </div>
+                      <div style={{
                         fontSize: 11, color: 'var(--dosy-fg-tertiary)',
                         margin: '2px 0 0 0', fontVariantNumeric: 'tabular-nums',
+                        display: 'flex', alignItems: 'center', gap: 6,
                       }}>
-                        {formatDate(d.scheduledAt)} {formatTime(d.scheduledAt)}
-                      </p>
+                        {!patientId && p && <><span>{p.name.split(' ')[0]}</span><span style={{ opacity: 0.4 }}>·</span></>}
+                        <span>{formatDate(d.scheduledAt)} {formatTime(d.scheduledAt)}</span>
+                      </div>
                     </div>
                     <span style={{
-                      fontSize: 11, fontWeight: 700, flexShrink: 0,
-                      color: STATUS_DOSY_COLOR[d.status] || 'var(--dosy-fg-secondary)',
+                      fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+                      padding: '4px 10px', borderRadius: 999,
+                      background: statusBg, color: statusColor,
                       fontFamily: 'var(--dosy-font-display)',
+                      letterSpacing: '0.02em',
                     }}>{statusLabel(d.status)}</span>
                   </li>
                 )
@@ -501,6 +810,76 @@ export default function Reports() {
       />
     </motion.div>
   )
+}
+
+function ReportGauge({ percent, size = 84, stroke = 9 }) {
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const offset = c - (Math.min(100, Math.max(0, percent)) / 100) * c
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={stroke}/>
+        <motion.circle
+          cx={size/2} cy={size/2} r={r}
+          fill="none" stroke="white" strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.2, ease: EASE.out }}
+        />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column',
+      }}>
+        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, fontFamily: 'var(--dosy-font-display)' }}>{percent}</div>
+        <div style={{ fontSize: 9, fontWeight: 600, opacity: 0.85, marginTop: 1 }}>%</div>
+      </div>
+    </div>
+  )
+}
+
+function HeroStatBox({ icon: Icon, value, label }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    }}>
+      <Icon size={14} strokeWidth={2} style={{ opacity: 0.85 }}/>
+      <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1, fontFamily: 'var(--dosy-font-display)' }}>{value}</div>
+      <div style={{
+        fontSize: 9, fontWeight: 600, opacity: 0.85,
+        letterSpacing: '0.04em', textTransform: 'uppercase',
+      }}>{label}</div>
+    </div>
+  )
+}
+
+function LegendRow({ color, label, value, pct }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }}/>
+      <span style={{ color: 'var(--dosy-fg-secondary)', flex: 1, minWidth: 0,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      <span style={{ fontWeight: 700, color: 'var(--dosy-fg)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{value}</span>
+      <span style={{ color: 'var(--dosy-fg-tertiary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0, fontSize: 10 }}>({pct}%)</span>
+    </div>
+  )
+}
+
+function chipStyle(active) {
+  return {
+    flexShrink: 0,
+    padding: '6px 12px',
+    borderRadius: 999,
+    background: active ? 'var(--dosy-primary)' : 'var(--dosy-bg-elevated)',
+    color: active ? 'white' : 'var(--dosy-fg)',
+    border: active ? 'none' : '1.5px solid var(--dosy-border)',
+    fontSize: 13, fontWeight: 600,
+    cursor: 'pointer', transition: 'all 180ms',
+    boxShadow: active ? '0 4px 10px -2px rgba(255,107,91,0.4)' : 'var(--dosy-shadow-xs)',
+  }
 }
 
 function downloadBlob(blob, filename) {

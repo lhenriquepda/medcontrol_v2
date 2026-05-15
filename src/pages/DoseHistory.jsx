@@ -201,7 +201,7 @@ export default function DoseHistory() {
         />
 
         {/* Daily summary card — esq texto, dir % box sunset-soft */}
-        <Card padding={16}>
+        <Card padding={16} muted>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
@@ -224,19 +224,20 @@ export default function DoseHistory() {
             </div>
             <div style={{
               width: 64, height: 64, borderRadius: 16,
-              background: 'var(--dosy-gradient-sunset-soft)',
+              background: 'var(--dosy-gradient-sunset)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
+              boxShadow: '0 6px 14px -4px rgba(255,61,127,0.35)',
             }}>
               <div style={{
                 fontFamily: 'var(--dosy-font-display)',
                 fontWeight: 800, fontSize: 22, letterSpacing: '-0.025em',
-                lineHeight: 1, color: 'var(--dosy-fg)',
+                lineHeight: 1, color: 'var(--dosy-fg-on-sunset)',
                 fontVariantNumeric: 'tabular-nums',
               }}>{summary.pct == null ? '—' : `${summary.pct}%`}</div>
               <div style={{
-                fontSize: 10, fontWeight: 600, opacity: 0.7, marginTop: 2,
-                color: 'var(--dosy-fg)',
+                fontSize: 10, fontWeight: 600, opacity: 0.9, marginTop: 2,
+                color: 'var(--dosy-fg-on-sunset)',
                 fontFamily: 'var(--dosy-font-display)',
               }}>adesão</div>
             </div>

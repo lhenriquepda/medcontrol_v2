@@ -17,19 +17,18 @@ import { ADVANCE_OPTIONS, SECTION_LABEL_STYLE, sectionVariant } from './constant
 export function PlanSection({ tier }) {
   return (
     <motion.div variants={sectionVariant}>
-      <Card padding={16} style={{
+      <Card padding={16} gradient style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'var(--dosy-gradient-sunset-soft)',
       }}>
         <div>
           <p style={{
             fontSize: 11, fontWeight: 700,
             letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: 'var(--dosy-fg-secondary)', margin: 0,
+            color: 'var(--dosy-fg-on-sunset)', opacity: 0.9, margin: 0,
             fontFamily: 'var(--dosy-font-display)',
           }}>Seu plano</p>
           <p style={{
-            fontSize: 12, color: 'var(--dosy-fg-secondary)',
+            fontSize: 12, color: 'var(--dosy-fg-on-sunset)', opacity: 0.85,
             margin: '2px 0 0 0',
           }}>Tier ativo da conta</p>
         </div>
@@ -37,13 +36,14 @@ export function PlanSection({ tier }) {
           fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
           padding: '6px 14px',
           background: tier === 'pro' || tier === 'admin'
-            ? 'var(--dosy-gradient-sunset)'
+            ? 'rgba(255,255,255,0.22)'
             : 'var(--dosy-bg-elevated)',
           color: tier === 'pro' || tier === 'admin'
             ? 'var(--dosy-fg-on-sunset)'
             : 'var(--dosy-fg)',
           borderRadius: 9999,
-          boxShadow: 'var(--dosy-shadow-sm)',
+          backdropFilter: 'blur(8px)',
+          border: tier === 'pro' || tier === 'admin' ? '1px solid rgba(255,255,255,0.3)' : 'none',
           textTransform: 'uppercase',
           fontFamily: 'var(--dosy-font-display)',
         }}>{TIER_LABELS[tier]}</span>
@@ -52,7 +52,8 @@ export function PlanSection({ tier }) {
   )
 }
 
-// ─── Aparência (theme + icon style) ───
+// ─── Aparência (theme) ───
+// v0.2.3.5 #246 — removido "Estilo de ícones" toggle. Flat = padrão definitivo.
 export function AppearanceSection({ theme, setTheme }) {
   return (
     <motion.section variants={sectionVariant}>
@@ -63,34 +64,6 @@ export function AppearanceSection({ theme, setTheme }) {
           label="Modo escuro"
           right={<Toggle value={theme === 'dark'} onChange={(v) => setTheme(v ? 'dark' : 'light')}/>}
         />
-        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)', margin: 0 }}>Estilo de ícones</p>
-            <p style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
-              Flat = visual moderno · Emoji = legado colorido
-            </p>
-          </div>
-          <select
-            defaultValue={typeof window !== 'undefined' ? (localStorage.getItem('dosy_icon_style') || 'flat') : 'flat'}
-            onChange={(e) => {
-              if (e.target.value === 'flat') localStorage.removeItem('dosy_icon_style')
-              else localStorage.setItem('dosy_icon_style', e.target.value)
-              window.location.reload()
-            }}
-            style={{
-              fontSize: 13, fontWeight: 600,
-              padding: '8px 12px', borderRadius: 12,
-              background: 'var(--dosy-bg-sunken)',
-              color: 'var(--dosy-fg)',
-              border: 'none', outline: 'none',
-              fontFamily: 'var(--dosy-font-body)',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="flat">Flat</option>
-            <option value="emoji">Emoji</option>
-          </select>
-        </div>
       </Card>
     </motion.section>
   )

@@ -246,24 +246,28 @@
    ============================================================================= */
 
 html.dark {
-  --color-bg: #020617;
-  /* slate-950 — fundo geral escuro */
-  --color-bg-elevated: #0f172a;
-  /* slate-900 — cards no escuro */
-  --color-bg-subtle: #1e293b;
-  /* slate-800 — chips */
-  --color-bg-strong: #334155;
-  /* slate-700 — divisores */
+  /* v0.2.3.5 #245 — migrate legacy slate dark → warm near-black Dosy palette.
+     Antes: slate-950/900 navy bluish em inputs/dropdowns. Agora alinhado com
+     dosy-bg/dosy-bg-elevated (warm brown-tinted). */
+  --color-bg: #1C1410;
+  /* dosy-bg dark */
+  --color-bg-elevated: #261B16;
+  /* dosy-bg-elevated dark */
+  --color-bg-subtle: #2A1F18;
+  /* warm peach-50 dark */
+  --color-bg-strong: #3A2820;
+  /* warm peach-100 dark */
 
-  --color-text: #f1f5f9;
-  /* texto claro principal */
-  --color-text-muted: #cbd5e1;
-  /* slate-300 */
-  --color-text-subtle: #64748b;
-  --color-text-inverse: #0f172a;
+  --color-text: #FFF4EC;
+  /* dosy-fg dark */
+  --color-text-muted: #DDC8B6;
+  /* dosy-fg-secondary dark */
+  --color-text-subtle: #B0A091;
+  /* dosy-fg-tertiary dark */
+  --color-text-inverse: #1C1410;
 
-  --color-border: #1e293b;
-  --color-border-strong: #334155;
+  --color-border: rgba(255, 244, 236, 0.10);
+  --color-border-strong: rgba(255, 244, 236, 0.20);
 
   /* Sombras menores no escuro (efeito menos pronunciado) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);

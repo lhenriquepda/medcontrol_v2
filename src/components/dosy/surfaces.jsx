@@ -9,12 +9,14 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 /* ── Card ──────────────────────────────────────────────────────────────
- * variants: gradient (sunset) | soft (sunset-soft) | elevated (default)
+ * variants: gradient (sunset destacado) | muted (sunset-muted discreto) | soft (sunset-soft pastel) | elevated (default)
+ * v0.2.3.5 #244 — muted: warm tint sutil, adapta light/dark, texto fg-primary legível.
  */
 export function Card({
   children,
   padding = 18,
   gradient,
+  muted,
   soft,
   onClick,
   className = '',
@@ -23,12 +25,16 @@ export function Card({
 }) {
   const background = gradient
     ? 'var(--dosy-gradient-sunset)'
+    : muted
+    ? 'var(--dosy-gradient-sunset-muted)'
     : soft
     ? 'var(--dosy-gradient-sunset-soft)'
     : 'var(--dosy-bg-elevated)'
   const color = gradient ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg)'
   const boxShadow = gradient
     ? '0 16px 36px -10px rgba(255,61,127,0.4), 0 6px 14px -6px rgba(255,107,91,0.24)'
+    : muted
+    ? '0 8px 20px -8px rgba(255,107,91,0.18), var(--dosy-shadow-sm)'
     : 'var(--dosy-shadow-md)'
   return (
     <div
