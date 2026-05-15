@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, processLock } from '@supabase/supabase-js'
 import { Capacitor } from '@capacitor/core'
 import { SecureStorage } from '@aparajita/capacitor-secure-storage'
 
@@ -36,7 +36,15 @@ export const supabase = hasSupabase
         // Native: encrypted KeyStore. Web: default localStorage (browser session-isolated)
         ...(isNative ? { storage: SecureStorageAdapter } : {}),
         // Required on native — no URL redirect for OAuth in WebView
-        detectSessionInUrl: !isNative
+        detectSessionInUrl: !isNative,
+        // v0.2.3.6 — processLock substitui navigatorLock default.
+        // navigator.locks API fica órfão em StrictMode + remount rápido + WebView
+        // background→foreground: orphan lock bloqueia TODAS queries auth-dependentes
+        // (skeleton loop infinito Dashboard, SharePatientSheet Carregando..., etc).
+        // processLock é mutex em memória do processo, não usa Web Lock API.
+        // Trade-off: multi-tab web pode ter race em token refresh — aceitável
+        // (Dosy usa single-tab típico; mobile native nunca multi-process).
+        lock: processLock
       },
       db: { schema: SCHEMA },
       // Item #079 (release v0.1.7.1) — heartbeat explicit + reconnect rápido.
