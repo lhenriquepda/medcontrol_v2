@@ -160,26 +160,24 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.5` (vc 68, AAB upload Play Console + merge master pendente). v0.2.3.5 escopo UI/UX redesign 5 telas + sistema gradiente unificado + signup branded + self-patient checkbox + share Plus fix. 11 commits, ~7h aplicado.
+**Branch ativa:** `master` (release/v0.2.3.5 mergeada `bf447d3`). v0.2.3.5 SHIPPED 2026-05-15.
 
-**v0.2.3.5 items fechados:**
+**✅ SHIPPED `release/v0.2.3.5`** (vc 68, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.5` commit `bf447d3`, Vercel prod dosymed.app):
 - ✅ **#239** P1 BUG optimistic cache patch (regression #163)
 - ✅ **#240-#241** P2 UX SOS + TreatmentList redesign
-- ✅ **#243** P1 BUG Reports fmtDateInput + isLoading distingue fetch
+- ✅ **#243** P1 BUG Reports fmtDateInput UTC shift + isLoading distingue fetch
 - ✅ **#244** P2 UX sistema gradiente unificado (token muted + Card variant)
 - ✅ **#245** P2 UX Dark warm palette migration (slate→Dosy warm)
 - ✅ **#246** P3 CLEANUP remove Estilo de ícones toggle (Flat padrão)
-- ✅ **#247** P2 UX TreatmentForm redesign + PatientPicker PatientAvatar
+- ✅ **#247** P2 UX TreatmentForm redesign + PatientPicker PatientAvatar real
 - ✅ **#248-#249** P2 UX Reports + Analytics redesign
-- ✅ **#251** P1 BUG share Plus gating client+server (migration `share_patient_include_plus_v0_2_3_5`)
+- ✅ **#251** P1 BUG share Plus gating client+server (migration + copy cleanup)
 - ✅ **#252** P2 UX tela "Verifique email" pós-signup (substitui toast vermelho)
-- ✅ **#253** P2 UX email template Dosy branded sunset wordmark
-- ✅ **#254** P2 FEATURE checkbox "criar paciente com meu nome" + user_metadata flag cross-device + session mutex + cache invalidate
-- 🆕 **#250** P3 DEFERIDO v0.2.3.6 — API medicamentos ANVISA + disclaimers clínicos (plano completo CHECKLIST)
+- ✅ **#253** P2 UX email template Dosy branded (wordmark CSS, sunset hero, CTA)
+- ✅ **#254** P2 FEATURE checkbox "criar paciente com meu nome" (user_metadata cross-device + session mutex + qc.invalidate)
+- ⏭️ **#250** P3 DEFERIDO v0.2.3.6 — API medicamentos ANVISA + disclaimers clínicos
 
-**Validações autônomas teste-plus@/teste-free@ localhost:** TreatmentForm E2E + Reports fmtDateInput + share Plus client+server + dark warm + Plus gating UI + 5 telas redesign visual.
-
-**Regra crítica adicionada README §4 Regra 15:** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456. Trigger: 2026-05-15 IA criou treatment em lhenrique.pda@gmail.com por erro → cleanup feito + 4 alertas (README + Validar + ROADMAP topo + memory).
+**Regra crítica adicionada README §4 Regra 15:** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456.
 
 **Release anterior shipped v0.2.3.2 (2026-05-14):**
 
