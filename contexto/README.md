@@ -87,6 +87,7 @@ Claude Code auto-injeta o índice de memória project-scoped no system reminder 
 | **12** | Push `--force` em master = **NUNCA**. Em release branch só com aviso explícito. | Master é canônico. |
 | **13** | `mailer_autoconfirm` = OFF prod. Não trocar pra ON. | Confirmação email obrigatória LGPD. |
 | **14** | **NUNCA executar trabalho em master ou branch errado.** Após Passo 5b OK do user, primeira ação OBRIGATÓRIA = `git checkout -b {tipo}/{nome}` + `git status` confirma. Só então inicia análise/edits/tools. | User disse "segue" significa "crie branch + execute", não "pule branch". Master = canônico, releases ficam fora dela. |
+| **15** | **NUNCA validar em conta pessoal do user.** Toda validação E2E (criar tratamento, paciente, dose, regra SOS, etc) DEVE ser em conta teste — `teste-free@teste.com`, `teste-plus@teste.com`, `teste-pro@teste.com` (senha `123456`). ANTES de qualquer Chrome MCP `left_click` em botão Criar/Salvar/Submit, IA OBRIGATORIAMENTE: (a) verifica usuário logado (header "Boa noite, X" + `SELECT auth.uid()` Supabase); (b) se NÃO for conta teste → logout + login conta teste. Se contas teste não existem → criar via signup ou pedir user. | Validação polui dados reais do user (tratamentos, pacientes, doses, regras). Risco LGPD + drift dados pessoais + reprimenda forte. |
 
 ---
 

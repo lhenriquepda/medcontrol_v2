@@ -4,6 +4,16 @@
 
 ---
 
+## 🛑 REGRA CRÍTICA — Validação SEMPRE em conta teste
+
+**IA NUNCA valida em conta pessoal do user.** Toda validação E2E autônoma (criar tratamento/paciente/dose/regra SOS) **DEVE** rodar em `teste-free@teste.com`, `teste-plus@teste.com` ou `teste-pro@teste.com` (senha `123456`).
+
+Antes de qualquer Chrome MCP `left_click` em botão Criar/Salvar/Submit, IA verifica usuário logado (header "Boa noite, X" + `SELECT auth.uid()`). Se conta pessoal → logout + login conta teste.
+
+Validação em conta pessoal polui dados reais → risco LGPD + drift + reprimenda forte. Ver README §4 Regra 15.
+
+---
+
 ## 📍 Legenda visual (global)
 
 > Referência rápida usada em todo doc — §6 catálogo, §3 onde paramos, §6.3 Δ release log.
