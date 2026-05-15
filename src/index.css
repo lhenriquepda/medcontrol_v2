@@ -142,19 +142,12 @@ a:focus-visible,
     background: var(--dosy-gradient-sunset); /* sunset — match UpdateBanner Dosy */
   }
   body.has-ad-banner {
-    /* v0.2.3.3 #231 fix — Android 15 WebView (Chrome 145 sdk_gphone64) reporta
-     * env(safe-area-inset-top) positivo mesmo com StatusBar.overlaysWebView=false +
-     * banner AdMob TOP_CENTER renderizado abaixo da status bar → soma duplicada
-     * gera gap peach vazio ~40px entre status bar e banner. Android 17 sdk_gphone16k
-     * (Pixel 9 Pro) e device físico real reportam inset=0 nesse contexto → renderizam
-     * correto. Fix: zerar env-safe quando ad banner ativo (banner native já handle
-     * seu próprio top spacing abaixo da status bar via plugin Capacitor AdMob).
-     * Status bar continua coberta pelo ::before overlay (height baseado em ad-banner-height). */
-    padding-top: var(--ad-banner-height, 76px);
-  }
-  body.has-ad-banner::before {
-    /* Overlay status bar só cobre altura do banner (não soma inset duplicado) */
-    height: var(--ad-banner-height, 0px);
+    /* v0.2.3.6 #262 — banner agora BOTTOM_CENTER (era TOP). Padding-bottom
+     * acomoda banner sem overlap do conteúdo. BottomNav usa --ad-banner-height
+     * direto via inline style pra ficar acima do banner.
+     * (Antes v0.2.3.3 #231: padding-top quando TOP_CENTER + Android 15 status
+     * bar handling — removido pois banner já não está no topo.) */
+    padding-bottom: var(--ad-banner-height, 76px);
   }
 
 

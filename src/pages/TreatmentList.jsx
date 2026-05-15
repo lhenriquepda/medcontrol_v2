@@ -443,7 +443,7 @@ function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
               <span style={{ opacity: 0.5 }}>·</span>
               <span>{t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'}</span>
               <span style={{ opacity: 0.5 }}>·</span>
-              <span>{t.isContinuous ? '♾ contínuo' : `${t.durationDays} dias`}</span>
+              <span>{t.isContinuous ? '♾ contínuo' : `${t.durationDays} ${t.durationDays === 1 ? 'dia' : 'dias'}`}</span>
             </div>
 
             {ed && (
@@ -451,7 +451,16 @@ function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
                 fontSize: 11, color: 'var(--dosy-fg-tertiary)', marginTop: 6,
                 fontVariantNumeric: 'tabular-nums',
               }}>
-                {eff === 'auto-ended' ? `Encerrado em ${formatDate(ed.toISOString())}` : `Termina em ${formatDate(ed.toISOString())}`}
+                {(() => {
+                  // v0.2.3.6 #263 fix: "Termina hoje" / "Amanhã" relative quando próximo
+                  const today = new Date(); today.setHours(0,0,0,0)
+                  const edDay = new Date(ed); edDay.setHours(0,0,0,0)
+                  const diffDays = Math.round((edDay - today) / 86400000)
+                  if (eff === 'auto-ended') return `Encerrado em ${formatDate(ed.toISOString())}`
+                  if (diffDays === 0) return 'Termina hoje'
+                  if (diffDays === 1) return 'Termina amanhã'
+                  return `Termina em ${formatDate(ed.toISOString())}`
+                })()}
               </div>
             )}
           </div>

@@ -159,9 +159,10 @@ export async function bindFcmListenersOnce() {
         p_user_agent: 'capacitor-android',
         p_device_id_uuid: deviceIdUuid
       })
-      if (error) console.error('[FCM] upsert RPC FAILED:', error)
+      // v0.2.3.6 #260 fix: serializar error para evitar `[object Object]` no console.
+      if (error) console.error('[FCM] upsert RPC FAILED:', error?.message || error?.code || JSON.stringify(error))
       else console.log('[FCM] token persisted device_id_uuid:', deviceIdUuid)
-    } catch (e) { console.error('[FCM] registration handler:', e) }
+    } catch (e) { console.error('[FCM] registration handler:', e?.message || JSON.stringify(e)) }
   })
 
   await PushNotifications.addListener('registrationError', (err) => {

@@ -265,13 +265,33 @@ mcp__supabase__execute_sql({
 - `[x]` JS: criar tratamento (Chrome MCP localhost teste-plus 2026-05-15) → navegar /pacientes/9f09348b... → seção "Tratamentos ativos 2 / Acetilcisteina QA Teste 5ml · a cada 8h · 7 dias" visível ✅
 - `[x]` JS: /tratamentos continua mostrando (não quebrou caso existente)
 
-### v0.2.3.6 QA Completo — Bugs detectados 2026-05-15
-> Relatório: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) | Itens no CHECKLIST: #259–#263
-- `[~]` **BUG #4 Relatórios "Cancelada"** (#259 P2): dose mostra status "Cancelada" após pause/resume tratamento. Investigação: verificar status real no DB pós-pause-resume. Pendente próxima sessão.
-- `[~]` **BUG #5 Console [object Object]** (#260 P2): errors sem `.message` nos catch blocks. Pendente auditoria console.error em next session.
-- `[~]` **BUG #1 HORÁRIO SOS en-US** (#261 P3): `datetime-local` herda locale Android. Fix: componente customizado ou overlay JS.
-- `[~]` **BUG #2 Ad acima header** (#262 P3): AdMob banner acima do header Dosy. Fix: reposicionar ad para bottom/meio-lista.
-- `[~]` **BUG #3 "1 dias" termina hoje** (#263 P4): tratamento terminando hoje exibe "1 dias". Fix: `daysRemaining <= 0 → "Termina hoje"`.
+### v0.2.3.6 #259-#263 — Bugs QA fechados 2026-05-15 (segunda batelada)
+> Relatório original: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) | Itens detalhados [CHECKLIST.md](CHECKLIST.md) #259-#263
+
+**#259 P2 BUG — "Cancelada" persiste em Reports após pause/resume** ✅ FIXADO
+- **Root cause:** 2 overloads de `update_treatment_schedule` existiam — versão antiga `(uuid, jsonb)` sem `v_is_resume` logic. Client chamava com 2 args → resolvia versão antiga → não deletava cancelled futuras + não regenerava pending.
+- **Fix:** (a) migration `fix_update_treatment_schedule_resume_cleans_cancelled_v0_2_3_6` adiciona `v_is_resume := old_status IN ('paused','cancelled') AND new_status='active'` + DELETE inclui `cancelled` futuras + regenerate; (b) DROP overload antigo `(uuid, jsonb)`.
+- `[x]` Validado Chrome MCP localhost teste-plus 2026-05-15 18:09: pause→19 cancelled, resume→21 pending novas + 1 cancelled passada (preserva histórico)
+
+**#260 P2 BUG — Console errors `[object Object]`** ✅ FIXADO
+- **Root cause:** `fcm.js:162` `console.error('[FCM] upsert RPC FAILED:', error)` — `error` é objeto Supabase serializado como `[object Object]`. Idem `:164` catch.
+- **Fix:** serializar via `error?.message || error?.code || JSON.stringify(error)` em ambos call sites.
+- `[x]` Validado: catch blocks agora geram texto legível, sem `[object Object]`
+
+**#261 P3 BUG — HORÁRIO SOS formato en-US** ✅ FIXADO
+- **Root cause:** `<input type="datetime-local">` herda locale OS (en-US no emulator Android).
+- **Fix:** SOS.jsx split em 2 inputs: `type="date"` + `type="time"`. State separado `dateVal/timeVal`, combina via `${dateVal}T${timeVal}` para submit.
+- `[x]` Validado Chrome MCP localhost 2026-05-15 18:05: labels "Data" + "Hora" separadas, valores `2026-05-15` + `18:05` formato consistente
+
+**#262 P3 UX — Ad banner acima do header** ✅ FIXADO
+- **Root cause:** `useAdMobBanner.js` usava `BannerAdPosition.TOP_CENTER` (banner acima do header Dosy).
+- **Fix:** `BannerAdPosition.BOTTOM_CENTER` + BottomNav `bottom` calc inclui `var(--ad-banner-height)` + CSS `body.has-ad-banner { padding-bottom }` (era padding-top).
+- `[ ]` **Device físico:** banner aparece BELOW conteúdo + BottomNav fica ACIMA do banner (não testável em web — AdMob é native only)
+
+**#263 P4 UX — "1 dias" + "Termina hoje"** ✅ FIXADO
+- **Root cause:** TreatmentList.jsx line 446 `${durationDays} dias` (sem singular) + line 454 sempre "Termina em DD/MM".
+- **Fix:** (a) singular: `${days} ${days === 1 ? 'dia' : 'dias'}`; (b) relative: se `diffDays === 0` → "Termina hoje", `=== 1` → "Termina amanhã", else `Termina em DD/MM/YYYY`.
+- `[x]` Validado Chrome MCP localhost 2026-05-15 17:48: tratamento 1 day startDate=hoje → display "1 dia" + "Termina amanhã"
 
 
 

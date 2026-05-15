@@ -15,7 +15,7 @@ import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule, useDeleteSosRu
 import { useOfflineGuard } from '../hooks/useOfflineGuard'
 import { validateSos } from '../services/dosesService'
 import { useToast } from '../hooks/useToast'
-import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '../utils/dateUtils'
+import { formatDateTime, fromDatetimeLocalInput, toDateInput } from '../utils/dateUtils'
 
 // v0.2.3.5 #238 — SOS redesign: card-grid dinâmico inspirado em dashboard mobile premium.
 // Mantém colors Dosy (peach/danger), adiciona hero card stat + chips pacientes scroll +
@@ -26,7 +26,13 @@ export default function SOS() {
   const [patientId, setPatientId] = useState('')
   const [medName, setMedName] = useState('')
   const [unit, setUnit] = useState('')
-  const [when, setWhen] = useState(toDatetimeLocalInput(new Date().toISOString()))
+  // v0.2.3.6 #261 fix: split datetime-local em date + time separados.
+  // WebView Android usa locale OS (en-US emulator) ignorando lang="pt-BR".
+  // Date type="date" + time type="time" renderizam consistentes pt-BR.
+  const _initialNow = new Date()
+  const [dateVal, setDateVal] = useState(toDateInput(_initialNow.toISOString()))
+  const [timeVal, setTimeVal] = useState(`${String(_initialNow.getHours()).padStart(2,'0')}:${String(_initialNow.getMinutes()).padStart(2,'0')}`)
+  const when = `${dateVal}T${timeVal}`
   const [observation, setObservation] = useState('')
 
   const { data: rules = [] } = useSosRules(patientId)
@@ -148,7 +154,10 @@ export default function SOS() {
         return
       }
     }
-    setMedName(''); setUnit(''); setObservation(''); setWhen(toDatetimeLocalInput(new Date().toISOString()))
+    setMedName(''); setUnit(''); setObservation('')
+    const _now = new Date()
+    setDateVal(toDateInput(_now.toISOString()))
+    setTimeVal(`${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`)
   }
 
   const selectedPatient = patients.find((p) => p.id === patientId)
@@ -352,12 +361,20 @@ export default function SOS() {
               onChange={(e) => setUnit(e.target.value)}
               placeholder="Ex: 1 cp"
             />
-            <Input
-              label="Horário"
-              type="datetime-local"
-              value={when}
-              onChange={(e) => setWhen(e.target.value)}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <Input
+                label="Data"
+                type="date"
+                value={dateVal}
+                onChange={(e) => setDateVal(e.target.value)}
+              />
+              <Input
+                label="Hora"
+                type="time"
+                value={timeVal}
+                onChange={(e) => setTimeVal(e.target.value)}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>

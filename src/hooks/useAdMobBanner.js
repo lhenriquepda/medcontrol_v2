@@ -77,10 +77,14 @@ export function useAdMobBanner() {
           document.documentElement.style.setProperty('--ad-banner-height', '60px')
           document.body.classList.add('has-ad-banner')
 
+          // v0.2.3.6 #262 fix: Banner BOTTOM_CENTER ao invés de TOP_CENTER.
+          // QA reportou: ad acima do header Dosy é intrusivo — primeiro elemento
+          // visível é o ad. BOTTOM_CENTER mantém ad discreto (acima do bottom nav,
+          // padrão Plus = 1 ad discreto memory project_plus_vs_pro).
           await AdMob.showBanner({
             adId: ADMOB_BANNER_ANDROID,
             adSize: BannerAdSize.ADAPTIVE_BANNER,
-            position: BannerAdPosition.TOP_CENTER,
+            position: BannerAdPosition.BOTTOM_CENTER,
             margin: 0
           })
 
