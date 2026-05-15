@@ -62,6 +62,21 @@ function patchDoseInCache(qc, id, patch) {
       data.map((d) => (d.id === id ? { ...d, ...patch } : d))
     )
   }
+  // v0.2.3.5 #239 fix — v0.2.3.4 #163 introduziu cache ['dashboard-payload', ...]
+  // que Dashboard usa via useDashboardPayload (RPC consolidado). patch não chegava
+  // lá → user clicava Skip, optimistic atualizava ['doses', ...] mas Dashboard lia
+  // payload.doses do cache dashboard-payload separado → UI mostrava dose ainda
+  // pending, permitia click skip novamente. Patchar ambos caches resolve.
+  const dpQueries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+  for (const q of dpQueries) {
+    const data = q.state.data
+    if (!data || !Array.isArray(data.doses)) continue
+    snapshots.push([q.queryKey, data])
+    qc.setQueryData(q.queryKey, {
+      ...data,
+      doses: data.doses.map((d) => (d.id === id ? { ...d, ...patch } : d))
+    })
+  }
   return snapshots
 }
 
@@ -123,6 +138,8 @@ function refetchDoses(qc) {
   if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
   _refetchDosesTimer = setTimeout(() => {
     qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
+    // v0.2.3.5 #239 — invalidate dashboard-payload também (Dashboard usa RPC consolidado)
+    qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     _refetchDosesTimer = null
   }, 2000)
 }
