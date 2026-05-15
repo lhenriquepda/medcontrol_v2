@@ -4,6 +4,23 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
 
+// v0.2.3.6 idle fix: lê expires_at do token no storage sem passar pelo processLock.
+// Usado para detectar sessão genuinamente expirada quando refreshSession() falha
+// com erro transient (ex: ProcessLockAcquireTimeoutError pós-idle longo).
+function _readStoredTokenExpiry() {
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL
+    if (!url) return null
+    const projectRef = new URL(url).hostname.split('.')[0]
+    const raw = localStorage.getItem(`sb-${projectRef}-auth-token`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed?.expires_at ?? parsed?.session?.expires_at ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * useAppResume — handle app coming back from background/inactive state.
  *
@@ -25,7 +42,7 @@ import { supabase } from '../services/supabase'
  *
  * Mount once em App.jsx top-level.
  */
-const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5min
+const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5 min
 
 // Item #202 (release v0.2.1.5+) — mutex + debounce pra prevenir refresh storm.
 // Bug observado em prod 2026-05-08 09:00 BRT: 5 tokens rotacionados em 1.48s
@@ -87,6 +104,17 @@ export function useAppResume() {
               errStatus === 403 ||
               /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
             if (!isAuthFailure) {
+              // v0.2.3.6 #255 idle fix: erro "transient" pode ser ProcessLockAcquireTimeout
+              // pós-idle longo (>1h). Se o token já expirou no storage, refetchQueries()
+              // vai falhar com 401 em todas as queries → skeleton infinito.
+              // Detectar via localStorage (não usa processLock) e forçar signOut.
+              const storedExp = _readStoredTokenExpiry()
+              const tokenExpired = storedExp !== null && storedExp < Math.floor(Date.now() / 1000)
+              if (tokenExpired) {
+                console.warn('[useAppResume] token expirado + refresh falhou (transient) → signOut forçado')
+                await supabase.auth.signOut()
+                return
+              }
               console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
             } else {
               console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
