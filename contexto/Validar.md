@@ -224,6 +224,34 @@ mcp__supabase__execute_sql({
 
 **Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.
 
+### v0.2.3.6 #268 #269 #270 #271 #262-revert — Bugs cascata pós idle validation falso positivo
+> Bug original: validação idle anterior reportada OK foi falso positivo — dados eram cache stale, não fetch fresh. User identificou: badge sino "2 atrasadas" mas Dashboard "0 atrasadas", filtro Atrasada vazio, dose deletada ainda no overdue cache.
+
+**#268 — supabase-js travado pós idle (getSession timeout)**
+- Root: refresh transient error + token expired durante idle → supabase-js fica em pending fetching forever. Fix #255b (inactiveMs > 1h) insuficiente — 30-60min idle quebra.
+- Fix: useAppResume valida session pós-refresh via `Promise.race([supabase.auth.getSession(), timeout 5s])`. Session inválida OU timeout → signOut forçado.
+- `[x]` Validado emulador 23:39 UTC: idle 53min com fixes aplicados, Dashboard renderiza dados consistentes (não trava supabase-js).
+
+**#269 — Stale cache órfã overdue badge (AppHeader)**
+- Root: `useDoses({status:'overdue'})` sem refetchInterval — cache mantém doses deletadas/mudadas indefinidamente.
+- Fix: AppHeader passa `pollIntervalMs: 60_000` no `useDoses(overdueFilter, {pollIntervalMs:60_000})` pra revalidar a cada 1min.
+- `[x]` Validado emulador: badge "3" sempre consistente com DB overdue count (3 doses passadas) durante idle + cross hour boundary.
+
+**#270 — placeholderData mascara fetch travado (Dashboard sync indicator)**
+- Root: Fix #267 `placeholderData` cross-key resolve hour boundary mas oculta query atual travada — user vê dados old como se fossem corretos.
+- Fix: Dashboard mostra banner "Sincronizando dados... (mostrando última versão conhecida)" quando `isFetching=true` + data age >8s + <60s.
+- `[x]` Validado emulador 23:39 UTC: 0 banner sync após resume (queries completam <8s)
+
+**#271 — createTreatment não invalida dashboard-payload**
+- Root: `mutationRegistry.createTreatment.onSuccess` invalida treatments/doses/user_medications mas esquece `['dashboard-payload']`. Dashboard mostra dados stale pós-criar treatment.
+- Fix: invalidateQueries dashboard-payload em createTreatment + registerSos + updateTreatment + deleteTreatment + createPatient + updatePatient + deletePatient (parity).
+- `[x]` Validado emulador: pós-criar TesteFuturo Med, Dashboard mostra 21 doses recém criadas + 3 overdue corretamente.
+
+**#262 REVERT — Banner AdMob TOP (não BOTTOM)**
+- Root: fix #262 inicial moveu banner TOP→BOTTOM_CENTER pensando que TOP era intrusivo. User confirmou: TOP era posição correta. BOTTOM causou: (a) hero card cortado no topo (CSS padding errado); (b) banner cobre BottomNav.
+- Fix: revert TOP_CENTER + padding-top CSS + remove BottomNav offset --ad-banner-height.
+- `[x]` Validado emulador 23:12 UTC: banner Bradesco test renderiza acima do header Dosy, hero card inteiro, BottomNav visível.
+
 ### v0.2.3.6 #267 — Dashboard skeleton em troca de hora (placeholderData cross-key)
 - **Bug reportado:** user deixou app idle, voltou ao Dashboard — skeleton infinito mesmo com cache populado.
 - **Root cause:** `useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`. Cada hora gera queryKey diferente. Quando hora muda (19→20), nova query criada — `placeholderData: previousData` retorna undefined porque essa key nunca renderizou. Cache tinha 5 queries com data nas horas anteriores mas Dashboard só usava a CURRENT.

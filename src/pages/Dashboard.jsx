@@ -87,7 +87,12 @@ export default function Dashboard() {
   // (usePatients + useTreatments + useDoses) + 1 RPC (extend_continuous_treatments) por
   // single round-trip. Hook popula caches individuais via qc.setQueryData side-effect,
   // outras telas (Patients, DoseHistory, Reports) continuam usando hooks separados sem regressão.
-  const { data: payload, isLoading, isError, error, refetch } = useDashboardPayload(baseWindow)
+  const { data: payload, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useDashboardPayload(baseWindow)
+  // v0.2.3.6 #270 fix — detectar query travada mascarada por placeholderData (#267).
+  // Quando current queryKey está fetching há >8s + temos placeholderData de OUTRA key,
+  // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
+  // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
+  const isStaleSync = isFetching && dataUpdatedAt && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
   const allDosesRaw = payload?.doses || []
   const patients = payload?.patients || []
   // Filter client-side por patientId (era passado pra useDoses query antes)
@@ -309,6 +314,26 @@ export default function Dashboard() {
         </div>
 
         <AdBanner />
+
+        {isStaleSync && (
+          <div role="status" style={{
+            background: 'var(--dosy-info-bg)',
+            color: 'var(--dosy-info)',
+            padding: '8px 14px',
+            borderRadius: 12,
+            fontSize: 12.5,
+            display: 'flex', alignItems: 'center', gap: 8,
+            marginTop: 8,
+          }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: 99,
+              background: 'currentColor',
+              animation: 'shimmer 1.3s infinite',
+              opacity: 0.7,
+            }} />
+            Sincronizando dados... (mostrando última versão conhecida)
+          </div>
+        )}
 
         {isError && !payload ? (
           // v0.2.3.4 #237 fix — error state explícito ao invés de skeleton infinito.

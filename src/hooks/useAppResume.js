@@ -104,6 +104,32 @@ export function useAppResume() {
               console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
             }
           }
+
+          // v0.2.3.6 #268 fix — validar session pós-refresh com timeout 5s.
+          // Cenário: refreshSession() retorna OK mas session interna ainda inválida
+          // (token expirou DURANTE idle ~30-60min, refresh chain quebrou silencioso,
+          // queries subsequentes ficam travadas em fetching/401 retry loop).
+          // Sem este check, skeleton infinito mascarado por placeholderData cross-key
+          // (fix #267). User vê dashboard com dados stale + queries fetching forever.
+          try {
+            const sessionCheck = await Promise.race([
+              supabase.auth.getSession(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 5000))
+            ])
+            const sess = sessionCheck?.data?.session
+            const nowSec = Math.floor(Date.now() / 1000)
+            const sessionInvalid = !sess || (sess.expires_at && sess.expires_at < nowSec)
+            if (sessionInvalid) {
+              console.warn('[useAppResume] pós-refresh session inválida (exp:', sess?.expires_at, 'now:', nowSec, ') → signOut forçado')
+              await supabase.auth.signOut()
+              return
+            }
+          } catch (e) {
+            console.warn('[useAppResume] getSession timeout/error → signOut forçado:', e?.message)
+            await supabase.auth.signOut()
+            return
+          }
+
           // 2. Drop dead websocket channels — useRealtime resubscribe via
           //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
           await supabase.removeAllChannels()

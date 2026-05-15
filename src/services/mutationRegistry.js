@@ -240,6 +240,7 @@ export function registerMutationDefaults(qc) {
         }
       }
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -280,6 +281,7 @@ export function registerMutationDefaults(qc) {
         )
       }
       qc.invalidateQueries({ queryKey: ['patients'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -313,6 +315,7 @@ export function registerMutationDefaults(qc) {
         qc.setQueryData(['patients', data.id], data)
       }
       qc.invalidateQueries({ queryKey: ['patients'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -323,6 +326,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['patients'] })
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -447,6 +451,10 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      // v0.2.3.6 #271 fix: createTreatment não invalidava ['dashboard-payload'],
+      // resultado: Dashboard não mostrava doses recém-criadas até next mount/focus.
+      // Mantém parity com createPatient (line 142) que já invalida.
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -477,6 +485,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -486,6 +495,7 @@ export function registerMutationDefaults(qc) {
       track(EVENTS.TREATMENT_DELETED)
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -528,6 +538,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -554,6 +565,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -592,6 +604,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 }

@@ -39,9 +39,7 @@ export default function DosyBottomNav() {
         // devices Samsung com 3-button nav clássico, empurrando BottomNav
         // muito acima do bottom edge. Cap em 16px via min() — suficiente pra
         // gesture nav modern (S25) sem inflar em Note 10 / 3-button.
-        // v0.2.3.6 #262: somar --ad-banner-height pra BottomNav ficar acima
-        // do AdMob BOTTOM_CENTER banner (Plus tier).
-        bottom: 'calc(8px + min(env(safe-area-inset-bottom, 0px), 16px) + var(--ad-banner-height, 0px))',
+        bottom: 'calc(8px + min(env(safe-area-inset-bottom, 0px), 16px))',
         zIndex: 30,
         pointerEvents: 'none',
       }}
