@@ -209,8 +209,9 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 > | 8 commit | ✅ | ✅ | ✅ |
 > | 9 sync 4 docs | ✅ ROADMAP+CHECKLIST+PROJETO+README | ⚠️ só ROADMAP §3 + relevantes | ❌ |
 > | 10 push | ✅ | ✅ | ✅ |
-> | 11 build AAB + upload Play Console | ✅ | ❌ | ❌ |
-> | 12 validação web + device | ✅ ambos | ⚠️ web smoke se relevante | ❌ |
+> | 10.5 STOP obrigatório | ✅ aguardar OK user antes AAB | ❌ | ❌ |
+> | 11 validação web + device | ✅ §11a Chrome MCP + §11b emulator autônomo | ⚠️ web smoke se relevante | ❌ |
+> | 12 build AAB + upload Play Console | ✅ SÓ após validação + OK user Passo 10.5 | ❌ | ❌ |
 > | 13 pós-release (tag + merge master + Vercel prod) | ✅ tag canônico | ⚠️ merge master sem tag/AAB, Vercel auto-deploy git push | ❌ não merge |
 > | 14 STOP final | ✅ | ✅ | ✅ |
 >
@@ -252,7 +253,7 @@ git push origin release/v{X.Y.Z}
 **Pré-requisitos antes do STOP:**
 1. Todos os fixes do escopo aplicados + commits feitos + push origin branch
 2. Validar.md entry criada no topo com TODOS os items da release
-3. Validação autônoma rodada em tudo que cabe (Chrome MCP web §12a + emulator §12b + Supabase MCP DB state)
+3. Validação autônoma rodada em tudo que cabe (Chrome MCP web §11a + emulator §11b + Supabase MCP DB state)
 4. Validar.md com `[x]` marcado em cada item validado autonomamente
 5. Items `[ ]` restantes = SÓ os que dependem de device físico real OR observação temporal pós-deploy (24h Supabase egress, Sentry symbols upload com token, etc)
 
@@ -271,25 +272,11 @@ Após autorização explícita: prosseguir Passos 11-14 sem nova interrupção.
 
 ---
 
-## Passo 11 — Build + Upload Play Store (SÓ após autorização Passo 10.5)
-- Bump `versionCode + 1` em `android/app/build.gradle`
-- Build AAB via CLI (autônomo, sem Studio GUI):
-  ```bash
-  cd android
-  TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
-    JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
-    PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease
-  ```
-  - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
-  - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
-  - Output: `android/app/build/outputs/bundle/release/app-release.aab`
-- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
-- **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
-- Internal Testing track ativa em ~1h
+## Passo 11 — Validação (web primeiro, device só pro que web não cobre)
 
-## Passo 12 — Validação (web primeiro, device só pro que web não cobre)
+> ⚠️ **Validação ANTES do Build AAB.** Ordem correta: validar → aprovar → buildar. Nunca buildar para depois descobrir bug.
 
-### 12a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
+### 11a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
 
 Antes de pedir validação device pro user, verifique se o item pode ser validado via web.
 
@@ -354,9 +341,9 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 > - Capacitor.Network bridge → onlineManager só ativa em `Capacitor.isNativePlatform()` — fluxo nativo não testável web.
 > - FCM background, AlarmManager, plugin nativo CriticalAlarm — tudo Android-only.
 
-### 12b — Validação device AUTÔNOMA via emulator CLI (NOVO v0.2.3.2+)
+### 11b — Validação device AUTÔNOMA via emulator CLI (NOVO v0.2.3.2+)
 
-> **Comprovado v0.2.3.2 2026-05-14:** fluxo end-to-end zero GUI Studio. IA roda sozinha sem user na máquina pra maioria validações device. Use SEMPRE este fluxo antes de §12c (user manual).
+> **Comprovado v0.2.3.2 2026-05-14:** fluxo end-to-end zero GUI Studio. IA roda sozinha sem user na máquina pra maioria validações device. Use SEMPRE este fluxo antes de §11c (user manual).
 
 **Stack autônoma:**
 - **avdmanager CLI** cria AVDs (`$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager.bat create avd -n <Name> -k "system-images;android-35;google_apis_playstore;x86_64" -d <device>`)
@@ -369,7 +356,7 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 - **Supabase MCP** `execute_sql` — INSERT dose direto DB pra triggerar Edge → FCM → device; SELECT alarm_audit_log validar 6 sources populando; check push_subscriptions device_id_uuid
 - **Chrome MCP** Play Console upload + admin.dosymed.app `/alarm-audit` painel
 
-**Receita validação autônoma (executar via §12a primeiro web, depois emulator se device-only):**
+**Receita validação autônoma (executar via §11a primeiro web, depois emulator se device-only):**
 
 1. **Setup AVDs (1× por device target):**
    ```bash
@@ -497,9 +484,9 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 - ⚠️ Reboot test (`adb reboot`) takes ~30-60s emulator restart.
 - ⚠️ Push FCM real (não data-only) — emulator Google Play Services OK, mas FCM token diferente device físico (test token).
 
-### 12c — Validação device manual (fallback user-driven)
+### 11c — Validação device manual (fallback user-driven)
 
-> Usar APENAS quando §12b não cobre (Samsung One UI quirks, AdMob real PROD ad units, biometric, Privacy Screen FLAG_SECURE recents, In-App Updates Play Core flexible flow).
+> Usar APENAS quando §11b não cobre (Samsung One UI quirks, AdMob real PROD ad units, biometric, Privacy Screen FLAG_SECURE recents, In-App Updates Play Core flexible flow).
 
 Cenários device-only que IA NÃO consegue autonomous:
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` Samsung One UI 7 / Xiaomi MIUI behaviour
@@ -518,14 +505,33 @@ Cenários device-only que IA NÃO consegue autonomous:
 4. IA verifica Sentry breadcrumbs/issues 24h pós-install + painel admin
 
 **Antes de pedir validação device manual, IA:**
-1. Listar itens da release que precisam device-only (vs §12a web-validável OR §12b emulator-autônomo)
-2. Validar TUDO que cabe web via Chrome MCP (§12a)
-3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§12b)
-4. Reportar resultado §12a+§12b pro user
-5. **Atualizar [`contexto/Validar.md`](Validar.md) OBRIGATÓRIO** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §12a+§12b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
+1. Listar itens da release que precisam device-only (vs §11a web-validável OR §11b emulator-autônomo)
+2. Validar TUDO que cabe web via Chrome MCP (§11a)
+3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§11b)
+4. Reportar resultado §11a+§11b pro user
+5. **Atualizar [`contexto/Validar.md`](Validar.md) OBRIGATÓRIO** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §11a+§11b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
 6. Pedir validação manual ao user, apontando pra `Validar.md`
 
-> 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os bugs foram cobertos §12a+§12b runtime, criar entry vazia com nota `**Validação device:** TODOS cenários cobertos autonomous §12a+§12b — nada pra user fazer.`. NUNCA pular esse passo — Validar.md é histórico/auditoria.
+> 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os bugs foram cobertos §11a+§11b runtime, criar entry vazia com nota `**Validação device:** TODOS cenários cobertos autonomous §11a+§11b — nada pra user fazer.`. NUNCA pular esse passo — Validar.md é histórico/auditoria.
+
+## Passo 12 — Build + Upload Play Store (SÓ após validação §11 + autorização Passo 10.5)
+
+> ⚠️ **NUNCA buildar antes de validar.** Chegou aqui significa: §11a + §11b feitos, Validar.md atualizado, user deu OK explícito no Passo 10.5.
+
+- Bump `versionCode + 1` em `android/app/build.gradle`
+- Build AAB via CLI (autônomo, sem Studio GUI):
+  ```bash
+  cd android
+  TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+    JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+    PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease
+  ```
+  - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
+  - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
+  - Output: `android/app/build/outputs/bundle/release/app-release.aab`
+- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
+- **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
+- Internal Testing track ativa em ~1h
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
