@@ -233,6 +233,31 @@ mcp__supabase__execute_sql({
 - `[x]` App carrega Dashboard pós-install sem skeleton (session SecureStorage preservada)
 - `[ ]` **Device físico:** 1h+ background com token expirando → resume → app deve redirecionar para tela de login (sem skeleton infinito). **Como fazer:** logar, aguardar 1h sem usar app (ou editar `expires_at` do token no Supabase console para forçar expiração), colocar em background, aguardar mais 10min, retomar. **O que esperar:** tela de login. **Se falhar:** skeleton loop → bug ainda presente.
 
+### v0.2.3.6 #264 — Dose passada pulada no create_treatment_with_doses
+- **Bug reportado:** user cadastrou Acetilcisteina 16:00 BRT às 16:07 BRT, dose das 16:00 não foi criada (pulada por WHILE loop).
+- **Root cause:** `create_treatment_with_doses` (e `update_treatment_schedule`) tem `WHILE v_first < v_now LOOP v_first := v_first + step` que avança a 1ª dose para o futuro, pulando completamente qualquer dose passada — mesmo por minutos.
+- **Fix aplicado:** SQL — remover WHILE pula-passado. 1ª dose sempre = `dataInicio + firstDoseTime`. Doses passadas inseridas com `status='pending'` → cliente recomputa overdue via `recomputeOverdue()` em `dosesService.js` → Dashboard mostra como "atrasada".
+- **Form UX (Opção 1):** Renomear "Início" → "Data de início", trocar `type="datetime-local"` → `type="date"`. Hora vem só de `firstDoseTime`. Elimina confusão de 2 horas conflitantes.
+- `[x]` SQL migration applied (`fix_create_treatment_doses_past_and_exact_count_v0_2_3_6`) + 1ª dose passada cria com status='pending'
+- `[x]` Form mostra "Data de início" como input type="date" + hint visível
+- `[x]` Validação Chrome MCP localhost teste-plus@teste.com 2026-05-15 16:35 BRT: tratamento Acetilcisteina QA Teste hoje 15:35 → 1ª dose 15:35 BRT criada com status pending no DB (`past_doses: 1`) → Dashboard mostra "atrasada" via recomputeOverdue
+- `[ ]` **Device físico:** mesma validação no APK release
+
+### v0.2.3.6 #265 — Total doses incorreto: esperado 15, gerou 12
+- **Bug reportado:** preview mostrou "15 doses" mas DB tem 12.
+- **Root cause:** `create_treatment_with_doses` usa `doseHorizon = startDate (00:00 local) + durationDays days`. Loop while `v_first + v_t < v_horizon`. Quando 1ª dose é no meio do dia (ex: 16:00), horizonte termina antes de completar `durationDays × 24 / intervalHours` doses.
+- **Fix aplicado:** SQL — substituir loop horizonte por contador exato: `for v_t in 0..(total_doses - 1) loop` onde `total_doses = ceil(durationDays × 24 / intervalHours)`. Garante `15 doses` para `5 days × 8h`.
+- `[x]` SQL: tratamento 7d 8h gerou exatamente 21 doses (validado 2026-05-15 emulator Chrome MCP — `total_doses: 21`, `first_dose: 15/05 18:35 UTC`, `last_dose: 22/05 10:35 UTC`)
+- `[x]` Preview frontend "21 doses no total" bateu com DB count
+- `[ ]` SQL times mode: validar tratamento 3 horários/dia × 5 dias = 15 doses (não testado autônomo, padrão é interval)
+
+### v0.2.3.6 #266 — PatientDetail não mostra tratamento recém-criado como ativo
+- **Bug reportado:** Acetilcisteina aparece em /tratamentos mas NÃO em /pacientes/rael (Tratamentos ativos vazio).
+- **Root cause:** `createTreatment.onMutate` em `mutationRegistry.js:389` faz `qc.setQueryData(['treatments'], ...)` que só atinge queryKey EXATA. Variações `['treatments', { patientId }]` não são atualizadas. Combinado com `useTreatments` `refetchOnMount: false` + `invalidateQueries` que não re-fetcha queries não montadas, PatientDetail mostra cache stale.
+- **Fix aplicado:** JS — usar `insertEntityIntoLists(qc, 'treatments', tempTreatment, ...)` (função já existe linha 104, criada mas nunca usada). Mesmo padrão já aplicado em pause/resume/end via `patchEntityListsInCache`. onSuccess também patcheia todas variações para substituir temp por real.
+- `[x]` JS: criar tratamento (Chrome MCP localhost teste-plus 2026-05-15) → navegar /pacientes/9f09348b... → seção "Tratamentos ativos 2 / Acetilcisteina QA Teste 5ml · a cada 8h · 7 dias" visível ✅
+- `[x]` JS: /tratamentos continua mostrando (não quebrou caso existente)
+
 ### v0.2.3.6 QA Completo — Bugs detectados 2026-05-15
 > Relatório: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) | Itens no CHECKLIST: #259–#263
 - `[~]` **BUG #4 Relatórios "Cancelada"** (#259 P2): dose mostra status "Cancelada" após pause/resume tratamento. Investigação: verificar status real no DB pós-pause-resume. Pendente próxima sessão.
