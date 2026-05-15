@@ -565,7 +565,7 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** master @ tag `v0.2.3.2` (vc 65, Play Console Internal Testing 2026-05-14 14:46 BRT). Branch `release/v0.2.3.0` mergeada via `c0cb372`. Sem release em curso.
+**Versão atual:** branch `release/v0.2.3.5` em curso (vc 68, AAB upload Play Console pendente). Anterior master @ tag `v0.2.3.2` (vc 65). v0.2.3.5 escopo UI/UX redesign 5 telas + gradiente unificado + signup branded + self-patient checkbox + share Plus fix.
 **Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.2 via auto-deploy)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
