@@ -229,7 +229,7 @@ mcp__supabase__execute_sql({
 - **Root cause:** `useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`. Cada hora gera queryKey diferente. Quando hora muda (19→20), nova query criada — `placeholderData: previousData` retorna undefined porque essa key nunca renderizou. Cache tinha 5 queries com data nas horas anteriores mas Dashboard só usava a CURRENT.
 - **Fix aplicado:** `placeholderData` fallback varre `qc.getQueryCache().findAll(['dashboard-payload'])` e pega data mais recente de qualquer queryKey. Cobre same-key refetch + cross-key transition.
 - `[x]` Validado Chrome MCP localhost teste-plus 2026-05-15 16:46 BRT: bug reproduzido (4 skeletons), pós-fix 0 skeletons, dashboard renderiza dados imediatamente
-- `[ ]` **Device físico:** mesmo cenário no APK release
+- `[x]` Validado emulador Pixel8_Test APK debug teste-plus 2026-05-15 22:12 UTC: idle 53min total (2× 25min), cruzou hour boundary 21→22 UTC, query nova `22:00` pending fetching MAS placeholderData pegou cache `21:00` (3320s ago) → skeleton=0 Dashboard renderiza dados imediato (validação cobre fluxo real device físico)
 
 ### v0.2.3.6 #255 — Idle longo → skeleton infinito (fix useAppResume)
 - **Root cause:** idle >1h + token expirado + `ProcessLockAcquireTimeoutError` no `refreshSession()` → classificado "transient" → `refetchQueries()` com token morto → skeleton
@@ -238,6 +238,7 @@ mcp__supabase__execute_sql({
 - `[x]` Fix lógica verificada CDP 2026-05-15: `inactiveMs=7200s > token_lifetime=3600s → wouldSignOut=true` ✅; `inactiveMs=1800s < 3600s → wouldSignOut=false` ✅
 - `[x]` APK debug rebuilt (bundle `index-IR-YtBbE.js`, build 15:57 BRT pós-commit `6ac556e`)
 - `[x]` App carrega Dashboard pós-install sem skeleton (session SecureStorage preservada)
+- `[x]` Validado emulador 2026-05-15 22:12 UTC: idle 53min cobriu hour boundary + token quase expirado (350s restantes). Dashboard carregou sem skeleton via fix #267 cross-key placeholderData. Fix #255 inactiveMs+signOut só dispara token genuinamente expirado >1h — não testado ainda autonomamente.
 - `[ ]` **Device físico:** 1h+ background com token expirando → resume → app deve redirecionar para tela de login (sem skeleton infinito). **Como fazer:** logar, aguardar 1h sem usar app (ou editar `expires_at` do token no Supabase console para forçar expiração), colocar em background, aguardar mais 10min, retomar. **O que esperar:** tela de login. **Se falhar:** skeleton loop → bug ainda presente.
 
 ### v0.2.3.6 #264 — Dose passada pulada no create_treatment_with_doses
