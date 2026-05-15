@@ -4,23 +4,6 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
 
-// v0.2.3.6 idle fix: lê expires_at do token no storage sem passar pelo processLock.
-// Usado para detectar sessão genuinamente expirada quando refreshSession() falha
-// com erro transient (ex: ProcessLockAcquireTimeoutError pós-idle longo).
-function _readStoredTokenExpiry() {
-  try {
-    const url = import.meta.env.VITE_SUPABASE_URL
-    if (!url) return null
-    const projectRef = new URL(url).hostname.split('.')[0]
-    const raw = localStorage.getItem(`sb-${projectRef}-auth-token`)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return parsed?.expires_at ?? parsed?.session?.expires_at ?? null
-  } catch {
-    return null
-  }
-}
-
 /**
  * useAppResume — handle app coming back from background/inactive state.
  *
@@ -105,13 +88,14 @@ export function useAppResume() {
               /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
             if (!isAuthFailure) {
               // v0.2.3.6 #255 idle fix: erro "transient" pode ser ProcessLockAcquireTimeout
-              // pós-idle longo (>1h). Se o token já expirou no storage, refetchQueries()
-              // vai falhar com 401 em todas as queries → skeleton infinito.
-              // Detectar via localStorage (não usa processLock) e forçar signOut.
-              const storedExp = _readStoredTokenExpiry()
-              const tokenExpired = storedExp !== null && storedExp < Math.floor(Date.now() / 1000)
-              if (tokenExpired) {
-                console.warn('[useAppResume] token expirado + refresh falhou (transient) → signOut forçado')
+              // pós-idle longo (>1h token Supabase padrão). Se ficamos inativos mais que
+              // o token lifetime, o access_token certamente expirou e refetchQueries()
+              // vai falhar com 401 em TODAS as queries → skeleton infinito.
+              // Usa inactiveMs (já calculado) — independe do storage backend
+              // (funciona para localStorage/web E SecureStorage/nativo Android).
+              const SUPABASE_TOKEN_LIFETIME_MS = 60 * 60 * 1000 // 1h padrão Supabase
+              if (inactiveMs > SUPABASE_TOKEN_LIFETIME_MS) {
+                console.warn('[useAppResume] idle', Math.round(inactiveMs / 1000), 's > token lifetime + refresh falhou (transient) → signOut forçado')
                 await supabase.auth.signOut()
                 return
               }
