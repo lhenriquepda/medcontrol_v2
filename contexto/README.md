@@ -6,6 +6,49 @@
 
 ---
 
+## 📑 Índice — Fluxo de trabalho
+
+### 🟡 Passos de Entrada (toda sessão)
+
+| Passo | O que fazer | Ação |
+|---|---|---|
+| [0](#-passo-0--varrer-validarmd-validações-manuais-pendentes) | **Varrer Validar.md** — alertar user se tiver `[ ]` pendentes | Obrigatório antes de qualquer coisa |
+| [1](#-passo-1--carregar-contexto-3-reads-paralelos) | **Carregar contexto** — PROJETO.md + ROADMAP §3 + CHECKLIST | 3 reads paralelos |
+| [2](#-passo-2--estado-git-fonte-da-verdade) | **Estado git** — branch ativa, commits ahead, working tree | `git status` + `git log -5` |
+| [3](#-passo-3--memória-durável-auto-injetada) | **Memória** — feedback/user/project/reference files | Auto-injetado, revisar prioridades 🔴 |
+| [4](#-passo-4--regras-negativas-nunca-quebrar) | **Regras NUNCA quebrar** — 15 regras críticas | Ler antes de tocar qualquer arquivo |
+| [5](#-passo-5--stop-reportar-ao-user) | **STOP — reportar ao user** — versão, P0s, próximo passo | Esperar OK explícito |
+| [5b](#-passo-5b--classificar-trabalho-proposto) | **Classificar trabalho** — release/docs/server/refactor/experiment | Branch + bump versão se AAB |
+
+### 🔧 Passos de Fechamento (após codar)
+
+| Passo | O que fazer | Quando |
+|---|---|---|
+| [6](#passo-6--auditoria-pré-commit) | **Auditoria pré-commit** — `npm run build` verde + lint + egress | release/hotfix com JS |
+| [7](#passo-7--validação-preview-vercel-se-web-tocou) | **Preview Vercel** — testar build prod na branch | se web tocou |
+| [8](#passo-8--commit) | **Commit** — stage específico + HEREDOC + hooks passam | sempre |
+| [9](#passo-9--sync-docs-4-arquivos-obrigatório) | **Sync 4 docs** — ROADMAP + CHECKLIST + PROJETO + README | release/hotfix |
+| [10](#passo-10--push) | **Push** origin | sempre |
+| [10.5](#-passo-105--stop-único-obrigatório-antes-build-aab) | **🛑 STOP — aguardar OK user antes AAB** | obrigatório release |
+| [11](#passo-11--validação-web-primeiro-device-só-pro-que-web-não-cobre) | **Validação** — §11a Chrome MCP web + §11b emulator autônomo + Validar.md | antes do Build |
+| [12](#passo-12--build--upload-play-store-só-após-validação-11--autorização-passo-105) | **Build AAB + Play Console** — gradlew + Chrome MCP upload | SÓ após §11 validado |
+| [13](#passo-13--pós-release-release-fechado-mergeado-master) | **Pós-release** — tag + merge master + Vercel prod | release fechada |
+| [14](#passo-14--stop-final) | **STOP final** — reportar status + próximo P0 | sempre |
+
+### 📚 Referência rápida
+
+| Seção | Conteúdo |
+|---|---|
+| [§10](#10--receita-chrome-mcp-play-console-upload-aab) | Receita Chrome MCP → Play Console upload AAB |
+| [§11](#11--convenções-código-essenciais) | Convenções código (Tailwind, RQ keys, RPC, etc) |
+| [§12](#12--recursos-externos) | URLs admin / Supabase / Play Console / Vercel |
+| [§13](#13--estado-atual-do-projeto) | Estado atual — versão, tag, contas teste |
+| [§14](#14--ciclo-publicar-release-8-passos-referência) | Ciclo release macro (8 passos) |
+| [§16](#16--mapa-pasta-contexto) | Mapa de arquivos em `contexto/` |
+| [§19](#19--onde-ler-quando) | "Onde ler quando..." — índice por pergunta |
+
+---
+
 ## 🚨 PASSO 0 — Varrer `Validar.md` (validações manuais pendentes)
 
 **Antes de qualquer coisa**, abra [`contexto/Validar.md`](Validar.md) e conte os checkboxes `[ ]` na seção topo (release mais recente).
