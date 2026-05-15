@@ -224,6 +224,13 @@ mcp__supabase__execute_sql({
 
 **Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.
 
+### v0.2.3.6 #267 — Dashboard skeleton em troca de hora (placeholderData cross-key)
+- **Bug reportado:** user deixou app idle, voltou ao Dashboard — skeleton infinito mesmo com cache populado.
+- **Root cause:** `useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`. Cada hora gera queryKey diferente. Quando hora muda (19→20), nova query criada — `placeholderData: previousData` retorna undefined porque essa key nunca renderizou. Cache tinha 5 queries com data nas horas anteriores mas Dashboard só usava a CURRENT.
+- **Fix aplicado:** `placeholderData` fallback varre `qc.getQueryCache().findAll(['dashboard-payload'])` e pega data mais recente de qualquer queryKey. Cobre same-key refetch + cross-key transition.
+- `[x]` Validado Chrome MCP localhost teste-plus 2026-05-15 16:46 BRT: bug reproduzido (4 skeletons), pós-fix 0 skeletons, dashboard renderiza dados imediatamente
+- `[ ]` **Device físico:** mesmo cenário no APK release
+
 ### v0.2.3.6 #255 — Idle longo → skeleton infinito (fix useAppResume)
 - **Root cause:** idle >1h + token expirado + `ProcessLockAcquireTimeoutError` no `refreshSession()` → classificado "transient" → `refetchQueries()` com token morto → skeleton
 - **Fix aplicado:** `inactiveMs > 3600s (SUPABASE_TOKEN_LIFETIME_MS)` + `!isAuthFailure` → `supabase.auth.signOut()` → useAuth redireciona login. Funciona para localStorage (web) E SecureStorage (nativo Android).
