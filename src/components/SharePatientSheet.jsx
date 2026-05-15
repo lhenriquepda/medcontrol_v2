@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Lock, Mail, X as XIcon } from 'lucide-react'
 import { Sheet, Button, Input, Avatar } from './dosy'
 import { usePatientShares, useSharePatient, useUnsharePatient } from '../hooks/useShares'
-import { useMyTier } from '../hooks/useSubscription'
+import { useMyTier, useIsPro } from '../hooks/useSubscription'
 import PaywallModal from './PaywallModal'
 import OfflineNotice from './OfflineNotice'
 import { useOfflineGuard } from '../hooks/useOfflineGuard'
 
 export default function SharePatientSheet({ open, onClose, patient }) {
+  // v0.2.3.5 #251 — Plus tem todas features Pro (só difere por mostrar 1 Ad).
+  // Antes: isPro = ['pro','admin'] excluía plus → bloqueava Plus de compartilhar.
+  // Fix: useIsPro() inclui plus+pro+admin (PRO_FEATURE_TIERS).
   const { data: tier } = useMyTier()
-  const isPro = tier === 'pro' || tier === 'admin'
+  const isPro = useIsPro()
   const patientId = patient?.id
   const { data: shares = [], isLoading } = usePatientShares(patientId)
   const shareMut = useSharePatient()
@@ -98,12 +101,8 @@ export default function SharePatientSheet({ open, onClose, patient }) {
                 margin: 0, paddingLeft: 4,
               }}>
                 <Lock size={11} strokeWidth={1.75}/>
-                {/* Item #120 (release v0.2.0.3): copy condicional baseado em tier real.
-                    Plus user via "plano Plus" não "plano Free". Compartilhar é exclusivo
-                    pro/admin. */}
-                {tier === 'plus'
-                  ? 'Você está no plano Plus. Compartilhar é exclusivo PRO.'
-                  : 'Você está no plano Free. Assine PRO para compartilhar.'}
+                {/* v0.2.3.5 #251 — Plus tem todas features Pro. Só Free vê este lock. */}
+                Você está no plano Free. Assine PRO para compartilhar.
               </p>
             )}
           </form>
