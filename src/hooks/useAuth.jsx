@@ -305,22 +305,24 @@ export function AuthProvider({ children }) {
       if (data?.user && Array.isArray(identities) && identities.length === 0) {
         throw new Error('Este email já está cadastrado. Use a aba Entrar.')
       }
-      // Se auto-confirm está ativo, já logamos direto. Senão o trigger confirma no DB
-      // e fazemos o login imediatamente.
+      // v0.2.3.5 #252 — email confirm required (mailer_autoconfirm=OFF prod).
+      // Sem session → pending confirmation. Caller mostra tela "verifique email".
+      // Antes: tentava signInWithPassword que falhava com "Email not confirmed"
+      // → toast vermelho confuso (sem tela explicativa).
       if (!data.session) {
-        const { error: e2 } = await supabase.auth.signInWithPassword({ email, password })
-        if (e2) throw new Error(traduzirErro(e2))
+        return { pendingConfirmation: true, email }
       }
-      // Item #201 — registra criação de conta + login automático
+      // Caso auto-confirm ativo (dev/test) → já logado.
       logAuthEvent('sign_in', {
         details: {
           tipo: 'criou_conta_nova',
           descricao: 'Criou conta nova e entrou pela primeira vez'
         }
       }).catch(() => { /* fail-safe */ })
-      return
+      return { pendingConfirmation: false }
     }
     await mock.signUpLocal(email, password, name)
+    return { pendingConfirmation: false }
   }
 
   async function updateProfile({ name }) {

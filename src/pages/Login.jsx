@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, MailCheck, Inbox } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { TIMING, EASE } from '../animations'
@@ -21,8 +21,9 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   // #153 (v0.2.0.12) — modes:
-  //  'signin' | 'signup' | 'forgot-email' (digita email) | 'forgot-otp' (digita código)
+  //  'signin' | 'signup' | 'forgot-email' | 'forgot-otp' | 'check-email' (v0.2.3.5 #252 pós-signup confirme email)
   const [mode, setMode] = useState('signin')
+  const [pendingEmail, setPendingEmail] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,7 +45,16 @@ export default function Login() {
     setBusy(true)
     try {
       if (mode === 'signin') await signInEmail(email, password)
-      else if (mode === 'signup') await signUpEmail(email, password, name)
+      else if (mode === 'signup') {
+        const res = await signUpEmail(email, password, name)
+        // v0.2.3.5 #252 — pending email confirm → tela explicativa em vez de toast.
+        if (res?.pendingConfirmation) {
+          setPendingEmail(email)
+          setMode('check-email')
+          setBusy(false)
+          return
+        }
+      }
       else if (mode === 'forgot-email') {
         // #153: envia OTP code 6 dígitos por email
         await sendRecoveryOtp(email)
@@ -122,6 +132,70 @@ export default function Login() {
           }}>Gestão simples de medicamentos</p>
         </div>
 
+        {/* v0.2.3.5 #252 — Tela "verifique email" pós-signup. Substitui toast vermelho confuso. */}
+        {mode === 'check-email' ? (
+          <Card padding={24} style={{ display: 'flex', flexDirection: 'column', gap: 16, textAlign: 'center' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 9999, margin: '0 auto',
+              background: 'var(--dosy-gradient-sunset)',
+              color: 'var(--dosy-fg-on-sunset)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 12px 32px -8px rgba(255,107,91,0.35)',
+            }}>
+              <MailCheck size={28} strokeWidth={2}/>
+            </div>
+            <div>
+              <h2 style={{
+                fontSize: 20, fontWeight: 800, margin: '0 0 6px 0',
+                color: 'var(--dosy-fg)', fontFamily: 'var(--dosy-font-display)',
+                letterSpacing: '-0.02em',
+              }}>Verifique seu email</h2>
+              <p style={{
+                fontSize: 13.5, color: 'var(--dosy-fg-secondary)',
+                lineHeight: 1.5, margin: 0,
+              }}>
+                Enviamos um link de confirmação para
+              </p>
+              <p style={{
+                fontSize: 14, fontWeight: 700, margin: '4px 0 0 0',
+                color: 'var(--dosy-primary)',
+                fontFamily: 'var(--dosy-font-display)',
+                wordBreak: 'break-all',
+              }}>{pendingEmail}</p>
+            </div>
+            <div style={{
+              padding: 14, borderRadius: 14,
+              background: 'var(--dosy-gradient-sunset-muted)',
+              display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left',
+            }}>
+              <Inbox size={18} strokeWidth={2} style={{
+                flexShrink: 0, color: 'var(--dosy-primary)', marginTop: 1,
+              }}/>
+              <div style={{ fontSize: 12.5, color: 'var(--dosy-fg)', lineHeight: 1.5 }}>
+                Abra o email e clique em <strong>Confirmar email</strong>. Você cairá direto no app.
+                Se não chegar em 2 minutos, confira a pasta de <strong>Spam</strong>.
+              </div>
+            </div>
+            <Button
+              type="button"
+              kind="secondary"
+              full
+              onClick={() => { setMode('signin'); setEmail(pendingEmail); setPassword(''); setName(''); setConsent(false) }}
+            >
+              Já confirmei — entrar
+            </Button>
+            <button
+              type="button"
+              onClick={() => { setMode('signup'); setPendingEmail('') }}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 600,
+                color: 'var(--dosy-fg-secondary)',
+                fontFamily: 'var(--dosy-font-display)',
+              }}
+            >Usar outro email</button>
+          </Card>
+        ) : (
         <Card padding={20} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Mode toggle / forgot header */}
           {mode !== 'forgot-email' && mode !== 'forgot-otp' ? (
@@ -361,6 +435,7 @@ export default function Login() {
             </>
           )}
         </Card>
+        )}
 
         {!hasSupabase && (
           <p style={{
