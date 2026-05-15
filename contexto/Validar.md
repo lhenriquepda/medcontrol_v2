@@ -19,7 +19,44 @@
 
 ---
 
-## 🆕 Release v0.2.3.5 — versionCode 68 (em curso, AAB pendente autorização user)
+## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
+
+**Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico.
+
+### v0.2.3.6 #250 — ANVISA autocomplete medicamentos
+- `[x]` Migration `medications_catalog` + GIN trigram + RLS public read aplicada
+- `[x]` ETL 764 rows ANVISA carregados (full 6989 via SUPABASE_SERVICE_KEY pendente)
+- `[x]` RPC `search_medications` retorna correto (testado SQL direto)
+- `[x]` Migration accent-insensitive `unaccent` extension + `immutable_unaccent` wrapper + indexes recriados
+- `[x]` SQL "magne" retorna MAGNÉSIO/ESOMEPRAZOL MAGNÉSICO/PANTOPRAZOL MAGNÉSICO/SULFATO DE MAGNÉSIO
+- `[x]` SQL "aspirina" sem acento retorna ASPIRINA PREVENT
+- `[x]` Frontend `MedNameInput` autocomplete local + ANVISA + userMeds (Chrome MCP localhost "dipir" → Dipirona/Dipirona sódica, "novalgi" → Novalgina, "amoxic" → Amoxicilina/Clavulanato)
+- `[ ]` **Device físico:** TreatmentForm "dipir" mostra Dipirona com subtitle principio_ativo
+- `[ ]` **Device físico:** TreatmentForm "Magne" sem acento mostra Magnésio
+
+### v0.2.3.6 #SHARING-FIX — sistema compartilhamento quebrado (CRÍTICO)
+- **Bug reportado:** Daffiny vê "Bem-vindo ao Dosy" sem shares; Luiz vê SharePatientSheet de Liam "Carregando..." pra sempre; Skeleton loop Dashboard pós-idle
+- **Fixes aplicados:**
+  - Migration `get_dashboard_payload_include_shares_v0_2_3_6` — RPC consolidado inclui shares via CTE accessible (UNION próprios + patient_shares)
+  - `services/supabase.js` — `lock: processLock` substitui navigatorLock orphan
+  - `hooks/usePatients.js` — remove `refetchOnMount: false`
+  - `hooks/useAuth.jsx` — INITIAL_SESSION + SIGNED_IN invalidate ['patients']/['received_shares']/['dashboard-payload']/['patient_shares']
+- `[x]` Migration aplicada Supabase prod
+- `[x]` SQL test: `get_dashboard_payload()` simulando Daffiny role retorna patients=2/treatments=20/doses=678
+- `[x]` Chrome MCP localhost Daffiny: pré-fix Dashboard 0 doses + "Bem-vindo"; pós-fix 4/11 doses HOJE + 7 pendentes + 3 atrasadas + 61% adesão + cards Liam (5 doses) + Rael (6 doses) + lista Pacientes mostra Liam+Rael
+- `[x]` Build verde `npm run build` 19s 0 warnings
+- `[x]` Build debug APK gradlew CLI 33s sucesso (vc 69 vn 0.2.3.6)
+- `[x]` APK instalado emulator Pixel 8 Android 15 → app launch OK + login screen render
+- `[ ]` **Device físico Luiz:** SharePatientSheet abre Liam mostra Daffiny dentro de 2s (sem "Carregando..." pra sempre)
+- `[ ]` **Device físico Daffiny:** Dashboard mostra Rael + Liam + doses dos 2 pacientes após cold start
+- `[ ]` **Device físico Daffiny:** deixar app idle 10min + voltar → cache refresh, sem skeleton loop infinito
+- `[ ]` **Device físico:** background→foreground 5× consecutivos → sem auth lock orphan no Sentry breadcrumbs
+
+> Validação device-only via emulator Pixel 8 CLI parou em login (limitação ADB `input text` em webview HTML form fields; web Chrome MCP cobre 100% mudanças JS+RPC, sem código nativo afetado).
+
+---
+
+## 🟢 Release v0.2.3.5 — versionCode 68 (em curso, AAB pendente autorização user)
 
 **Escopo:** UI/UX redesign 5 telas + critical bug Reports + sistema gradiente unificado + dark warm migration + cleanup icon style.
 
