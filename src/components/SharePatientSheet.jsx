@@ -64,9 +64,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
             lineHeight: 1.5, margin: 0,
           }}>
             Compartilhe este paciente com outro usuário do Dosy. As alterações
-            aparecem em tempo real para ambos.{' '}
-            Recurso <span style={{ color: 'var(--dosy-primary)', fontWeight: 700 }}>PRO</span>
-            {' '}— apenas quem compartilha precisa ser PRO.
+            aparecem em tempo real para ambos.
           </p>
 
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

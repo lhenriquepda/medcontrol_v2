@@ -53,7 +53,7 @@
 - `[x]` **TreatmentForm fluxo E2E** — criado treatment TESTE-V0235-DELETE Rael 8h/3dias localhost. Toast "Tratamento criado" + nav home. SQL SELECT confirmou 6 doses geradas Supabase. Cleanup OK (DELETE doses + treatments, 0 restantes). _Inicialmente executado em conta pessoal Luiz por erro IA → cleanup feito, regra crítica adicionada README §4 Regra 15 + Validar topo + ROADMAP topo + memory file._
 - `[x]` **Reports preset chips fmtDateInput** — teste-plus@ Reports `/relatorios` `[7 dias]` chip clica → display "07/05/2026 → 14/05/2026" correto (sem UTC shift -1 dia). 30 dias display "14/04 → 14/05" também correto. Hero gauge sunset render OK.
 - `[x]` **SOS over-limit window.confirm** — code review SOS.jsx linha 119 `window.confirm("⚠️ Atenção — limite de segurança atingido...")` + `if (!proceed) return` cancela + warning toast pós-proceed. Path `validateSos().ok=false` cobre over-limit. Lógica não-bloqueante confirmada (decisão clínica user, não app).
-- `[x]` **#251 SharePatientSheet Plus gating fix** — teste-plus@ localhost: clica TestePaciente → Compartilhar paciente → Sheet abre limpo (sem lock amber "exclusivo PRO"), botão Compartilhar sunset ativo. Sem regressão Free.
+- `[x]` **#251 Share Plus gating fix client+server E2E** — teste-plus@ → teste-free@ localhost: Sheet abre limpo (sem lock + copy "Recurso PRO" removida), click Compartilhar → toast verde "Paciente compartilhado com teste-free@teste.com" + lista COMPARTILHADO COM populated (Teste Free) + SQL `patient_shares` confirma row inserida via RPC. Cleanup OK. Migration `share_patient_include_plus_v0_2_3_5` server-side. PatientDetail subtitle "Trabalhe em conjunto com outro usuário" sem · PRO.
 
 **Validação device-only pendente (user testa pós-AAB, opcional):**
 

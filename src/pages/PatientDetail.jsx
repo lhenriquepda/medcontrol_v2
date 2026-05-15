@@ -258,7 +258,7 @@ export default function PatientDetail() {
               <div style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', marginTop: 1 }}>
                 {shares.length > 0
                   ? `Compartilhado com ${shares.length} pessoa${shares.length > 1 ? 's' : ''}`
-                  : 'Trabalhe em conjunto com outro usuário · PRO'}
+                  : 'Trabalhe em conjunto com outro usuário'}
               </div>
             </div>
             {shares.length > 0 && (
