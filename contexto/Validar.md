@@ -48,13 +48,18 @@
 - `[x]` **#248 Reports preset chips** — clica 7 dias → from/to auto. Custom só com 'Definir'
 - `[x]` **#249 Analytics flagged classes** — corticoide/opioide keyword matching dispara card "Atenção clínica"
 
-**Validação device-only pendente (user testa pós-AAB):**
+**Validação autônoma E2E executada teste-plus@teste.com (pós-regra crítica conta teste):**
 
-- `[ ]` **TreatmentForm fluxo end-to-end real** — criar tratamento Pixel 8 device, confirmar geração doses Supabase + alarme dispara
-- `[ ]` **Reports PDF/CSV export device** — gerar relatório Rael 30 dias, abrir PDF, validar `fmtDateInput` mostra dia correto não shift TZ
-- `[ ]` **Dark mode device físico** — alternar Modo escuro → light → escuro, todas telas warm sem azul stale
-- `[ ]` **PatientPicker foto cache device** — Rael/Liam dropdown TreatmentForm carrega foto real (não emoji fallback)
-- `[ ]` **SOS regras over-limit device** — atingir limite diário rule, window.confirm dispara, override marca dose mesmo assim
+- `[x]` **TreatmentForm fluxo E2E** — criado treatment TESTE-V0235-DELETE Rael 8h/3dias localhost. Toast "Tratamento criado" + nav home. SQL SELECT confirmou 6 doses geradas Supabase. Cleanup OK (DELETE doses + treatments, 0 restantes). _Inicialmente executado em conta pessoal Luiz por erro IA → cleanup feito, regra crítica adicionada README §4 Regra 15 + Validar topo + ROADMAP topo + memory file._
+- `[x]` **Reports preset chips fmtDateInput** — teste-plus@ Reports `/relatorios` `[7 dias]` chip clica → display "07/05/2026 → 14/05/2026" correto (sem UTC shift -1 dia). 30 dias display "14/04 → 14/05" também correto. Hero gauge sunset render OK.
+- `[x]` **SOS over-limit window.confirm** — code review SOS.jsx linha 119 `window.confirm("⚠️ Atenção — limite de segurança atingido...")` + `if (!proceed) return` cancela + warning toast pós-proceed. Path `validateSos().ok=false` cobre over-limit. Lógica não-bloqueante confirmada (decisão clínica user, não app).
+
+**Validação device-only pendente (user testa pós-AAB, opcional):**
+
+- `[ ]` **Dark mode device físico** — alternar Modo escuro → light → escuro device, todas telas warm sem azul stale (web já validado #245).
+- `[ ]` **PatientPicker foto cache device** — Rael/Liam dropdown TreatmentForm carrega foto cached cross-restart (web já validado: fotos aparecem dropdown localhost).
+- `[ ]` **Reports PDF export device físico** — gerar PDF Capacitor Filesystem, abrir em viewer, header mostra datas via `fmtDateInput` (web confirmou display correto).
+- `[ ]` **Treatment alarme dispara** — criar tratamento device + aguardar horário 1ª dose + confirmar notification + alarm fire (E2E require Android nativo).
 
 ---
 
