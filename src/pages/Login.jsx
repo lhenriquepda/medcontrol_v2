@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, AlertTriangle, MailCheck, Inbox } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, MailCheck, Inbox, UserPlus } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { TIMING, EASE } from '../animations'
@@ -29,6 +29,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [consent, setConsent] = useState(false)
+  // v0.2.3.5 #254 — checkbox "criar paciente com meu nome" no signup
+  const [createSelfPatient, setCreateSelfPatient] = useState(true)
   const [busy, setBusy] = useState(false)
 
   async function submit(e) {
@@ -46,6 +48,11 @@ export default function Login() {
     try {
       if (mode === 'signin') await signInEmail(email, password)
       else if (mode === 'signup') {
+        // v0.2.3.5 #254 — flag pra criar paciente self pós session active.
+        // useAuth SIGNED_IN listener consome flag + cria patient + limpa.
+        if (createSelfPatient && name.trim()) {
+          try { localStorage.setItem('dosy_pending_self_patient', name.trim()) } catch { /* ignore */ }
+        }
         const res = await signUpEmail(email, password, name)
         // v0.2.3.5 #252 — pending email confirm → tela explicativa em vez de toast.
         if (res?.pendingConfirmation) {
@@ -362,6 +369,68 @@ export default function Login() {
                 }}>
                   Senha: mín. 8 chars, uma maiúscula, um número.
                 </p>
+                {/* v0.2.3.5 #254 — checkbox destacado: criar paciente com nome do user */}
+                <button
+                  type="button"
+                  onClick={() => setCreateSelfPatient((v) => !v)}
+                  className="dosy-press"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 14px',
+                    borderRadius: 16,
+                    border: createSelfPatient ? 'none' : '1.5px solid var(--dosy-border)',
+                    background: createSelfPatient
+                      ? 'var(--dosy-gradient-sunset)'
+                      : 'var(--dosy-bg-elevated)',
+                    color: createSelfPatient ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-fg)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'var(--dosy-font-body)',
+                    boxShadow: createSelfPatient
+                      ? '0 8px 20px -6px rgba(255,107,91,0.4)'
+                      : 'var(--dosy-shadow-xs)',
+                    transition: 'all 200ms',
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: createSelfPatient ? 'rgba(255,255,255,0.22)' : 'var(--dosy-peach-100)',
+                    color: createSelfPatient ? 'var(--dosy-fg-on-sunset)' : 'var(--dosy-primary)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    backdropFilter: createSelfPatient ? 'blur(8px)' : 'none',
+                    border: createSelfPatient ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                  }}>
+                    <UserPlus size={18} strokeWidth={2.25}/>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13.5, fontWeight: 800,
+                      fontFamily: 'var(--dosy-font-display)',
+                      lineHeight: 1.2, marginBottom: 2,
+                    }}>Criar paciente com meu nome</div>
+                    <div style={{
+                      fontSize: 11.5, opacity: createSelfPatient ? 0.9 : 0.7,
+                      lineHeight: 1.4,
+                    }}>{name.trim()
+                      ? `Vai cadastrar "${name.trim()}" como paciente automaticamente`
+                      : 'Cadastra você como paciente automaticamente'}</div>
+                  </div>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 7,
+                    background: createSelfPatient ? '#FFFFFF' : 'transparent',
+                    border: createSelfPatient ? 'none' : '2px solid var(--dosy-fg-tertiary)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'all 180ms',
+                  }}>
+                    {createSelfPatient && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dosy-primary)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </div>
+                </button>
                 <label style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   fontSize: 12, color: 'var(--dosy-fg-secondary)',

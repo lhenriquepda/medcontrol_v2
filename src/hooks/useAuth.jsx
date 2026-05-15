@@ -126,6 +126,31 @@ export function AuthProvider({ children }) {
           // push_sub indevido. Limpar em SIGNED_IN garante state fresco.
           if (event === 'SIGNED_IN') {
             try { localStorage.removeItem('dosy_explicit_logout') } catch { /* ignore */ }
+            // v0.2.3.5 #254 — checkbox "criar paciente com meu nome" no signup.
+            // Login.jsx grava flag em localStorage com o nome digitado.
+            // Aqui (1º SIGNED_IN pós-confirmação email) consome flag + cria patient.
+            // Try/catch isolado pra não quebrar fluxo signup se falhar (logs warn).
+            try {
+              const pendingName = localStorage.getItem('dosy_pending_self_patient')
+              if (pendingName && s?.user?.id) {
+                localStorage.removeItem('dosy_pending_self_patient')
+                // Check se já existe paciente (idempotência — usuário pode logar 2x antes patient_limit insert).
+                const { data: existing } = await supabase
+                  .from('patients')
+                  .select('id')
+                  .eq('userId', s.user.id)
+                  .limit(1)
+                if (!existing || existing.length === 0) {
+                  await supabase.from('patients').insert({
+                    userId: s.user.id,
+                    name: pendingName,
+                    avatar: '🙂',
+                  })
+                }
+              }
+            } catch (e) {
+              console.warn('[useAuth #254] self patient creation failed:', e?.message || e)
+            }
           }
           // Item #201 (release v0.2.1.5) — telemetria sign_in foi MOVIDA do listener
           // pra signInEmail()/signInOAuth(). Listener SIGNED_IN também fire em session
