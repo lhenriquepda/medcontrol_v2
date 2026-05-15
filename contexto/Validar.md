@@ -19,6 +19,117 @@
 
 ---
 
+## 🛠️ Manual de Validação Autônoma (IA executa, sem device físico)
+
+> Receita testada release v0.2.3.6. IA usa pra reproduzir bugs + validar fixes ANTES de pedir validação device pro user.
+
+### Setup (1× por sessão Studio aberta)
+
+**Pre-requisito Android Studio:** Settings → Tools → Device Mirroring →
+- ✓ "Activate mirroring when a new physical device is connected"
+- ✓ "Activate mirroring when the IDE launches an emulator"
+
+Garante Studio "Running Devices" panel auto-pega emulator lançado via CLI.
+
+### 1. Emulator com flags Studio (keyboard físico funciona via Mirror)
+
+```bash
+# Kill emulators velhos primeiro (evita "Running multiple emulators" erro)
+powershell -c "Get-Process | Where-Object { \$_.ProcessName -match 'qemu|emulator|crashpad|netsimd' } | Stop-Process -Force"
+
+# Lança com flags EXATAS que Studio usa (Win32_Process extraído)
+$ANDROID_HOME/emulator/emulator.exe -netdelay none -netspeed full \
+  -avd Pixel8_Test -qt-hide-window -grpc-use-token -idle-grpc-timeout 300
+# tool run_in_background: true — NÃO usar `&` no shell (SIGHUP)
+```
+
+**`-qt-hide-window` ≠ `-no-window`:**
+- `-no-window` = headless puro, sem Qt UI, Studio Mirror NÃO pega frames
+- `-qt-hide-window` = Qt UI escondida MAS processo Qt vivo + gRPC streaming → Studio Mirror pega
+
+Wait boot:
+```bash
+until [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
+```
+
+### 2. Build + install APK debug
+
+```bash
+cd android
+TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+  JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+  PATH="$JAVA_HOME/bin:$PATH" ./gradlew assembleDebug
+
+adb -s emulator-5554 install -r -t app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST_NOTIFICATIONS
+adb -s emulator-5554 shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity
+```
+
+### 3. Login programático via Chrome DevTools Protocol
+
+ADB `input text` NÃO funciona em webview HTML form fields. CDP via gRPC do
+Capacitor webview é o caminho confiável.
+
+```bash
+# Setup forward porta 9222 → webview devtools socket
+APP_PID=$(adb -s emulator-5554 shell pidof com.dosyapp.dosy.dev | tr -d '\r')
+adb -s emulator-5554 forward tcp:9222 localabstract:webview_devtools_remote_$APP_PID
+
+# Pega page ID
+PAGE=$(curl -s http://localhost:9222/json | grep -oE '"id": "[A-F0-9]+"' | head -1 | grep -oE '[A-F0-9]+$')
+
+# Login: POST /auth/v1/token + set localStorage + reload `/`
+node scripts/cdp_login.mjs "$PAGE" daffiny.estevam@gmail.com 123456
+# OR: teste-plus@teste.com 123456 (conta teste recomendada)
+```
+
+Script salva session Supabase v2 no localStorage corretamente. App reload
+detecta SIGNED_IN automatic, hooks disparam, dashboard popula.
+
+### 4. Interação UI via ADB tap (após login)
+
+Coords reais (1080x2400 Pixel 8) — multiplicar screenshot coord × 2 se screenshot scaled 540x1200:
+```bash
+adb -s emulator-5554 shell input tap <x> <y>
+adb -s emulator-5554 shell input keyevent 4  # back
+adb -s emulator-5554 shell input swipe <x1> <y1> <x2> <y2> 300  # swipe 300ms
+```
+
+Para parsing UI: `adb shell uiautomator dump /data/local/tmp/ui.xml` + pull.
+Webview nodes NÃO aparecem (só wrapper). Usar coords baseadas em screenshot
+analizado visualmente OR DOM query via CDP `document.querySelector(...).getBoundingClientRect()`.
+
+### 5. Screenshot
+
+```bash
+MSYS_NO_PATHCONV=1 adb -s emulator-5554 shell screencap -p /data/local/tmp/d.png
+MSYS_NO_PATHCONV=1 adb -s emulator-5554 pull '//data/local/tmp/d.png' 'C:\temp\d.png'
+# IA: Read C:\temp\d.png pra ver
+```
+
+### 6. SQL state validation via Supabase MCP
+
+Verificar DB state pré/pós ação UI:
+```
+mcp__supabase__execute_sql({
+  project_id: 'guefraaqbkcehofchnrc',
+  query: 'SELECT ... FROM medcontrol.<table> WHERE ...'
+})
+```
+
+### Limites conhecidos do fluxo autônomo
+
+| Cenário | Bloqueador | Workaround |
+|---|---|---|
+| Password field via ADB `input text` | Webview HTML form não recebe ADB input | CDP login programático (passo 3) |
+| Reboot test | Emulator restart 30-60s | Aceitar custo OR fazer em batch fim sessão |
+| FCM real push device físico | Emulator tem token sandbox | Validar Java AlarmScheduler.fired via logcat |
+| Biometric / SecureStorage hardware | Sensor real / KeyStore real | Device físico user obrigatório |
+| AdMob PROD ad units | Emulator só TEST_AD_UNIT | Device físico user obrigatório |
+| Privacy screen FLAG_SECURE recents | Hardware blur | Device físico user obrigatório |
+
+---
+
 ## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
 
 **Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico.

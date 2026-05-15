@@ -384,11 +384,58 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
    echo "no" | avdmanager create avd -n Pixel9Pro_Test -k "system-images;android-35;google_apis_playstore;x86_64" -d "pixel_9_pro"
    ```
 
-2. **Start emulator headless + wait boot:**
+2. **Start emulator com flags Studio (Studio Mirror embedded — keyboard OK):**
+
+   **Pre-requisito:** Settings → Tools → Device Mirroring → habilitar ✓
+   "Activate mirroring when a new physical device is connected" + ✓
+   "Activate mirroring when the IDE launches an emulator".
+
    ```bash
-   $ANDROID_HOME/emulator/emulator.exe -avd Pixel8_Test -no-snapshot -port 5554 &  # run_in_background
+   # Flags EXATAS que Android Studio usa pra spawn emulator (extraídas via
+   # Win32_Process CommandLine). Reproduzir CLI dá MESMO comportamento:
+   # janela Qt escondida + Studio Device Mirroring panel embedded pega
+   # frames via gRPC → keyboard físico funciona dentro do HUD.
+   #
+   # Flags importantes:
+   #   -netdelay none           → sem delay rede
+   #   -netspeed full           → velocidade rede full
+   #   -avd Pixel8_Test         → AVD target
+   #   -qt-hide-window          → CHAVE! Esconde janela Qt MAS mantém Qt
+   #                              process (gRPC streaming OK pra Studio Mirror).
+   #                              DIFERE de -no-window (headless puro, sem Qt
+   #                              UI = Studio Mirror NÃO pega frames).
+   #   -grpc-use-token          → gRPC com token auth (Studio espera isso)
+   #   -idle-grpc-timeout 300   → timeout 300s gRPC idle
+   $ANDROID_HOME/emulator/emulator.exe -netdelay none -netspeed full \
+     -avd Pixel8_Test -qt-hide-window -grpc-use-token -idle-grpc-timeout 300
+   # via tool run_in_background: true (não usar `&` no shell — recebe SIGHUP)
    until [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
    ```
+
+   **Se houver emulator externo Qt já rodando** (sintoma: janela `Android Emulator
+   - Pixel8_Test:5554` apareceu em monitor externo, teclado físico não funciona),
+   significa Studio Mirror auto-detect off OU emulator lançado sem `-qt-hide-window`.
+   Kill + relança com flags acima:
+   ```powershell
+   Get-Process | Where-Object { $_.ProcessName -match "qemu|emulator|crashpad|netsimd" } | Stop-Process -Force
+   ```
+
+3. **Login programático via Chrome DevTools Protocol (CDP)** (input text não
+   funciona em webview HTML form fields via ADB):
+   ```bash
+   # Find webview PID + setup forward
+   APP_PID=$(adb -s emulator-5554 shell pidof com.dosyapp.dosy.dev | tr -d '\r')
+   adb -s emulator-5554 forward tcp:9222 localabstract:webview_devtools_remote_$APP_PID
+
+   # Lista pages DevTools
+   PAGE=$(curl -s http://localhost:9222/json | grep -oE '"id": "[A-F0-9]+"' | head -1 | grep -oE '[A-F0-9]+$')
+
+   # Auth via REST direto + set localStorage + reload (mais confiável que click form)
+   node scripts/cdp_login.mjs "$PAGE" daffiny.estevam@gmail.com 123456
+   ```
+   Script `scripts/cdp_login.mjs` faz POST `/auth/v1/token`, salva session no
+   localStorage no formato Supabase v2 esperado, redireciona `/`. Funciona com
+   qualquer conta sem precisar interagir com form HTML.
 
 3. **Build APK CLI + install:**
    ```bash
