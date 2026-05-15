@@ -8300,3 +8300,102 @@ Análise cross-source dificultada — admin panel `/alarm-audit` não consegue f
 | RPC `upsert_push_subscription` precisa update assinatura | 🟢 Baixo | Adicionar `p_device_id` parâmetro opcional, backward-compat | OK |
 
 **Egress save:** Zero. Higiene observabilidade.
+
+---
+
+## QA v0.2.3.6 — Bugs detectados (2026-05-15)
+
+> Relatório completo: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) — rodado em emulator Pixel8_Test, conta teste-plus@teste.com.
+
+---
+
+### #255 — Idle longo (>1h) → skeleton infinito Dashboard ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 — idle 3h10min, token expirou durante freeze Android
+- **Fix commit:** `de90af7` branch `release/v0.2.3.6`
+
+**Root cause:**
+
+`useAppResume.onResume()` chama `supabase.auth.refreshSession()`. Com `processLock + lockAcquireTimeout: 15s`, o lock timeout dispara `ProcessLockAcquireTimeoutError` sem fazer request HTTP. Código classificava como "transient error" (`isAuthFailure=false`) → mantinha session → `refetchQueries()` disparava com token expirado → todas queries retornavam 401 → skeleton infinito. **Zero network requests** observados via CDP Network Monitor em 10+ minutos de foreground.
+
+**Fix aplicado (`src/hooks/useAppResume.js`):**
+
+Adicionada `_readStoredTokenExpiry()` — lê `expires_at` direto do localStorage (bypass processLock). Se token expirado + refresh transient → `supabase.auth.signOut()` → `useAuth` redireciona login. Comportamento `#190/#202` preservado para network glitches reais (token válido + erro de rede → keep session).
+
+**Critério aceitação (validação device físico pendente):**
+- 🧪 App em foreground após 1h+ background com token expirado → redireciona tela login (sem skeleton)
+- ✅ Token válido + network timeout → mantém session (não faz logout desnecessário)
+
+---
+
+### #259 — Status "Cancelada" em Relatórios após pause/resume tratamento
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #4)
+
+**Sintoma:** Relatórios → DETALHAMENTO mostra dose de tratamento com status "Cancelada" após ciclo pause+resume. Dashboard mostra dose como "pendente". Inconsistência entre views.
+
+**Reprodução:**
+1. Criar tratamento Dipirona 8h/8h para paciente
+2. Confirmar dose → Desfazer (undo)
+3. Pausar tratamento → Retomar
+4. `/relatorios` → DETALHAMENTO → dose aparece "Cancelada"
+
+**Investigação necessária:**
+- Verificar status real no DB: `SELECT status FROM medcontrol.doses WHERE id='...'`
+- Verificar se `pause_treatment` RPC cancela doses pending e `resume_treatment` não as recria
+- Verificar se Reports frontend mapeia `cancelled` → "Cancelada" vs Dashboard que mapeia para "pendente"
+
+---
+
+### #260 — Console errors `[object Object]` silenciosos Dashboard/Patients
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md OBSERVAÇÃO #5)
+
+**Sintoma:** CDP Console listener captura `[error] [object Object]` (2 ocorrências) ao carregar Dashboard e navegar para `/pacientes`. Erros são objetos JS logados sem `.message` serializado — mascaram possíveis erros de fetch silenciosos.
+
+**Investigação:** Auditar todos `catch(err)` + `onError(err)` em hooks React Query e services JS. Substituir `console.error(err)` por `console.error(err?.message || err)` ou `Sentry.captureException(err)`.
+
+---
+
+### #261 — HORÁRIO SOS exibe formato en-US (05/15/2026 3:06PM)
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟢 P3
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #1)
+
+**Sintoma:** Campo `<input type="datetime-local">` no formulário SOS exibe `05/15/2026, 3:06PM` em vez de `15/05/2026 15:06`. Emulator/WebView Android usa locale `en-US`.
+
+**Fix options:**
+1. Componente customizado de datepicker (recomendado — controle total do formato)
+2. Overlay CSS/JS que re-formata o valor displayed via `Intl.DateTimeFormat('pt-BR')`
+3. Adicionar `lang="pt-BR"` no `<html>` root (pode ou não funcionar dependendo do WebView)
+
+---
+
+### #262 — Ad banner Plus renderiza acima do header Dosy
+
+- **Categoria:** 🐛 BUGS / UX
+- **Prioridade:** 🟢 P3
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #2)
+
+**Sintoma:** Tela "Mais" e outras telas com ad (tier Plus = 1 ad discreto): o banner AdMob renderiza ACIMA do header Dosy (logo + saudação). Primeiro elemento visível é o ad, não a identidade visual.
+
+**Fix:** Mover posicionamento do ad para posição discreta — bottom da tela (acima do bottom nav), ou no meio de lista de conteúdo. Nunca acima do header.
+
+---
+
+### #263 — Tratamentos exibe "1 dias" quando termina hoje
+
+- **Categoria:** 🐛 BUGS / UX
+- **Prioridade:** ⚪ P4
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #3)
+
+**Sintoma:** Card de tratamento exibe "1 dias" de duração restante quando `endDate === today`. Deveria exibir "Termina hoje" ou "Último dia".
+
+**Fix:** No cálculo de dias restantes, se `daysRemaining <= 0`, exibir "Termina hoje" (se `daysRemaining === 0`) ou considerar encerrado automaticamente.

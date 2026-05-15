@@ -160,7 +160,31 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `master` (release/v0.2.3.5 mergeada `bf447d3`). v0.2.3.5 SHIPPED 2026-05-15.
+**Branch ativa:** `release/v0.2.3.6` (commit `de90af7`). QA autônomo completo rodado 2026-05-15.
+
+**🔄 EM CURSO `release/v0.2.3.6`** (vc 69 planejado, baseado em master vc 68 `bf447d3`) — itens implementados nesta sessão:
+- ✅ **#250** P3 FEATURE API medicamentos ANVISA — `medications_catalog` (764 linhas ETL) + `search_medications` RPC unaccent + `MedNameInput.jsx` 3-fontes autocomplete + `useMedCatalogSearch` hook
+- ✅ **#253b** P2 BUG email template wordmark texto (img→CSS)
+- ✅ **#254b** P2 BUG self-patient via user_metadata + session mutex + cache invalidate signup
+- ✅ **#256b** P1 BUG SOS submit trava silencioso (3 causas): window.confirm→ConfirmDialog + onClose toast cleanup + `p_force` param RPC `register_sos_dose`
+- ✅ **#257b** P1 BUG skeleton infinito pós-idle — `processLock` + `lockAcquireTimeout: 15s` (supabase.js)
+- ✅ **#258b** P1 BUG sharing Dashboard não incluía pacientes compartilhados (`get_dashboard_payload` RPC CTE)
+- ✅ **#255** P1 BUG **[QA 2026-05-15]** idle longo (>1h token expirado) → skeleton infinito — `_readStoredTokenExpiry()` + force signOut pós `ProcessLockAcquireTimeoutError` com token expirado (`useAppResume.js` commit `de90af7`). Ver [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) BUG #6.
+
+**Bugs detectados no QA v0.2.3.6 2026-05-15 — abertos para próxima sessão:**
+> Relatório completo: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md)
+- ⏳ **#259** P2 BUG Status "Cancelada" em Relatórios após ciclo pause/resume tratamento (QA BUG #4)
+- ⏳ **#260** P2 BUG Console errors `[object Object]` silenciosos no Dashboard/Patients (QA OBSERVAÇÃO #5)
+- ⏳ **#261** P3 BUG HORÁRIO no formulário SOS exibe formato en-US (`05/15/2026 3:06PM` vs `15/05/2026 15:06`) — `datetime-local` herda locale do Android WebView (QA BUG #1)
+- ⏳ **#262** P3 UX Ad banner Plus renderiza ACIMA do header Dosy na tela Mais (QA BUG #2)
+- ⏳ **#263** P4 UX Tratamentos exibe "1 dias" quando tratamento termina hoje (deveria "Termina hoje") (QA BUG #3)
+
+**Pendente antes fechar release/v0.2.3.6:**
+- ⏳ Build AAB vc 69 + upload Play Console (Passo 10.5 → aguardar OK user)
+- ⏳ Validação idle fix #255 em device físico (S25 Ultra) — token expirado + resume → deve redirecionar login
+- ⏳ Push resumo diário (disparo cron 5am BRT — requer timing manual)
+
+**Regra crítica adicionada README §4 Regra 15:** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456.
 
 **✅ SHIPPED `release/v0.2.3.5`** (vc 68, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.5` commit `bf447d3`, Vercel prod dosymed.app):
 - ✅ **#239** P1 BUG optimistic cache patch (regression #163)
@@ -175,9 +199,7 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 - ✅ **#252** P2 UX tela "Verifique email" pós-signup (substitui toast vermelho)
 - ✅ **#253** P2 UX email template Dosy branded (wordmark CSS, sunset hero, CTA)
 - ✅ **#254** P2 FEATURE checkbox "criar paciente com meu nome" (user_metadata cross-device + session mutex + qc.invalidate)
-- ⏭️ **#250** P3 DEFERIDO v0.2.3.6 — API medicamentos ANVISA + disclaimers clínicos
-
-**Regra crítica adicionada README §4 Regra 15:** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456.
+- ⏭️ **#250** P3 DEFERIDO → v0.2.3.6 ✅ entregue
 
 **Release anterior shipped v0.2.3.2 (2026-05-14):**
 
