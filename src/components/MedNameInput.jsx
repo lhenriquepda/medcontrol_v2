@@ -45,14 +45,17 @@ export default function MedNameInput({ value, onChange, required = true }) {
     // Convert local to suggestion objects (no subtitle)
     const localSuggestions = local.map((text) => ({ text }))
 
-    // ANVISA results not already in local (dedup by lowercase nome_comercial)
-    const localLower = new Set(local.map((t) => t.toLowerCase()))
+    // Normalize for accent-insensitive comparison
+    const normKey = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
+
+    // ANVISA results not already in local (dedup accent + case insensitive)
+    const localKeys = new Set(local.map(normKey))
     const catalogSuggestions = (catalogItems || [])
-      .filter((item) => !localLower.has((item.nome_comercial || '').toLowerCase()))
+      .filter((item) => !localKeys.has(normKey(item.nome_comercial)))
       .slice(0, 6)
       .map((item) => ({
         text: item.nome_comercial,
-        principio: item.principio_ativo !== item.nome_comercial ? item.principio_ativo : undefined,
+        principio: normKey(item.principio_ativo) !== normKey(item.nome_comercial) ? item.principio_ativo : undefined,
       }))
 
     const merged = [...localSuggestions, ...catalogSuggestions]
