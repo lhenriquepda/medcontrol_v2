@@ -14,6 +14,45 @@
 
 ---
 
+## 🆕 Release v0.2.3.5 — versionCode 68 (em curso, AAB pendente autorização user)
+
+**Escopo:** UI/UX redesign 5 telas + critical bug Reports + sistema gradiente unificado + dark warm migration + cleanup icon style.
+
+- **#239** P1 BUG optimistic skip/confirm cache patch — regressão #163. Fix dual cache patch (`['doses']` + `['dashboard-payload']`) em `mutationRegistry.js`.
+- **#240** P2 UX SOS redesign — hero + chips paciente + grid recentes + Regras collapsible + alerta over-limit (não bloqueia).
+- **#241** P2 UX TreatmentList redesign — hero stats + filter chips paciente + Ativos collapsible.
+- **#243** P1 BUG Reports — `formatDate(YYYY-MM-DD)` UTC parse shift -1 dia BRT + "Sem doses" false negative durante refetch. Fix `fmtDateInput` + `isLoading` distingue fetch de empty.
+- **#244** P2 UX Sistema gradientes unificado — token `--dosy-gradient-sunset-muted` + Card variant `muted` + padronização hero sunset 5 telas.
+- **#245** P2 UX Dark mode warm palette — legacy slate-950/900 → Dosy warm. Focus ring azul → peach.
+- **#246** P3 CLEANUP Remove Estilo de ícones Flat/Emoji toggle — Flat = padrão definitivo.
+- **#247** P2 UX TreatmentForm redesign — PatientPicker usa PatientAvatar real + steps numerados + hero sunset + mode tabs/duration unit sunset.
+- **#248** P2 UX Reports redesign — period chips presets + patient chips + hero gauge + distribuição + top meds.
+- **#249** P2 UX Analytics redesign — gauge ring + insight cards + atenção clínica corticoide/opioide/AINE.
+
+**Validação autônoma (Chrome MCP localhost iterativa user-driven):**
+
+- `[x]` **Build verde** — `npm run build` 18.66s 0 warnings novos
+- `[x]` **#239 cache patch runtime** — pulei dose Avamys via UI, banner amber confirma + visualmente atualiza imediato (não fica overdue)
+- `[x]` **#240 SOS visual** — hero gradient sunset + Pacientes chips + Regras collapsible validados light/dark localhost
+- `[x]` **#241 TreatmentList visual** — hero stats 3-col + chips paciente PatientAvatar fotos reais + Ativos collapsible
+- `[x]` **#243 Reports bug** — Rael + 7 dias mostra 31 doses (era "Sem doses"). Display "06/05→13/05" agora "07/05→14/05" correto
+- `[x]` **#244 Gradient unified** — Reports/TreatmentList/Analytics/SOS/Settings PlanSection hero sunset. DoseHistory daily card muted. Light + dark
+- `[x]` **#245 Dark warm** — Ajustes verifica botão + dropdown Na hora sem azul slate, warm brown matching Dosy
+- `[x]` **#246 Icon cleanup** — Settings sem select Flat/Emoji. Icon component compila + render sem erro
+- `[x]` **#247 TreatmentForm** — Pacientes Rael/Liam mostram foto cadastrada no dropdown. Steps 1-4 numerados. Mode tabs sunset active
+- `[x]` **#248 Reports preset chips** — clica 7 dias → from/to auto. Custom só com 'Definir'
+- `[x]` **#249 Analytics flagged classes** — corticoide/opioide keyword matching dispara card "Atenção clínica"
+
+**Validação device-only pendente (user testa pós-AAB):**
+
+- `[ ]` **TreatmentForm fluxo end-to-end real** — criar tratamento Pixel 8 device, confirmar geração doses Supabase + alarme dispara
+- `[ ]` **Reports PDF/CSV export device** — gerar relatório Rael 30 dias, abrir PDF, validar `fmtDateInput` mostra dia correto não shift TZ
+- `[ ]` **Dark mode device físico** — alternar Modo escuro → light → escuro, todas telas warm sem azul stale
+- `[ ]` **PatientPicker foto cache device** — Rael/Liam dropdown TreatmentForm carrega foto real (não emoji fallback)
+- `[ ]` **SOS regras over-limit device** — atingir limite diário rule, window.confirm dispara, override marca dose mesmo assim
+
+---
+
 ## 🆕 Release v0.2.3.4 — versionCode 67 (em curso, AAB pendente autorização user)
 
 **Escopo:** refactor cost escala focado #163 + #165 + 2 BUG UX user-reported (#236 #237).

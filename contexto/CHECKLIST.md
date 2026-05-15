@@ -6,6 +6,118 @@
 
 ---
 
+## 🚧 Release v0.2.3.5 em curso
+
+### #release-v0.2.3.5 — UI/UX redesign 5 telas + crit bug Reports + sistema gradiente unificado
+
+- **Status:** 🚧 branch `release/v0.2.3.5` aberta (commit `8d1eb8f` bump vc 67→68). Validação web localhost iterativa user-driven. Esforço aplicado ~6h.
+- **Escopo:**
+  - **#239** P1 BUG optimistic skip/confirm cache patch — regressão #163 RPC consolidado v0.2.3.4: `patchDoseInCache` só patcheava `['doses', ...]`, deixava `['dashboard-payload', ...]` stale → UI Avamys 20h continuava "atrasada" + múltiplos clicks "Pular" possíveis. Fix em `mutationRegistry.js`: patch ambos caches + snapshots dual + `refetchDoses` invalida ambos. Commit `11248cd`.
+  - **#240** P2 UX SOS redesign — hero gradient peach→danger (depois unificado #244 → sunset) + ShieldAlert icon + stats 24h/Total + patient chips horizontal scroll PatientAvatar + grid 2-col medicamentos recentes (autofill) + form visual + Regras collapsible (ChevronDown) + form add/update + `upsertSosRule` agora inclui userId (RLS fix silent fail) + `useDeleteSosRule` hook novo + window.confirm over-limit (alerta sem bloquear).
+  - **#241** P2 UX TreatmentList redesign — hero stats 3-col gradient + filter chips PatientAvatar + CollapsibleSection Ativos (default expanded, closable como Encerrados/Pausados) + cards com Pill icon + PatientAvatar inline + metadata pills (dose·interval·duration) + inactive opacity 0.78 + empty state "Limpar filtros".
+  - **#243** P1 BUG Reports — (a) `formatDate("YYYY-MM-DD")` parseia UTC em BRT shifta -1 dia (display "07/05 → 14/05" mostrava "06/05 → 13/05"). Fix `fmtDateInput()` helper local sem `new Date()`. (b) Click chip preset → setFrom/setTo → useDoses novo queryKey sem cache → `doses=[]` default → render mostrava "Sem doses no período" durante fetch (false negative). Fix `isLoading = isPending || (isFetching && doses.length === 0)` distingue loading de empty real. Render spinner "Carregando doses…" durante refetch.
+  - **#244** P2 UX Sistema gradientes unificado:
+    - Token novo `--dosy-gradient-sunset-muted` em `dosy-tokens.css`: 32% sunset mix sobre `bg-elevated` via `color-mix(in oklab)` — adapta auto light/dark, texto `fg` legível ambos modos.
+    - Card primitive ganhou variant `muted` (`surfaces.jsx`).
+    - Hero "destacado" (sunset vibrante) padronizado: Reports gauge, TreatmentList stats, Analytics adesão, SOS siren. Settings PlanSection trocado pra `gradient` vibrante por feedback user.
+    - Discreto (muted) aplicado: DoseHistory daily summary.
+  - **#245** P2 UX Dark mode warm palette migration — `theme.css html.dark` legacy slate-950/900/800 (`#020617/#0f172a/#1e293b`) → Dosy warm (`#1C1410/#261B16/#2A1F18/#3A2820`) + text/border tokens dark migrados pra `fg/fg-secondary/fg-tertiary` + `--color-border` alpha warm. Plus `index.css` `html.dark .input:focus` ring azul `rgba(47,145,255,0.2)` → peach `rgba(255,107,91,0.22)`. Resolve "azul estranho" botão Verificar permissões + dropdown Na hora reportado user.
+  - **#246** P3 CLEANUP Remove "Estilo de ícones" Flat/Emoji toggle. Flat = padrão definitivo:
+    - `Settings/sections.jsx` AppearanceSection: select Flat/Emoji + helper text deletados.
+    - `components/Icon.jsx` reescrito: removido `STYLE_KEY`, `DEFAULT_STYLE`, `getStyle()`, branch emoji do render, export `emojiFor` (unused), `CircleEllipsis` import morto. `ICONS` map simplificado pra `{name: lucideComp}`.
+    - localStorage key `dosy_icon_style` não mais lido/escrito (entradas legacy ficam inertes — sem custo migration).
+  - **#247** P2 UX TreatmentForm redesign:
+    - PatientPicker fix crítico: agora usa `PatientAvatar` (foto real cached via usePatientPhoto) tanto trigger quanto options. Antes só renderizava `selected.avatar` emoji string → user reportou "sem foto" no dropdown.
+    - Hero sunset top: Pill icon glass + "NOVO TRATAMENTO" + nome med + preview count.
+    - Steps numerados 1-4 (Quem e o quê / Quando tomar / Por quanto tempo / Salvar modelo) — badge circular sunset + ícone + título uppercase.
+    - Mode tabs Intervalo fixo/Horários: sunset gradient active + subtitle hint.
+    - Duration unit Dias/Semanas/Meses: sunset gradient active (antes peach solid).
+    - Uso contínuo card: destaca com gradient muted + Infinity icon quando ativo.
+    - Preview virou card muted Sparkles icon (antes texto solto).
+    - Helpers extraídos: `SectionHeader`, `FieldLabel`, `FieldError`.
+  - **#248** P2 UX Reports redesign — period preset chips 7/10/30/365/Definir (custom date pickers só quando 'custom') + patient chips com PatientAvatar padrão Tratamentos + hero gauge ReportGauge SVG sunset + sub-stats 4 HeroStatBox (Tomadas/Puladas/Atrasadas/Pendentes) + Distribuição stacked horizontal bar + LegendRow grid + top medicamentos ranking + dose list com PatientAvatar/Pill + status pills coloridas + SOS badge inline.
+  - **#249** P2 UX Analytics redesign — FLAGGED_CLASSES dictionary (corticoide/opioide/ansiolítico/AINE keyword matching) + `classifyMed(name)` + GaugeRing SVG animated strokeDashoffset + TrendBadge vs período anterior + InsightCard grid 2×2 (Sequência/Total/Horário difícil/SOS) + "Atenção clínica" warning threshold-based (7d ≥3, 30d ≥5, 90d ≥10) + top medicamentos com class badges + horário problemático bar chart 24h buckets + adesão por paciente cor-codificada + calendário heatmap mantido + skeleton só cold-start.
+- **Files tocados v0.2.3.5:**
+  - `src/components/Icon.jsx`, `src/components/PatientPicker.jsx`
+  - `src/components/dosy/surfaces.jsx` (Card muted variant)
+  - `src/hooks/useDoses.js`, `src/services/dosesService.js` (deleteSosRule, upsertSosRule userId)
+  - `src/index.css`, `src/styles/dosy-tokens.css` (gradient-sunset-muted), `src/styles/theme.css` (warm dark)
+  - `src/pages/{Analytics,DoseHistory,Reports,SOS,TreatmentForm,TreatmentList}.jsx`
+  - `src/pages/Settings/sections.jsx` (PlanSection gradient + AppearanceSection cleanup)
+  - `src/services/mutationRegistry.js` (#239 patch dual cache)
+- **Backend:** zero impacto frontend-only release.
+- **Aceitação:** todos visuais validados Chrome MCP localhost user-driven (light + dark). Build verde `npm run build` 18.66s 0 warnings.
+
+### #250 — API medicamentos ANVISA + disclaimers clínicos [v0.2.3.6 NEXT]
+
+- **Status:** ⏳ DEFERIDO próxima release. User pediu 2026-05-14: autocomplete medicamento via API real + info crítica (tarja, dose máx referência) pra disclaimers SOS + cadastro.
+- **Origem:** [User feedback] sessão v0.2.3.5 — "existe API medicamentos pra aplicar no dropdown? + informações criticas, doses maximas recomendadas → disclaimers SOS e cadastro"
+- **Prioridade:** P3 (feature opcional pre-launch — agrega trust + reduz erro user mas não bloqueia ship Closed Testing)
+- **Esforço estimado:** 12-16h (ETL 4h + schema/edge 4h + curadoria warnings top 100 8h)
+- **APIs pesquisadas:**
+  - **ANVISA Open Data** (`dados.gov.br/dataset/dados-abertos-medicamentos`) — CSV gratuito ~30k medicamentos BR registrados. Campos: nome comercial, princípio ativo DCB, laboratório, classe terapêutica, tarja (livre/vermelha/preta), apresentações, registro MS. Atualização mensal. **SEM** API REST oficial — download + ingest.
+  - **WHO ATC/DDD** (`atcddd.fhi.no`) — classificação ATC + Dose Diária Definida free. Cruza ANVISA via DCB↔INN.
+  - **openFDA Drug API** (`api.fda.gov/drug/label.json`) — warnings/dosage/contraindications free 240 req/min sem key. EN, base US, mas princípio ativo bate.
+  - **RxNorm NIH** — padronização nomes free. Cross BR↔US.
+  - **DrugBank** — rica mas pago/free academic. Não usar comercial sem licença.
+  - **Memed/DEF** — pago/só prescritores. Não viável.
+  - ❌ Scrape Consulta Remédios/Bulario.com — TOS + frágil.
+- **Plano arquitetura 2 fases:**
+  - **Fase 1 — Autocomplete (4-6h, low risk):**
+    - ETL ANVISA CSV → tabela `medications_catalog` Supabase
+      - colunas: id (uuid), nome_comercial, principio_ativo, classe, tarja, laboratorio, apresentacao, ativo (boolean)
+      - índice trigram `gin (nome_comercial gin_trgm_ops, principio_ativo gin_trgm_ops)` pra busca ILIKE rápida
+    - Edge function `/search-meds?q=` → ILIKE pattern + limit 20 + sort by exact match priority
+    - `MedNameInput` consome endpoint (debounce 300ms + cached client)
+    - Sem login required (catálogo público)
+  - **Fase 2 — Info clínica curada (8-10h, medium risk Play Console):**
+    - Tabela `medication_warnings`
+      - principio_ativo, severity ('info'|'warn'|'critical'), label_short, descricao, fonte (ANVISA|WHO|FDA), updated_at
+    - Top 100 meds mais usados (extraídos de doses BR atuais + ranking ANVISA) curados manual
+    - Triggers de alerta:
+      - Tarja preta ANVISA → banner amber "Uso controlado — atenção dosagem"
+      - Classe corticoide ATC H02A → "Uso prolongado: efeitos colaterais (osteoporose, supressão adrenal)"
+      - Classe opioide ATC N02A → "Risco dependência + depressão respiratória"
+      - Classe AINE ATC M01A → "Risco gastrintestinal + renal idosos"
+      - Classe ansiolítico ATC N05B → "Risco dependência + tolerância"
+      - Anticoagulante ATC B01A → "Risco hemorragia — interações alimentares"
+    - Integração SOS: se rule existe + medicamento confere classe risk → enriquece toast warning
+    - Cadastro Treatment: ao selecionar med + criança patient (age <12) + classe corticoide → modal "Atenção uso corticoide pediátrico" (informativo, não bloqueia)
+- **⚠️ Risk Play Console (Saúde e Fitness, NÃO Medicina):**
+  - **Permitido:** info, classificação ATC, disclaimers educacionais "consulte médico".
+  - **Proibido/risk:** cálculo dose pediátrica auto por peso, recomendação clínica direta "dose segura", afirmação "este medicamento é seguro/perigoso pra você".
+  - **Regras compliance:**
+    - Toda info clínica cita fonte (ANVISA bula, WHO ATC, FDA label)
+    - Disclaimer global persistente no Settings "Informação educativa, não substitui receita médica"
+    - NÃO calcular dose máxima personalizada — só MOSTRAR referência ANVISA/WHO genérica
+    - Modal opt-in primeira vez user vê info clínica: "Concordo que info é educacional"
+- **Egress impact:**
+  - ANVISA CSV → Supabase ingest 1× (~5 MB), depois só reads on-demand.
+  - Search edge function: ~5 KB/query. Estimativa 50-100 queries/user/mês = 250-500 KB. OK.
+  - Sem polling — só on-demand quando user digita med name.
+- **Custo:**
+  - ANVISA dados: R$0
+  - WHO ATC: R$0
+  - openFDA: R$0
+  - Dev time: 1-2 sessões (~12-16h total split 2 PRs)
+- **Aceitação:**
+  - ✅ Tabela `medications_catalog` populada ≥25k rows ANVISA atual
+  - ✅ MedNameInput autocomplete <300ms p95 latência
+  - ✅ Top 100 meds curados warnings (≥3 classes cobertas: corticoide/opioide/AINE)
+  - ✅ Disclaimer global Settings + footer Treatment form
+  - ✅ Modal opt-in primeira info clínica
+  - ✅ Smoke test Play Console submit checklist categoria Saúde e Fitness (NÃO Medicina) — preview store listing limpa
+  - ✅ Egress audit pós-deploy 7d (search-meds queries + edge invocations)
+- **Dependências:** nenhuma (greenfield feature)
+- **Próximo passo concreto v0.2.3.6:**
+  1. Investigar dataset ANVISA real (download + esquema colunas atuais)
+  2. Esboço schema final `medications_catalog` + migration
+  3. Edge function `/search-meds` deploy + smoke test
+  4. Hook MedNameInput em catálogo
+  5. (PR 2) Curadoria top 100 warnings + UI disclaimers
+
+---
+
 ## 🚧 Release v0.2.3.3 em curso
 
 ### #release-v0.2.3.3 — Fix #231 + cost escala #163+#164+#165 + #110 native crashes + Sentry triage

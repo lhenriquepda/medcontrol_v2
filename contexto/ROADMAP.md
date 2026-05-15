@@ -190,6 +190,21 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 Esforço v0.2.3.3 final: ~5h aplicado. Validação cada item via emulator autônomo §12b README.
 
+**Em curso `release/v0.2.3.5`** (branch `8d1eb8f`, bump vc 67→68 vn 0.2.3.4→0.2.3.5) — UI/UX redesign + critical bug:
+- ✅ **#239** P1 BUG optimistic skip/confirm patch cache `dashboard-payload` (regression #163) (`11248cd`)
+- ✅ **#240** P2 UX SOS redesign — hero card peach→danger + chips paciente + grid recentes + Regras collapsible + form alerta over-limit (não bloqueia)
+- ✅ **#241** P2 UX TreatmentList redesign — hero stats 3-col + filter chips paciente PatientAvatar + Ativos collapsible + cards visuais
+- ✅ **#243** P1 BUG Reports "Sem doses" durante refetch + formatDate UTC parse shift -1 dia BRT — `isLoading` distingue fetch de empty + `fmtDateInput` helper local
+- ✅ **#244** P2 UX Sistema gradientes unificado — token `--dosy-gradient-sunset-muted` + Card variant `muted` + padronização hero sunset (Reports/TreatmentList/Analytics/SOS/Settings)
+- ✅ **#245** P2 UX Dark mode warm palette — legacy slate-950/900 → Dosy warm `#1C1410/#261B16` + focus ring peach (antes azul)
+- ✅ **#246** P3 CLEANUP Remove "Estilo de ícones" Flat/Emoji toggle — Flat = padrão definitivo. Icon.jsx simplificado (sem `STYLE_KEY/emojiFor/CircleEllipsis`)
+- ✅ **#247** P2 UX TreatmentForm redesign — hero sunset top + steps numerados (1-4) + PatientPicker usa PatientAvatar real + mode tabs sunset active + duration unit sunset + preview muted card
+- ✅ **#248** P2 UX Reports redesign — period preset chips 7/10/30/365/Definir + patient chips PatientAvatar + hero gauge sunset + distribuição stacked bar + top meds ranking
+- ✅ **#249** P2 UX Analytics redesign — gauge ring + trend badge + insight cards + atenção clínica corticoide/opioide/AINE keyword matching + horário difícil bar + adesão por paciente
+- 🆕 **#250** P3 FEATURE [NOVO — DEFERIDO v0.2.3.6] **API medicamentos ANVISA + disclaimers clínicos.** User pediu autocomplete med name via API + info crítica (tarja, dose máx referência) pra disclaimers SOS + cadastro. Plano: ETL ANVISA Open Data CSV → tabela `medications_catalog` Supabase + edge function `/search-meds` + tabela `medication_warnings` (princípio_ativo, severity, label, fonte). Top 100 meds curados manual com WHO ATC class. Risk Play Console: NÃO calcular dose pediátrica auto, só MOSTRAR referência ANVISA/WHO + disclaimer "consulte médico". Esforço estimado 12-16h (ETL 4h + schema/edge 4h + curadoria warnings top 100 8h). Ver CHECKLIST #250 detalhado.
+
+Esforço v0.2.3.5: ~6h aplicado. Validação web Chrome MCP localhost iterativa user-driven.
+
 **Sentry triage 2026-05-14 — backlog limpo de 15 → 3 issues abertas:**
 - ✅ **Resolved (7):** 6 issues postgres_changes callbacks (80 events bulk) já fechado por #157 disable Realtime — bundles antigos cacheados em users vão dropar naturalmente. + DOSY-K W.weight.replace TypeError — fix `String(weight).replace(...)` já aplicado release 0.2.0.0+, issue de bundle stale.
 - ✅ **Archived (5):** DOSY-S/R ANR syscall Vsync (generic Android Choreographer, no actionable stack, Processing Error symbolication), DOSY-Q NullPointerException Capacitor Keyboard plugin (library bug upstream), DOSY-N RemoteServiceException broadcast (Android 12 system-level release 0.2.0.3 antigo), DOSY-P auth-token lock stolen (supabase-js NavigatorLock multi-tab — biblioteca noise, não bug).
