@@ -65,39 +65,129 @@ adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST
 adb -s emulator-5554 shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity
 ```
 
-### 3. Login programático via Chrome DevTools Protocol
+### 3. Login programático (DOIS caminhos — escolher conforme build target)
 
-ADB `input text` NÃO funciona em webview HTML form fields. CDP via gRPC do
-Capacitor webview é o caminho confiável.
+**3A. Native APK build (SecureStorage) → Appium + plugin SecureStorage direct**
+
+App native usa `@aparajita/capacitor-secure-storage` (KeyStore Android) como
+storage adapter, NÃO localStorage. Login REST + write SecureStorage via plugin
+positional API `SS.set(key, value)` (não `SS.set({key,value})`).
+
+Setup uma vez:
+```bash
+# Install deps (uma vez por máquina)
+npm install -g appium
+appium driver install uiautomator2
+# Webdriverio local devDep do projeto
+npm install --no-save webdriverio
+```
+
+Start Appium server:
+```bash
+# Allow chromedriver autodownload (Chrome WebView versão custom Capacitor)
+node "$(npm root -g)/appium/build/lib/main.js" --port 4723 \
+  --allow-insecure uiautomator2:chromedriver_autodownload
+# run_in_background: true
+until curl -s http://localhost:4723/status | grep -q '"ready"'; do sleep 1; done
+```
+
+Login via WebView context + REST + SecureStorage:
+```bash
+node scripts/appium_login.mjs daffiny.estevam@gmail.com 123456
+# OR: teste-plus@teste.com 123456 (conta teste — preferir)
+```
+
+Script `scripts/appium_login.mjs` fluxo:
+1. Conecta Appium emulator-5554 sem reset
+2. `getContexts()` → encontra `WEBVIEW_com.dosyapp.dosy.dev`
+3. `switchContext` para webview
+4. `executeAsync`: POST `/auth/v1/token?grant_type=password` → recebe session
+5. `localStorage.setItem('sb-...-auth-token', JSON.stringify(session))`
+6. `Capacitor.Plugins.SecureStorage.set('sb-...-auth-token', sessionStr)` ← chave!
+7. `location.reload()` → Supabase JS detecta session restaurada → SIGNED_IN
+
+⚠️ **Pegadinha plugin SecureStorage:** API é POSITIONAL `set(key, value)` não
+`set({key, value})`. Versões antigas usavam object — falham com "data in the
+store is in an invalid format". `@aparajita/capacitor-secure-storage` v3.x
+positional confirmed v0.2.3.6 release.
+
+**3B. Web/PWA build (localStorage) → CDP simples**
+
+ADB `input text` NÃO funciona em webview HTML form fields. CDP é o caminho.
 
 ```bash
 # Setup forward porta 9222 → webview devtools socket
 APP_PID=$(adb -s emulator-5554 shell pidof com.dosyapp.dosy.dev | tr -d '\r')
 adb -s emulator-5554 forward tcp:9222 localabstract:webview_devtools_remote_$APP_PID
-
-# Pega page ID
 PAGE=$(curl -s http://localhost:9222/json | grep -oE '"id": "[A-F0-9]+"' | head -1 | grep -oE '[A-F0-9]+$')
-
-# Login: POST /auth/v1/token + set localStorage + reload `/`
 node scripts/cdp_login.mjs "$PAGE" daffiny.estevam@gmail.com 123456
-# OR: teste-plus@teste.com 123456 (conta teste recomendada)
 ```
 
-Script salva session Supabase v2 no localStorage corretamente. App reload
-detecta SIGNED_IN automatic, hooks disparam, dashboard popula.
+**Por que NÃO usar form fill tap (CDP click button)?**
+Click programático via `btn.click()` em React Capacitor webview frequentemente
+NÃO dispara `onClick` handler. `dispatchEvent(new PointerEvent(...))` também
+falha em alguns React Synthetic Event handlers. Native tap via coords também
+é frágil (offset status bar/dpr scaling/safe-area). Auth REST + storage
+write + reload é mais determinístico.
 
-### 4. Interação UI via ADB tap (após login)
+### 4. Interação UI (após login)
 
-Coords reais (1080x2400 Pixel 8) — multiplicar screenshot coord × 2 se screenshot scaled 540x1200:
+**4A. Navegação SPA via History API (mais confiável que tap)**
+
+Click em React Router `<Link>` programaticamente pode falhar. Use history:
+```bash
+node -e "const {WebSocket} = require('ws'); const ws = new WebSocket('ws://localhost:9222/devtools/page/PAGE_ID');
+ws.on('open', () => {
+  ws.send(JSON.stringify({id:1,method:'Runtime.evaluate',params:{
+    expression: \"window.history.pushState({},'','/pacientes'); window.dispatchEvent(new PopStateEvent('popstate')); 'navigated'\",
+    returnByValue:true
+  }}));
+  ws.on('message', d => { console.log(JSON.parse(d).result?.result?.value); ws.close(); process.exit(0) });
+});"
+```
+
+Routes principais Dosy:
+- `/` Dashboard
+- `/pacientes` Lista
+- `/pacientes/:id` PatientDetail
+- `/tratamento/novo` TreatmentForm
+- `/ajustes` Settings
+- `/sos` SOS
+
+**4B. Tap nativo via ADB (para botões fora React/Routes)**
+
+Coords reais Pixel 8 1080×2400. Screenshot pull é 540×1200 (scale 0.5) — multiplicar por 2.
+
 ```bash
 adb -s emulator-5554 shell input tap <x> <y>
 adb -s emulator-5554 shell input keyevent 4  # back
+adb -s emulator-5554 shell input keyevent KEYCODE_HOME  # home (background app)
 adb -s emulator-5554 shell input swipe <x1> <y1> <x2> <y2> 300  # swipe 300ms
 ```
 
+**4C. Bottom Nav (Início / Pacientes / + / SOS / Mais)**
+
+Real coords Pixel 8 bottom nav (y=2280 aprox):
+- Início (Dashboard): `(116, 2280)`
+- Pacientes: `(348, 2280)`
+- `+` (FAB Novo tratamento): `(540, 2240)`
+- SOS: `(733, 2280)`
+- Mais: `(965, 2280)`
+
+**4D. Permissions system dialogs (não tap — usar pm grant)**
+
+```bash
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST_NOTIFICATIONS
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.SCHEDULE_EXACT_ALARM
+adb -s emulator-5554 shell input keyevent 4  # dismiss any leftover dialog
+```
+
 Para parsing UI: `adb shell uiautomator dump /data/local/tmp/ui.xml` + pull.
-Webview nodes NÃO aparecem (só wrapper). Usar coords baseadas em screenshot
-analizado visualmente OR DOM query via CDP `document.querySelector(...).getBoundingClientRect()`.
+Webview nodes NÃO aparecem (só wrapper). Use DOM via CDP/Appium:
+```js
+document.querySelector('selector').getBoundingClientRect()
+// CSS px → device px: (x * window.devicePixelRatio, y * dpr + 132 status bar)
+```
 
 ### 5. Screenshot
 
@@ -132,7 +222,26 @@ mcp__supabase__execute_sql({
 
 ## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
 
-**Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico.
+**Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.
+
+### v0.2.3.6 #255 — Idle longo → skeleton infinito (fix useAppResume)
+- **Root cause:** idle >1h + token expirado + `ProcessLockAcquireTimeoutError` no `refreshSession()` → classificado "transient" → `refetchQueries()` com token morto → skeleton
+- **Fix aplicado:** `inactiveMs > 3600s (SUPABASE_TOKEN_LIFETIME_MS)` + `!isAuthFailure` → `supabase.auth.signOut()` → useAuth redireciona login. Funciona para localStorage (web) E SecureStorage (nativo Android).
+- **Commits:** `de90af7` (fix inicial v1 — era localStorage, incorreto), `6ac556e` (fix correto v2 — inactiveMs)
+- `[x]` Fix lógica verificada CDP 2026-05-15: `inactiveMs=7200s > token_lifetime=3600s → wouldSignOut=true` ✅; `inactiveMs=1800s < 3600s → wouldSignOut=false` ✅
+- `[x]` APK debug rebuilt (bundle `index-IR-YtBbE.js`, build 15:57 BRT pós-commit `6ac556e`)
+- `[x]` App carrega Dashboard pós-install sem skeleton (session SecureStorage preservada)
+- `[ ]` **Device físico:** 1h+ background com token expirando → resume → app deve redirecionar para tela de login (sem skeleton infinito). **Como fazer:** logar, aguardar 1h sem usar app (ou editar `expires_at` do token no Supabase console para forçar expiração), colocar em background, aguardar mais 10min, retomar. **O que esperar:** tela de login. **Se falhar:** skeleton loop → bug ainda presente.
+
+### v0.2.3.6 QA Completo — Bugs detectados 2026-05-15
+> Relatório: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) | Itens no CHECKLIST: #259–#263
+- `[~]` **BUG #4 Relatórios "Cancelada"** (#259 P2): dose mostra status "Cancelada" após pause/resume tratamento. Investigação: verificar status real no DB pós-pause-resume. Pendente próxima sessão.
+- `[~]` **BUG #5 Console [object Object]** (#260 P2): errors sem `.message` nos catch blocks. Pendente auditoria console.error em next session.
+- `[~]` **BUG #1 HORÁRIO SOS en-US** (#261 P3): `datetime-local` herda locale Android. Fix: componente customizado ou overlay JS.
+- `[~]` **BUG #2 Ad acima header** (#262 P3): AdMob banner acima do header Dosy. Fix: reposicionar ad para bottom/meio-lista.
+- `[~]` **BUG #3 "1 dias" termina hoje** (#263 P4): tratamento terminando hoje exibe "1 dias". Fix: `daysRemaining <= 0 → "Termina hoje"`.
+
+
 
 ### v0.2.3.6 #250 — ANVISA autocomplete medicamentos
 - `[x]` Migration `medications_catalog` + GIN trigram + RLS public read aplicada
