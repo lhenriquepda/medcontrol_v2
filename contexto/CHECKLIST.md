@@ -8399,3 +8399,122 @@ Adicionada `_readStoredTokenExpiry()` — lê `expires_at` direto do localStorag
 **Sintoma:** Card de tratamento exibe "1 dias" de duração restante quando `endDate === today`. Deveria exibir "Termina hoje" ou "Último dia".
 
 **Fix:** No cálculo de dias restantes, se `daysRemaining <= 0`, exibir "Termina hoje" (se `daysRemaining === 0`) ou considerar encerrado automaticamente.
+
+---
+
+### #264 — Dose 1ª passada pulada no create_treatment_with_doses ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15 — criou tratamento Acetilcisteina 16:00 BRT às 16:07 BRT, dose 16:00 não foi criada
+- **Fix commits:** `4113639` (SQL + form), `fix_create_treatment_doses_past_and_exact_count_v0_2_3_6` migration
+
+**Root cause:**
+
+`create_treatment_with_doses` (e `update_treatment_schedule`) tinha:
+```sql
+WHILE v_first < v_now LOOP
+  v_first := v_first + make_interval(hours => v_step_hours);
+END LOOP;
+```
+Avançava 1ª dose pro futuro pulando qualquer dose no passado — mesmo passada por minutos. Cenário user "iniciei ontem" também ficava quebrado.
+
+**Fix aplicado:**
+
+1. SQL: removido WHILE pula-passado. 1ª dose mantida em `dataInicio + firstDoseTime` mesmo se passada. Status='pending' → cliente recompute overdue via `recomputeOverdue()` em `dosesService.js` → Dashboard mostra "atrasada".
+2. Frontend: TreatmentForm "Início" `type=datetime-local` → "Data de início" `type=date`. Hora vem só de `firstDoseTime`. Hint explica: "Hora vem do campo 'Horário da 1ª dose' acima. Pode ser data passada (doses anteriores aparecem como atrasadas)".
+3. Helpers `toDateInput`/`fromDateInput` em `dateUtils.js`.
+
+**Validado Chrome MCP localhost teste-plus 2026-05-15:**
+- DB: `past_doses: 1`, `first_dose: 15/05 18:35 UTC` (= 15:35 BRT preservada)
+- Dashboard mostra "Acetilcisteina QA Teste · Hoje 15:35 atrasada" ✅
+
+---
+
+### #265 — Total doses incorreto (15 esperado, 12 gerado) ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** User reportado 2026-05-15 (mesmo cenário #264)
+- **Fix commit:** `4113639`
+
+**Root cause:**
+
+SQL usava `doseHorizon = startDate (00:00 local) + durationDays days` + `WHILE v_first + v_t < v_horizon`. Quando 1ª dose era no meio do dia (ex: 16:00), horizonte terminava antes de completar `durationDays × 24 / intervalHours` doses.
+
+**Fix aplicado:**
+
+Substituído loop horizonte por `FOR v_i IN 0..(total_doses - 1)` onde `total_doses = CEIL(durationDays × 24 / intervalHours)`. Garante count exato.
+
+**Validado:** 7d × 8h gerou exatamente 21 doses (DB `total_doses: 21`).
+
+---
+
+### #266 — PatientDetail não mostra tratamento recém-criado como ativo ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15
+- **Fix commit:** `4113639`
+
+**Root cause:**
+
+`createTreatment.onMutate` em `mutationRegistry.js:389` usava:
+```js
+qc.setQueryData(['treatments'], (old = []) => [tempTreatment, ...(old || [])])
+```
+Só atinge queryKey **exata** `['treatments']`. Variações `['treatments', { patientId }]` não eram atualizadas. Combinado com `useTreatments` `refetchOnMount: false` + `invalidateQueries` (não re-fetcha queries não montadas) → PatientDetail mostrava cache stale sem o novo med.
+
+Função `insertEntityIntoLists` (linha 104) existia mas nunca era usada — código morto.
+
+**Fix aplicado:**
+
+1. `onMutate`: usa `insertEntityIntoLists(qc, 'treatments', tempTreatment, filterMatchFn)` com filter match `(item, filter) => !filter?.patientId || filter.patientId === item.patientId`.
+2. `onSuccess`: loop em todas queries `findAll({ queryKey: ['treatments'] })` substituindo temp→real (não só queryKey exata).
+3. `onError`: rollback via snapshots de todas variações.
+
+Padrão alinhado com `pauseTreatment`/`resumeTreatment`/`endTreatment` que já usavam `patchEntityListsInCache` (fix #204 v0.2.1.8).
+
+**Validado:** /pacientes/{id} → seção "Tratamentos ativos 2 / Acetilcisteina QA Teste 5ml · a cada 8h · 7 dias" ✅
+
+---
+
+### #267 — Dashboard skeleton infinito em troca de hora ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15 — deixou app idle Dashboard, voltou e ficou skeleton
+- **Fix commit:** `20efdbf`
+
+**Root cause:**
+
+`useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`:
+```js
+queryKey: ['dashboard-payload', { from: roundToHour(from), to: roundToHour(to), daysAhead }]
+```
+
+Cada hora gera queryKey diferente. Cache mantém 5 queries (uma por hora). Quando hora muda (ex: 19→20), nova queryKey criada — `placeholderData: previousData` retorna `undefined` porque essa key nunca renderizou antes.
+
+`isLoading: true` → `<SkeletonList count={4} />` renderiza permanente. Cache com dados das horas anteriores existe mas Dashboard só olha a query CURRENT.
+
+**Fix aplicado:**
+
+`placeholderData` fallback varre cache cross-key:
+```js
+placeholderData: (previousData) => {
+  if (previousData) return previousData
+  const all = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+  const withData = all.filter((q) => q.state.data)
+  if (withData.length === 0) return undefined
+  withData.sort((a, b) => (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0))
+  return withData[0].state.data
+}
+```
+
+Cobre:
+- Same-key refetch (previousData ainda first match)
+- Cross-key transition (hour boundary OR filter change OR daysAhead change)
+
+**Validado Chrome MCP localhost 2026-05-15 16:46 BRT:**
+- Bug reproduzido (4 shimmer skeletons visíveis com 5 queries cached)
+- Pós fix: 0 skeletons, dashboard renderiza dados imediatamente

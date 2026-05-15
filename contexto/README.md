@@ -661,11 +661,32 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** master @ tag `v0.2.3.5` (vc 68, Play Console Internal Testing publicado 2026-05-15, Vercel prod dosymed.app). v0.2.3.5 entregou: UI/UX redesign 5 telas + sistema gradiente unificado + signup branded + email template Dosy + self-patient checkbox + share Plus fix (client+server) + 3 bug-fixes P1 (#239 skipDose cache, #243 Reports date, #251 Plus gating). Sem release em curso.
-**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.2 via auto-deploy)
+**Versão atual:** `release/v0.2.3.6` EM CURSO (vc 69, AAB pendente autorização user Passo 10.5). HEAD `15f46b3`. Master @ tag `v0.2.3.5` (vc 68, Play Console Internal Testing 2026-05-15, Vercel prod dosymed.app).
+**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.5 via auto-deploy)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
+**🔄 Release em curso `release/v0.2.3.6`:**
+- ✅ **#250** P3 ANVISA autocomplete medicamentos (764 rows + RPC unaccent + MedNameInput 3-fontes)
+- ✅ **#253b** email wordmark texto (img→CSS)
+- ✅ **#254b** self-patient signup (user_metadata + session mutex + cache invalidate)
+- ✅ **#255** P1 idle longo >1h token expirado → skeleton (fix `inactiveMs > SUPABASE_TOKEN_LIFETIME_MS` em useAppResume)
+- ✅ **#256b** P1 SOS submit window.confirm bug Capacitor (ConfirmDialog + p_force RPC)
+- ✅ **#257b** P1 lockAcquireTimeout 15s skeleton pós-idle
+- ✅ **#258b** P1 sharing Dashboard RPC `get_dashboard_payload` CTE inclui shares
+- ✅ **#264** P1 dose 1ª passada pulada create_treatment_with_doses (SQL + Form type=date)
+- ✅ **#265** P2 total doses incorreto (SQL count exato)
+- ✅ **#266** P1 PatientDetail não mostra treatment recém-criado (insertEntityIntoLists)
+- ✅ **#267** P1 Dashboard skeleton hour boundary (placeholderData cross-key)
+
+**Bugs abertos (próxima release):** #259 #260 #261 #262 #263 — P2-P4 ver [`Validar.md`](Validar.md) e [`CHECKLIST.md`](CHECKLIST.md).
+
+**QA report completo:** [`qa/QA_REPORT.md`](qa/QA_REPORT.md)
+
 **Última release fechada master:**
+
+- ✅ v0.2.3.5 (2026-05-15) — UI/UX redesign 5 telas + sistema gradiente unificado + signup branded + email template Dosy + self-patient checkbox + share Plus fix (client+server) + 3 bug-fixes P1 (#239 skipDose cache, #243 Reports date, #251 Plus gating). vc 68 Play Console Internal Testing. Tag `bf447d3`. Vercel prod auto-deploy.
+
+**Releases anteriores fechadas master:**
 
 - ✅ v0.2.3.2 (2026-05-14) — **Bug-fixes #227-#230 + CLI gradlew destravado.** 4 bugs P1/P2 descobertos durante validação device v0.2.3.1 via Appium UiAutomator2 (Pixel 8 + Pixel 10 Pro XL): (a) **#227 P1** RLS audit log multi-policy fix — `alarm_audit_config` sem SELECT pra authenticated + `alarm_audit_log` sem SELECT own; 2 migrations applied, audit infrastructure 6 sources populando; (b) **#228 P1** `unsubscribeFcm` cross-device contamination — fix `fcm.js` filtra delete por `device_id_uuid`; (c) **#229 P1** snooze persist async race em reboot — fix `AlarmScheduler.java` 5 callsites `apply()` → `commit()` sync; (d) **#230 P2** Edge `dose-trigger-handler` v21 BATCH agrupa por (ownerId, patientId, minute_bucket) + query group siblings + CSV completo. **CLI gradlew destravado (bonus técnico):** root cause descoberto definitivo — filter driver bloqueia AF_UNIX especificamente em `C:\Users\<user>\AppData\Local\Temp` (não é Kaspersky, não é JDK, não é Winsock). Diagnóstico binário: bind+connect AF_UNIX OK em `C:\temp`, FAIL em `AppData\Local\Temp`. Fix `TEMP/TMP` redirect → `C:\temp\gradle_tmp` + JDK 25 Adoptium Temurin 25.0.3.9. AAB CLI 33s autônomo (substitui Studio GUI manual). Documentado `android/gradle.properties` + README §11. Validar.md 62 [x] / 0 pending. AAB vc 65 publicado Play Console Internal Testing 14:46 BRT. Master merge `c0cb372` → Vercel auto-deploy. Tag `v0.2.3.2` em `e277aa6`.
 
