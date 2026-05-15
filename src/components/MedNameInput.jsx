@@ -1,78 +1,95 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { suggestMedications } from '../data/medications'
 import { useUserMedications } from '../hooks/useUserMedications'
+import { useMedCatalogSearch } from '../hooks/useMedCatalogSearch'
 
 /**
  * MedNameInput — text field with dropdown autocomplete.
  *
- * Behavior:
- *   - User types ≥2 chars → dropdown shows up to 6 matches below input
- *   - List narrows as user types more
- *   - Tap row OR Enter on highlighted row → fills input + closes dropdown
- *   - Esc → closes dropdown (keeps typed value — input is free-text)
- *   - Blur → closes (small delay to allow tap)
- *   - User can submit free-text not in list (medications.js is hint, not whitelist)
+ * Sources (merged, deduplicated):
+ *   1. User's own medication history (priority, synchronous)
+ *   2. ANVISA catalog via search_medications RPC (debounced 300ms)
+ *   3. Local curated list (fallback)
  *
- * Mobile-friendly: dropdown is a tap-target list, not ghost-text or chips.
+ * Each suggestion: { text: string, principio?: string }
+ * principio shown as subtitle for catalog results only.
+ * onChange always receives the plain medName string.
  */
 export default function MedNameInput({ value, onChange, required = true }) {
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState([])
   const [highlight, setHighlight] = useState(-1)
+  const [debouncedValue, setDebouncedValue] = useState(value)
   const wrapperRef = useRef(null)
   const inputRef = useRef(null)
   const blurTimerRef = useRef(null)
+  const debounceRef = useRef(null)
   const listId = useId()
 
-  // User's own medication history — merged with hardcoded list as priority hints
   const { data: userMeds = [] } = useUserMedications()
+  const { data: catalogItems = [], isFetching: catalogFetching } = useMedCatalogSearch(debouncedValue)
+
+  // Debounce value for ANVISA catalog search (300ms)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedValue(value), 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [value])
+
+  // Merge sources whenever any input changes
   const userMedsKey = useMemo(() => userMeds.join('|'), [userMeds])
 
-  // Recompute suggestions when value or user history changes
   useEffect(() => {
-    const list = suggestMedications(value, 6, userMeds)
-    setSuggestions(list)
-    if (list.length === 0) setHighlight(-1)
-    else if (highlight >= list.length) setHighlight(list.length - 1)
-    // open only if input focused AND list non-empty AND value not exactly matching first
-    // (closes when user accepts a suggestion, since exact match means typed = picked)
-    if (document.activeElement === inputRef.current) {
-      const exact = list.length > 0 && list[0].toLowerCase() === value.toLowerCase()
-      setOpen(list.length > 0 && !exact)
-    }
-  }, [value, userMedsKey])
+    const local = suggestMedications(value, 4, userMeds)
 
-  // Close dropdown when user taps outside
+    // Convert local to suggestion objects (no subtitle)
+    const localSuggestions = local.map((text) => ({ text }))
+
+    // ANVISA results not already in local (dedup by lowercase nome_comercial)
+    const localLower = new Set(local.map((t) => t.toLowerCase()))
+    const catalogSuggestions = (catalogItems || [])
+      .filter((item) => !localLower.has((item.nome_comercial || '').toLowerCase()))
+      .slice(0, 6)
+      .map((item) => ({
+        text: item.nome_comercial,
+        principio: item.principio_ativo !== item.nome_comercial ? item.principio_ativo : undefined,
+      }))
+
+    const merged = [...localSuggestions, ...catalogSuggestions]
+    setSuggestions(merged)
+
+    if (merged.length === 0) setHighlight(-1)
+    else if (highlight >= merged.length) setHighlight(merged.length - 1)
+
+    if (document.activeElement === inputRef.current) {
+      const exact = merged.length > 0 && merged[0].text.toLowerCase() === value.toLowerCase()
+      setOpen(merged.length > 0 && !exact)
+    }
+  }, [value, userMedsKey, catalogItems])
+
+  // Close on outside tap
   useEffect(() => {
     if (!open) return
     function handleDocClick(e) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setOpen(false)
-      }
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false)
     }
     document.addEventListener('pointerdown', handleDocClick)
     return () => document.removeEventListener('pointerdown', handleDocClick)
   }, [open])
 
-  function handleChange(e) {
-    onChange(e.target.value)
-  }
+  function handleChange(e) { onChange(e.target.value) }
 
-  function handleFocus() {
-    if (suggestions.length > 0) setOpen(true)
-  }
+  function handleFocus() { if (suggestions.length > 0) setOpen(true) }
 
   function handleBlur() {
-    // Delay close so onPointerDown of a suggestion row can fire first
     blurTimerRef.current = setTimeout(() => setOpen(false), 150)
   }
 
-  function pick(med) {
+  function pick(item) {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
-    onChange(med)
+    onChange(item.text)
     setOpen(false)
     setHighlight(-1)
-    // Move focus back to input for continued editing if needed
     inputRef.current?.focus()
   }
 
@@ -100,7 +117,6 @@ export default function MedNameInput({ value, onChange, required = true }) {
       e.preventDefault()
       setOpen(false)
     } else if (e.key === 'Tab') {
-      // Tab accepts highlighted suggestion if any, otherwise lets focus move naturally
       if (highlight >= 0 && highlight < suggestions.length) {
         e.preventDefault()
         pick(suggestions[highlight])
@@ -108,19 +124,18 @@ export default function MedNameInput({ value, onChange, required = true }) {
     }
   }
 
-  // Highlight matched substring inside suggestion (case + diacritic insensitive)
-  function highlightMatch(med, query) {
-    if (!query || query.length < 2) return med
+  function highlightMatch(text, query) {
+    if (!query || query.length < 2) return text
     const norm = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
     const nQuery = norm(query)
-    const nMed = norm(med)
-    const idx = nMed.indexOf(nQuery)
-    if (idx === -1) return med
+    const nText = norm(text)
+    const idx = nText.indexOf(nQuery)
+    if (idx === -1) return text
     return (
       <>
-        {med.slice(0, idx)}
-        <strong style={{ color: 'var(--dosy-primary)' }}>{med.slice(idx, idx + query.length)}</strong>
-        {med.slice(idx + query.length)}
+        {text.slice(0, idx)}
+        <strong style={{ color: 'var(--dosy-primary)' }}>{text.slice(idx, idx + query.length)}</strong>
+        {text.slice(idx + query.length)}
       </>
     )
   }
@@ -166,7 +181,7 @@ export default function MedNameInput({ value, onChange, required = true }) {
           style={{
             position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)',
             zIndex: 30,
-            maxHeight: 240, overflowY: 'auto',
+            maxHeight: 280, overflowY: 'auto',
             margin: 0, padding: '4px 0',
             listStyle: 'none',
             borderRadius: 16,
@@ -177,21 +192,18 @@ export default function MedNameInput({ value, onChange, required = true }) {
             fontFamily: 'var(--dosy-font-body)',
           }}
         >
-          {suggestions.map((med, i) => {
+          {suggestions.map((item, i) => {
             const isHl = i === highlight
             return (
               <li
-                key={med}
+                key={`${item.text}-${i}`}
                 id={`${listId}-opt-${i}`}
                 role="option"
                 aria-selected={isHl}
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  pick(med)
-                }}
+                onPointerDown={(e) => { e.preventDefault(); pick(item) }}
                 onMouseEnter={() => setHighlight(i)}
                 style={{
-                  padding: '10px 14px',
+                  padding: item.principio ? '8px 14px 6px' : '10px 14px',
                   fontSize: 14,
                   cursor: 'pointer',
                   userSelect: 'none',
@@ -201,10 +213,24 @@ export default function MedNameInput({ value, onChange, required = true }) {
                   transition: 'background 150ms var(--dosy-ease-out)',
                 }}
               >
-                {highlightMatch(med, value)}
+                <div>{highlightMatch(item.text, value)}</div>
+                {item.principio && (
+                  <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', fontWeight: 400, marginTop: 1 }}>
+                    {item.principio}
+                  </div>
+                )}
               </li>
             )
           })}
+          {catalogFetching && (
+            <li style={{
+              padding: '6px 14px', fontSize: 11,
+              color: 'var(--dosy-fg-muted)', fontStyle: 'italic',
+              listStyle: 'none',
+            }}>
+              buscando no catálogo ANVISA…
+            </li>
+          )}
         </ul>
       )}
     </div>
