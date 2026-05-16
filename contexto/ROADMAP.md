@@ -160,15 +160,16 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo: perf bundle low-risk F1+F3+F6+F5 — reduzir lentidão device reportada pelo user pós últimas releases.
+**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo original: perf bundle low-risk F1+F3+F6+F5. Adicionado mid-release **#279 SERVER caregiver FCM fix** (Edge dose-trigger-handler v24 + daily-alarm-sync v5 — Doze bypass via `notification` payload pra cuidador). Todos itens implementados + commitados. Pendente apenas validação device físico (S25 Ultra + cuidador real) + autorização user Passo 10.5 pra build AAB.
 
 **Auditoria de origem:** [`contexto/auditoria/2026-05-15-perf-audit-device-slow.md`](auditoria/2026-05-15-perf-audit-device-slow.md) — 11 seções, identifica 3 regressões cascateadas (v0.2.3.1 Bloco 7 expansão janela 90 dias + v0.2.3.4 #163 duplo namespace cache + v0.2.3.5 #239 patch ambos) que multiplicaram custo por interação. Cada fix tem ANTES/DEPOIS, bug original protegido, justificativa de regressão segura.
 
-**Itens release/v0.2.3.7 (ABERTOS):**
-- ⏳ **#272** P1 BUG PERF — F1 alarmWindow App.jsx -30d/+60d → -1d/+14d (motivo original obsoletizado por #163)
-- ⏳ **#273** P1 BUG PERF — F3 useDashboardPayload placeholderData via ref module-scope (manter proteção #267, eliminar findAll por render)
-- ⏳ **#274** P1 BUG PERF — F6 React.memo BottomNav + AppHeader (sem regressão — otimização nova)
-- ⏳ **#275** P2 BUG PERF — F5 persister throttleTime 1000ms → 5000ms (fila offline #204 protege contra crash)
+**Itens release/v0.2.3.7 (FECHADOS sessão 2026-05-16):**
+- ✅ **#272** P1 BUG PERF — F1 alarmWindow App.jsx -30d/+60d → -1d/+14d (motivo original obsoletizado por #163) — commit `96b6071`
+- ✅ **#273** P1 BUG PERF — F3 useDashboardPayload placeholderData via ref module-scope (manter proteção #267, eliminar findAll por render) — commit `a8a396e`
+- ✅ **#274** P1 BUG PERF — F6 React.memo BottomNav + AppHeader (sem regressão — otimização nova) — commit `0431fc7`
+- ✅ **#275** P2 BUG PERF — F5 persister throttleTime 1000ms → 5000ms (fila offline #204 protege contra crash) — commit `410a352`
+- ✅ **#279** P1 SERVER BUG — Edge FCM caregiver bypass Doze (`notification` payload pra `isOwner=false` + `daily-alarm-sync` inclui `patient_shares`). Diagnose emulador: 2m34s atraso data-only background normal (One UI 7 Restricted = HORAS). v22 channel_id INVALID_ARGUMENT → v23 channel_id removed (priority field invalid) → v24 priority removed + fcm_fallback channel + INVALID_ARGUMENT não deleta token. E2E emulator 2026-05-16 14:45 UTC: caregiver tray `FCM-Notification:3852545` channel=`fcm_fallback_notification_channel` rendered direto do payload Android. Edge `dose-trigger-handler` v24 + `daily-alarm-sync` v5 ACTIVE. Commit `c58e9c7`. Validação device físico 2x devices pendente.
 
 **Itens HOLD (auditados, decisão posterior):**
 - ⏸️ **#276** F4 — refetchDoses não invalida dashboard-payload pós-patch. HOLD aguardar resultado v0.2.3.7. Risco: doses irmãs BATCH_UPDATE não atualizam até próximo focus.

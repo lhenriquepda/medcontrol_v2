@@ -272,6 +272,28 @@ mcp__supabase__execute_sql({
 - `[x]` **Build verde** (24.42s, sem warnings novos).
 - `[ ]` **Device físico (S25 Ultra):** smoke test crash-safety. Cenário: marcar dose → force-quit app < 5s depois → reabrir → confirmar dose aparece como done (fila offline drena). Esperado mesmo comportamento que pré-F5 (mutation queue cobre).
 
+### v0.2.3.7 #279 — Edge FCM caregiver bypass Doze (`notification` payload + daily-sync inclui shares)
+
+> **Bug reportado:** cuidador (paciente compartilhado via `patient_shares`) recebe FCM data-only que Android difere por Doze/AppStandby. Emulador medido: ~2m34s de atraso em background normal. Production Samsung One UI 7 Restricted bucket: HORAS. Cuidador perde lembrete da dose silenciosamente.
+>
+> **Root cause:** `dose-trigger-handler` sempre enviava FCM data-only — pra owner (app ativo, processa via DosyMessagingService + AlarmScheduler local) funciona; pra cuidador (app inativo na conta dele) Android não tem urgência de processar.
+>
+> **Fix aplicado (Edge `dose-trigger-handler` v24 + `daily-alarm-sync` v5 ambos ACTIVE):**
+> 1. `sendFcmTo()` aceita `notification` opcional (title/body). Owner → undefined (data-only mantido, app processa). Cuidador (`isOwner=false`) → notification payload → Android renderiza tray IMEDIATO.
+> 2. `channel_id` removido (usa `fcm_fallback_notification_channel` default — garante delivery em device force-stopped onde custom `dosy_tray` channel pode não existir).
+> 3. INVALID_ARGUMENT não deleta mais push_sub token (era over-aggressive — podia ser payload error transient, não token revoke). Só UNREGISTERED / 404 / registration-token-not-registered deletam.
+> 4. `daily-alarm-sync` inclui `patient_shares` (cuidadores) no sync diário 5am — self-healing se dose-trigger-handler falhar entrega FCM cuidador.
+
+- `[x]` **Edge deployed v24 (dose-trigger) + v5 (daily-sync)** confirmado via `list_edge_functions` Supabase MCP.
+- `[x]` **E2E emulator 2026-05-16 14:45 UTC** (5554=owner teste-plus, 5556=caregiver teste-free, paciente compartilhado "ShareKid"):
+  - SQL INSERT dose +60s → 5 audit log `edge_trigger_handler.fcm_sent` rows, todos `fcmOk:true`.
+  - Owner (4 push_subs teste-plus): `withNotification:false` (data-only mantido). Java side processou via `DosyMessagingService.batch_start → AlarmScheduler.scheduled → batch_end` em 160ms. NotificationRecord `id=861292774` channel=`dosy_tray` importance=5.
+  - **Caregiver (1 push_sub teste-free `TRJomxXD8sbo`): `withNotification:true` ✅.** NotificationRecord tag=`FCM-Notification:3852545` channel=`fcm_fallback_notification_channel` — **Android renderizou tray DIRETO do FCM notification payload, sem passar pelo app, bypass Doze comprovado.**
+- `[x]` **Audit log baseline correto:** owner aparece com 3 actions (batch_start/scheduled/batch_end) + 4 devices fcm_sent. Caregiver não aparece em java_fcm_received (teste-free não está em `alarm_audit_config` — esperado, audit é opt-in). Edge log confirma dispatch caregiver OK.
+- `[ ]` **Device físico (S25 Ultra) + segundo device cuidador real:** validar tray notif render imediato em One UI 7 production background normal + Restricted bucket. **Como fazer:** instalar Internal Testing build em 2 devices, conta owner em dispositivo A com paciente compartilhado, conta caregiver em dispositivo B (background normal, app fechado mas não force-stop). Owner cria dose → cuidador deve ver tray "Dose programada — {paciente} / {medName} às HH:MM" em <30s. **O que esperar:** tray renderiza com som padrão Android (fcm_fallback channel), abre app no clique. **Se falhar:** se tray atrasar >5min em background normal → fix incompleto, investigar metered-network OR App Standby bucket. Production Samsung Restricted bucket pode exigir `setForegroundService` ou intent stickiness adicional.
+- `[ ]` **Cron `daily-alarm-sync` 5am BRT dia seguinte:** verificar via Supabase logs que caregiver patient_ids entraram no payload de sync (Edge log line `patientIds total=N (own+shared)`). Sem fix v5, caregiver não recebia self-healing diário.
+- `[ ]` **Egress observação 24h:** acréscimo nominal por cuidador (1 FCM extra com notification payload vs data-only, ~200 bytes a mais por dose). Estimativa pré-launch: <5% acréscimo egress Edge functions. Verificar painel Supabase egress 2026-05-17.
+
 ---
 
 ---
