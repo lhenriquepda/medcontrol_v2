@@ -130,13 +130,42 @@ public class MainActivity extends BridgeActivity {
             postJsEvent("dosy:openDose", "doseId", openDoseId);
             return;
         }
+
+        // v0.2.3.7 Bug B fix — FCM share notification tap branch.
+        // Edge `patient-share-handler` sends data.kind=patient_share_added +
+        // data.patientId. App navigates to /pacientes/:id on tap.
+        String kind = intent.getStringExtra("kind");
+        if ("patient_share_added".equals(kind)) {
+            String patientId = intent.getStringExtra("patientId");
+            if (patientId != null) {
+                intent.removeExtra("kind");
+                intent.removeExtra("patientId");
+                postJsEvent("dosy:openPatient", "patientId", patientId);
+                return;
+            }
+        }
+
+        // FCM fire-time tap fallback — data.doseId present even though
+        // openDoseId may be null on some Android FCM intent serialization paths.
+        String doseId = intent.getStringExtra("doseId");
+        String fcmKind = kind != null ? kind : intent.getStringExtra("kind");
+        if (doseId != null && ("dose_fire_time".equals(fcmKind) || fcmKind == null)) {
+            intent.removeExtra("doseId");
+            AlarmService.stopActiveAlarm(this);
+            postJsEvent("dosy:openDose", "doseId", doseId);
+            return;
+        }
     }
 
     private void postJsEvent(String eventName, String key, String value) {
         // Set global var IMMEDIATELY (covers cold start: JS reads on mount)
         // Plus dispatch event with retries (covers warm start: listener already bound)
         String safeVal = value.replace("'", "\\'");
-        String varName = key.equals("doseIds") ? "__dosyPendingDoseIds" : "__dosyPendingDoseId";
+        // v0.2.3.7 Bug B fix — support patientId var alongside doseId/doseIds.
+        String varName;
+        if ("doseIds".equals(key)) varName = "__dosyPendingDoseIds";
+        else if ("patientId".equals(key)) varName = "__dosyPendingPatientId";
+        else varName = "__dosyPendingDoseId";
         String setVar = String.format("window.%s = '%s';", varName, safeVal);
         String dispatch = String.format(
             "window.dispatchEvent(new CustomEvent('%s', { detail: { %s: '%s' } }));",

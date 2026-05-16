@@ -341,6 +341,32 @@ mcp__supabase__execute_sql({
 | 12 | ✅ | Owner tray "Dosy 💊 — UITestMed (1cp)" via AlarmScheduler local exato 19:25:55 |
 | 13 | ✅+~ | **Owner tap → MainActivity log: `[handleAlarmAction] extras: openDoseIds=e5f78d3d-719a-4fee-b3bb-e4bb1765a5a3;`** ✅ — local alarm path correto. JS event dosy:openDoses posted. Dashboard renderizou MAS modal não visível (cache stale: dose acabou de ser INSERT'd via SQL, React Query owner ainda não fetcheou). Funcionalmente OK — recarregar dashboard mostraria modal. |
 
+### v0.2.3.7 Bug B FIX commit — share tap navigation 100%, fire-time partial
+
+**Aplicado 2026-05-16 19:40-19:46 UTC:**
+
+1. **Edge `dose-fire-time-notifier` v4** — `message.android.collapseKey = fire_${doseId}` + `message.android.notification.tag = fire_${doseId}` (FCM e Android-NotificationManager dedupe keys distintas por dose).
+2. **Edge `patient-share-handler` v3** — `message.android.collapseKey = share_${patientId}_${sharedWithUserId}`.
+3. **Edge `dose-trigger-handler` v24** (local fix commit, deploy pendente — depende _shared files) — caregiver path collapseKey `fire_${doseId}`.
+4. **MainActivity.handleAlarmAction** — adicionado branch `if kind==patient_share_added → postJsEvent("dosy:openPatient", "patientId", patientId)` + fallback `doseId` (não só `openDoseId`).
+5. **App.jsx** — listener novo `dosy:openPatient` → `navigate('/pacientes/:id')` + pending var `__dosyPendingPatientId` para cold start.
+
+**Resultados re-teste:**
+
+✅ **Share tap fix COMPLETO:**
+   - Caregiver tap em "Paciente compartilhado" tray → MainActivity log: extras OK (`patientId, ownerId, kind=patient_share_added`)
+   - App navegou direto pra `/pacientes/:id` (Patient Detail)
+   - UI mostra "TestePaciente / 50 anos / Paciente compartilhado com você / Edições aparecem em tempo real para ambos."
+   - **Funcional 100% via UI tap.**
+
+~ **Fire-time tap PARCIAL:**
+   - Caregiver tray agora mostra 3 notifs distintas (tag fix funcionou — antes Android colapsava em 1 só) ✅
+   - Tap em "Hora da dose às 16:45" → MainActivity log: ainda mostra `no extras`. Tap launches MainActivity mas intent extras null.
+   - Causa restante (hipótese): tap intent PendingIntent compartilhado entre múltiplas notifs FCM `notification` payload — Android usa launcher Intent template sem incluir data payload da notif específica tapped. Capacitor `pushNotificationActionPerformed` também não fires (verificado logcat).
+   - **Próxima iteração:** rendar fire-time tray via custom Java `NotificationCompat.Builder` em `DosyMessagingService.onMessageReceived` (branch `kind=dose_fire_time`) com PendingIntent que inclua `openDoseId` extra. Bypass do FCM SDK auto-render.
+
+**Workaround imediato pra usuário:** dose card no Dashboard tap → DoseModal abre (testado e funciona).
+
 **Bug B re-analisado (re-run confirma):**
 FCM tap behavior **inconsistente**:
 - ✅ **Share FCM** (`patient-share-handler` v2): tap → MainActivity intent extras PRESENTE com data fields (kind, patientId, ownerId). Capacitor `pushNotificationActionPerformed` PODE não disparar mas `getStringExtra("openDoseId")` retornaria null (não tem). Pra navegar Pacientes/:id, app precisa adicionar handler `kind=patient_share_added` → `postJsEvent("dosy:openPatient", "patientId", ...)`.

@@ -62,14 +62,22 @@ async function getFcmAccessToken(): Promise<string> {
   return json.access_token
 }
 
-async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>): Promise<boolean> {
+async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>, collapseKey?: string): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
   // deno-lint-ignore no-explicit-any
+  const androidCfg: any = { priority: 'HIGH' }
+  // v0.2.3.7 Bug B fix — collapseKey unique per logical event (e.g., doseId)
+  // prevents Android auto-collapse with sibling notifs (e.g., "Dose programada"
+  // + "Hora da dose" same dose). Without unique key, tap on collapsed group
+  // loses last message's data extras → MainActivity.handleAlarmAction sees
+  // intent.getExtras() == null. Setting collapseKey forces each notif into
+  // distinct tray slot, preserving its data payload on tap.
+  if (collapseKey) androidCfg.collapseKey = collapseKey
   const message: any = {
     token: deviceToken,
     notification: { title, body },
     data,
-    android: { priority: 'HIGH' }
+    android: androidCfg
   }
   try {
     const resp = await fetch(
@@ -179,8 +187,12 @@ Deno.serve(async (_req) => {
         .not('deviceToken', 'is', null)
 
       if (subs?.length) {
+        // collapseKey = `fire_${doseId}` ensures uniqueness across both
+        // "Dose programada" (dose-trigger-handler insert path) and "Hora da
+        // dose" (this fire-time path) for the same dose.
+        const collapseKey = `fire_${dose.id}`
         for (const sub of subs) {
-          const ok = await sendFcmNotification(sub.deviceToken, title, body, data)
+          const ok = await sendFcmNotification(sub.deviceToken, title, body, data, collapseKey)
           if (ok) totalSent++; else totalErrors++
         }
       }

@@ -121,11 +121,20 @@ async function getRecipientUserIds(patientId: string, ownerId: string): Promise<
 async function sendFcmTo(
   deviceToken: string,
   dataPayload: Record<string, string>,
-  notification?: { title: string; body: string }
+  notification?: { title: string; body: string },
+  collapseKey?: string
 ): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
   // deno-lint-ignore no-explicit-any
-  const message: any = { token: deviceToken, data: dataPayload, android: { priority: 'HIGH' } }
+  const androidCfg: any = { priority: 'HIGH' }
+  // v0.2.3.7 Bug B fix — collapseKey unique per dose prevents Android merge
+  // between "Dose programada" (this path) + "Hora da dose" (fire-time) trays.
+  // Without it, tap on merged group loses data extras → MainActivity sees
+  // intent.getExtras() == null. Set collapseKey only for caregiver notification
+  // path (owner data-only path doesn't render tray, so collapseKey moot).
+  if (collapseKey) androidCfg.collapseKey = collapseKey
+  // deno-lint-ignore no-explicit-any
+  const message: any = { token: deviceToken, data: dataPayload, android: androidCfg }
   if (notification) {
     message.notification = notification
     // android.notification omitted — FCM v1 API doesn't accept `priority` here
@@ -447,8 +456,12 @@ Deno.serve(async (req) => {
         })}`
       }
 
+      // collapseKey only for caregiver (notification path) — unique per dose
+      // prevents Android merging "Dose programada" + "Hora da dose" trays
+      // for same dose. Owner path stays without collapseKey (data-only, no tray).
+      const collapseKey = isOwner ? undefined : `fire_${doseId}`
       for (const sub of subs) {
-        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload }, notification)
+        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload }, notification, collapseKey)
         if (ok) sent++; else errors++
 
         if (auditEnabledUsers.has(userId)) {

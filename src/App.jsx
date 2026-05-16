@@ -338,8 +338,20 @@ export default function App() {
       window.__dosyLastDoseIds = doseIds
       navigate(`/?doses=${doseIds}`)
     }
+    // v0.2.3.7 Bug B fix — FCM share notification tap navigation.
+    // MainActivity.handleAlarmAction reads data.patientId from share FCM tap
+    // intent extras → posts this event → navigate to patient detail.
+    const onOpenPatient = (e) => {
+      const { patientId } = e.detail || {}
+      if (!patientId) return
+      console.log('[dosy:openPatient]', patientId)
+      if (window.__dosyLastPatientId === patientId) return
+      window.__dosyLastPatientId = patientId
+      navigate(`/pacientes/${patientId}`)
+    }
     window.addEventListener('dosy:openDose', onOpenDose)
     window.addEventListener('dosy:openDoses', onOpenDoses)
+    window.addEventListener('dosy:openPatient', onOpenPatient)
     // Process any pending IDs set by MainActivity before listener was bound (cold start)
     if (window.__dosyPendingDoseIds) {
       const ids = window.__dosyPendingDoseIds
@@ -351,9 +363,15 @@ export default function App() {
       window.__dosyPendingDoseId = null
       onOpenDose({ detail: { doseId: id } })
     }
+    if (window.__dosyPendingPatientId) {
+      const id = window.__dosyPendingPatientId
+      window.__dosyPendingPatientId = null
+      onOpenPatient({ detail: { patientId: id } })
+    }
     return () => {
       window.removeEventListener('dosy:openDose', onOpenDose)
       window.removeEventListener('dosy:openDoses', onOpenDoses)
+      window.removeEventListener('dosy:openPatient', onOpenPatient)
     }
   }, [user, navigate])
 

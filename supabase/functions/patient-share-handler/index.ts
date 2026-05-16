@@ -58,14 +58,16 @@ async function getFcmAccessToken(): Promise<string> {
   return json.access_token
 }
 
-async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>): Promise<boolean> {
+async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>, collapseKey?: string): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
   // deno-lint-ignore no-explicit-any
+  const androidCfg: any = { priority: 'HIGH' }
+  if (collapseKey) androidCfg.collapseKey = collapseKey
   const message: any = {
     token: deviceToken,
     notification: { title, body },
     data,
-    android: { priority: 'HIGH' }
+    android: androidCfg
   }
   try {
     const resp = await fetch(
@@ -161,10 +163,13 @@ Deno.serve(async (req) => {
       sharedWithUserId
     }
 
+    // collapseKey unique per share record prevents Android collapse with
+    // future shares OR dose notifs for same patient.
+    const collapseKey = `share_${patientId}_${sharedWithUserId}`
     let sent = 0
     let errors = 0
     for (const sub of subs) {
-      const ok = await sendFcmNotification(sub.deviceToken, title, body, data)
+      const ok = await sendFcmNotification(sub.deviceToken, title, body, data, collapseKey)
       if (ok) sent++; else errors++
     }
 
