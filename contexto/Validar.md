@@ -302,6 +302,25 @@ mcp__supabase__execute_sql({
 - `[x]` **E2E SQL test 2026-05-16 15:51-15:52 UTC:** caregiver app BACKGROUND (HOME, PID 8632 alive). Reset `fire_notified_at = NULL, scheduledAt = NOW()+50s` → pg_cron tick 15:52:00 → Edge processou 1 dose → FCM dispatched OK → caregiver tray: title="**Hora da dose — ShareKid**" body="**FireTimeTest às 12:52**" channel=`fcm_fallback_notification_channel` ✅.
 - `[x]` **Cron tick tracking:** cron.job_run_details mostra ticks 15:45/15:46/15:47/15:48/15:49/15:52 — todos succeeded.
 - `[ ]` **Tap tray → modal abre:** validar manual cuidador tap notif "Hora da dose" → MainActivity onCreate lê `openDoseId` extra → JS posts `dosy:openDose` → DoseModal abre marca tomada. (Handler nativo já existe; chave precisa estar no FCM data pra Android propagar.)
+
+### v0.2.3.7 UI E2E flow validado autonomous 2026-05-16 (steps 1-7)
+
+> Teste via Appium UI dual-session (Pixel 8 = teste-plus owner @ 5554, Pixel 10 = teste-free caregiver @ 5556). Scripts: `scripts/flow_v4.mjs` (steps 2-3), `scripts/flow_step4_to_7.mjs` (steps 4-7).
+
+- `[x]` **Step 1:** apps running latest APK Dosy-dev (`com.dosyapp.dosy.dev`), ambos dashboards renderizados com Teste Plus/Free identidades corretas.
+- `[x]` **Step 2:** Owner UI Pacientes → TestePaciente → tap "Compartilhar paciente" → SharePatientSheet abriu → email "teste-free@teste.com" digitado via ADB input.text → submit "Compartilhar" → success msg "Paciente compartilhado com teste-free@teste.com." renderizou.
+- `[x]` **Step 3:** Caregiver tray (dumpsys notification): title="Paciente compartilhado" body="Teste Plus compartilhou TestePaciente com você" channel=fcm_fallback_notification_channel ✅
+- `[x]` **Step 4:** Caregiver openNotifications + tap card → app abriu → navegou Pacientes → TestePaciente visível na lista shared.
+- `[x]` **Step 5:** Caregiver app HOME (PID alive, background).
+- `[x]` **Step 6:** Owner UI TreatmentForm → MEDICAMENTO=UITestMed + DOSE/UNIDADE=1cp + defaults (interval 8h, duration 7 dias) + tap "Criar tratamento" → Dashboard mostra "TestePaciente 3 doses 2 atrasadas / UITestMed 1cp· Hoje 08:00 atrasada / 16:00 atrasada".
+- `[x]` **Step 7:** Caregiver tray 4× "Dose programada — TestePaciente / UITestMed às {HH:MM}" (05:00, 13:00, 21:00 — corresponde aos 3 horários próximos da janela 48h dose-trigger-handler).
+- `[ ]` **Step 9-10 — fire-time → caregiver tray:** não validável em UI session curta — próxima dose futura é 21:00 BRT (~8h espera). Fire-time só dispara janela [-90s, +30s] da scheduledAt. Validação requer (a) esperar 21:00, OR (b) criar tratamento com dose +90s (UI freq mínima é 4h, não permite seconds), OR (c) manipular scheduledAt via SQL (admin cleanup, fora do fluxo).
+- `[ ]` **Step 11 — tap fire-time tray → DoseModal:** depende fire-time validar primeiro.
+- `[ ]` **Step 12-13 — owner alarm + modal já-tomada cross-user sync:** depende step 11.
+
+**Bug encontrado durante teste:**
+- ⚠️ Após reload owner app pós force-stop, primeira tentativa share UI ficou em "Enviando…" indefinidamente (RPC `share_patient_by_email` não completou via PostgREST). Refresh sequente resolveu — pode ser session token stale OU PostgREST connection cache. **Não-bloqueador** mas merece investigar nas próximas sessões (similar a #255/#268 idle session bugs).
+- ⚠️ Dose PUSH per-dose (não single "tratamento criado") — cada dose dispara FCM separada. Caregiver recebe 4× "Dose programada às HH:MM" em vez de 1× "Novo tratamento UITestMed criado". Pode poluir tray. Considerar agregação UI-side ou Edge-side.
 - `[ ]` **Device físico real cenário swipe-killed:** owner cria dose → cuidador (Samsung One UI 7) swipe-kill app de recents → aguarda scheduledAt → tray "Hora da dose" deve aparecer.
 - `[ ]` **UI E2E completo (Appium 13 steps):** owner cria patient → share → caregiver tray share → tap → app abre Pacientes → cuidador kill → owner cria dose → caregiver tray dose → wait scheduledAt → fire-time tray → tap → modal "marca tomada" → owner alarm sync mostra "já tomada".
 - `[ ]` **Egress impact 24h:** observar painel Supabase egress 2026-05-17. Estimativa: cron 1440 ticks/dia, cada empty ≤10ms ≤200B. Custo desprezível. Com doses ativas: +1 FCM por dose por cuidador, ~200B/FCM.
