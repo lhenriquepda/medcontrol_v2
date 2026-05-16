@@ -137,6 +137,12 @@ if (Capacitor.isNativePlatform()) {
 // Antes: localStorage sync block main thread em write + max ~5MB (quota varia browser).
 // Agora: IDB async + suporta GB-scale + write off-main-thread.
 // Fallback localStorage se IDB indisponível (Safari private mode raro).
+//
+// v0.2.3.7 #275 (F5 perf audit 2026-05-15) — throttleTime 1000→5000ms.
+// Reduz frequência de serialize JSON (cache cresce ~3-5MB no IDB com 90d doses pré-F1,
+// agora ~600KB-1MB pós-F1) no main thread. Crash-safety preservado pela fila offline
+// de mutations (#204 v0.2.1.7) com shouldDehydrateMutation: () => true — marcações
+// críticas persistem separadamente, não se perdem em crash mesmo com throttle maior.
 const idbAvailable = typeof window !== 'undefined' && 'indexedDB' in window
 const persister = idbAvailable
   ? createAsyncStoragePersister({
@@ -146,12 +152,12 @@ const persister = idbAvailable
         removeItem: (key) => idbDel(key),
       },
       key: 'dosy-query-cache',
-      throttleTime: 1000
+      throttleTime: 5000
     })
   : createSyncStoragePersister({
       storage: typeof window !== 'undefined' ? window.localStorage : null,
       key: 'dosy-query-cache',
-      throttleTime: 1000
+      throttleTime: 5000
     })
 
 // Native StatusBar overlay config one-time. Style + background color são
