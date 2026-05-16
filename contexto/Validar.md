@@ -252,7 +252,17 @@ mcp__supabase__execute_sql({
 - `[x]` **CDP introspecção QueryClient:** 7 entries `['dashboard-payload', *]` no cache, todas success, newest dataLen=180 doses fetchadas a 03:12 UTC. Confirma placeholderData fallback funciona — Dashboard pega último payload bem-sucedido sem precisar findAll+sort.
 - `[ ]` **Device físico (S25 Ultra):** smoke test Dashboard pós-resume idle 1h+ — confirma transição hour boundary não trava skeleton (cenário original #267).
 
-### v0.2.3.7 #274 F6 — React.memo BottomNav + AppHeader (pending)
+### v0.2.3.7 #274 F6 — React.memo BottomNav + AppHeader
+
+> **Bug original protegido:** nenhum (otimização nova). Ambos componentes nunca foram memoizados, re-renderizavam a cada render do App.jsx (cache patch, query refetch, signature recompute, useEffect deps).
+>
+> **Regressão a prevenir:** memo bloquear updates legítimos de tier/badges/notifs. Mitigação: ambos componentes não recebem props (todas dependências via hooks internos — useAuth, useDoses, useTreatments, usePatients, useReceivedShares, useAppUpdate, useNavigate, useSubscription). `React.memo` com comparator default skipa apenas re-renders por mudança de props (zero props = sempre skipa), MAS permite re-render por mudança de hooks internos.
+
+- `[x]` **Build verde** (24.34s, sem warnings novos).
+- `[x]` **Localhost teste-plus@ navegação BottomNav Início↔Pacientes↔Início:** transições OK, screen content renderiza correto, badge "2 atrasadas" no header continua mostrando, sino dropdown badge "2" permanece, tier dot azul OK. NavLink active state troca corretamente (cor Início ↔ Pacientes).
+- `[x]` **Console fresh load pós-refresh:** zero erros após reload (HMR warnings inline durante save são transients, não afetam runtime estável).
+- `[ ]` **Device físico (S25 Ultra):** validar que badges (overdue, shares, ending soon, update) atualizam quando dado muda + nav BottomNav não engasga (era o bug reportado).
+
 ### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms (pending)
 
 ---
