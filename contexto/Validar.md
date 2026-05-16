@@ -263,7 +263,16 @@ mcp__supabase__execute_sql({
 - `[x]` **Console fresh load pós-refresh:** zero erros após reload (HMR warnings inline durante save são transients, não afetam runtime estável).
 - `[ ]` **Device físico (S25 Ultra):** validar que badges (overdue, shares, ending soon, update) atualizam quando dado muda + nav BottomNav não engasga (era o bug reportado).
 
-### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms (pending)
+### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms
+
+> **Bug original protegido:** nenhum diretamente — throttle 1s era default conservador da migração IDB (#165 v0.2.3.4).
+>
+> **Regressão a prevenir:** marcações de dose perdidas em crash com throttle maior. Mitigação: mutation queue offline (#204 v0.2.1.7) com `shouldDehydrateMutation: () => true` persiste mutations críticas SEPARADAMENTE do cache de queries. confirm/skip/undo/registerSos/createPatient/createTreatment etc drenam via `resumePausedMutations()` na próxima abertura, INDEPENDENTE do cache de queries.
+
+- `[x]` **Build verde** (24.42s, sem warnings novos).
+- `[ ]` **Device físico (S25 Ultra):** smoke test crash-safety. Cenário: marcar dose → force-quit app < 5s depois → reabrir → confirmar dose aparece como done (fila offline drena). Esperado mesmo comportamento que pré-F5 (mutation queue cobre).
+
+---
 
 ---
 
