@@ -272,6 +272,40 @@ mcp__supabase__execute_sql({
 - `[x]` **Build verde** (24.42s, sem warnings novos).
 - `[ ]` **Device físico (S25 Ultra):** smoke test crash-safety. Cenário: marcar dose → force-quit app < 5s depois → reabrir → confirmar dose aparece como done (fila offline drena). Esperado mesmo comportamento que pré-F5 (mutation queue cobre).
 
+### v0.2.3.7 #280 — Patient share PUSH notification (gap real fechado)
+
+> **Bug reportado:** user adicionado como cuidador (via `share_patient_by_email` RPC) **não recebia nenhum aviso**. Só descobria abrindo o app + sync manual. Quebrava UX de compartilhamento (Step 3 fluxo cuidador).
+>
+> **Fix aplicado:**
+> - Edge `patient-share-handler` v2 ACTIVE — recebe webhook pg_net na INSERT `patient_shares`. Lookup `auth.admin.getUserById` (owner displayName) + `patients.name`. Dispatch FCM `notification` (não data) pra `sharedWithUserId.push_subscriptions` android. Tray render imediato bypass Doze.
+> - DB trigger `trg_notify_patient_share_inserted` AFTER INSERT → `pg_net.http_post` fire-and-forget.
+> - Migration `20260516160000_patient_share_notification_trigger_v0_2_3_7.sql`.
+
+- `[x]` **Edge deploy v2 + trigger ativo:** confirmado via list_edge_functions + apply_migration success.
+- `[x]` **E2E SQL test 2026-05-16 15:43-15:46 UTC:** delete + reinsert `patient_shares` row → caregiver (teste-free, 5556) tray: title="Paciente compartilhado" body="**Teste Plus compartilhou ShareKid com você**" channel=`fcm_fallback_notification_channel`. Owner displayName resolvido via `auth.admin.getUserById` + `raw_user_meta_data.name` ✅.
+- `[ ]` **Device físico:** validar tray notif em Samsung One UI 7 background normal (não force-stop).
+- `[ ]` **UI E2E real (Appium):** owner cria patient → share via UI → caregiver tray + tap → app navega.
+- `[ ]` **Limit known:** se caregiver app force-stopped (settings → forçar parada), Android 12+ bloqueia FCM completamente. Tray não chega até user reabrir. Mitigação: educação user OR usar AlarmManager scheduled (não disponível p/ share que é evento instantâneo).
+
+### v0.2.3.7 #281 — Fire-time alarm FCM caregiver app killed (gap real fechado)
+
+> **Bug reportado:** se cuidador app em Doze profundo OR force-stopped quando dose-trigger-handler dispara FCM data-only no momento da INSERT, AlarmScheduler local NÃO é agendado. No `scheduledAt` time, NADA dispara na conta cuidador (alarm fica preso só na conta owner). Bug crítico se cuidador é o responsável real.
+>
+> **Fix aplicado:**
+> - Edge `dose-fire-time-notifier` v2 ACTIVE — busca doses pending na janela `[NOW()-90s, NOW()+30s]` com `fire_notified_at IS NULL`. Pra cada dose: lookup `patient_shares.sharedWithUserId`, dispatch FCM `notification` (não data) a cada cuidador android push_sub. Owner NÃO recebe (local AlarmManager cobre).
+> - pg_cron `dose-fire-time-notifier-1min` (`* * * * *`) chama Edge via pg_net.http_post.
+> - Idempotência: `doses.fire_notified_at TIMESTAMPTZ` + index parcial `WHERE status='pending' AND fire_notified_at IS NULL`. Cron mark notified após dispatch — evita duplicate.
+> - FCM data inclui `openDoseId` → matches `MainActivity.handleAlarmAction` intent extra → posts JS event `dosy:openDose` → DoseModal abre.
+> - Migrations: `20260516160500_dose_fire_notified_at_v0_2_3_7.sql` + `20260516161000_dose_fire_time_cron_v0_2_3_7.sql`.
+
+- `[x]` **Edge deploy v2 + cron + migrations:** confirmado v2 ACTIVE + 5 cron job ativos incluindo `dose-fire-time-notifier-1min`.
+- `[x]` **E2E SQL test 2026-05-16 15:51-15:52 UTC:** caregiver app BACKGROUND (HOME, PID 8632 alive). Reset `fire_notified_at = NULL, scheduledAt = NOW()+50s` → pg_cron tick 15:52:00 → Edge processou 1 dose → FCM dispatched OK → caregiver tray: title="**Hora da dose — ShareKid**" body="**FireTimeTest às 12:52**" channel=`fcm_fallback_notification_channel` ✅.
+- `[x]` **Cron tick tracking:** cron.job_run_details mostra ticks 15:45/15:46/15:47/15:48/15:49/15:52 — todos succeeded.
+- `[ ]` **Tap tray → modal abre:** validar manual cuidador tap notif "Hora da dose" → MainActivity onCreate lê `openDoseId` extra → JS posts `dosy:openDose` → DoseModal abre marca tomada. (Handler nativo já existe; chave precisa estar no FCM data pra Android propagar.)
+- `[ ]` **Device físico real cenário swipe-killed:** owner cria dose → cuidador (Samsung One UI 7) swipe-kill app de recents → aguarda scheduledAt → tray "Hora da dose" deve aparecer.
+- `[ ]` **UI E2E completo (Appium 13 steps):** owner cria patient → share → caregiver tray share → tap → app abre Pacientes → cuidador kill → owner cria dose → caregiver tray dose → wait scheduledAt → fire-time tray → tap → modal "marca tomada" → owner alarm sync mostra "já tomada".
+- `[ ]` **Egress impact 24h:** observar painel Supabase egress 2026-05-17. Estimativa: cron 1440 ticks/dia, cada empty ≤10ms ≤200B. Custo desprezível. Com doses ativas: +1 FCM por dose por cuidador, ~200B/FCM.
+
 ### v0.2.3.7 #279 — Edge FCM caregiver bypass Doze (`notification` payload + daily-sync inclui shares)
 
 > **Bug reportado:** cuidador (paciente compartilhado via `patient_shares`) recebe FCM data-only que Android difere por Doze/AppStandby. Emulador medido: ~2m34s de atraso em background normal. Production Samsung One UI 7 Restricted bucket: HORAS. Cuidador perde lembrete da dose silenciosamente.

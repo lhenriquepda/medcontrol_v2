@@ -160,6 +160,9 @@ Deno.serve(async (_req) => {
       const body = `${dose.medName ?? 'Medicamento'} às ${hhmm}`
       const data: Record<string, string> = {
         kind: 'dose_fire_time',
+        // openDoseId matches MainActivity.handleAlarmAction Intent extra key →
+        // existing JS handler (App.jsx dosy:openDose) opens DoseModal on tap.
+        openDoseId: dose.id,
         doseId: dose.id,
         patientId: dose.patientId,
         scheduledAt: dose.scheduledAt,

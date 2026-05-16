@@ -402,7 +402,11 @@ Deno.serve(async (req) => {
     const data: Record<string, string> = {
       action: 'schedule_alarms',
       doses: JSON.stringify(dosePayload),
-      source_scenario: 'dose_inserted_or_updated'
+      source_scenario: 'dose_inserted_or_updated',
+      // openDoseId matches MainActivity.handleAlarmAction Intent extra key →
+      // existing JS handler (App.jsx dosy:openDose) opens DoseModal on tap.
+      // Used by caregiver path (isOwner=false) — owner relies on AlarmActivity.
+      openDoseId: doseId
     }
 
     const recipients = await getRecipientUserIds(patientId, ownerId)
