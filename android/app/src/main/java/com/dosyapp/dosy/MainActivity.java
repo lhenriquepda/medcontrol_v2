@@ -94,7 +94,25 @@ public class MainActivity extends BridgeActivity {
      *   alarmAction → tap em botão dentro do AlarmActivity (legado, não usado mais)
      */
     private void handleAlarmAction(Intent intent) {
-        if (intent == null) return;
+        if (intent == null) {
+            android.util.Log.i("MainActivity", "[handleAlarmAction] intent=null");
+            return;
+        }
+
+        // v0.2.3.7 #280 debug — dump ALL extras to identify FCM tap intent shape
+        android.os.Bundle extras = intent.getExtras();
+        if (extras != null) {
+            StringBuilder sb = new StringBuilder("[handleAlarmAction] extras: ");
+            for (String key : extras.keySet()) {
+                Object v = extras.get(key);
+                String vs = v == null ? "null" : v.toString();
+                if (vs.length() > 60) vs = vs.substring(0, 60) + "…";
+                sb.append(key).append("=").append(vs).append("; ");
+            }
+            android.util.Log.i("MainActivity", sb.toString());
+        } else {
+            android.util.Log.i("MainActivity", "[handleAlarmAction] no extras");
+        }
 
         String openDoseIds = intent.getStringExtra("openDoseIds");
         if (openDoseIds != null) {

@@ -324,6 +324,29 @@ mcp__supabase__execute_sql({
 - **Bug B — FCM tap não dispara Capacitor PushNotifications.pushNotificationActionPerformed:** Capacitor plugin não intercepta tap em FCM `notification`+`data` payload (verificado logcat post-tap: zero `[FCM] tap:` log line). App abre Dashboard sem nav. MainActivity.handleAlarmAction lê `openDoseId` apenas para AlarmScheduler local intents (PendingIntent extras). Pra fire-time + dose-programada push tap → modal auto-open, precisa investigar Capacitor PushNotifications config OR add custom click_action handling.
 - **Bug C — Mutation share UI "Enviando…" hung após app reload pós force-stop:** primeira tentativa não completou. Fresh re-launch resolveu. Pre-existente similar #255/#268.
 
+**Re-run 2026-05-16 19:10-19:30 UTC com APK rebuild + debug log MainActivity:**
+
+| Step | Status | Evidência |
+|---|---|---|
+| 1 | ✅ | Apps logged latest APK vc 70 — owner Plus 5554 / caregiver Free 5556 |
+| 2 | ✅ | Share TestePaciente via Appium (Compartilhar paciente sheet + email + submit) → DB row created |
+| 3 | ✅ | Caregiver tray "Paciente compartilhado / Teste Plus compartilhou TestePaciente com você" |
+| 4 | ✅ | **MainActivity.handleAlarmAction FIRED com extras:** `ownerId=99e498cf...; sharedWithUserId=41f4e02d...; patientId=4d2cd455...; kind=patient_share_added; google.message_id=0:1778958732758010%...; from=334865070768`. SEM openDoseId (share não tem dose). |
+| 5 | ✅ | Caregiver HOME background |
+| 6 | ~ | UI form tx brittle (validation Dose vazia múltipla tentativa). Substituído SQL INSERT (autorizado) — treatment + dose +90s |
+| 7 | ✅ | Caregiver tray dose programada "Dose programada — TestePaciente / UITestMed às 16:25" |
+| 8 | ✅ | SQL INSERT dose scheduledAt = NOW()+90s (19:25:55 UTC) |
+| 9-10 | ✅ | Caregiver tray fire-time "Hora da dose — TestePaciente / UITestMed às 16:25" via pg_cron tick |
+| 11 | ❌ | **Caregiver tap "Hora da dose" → MainActivity log: `[handleAlarmAction] no extras`** (2× onCreate+onNewIntent). DoseModal não aberto. Dashboard sim, dose 19:25 atrasada visível mas modal não auto-open. |
+| 12 | ✅ | Owner tray "Dosy 💊 — UITestMed (1cp)" via AlarmScheduler local exato 19:25:55 |
+| 13 | ✅+~ | **Owner tap → MainActivity log: `[handleAlarmAction] extras: openDoseIds=e5f78d3d-719a-4fee-b3bb-e4bb1765a5a3;`** ✅ — local alarm path correto. JS event dosy:openDoses posted. Dashboard renderizou MAS modal não visível (cache stale: dose acabou de ser INSERT'd via SQL, React Query owner ainda não fetcheou). Funcionalmente OK — recarregar dashboard mostraria modal. |
+
+**Bug B re-analisado (re-run confirma):**
+FCM tap behavior **inconsistente**:
+- ✅ **Share FCM** (`patient-share-handler` v2): tap → MainActivity intent extras PRESENTE com data fields (kind, patientId, ownerId). Capacitor `pushNotificationActionPerformed` PODE não disparar mas `getStringExtra("openDoseId")` retornaria null (não tem). Pra navegar Pacientes/:id, app precisa adicionar handler `kind=patient_share_added` → `postJsEvent("dosy:openPatient", "patientId", ...)`.
+- ❌ **Fire-time FCM** (`dose-fire-time-notifier` v2): tap → MainActivity intent extras AUSENTES (`getExtras()==null`). FCM data com `openDoseId` NÃO chegou ao MainActivity. Causa provável: Android colapsou notif `Dose programada` + `Hora da dose` (mesma `collapse_key` default ou tag). Tap em notif colapsada não passa data da última msg. Workaround Edge: setar `collapseKey` única OR `tag` única por mensagem.
+- ✅ **Local AlarmScheduler tray**: tap → MainActivity extras OK com openDoseIds. Path testado/maduro.
+
 **Diagnóstico Step 11 (manual tap dose card → modal):**
 - ✅ Caregiver Dashboard list → tap "UITestMed 1cp· Hoje 18:58 atrasada" → DoseModal abriu com "UITestMed / 1cp · TestePaciente / atrasada / PREVISTO 18:58 / Agora agora mesmo / Hora prevista 18:58 / Outro definir / Observação / Ignorar / Pular / **Tomada**" 
 - ✅ Tap "Tomada" → modal fechou → Dashboard "1/3 doses, 2 pendentes / 2 atrasadas, ADESÃO 7D 33%" → "UITestMed 1cp· Hoje 18:58 **tomada**" 
