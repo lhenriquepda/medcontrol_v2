@@ -239,7 +239,19 @@ mcp__supabase__execute_sql({
   - Alarme dispara horário programado próximas 24h-72h-7d (cobrir janela 7d com FCM horizon)
   - Sentry breadcrumbs sem erro novo
 
-### v0.2.3.7 #273 F3 — placeholderData ref module-scope (pending)
+### v0.2.3.7 #273 F3 — useDashboardPayload placeholderData ref module-scope
+
+> **Bug original protegido:** #267 v0.2.3.6 (commit `20efdbf`) — Dashboard skeleton infinito quando hora vira (19→20 cria nova queryKey, previousData undefined, isLoading true). Cache tinha dados das horas anteriores mas Dashboard não usava. Fix #267 introduziu varredura cross-key findAll + sort em CADA render.
+>
+> **F3 mantém efeito SEM custo per-render:** `_lastDashboardPayload` ref module-scope atualizado via `useEffect` quando query bem-sucedida. `placeholderData` lê ref O(1) em vez de varrer cache.
+>
+> **Regressão a prevenir:** Dashboard ficar em skeleton infinito on hour boundary OU on filter change. Mitigação: ref preserva último payload bem-sucedido, sobrevive transições de queryKey.
+
+- `[x]` **Build verde** (25.53s, sem warnings novos).
+- `[x]` **Localhost teste-plus@ Dashboard fresh load:** Dashboard renderiza dados sem skeleton infinito. Counter "3 pendentes / 2 atrasadas" + Adesão 33% + dose list visível. Console limpo pós-reload (zero erros novos — HMR warning transient durante save inline, não persiste pós-refresh).
+- `[x]` **CDP introspecção QueryClient:** 7 entries `['dashboard-payload', *]` no cache, todas success, newest dataLen=180 doses fetchadas a 03:12 UTC. Confirma placeholderData fallback funciona — Dashboard pega último payload bem-sucedido sem precisar findAll+sort.
+- `[ ]` **Device físico (S25 Ultra):** smoke test Dashboard pós-resume idle 1h+ — confirma transição hour boundary não trava skeleton (cenário original #267).
+
 ### v0.2.3.7 #274 F6 — React.memo BottomNav + AppHeader (pending)
 ### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms (pending)
 
