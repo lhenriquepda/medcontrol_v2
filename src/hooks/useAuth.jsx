@@ -182,6 +182,18 @@ export function AuthProvider({ children }) {
             qc.clear()
           }
 
+          // v0.2.3.6 [bug fix sharing/stale cache] — INITIAL_SESSION + SIGNED_IN sempre
+          // invalida queries críticas. Cenário fix: Daffiny tinha cache `['patients']`
+          // hidratado com `[]` (antes de receber shares). INITIAL_SESSION sem invalidate
+          // mantinha stale forever. Invalidate força refetch on mount das queries afetadas.
+          // refetchType: 'active' = só queries montadas no momento (sem storm).
+          if (s?.user?.id && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+            qc.invalidateQueries({ queryKey: ['patients'], refetchType: 'active' })
+            qc.invalidateQueries({ queryKey: ['received_shares'], refetchType: 'active' })
+            qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
+            qc.invalidateQueries({ queryKey: ['patient_shares'], refetchType: 'active' })
+          }
+
           // Item #081 (release v0.1.7.1) — propaga credentials pro DoseSyncWorker
           // (Android background) sempre que session muda.
           // Item #205 (release v0.2.1.8) — agora propaga access_token + exp pra

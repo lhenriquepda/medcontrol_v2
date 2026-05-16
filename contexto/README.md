@@ -6,6 +6,49 @@
 
 ---
 
+## 📑 Índice — Fluxo de trabalho
+
+### 🟡 Passos de Entrada (toda sessão)
+
+| Passo | O que fazer | Ação |
+|---|---|---|
+| [0](#-passo-0--varrer-validarmd-validações-manuais-pendentes) | **Varrer Validar.md** — alertar user se tiver `[ ]` pendentes | Obrigatório antes de qualquer coisa |
+| [1](#-passo-1--carregar-contexto-3-reads-paralelos) | **Carregar contexto** — PROJETO.md + ROADMAP §3 + CHECKLIST | 3 reads paralelos |
+| [2](#-passo-2--estado-git-fonte-da-verdade) | **Estado git** — branch ativa, commits ahead, working tree | `git status` + `git log -5` |
+| [3](#-passo-3--memória-durável-auto-injetada) | **Memória** — feedback/user/project/reference files | Auto-injetado, revisar prioridades 🔴 |
+| [4](#-passo-4--regras-negativas-nunca-quebrar) | **Regras NUNCA quebrar** — 15 regras críticas | Ler antes de tocar qualquer arquivo |
+| [5](#-passo-5--stop-reportar-ao-user) | **STOP — reportar ao user** — versão, P0s, próximo passo | Esperar OK explícito |
+| [5b](#-passo-5b--classificar-trabalho-proposto) | **Classificar trabalho** — release/docs/server/refactor/experiment | Branch + bump versão se AAB |
+
+### 🔧 Passos de Fechamento (após codar)
+
+| Passo | O que fazer | Quando |
+|---|---|---|
+| [6](#passo-6--auditoria-pré-commit) | **Auditoria pré-commit** — `npm run build` verde + lint + egress | release/hotfix com JS |
+| [7](#passo-7--validação-preview-vercel-se-web-tocou) | **Preview Vercel** — testar build prod na branch | se web tocou |
+| [8](#passo-8--commit) | **Commit** — stage específico + HEREDOC + hooks passam | sempre |
+| [9](#passo-9--sync-docs-4-arquivos-obrigatório) | **Sync 4 docs** — ROADMAP + CHECKLIST + PROJETO + README | release/hotfix |
+| [10](#passo-10--push) | **Push** origin | sempre |
+| [10.5](#-passo-105--stop-único-obrigatório-antes-build-aab) | **🛑 STOP — aguardar OK user antes AAB** | obrigatório release |
+| [11](#passo-11--validação-web-primeiro-device-só-pro-que-web-não-cobre) | **Validação** — §11a Chrome MCP web + §11b emulator autônomo + Validar.md | antes do Build |
+| [12](#passo-12--build--upload-play-store-só-após-validação-11--autorização-passo-105) | **Build AAB + Play Console** — gradlew + Chrome MCP upload | SÓ após §11 validado |
+| [13](#passo-13--pós-release-release-fechado-mergeado-master) | **Pós-release** — tag + merge master + Vercel prod | release fechada |
+| [14](#passo-14--stop-final) | **STOP final** — reportar status + próximo P0 | sempre |
+
+### 📚 Referência rápida
+
+| Seção | Conteúdo |
+|---|---|
+| [§10](#10--receita-chrome-mcp-play-console-upload-aab) | Receita Chrome MCP → Play Console upload AAB |
+| [§11](#11--convenções-código-essenciais) | Convenções código (Tailwind, RQ keys, RPC, etc) |
+| [§12](#12--recursos-externos) | URLs admin / Supabase / Play Console / Vercel |
+| [§13](#13--estado-atual-do-projeto) | Estado atual — versão, tag, contas teste |
+| [§14](#14--ciclo-publicar-release-8-passos-referência) | Ciclo release macro (8 passos) |
+| [§16](#16--mapa-pasta-contexto) | Mapa de arquivos em `contexto/` |
+| [§19](#19--onde-ler-quando) | "Onde ler quando..." — índice por pergunta |
+
+---
+
 ## 🚨 PASSO 0 — Varrer `Validar.md` (validações manuais pendentes)
 
 **Antes de qualquer coisa**, abra [`contexto/Validar.md`](Validar.md) e conte os checkboxes `[ ]` na seção topo (release mais recente).
@@ -209,8 +252,9 @@ Quando o user confirmar próximo passo e você tiver implementado código, siga 
 > | 8 commit | ✅ | ✅ | ✅ |
 > | 9 sync 4 docs | ✅ ROADMAP+CHECKLIST+PROJETO+README | ⚠️ só ROADMAP §3 + relevantes | ❌ |
 > | 10 push | ✅ | ✅ | ✅ |
-> | 11 build AAB + upload Play Console | ✅ | ❌ | ❌ |
-> | 12 validação web + device | ✅ ambos | ⚠️ web smoke se relevante | ❌ |
+> | 10.5 STOP obrigatório | ✅ aguardar OK user antes AAB | ❌ | ❌ |
+> | 11 validação web + device | ✅ §11a Chrome MCP + §11b emulator autônomo | ⚠️ web smoke se relevante | ❌ |
+> | 12 build AAB + upload Play Console | ✅ SÓ após validação + OK user Passo 10.5 | ❌ | ❌ |
 > | 13 pós-release (tag + merge master + Vercel prod) | ✅ tag canônico | ⚠️ merge master sem tag/AAB, Vercel auto-deploy git push | ❌ não merge |
 > | 14 STOP final | ✅ | ✅ | ✅ |
 >
@@ -252,7 +296,7 @@ git push origin release/v{X.Y.Z}
 **Pré-requisitos antes do STOP:**
 1. Todos os fixes do escopo aplicados + commits feitos + push origin branch
 2. Validar.md entry criada no topo com TODOS os items da release
-3. Validação autônoma rodada em tudo que cabe (Chrome MCP web §12a + emulator §12b + Supabase MCP DB state)
+3. Validação autônoma rodada em tudo que cabe (Chrome MCP web §11a + emulator §11b + Supabase MCP DB state)
 4. Validar.md com `[x]` marcado em cada item validado autonomamente
 5. Items `[ ]` restantes = SÓ os que dependem de device físico real OR observação temporal pós-deploy (24h Supabase egress, Sentry symbols upload com token, etc)
 
@@ -271,25 +315,11 @@ Após autorização explícita: prosseguir Passos 11-14 sem nova interrupção.
 
 ---
 
-## Passo 11 — Build + Upload Play Store (SÓ após autorização Passo 10.5)
-- Bump `versionCode + 1` em `android/app/build.gradle`
-- Build AAB via CLI (autônomo, sem Studio GUI):
-  ```bash
-  cd android
-  TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
-    JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
-    PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease
-  ```
-  - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
-  - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
-  - Output: `android/app/build/outputs/bundle/release/app-release.aab`
-- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
-- **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
-- Internal Testing track ativa em ~1h
+## Passo 11 — Validação (web primeiro, device só pro que web não cobre)
 
-## Passo 12 — Validação (web primeiro, device só pro que web não cobre)
+> ⚠️ **Validação ANTES do Build AAB.** Ordem correta: validar → aprovar → buildar. Nunca buildar para depois descobrir bug.
 
-### 12a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
+### 11a — Validação web via Chrome MCP (IA executa SEMPRE que possível)
 
 Antes de pedir validação device pro user, verifique se o item pode ser validado via web.
 
@@ -354,9 +384,9 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 > - Capacitor.Network bridge → onlineManager só ativa em `Capacitor.isNativePlatform()` — fluxo nativo não testável web.
 > - FCM background, AlarmManager, plugin nativo CriticalAlarm — tudo Android-only.
 
-### 12b — Validação device AUTÔNOMA via emulator CLI (NOVO v0.2.3.2+)
+### 11b — Validação device AUTÔNOMA via emulator CLI (NOVO v0.2.3.2+)
 
-> **Comprovado v0.2.3.2 2026-05-14:** fluxo end-to-end zero GUI Studio. IA roda sozinha sem user na máquina pra maioria validações device. Use SEMPRE este fluxo antes de §12c (user manual).
+> **Comprovado v0.2.3.2 2026-05-14:** fluxo end-to-end zero GUI Studio. IA roda sozinha sem user na máquina pra maioria validações device. Use SEMPRE este fluxo antes de §11c (user manual).
 
 **Stack autônoma:**
 - **avdmanager CLI** cria AVDs (`$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager.bat create avd -n <Name> -k "system-images;android-35;google_apis_playstore;x86_64" -d <device>`)
@@ -369,7 +399,7 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 - **Supabase MCP** `execute_sql` — INSERT dose direto DB pra triggerar Edge → FCM → device; SELECT alarm_audit_log validar 6 sources populando; check push_subscriptions device_id_uuid
 - **Chrome MCP** Play Console upload + admin.dosymed.app `/alarm-audit` painel
 
-**Receita validação autônoma (executar via §12a primeiro web, depois emulator se device-only):**
+**Receita validação autônoma (executar via §11a primeiro web, depois emulator se device-only):**
 
 1. **Setup AVDs (1× por device target):**
    ```bash
@@ -384,11 +414,58 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
    echo "no" | avdmanager create avd -n Pixel9Pro_Test -k "system-images;android-35;google_apis_playstore;x86_64" -d "pixel_9_pro"
    ```
 
-2. **Start emulator headless + wait boot:**
+2. **Start emulator com flags Studio (Studio Mirror embedded — keyboard OK):**
+
+   **Pre-requisito:** Settings → Tools → Device Mirroring → habilitar ✓
+   "Activate mirroring when a new physical device is connected" + ✓
+   "Activate mirroring when the IDE launches an emulator".
+
    ```bash
-   $ANDROID_HOME/emulator/emulator.exe -avd Pixel8_Test -no-snapshot -port 5554 &  # run_in_background
+   # Flags EXATAS que Android Studio usa pra spawn emulator (extraídas via
+   # Win32_Process CommandLine). Reproduzir CLI dá MESMO comportamento:
+   # janela Qt escondida + Studio Device Mirroring panel embedded pega
+   # frames via gRPC → keyboard físico funciona dentro do HUD.
+   #
+   # Flags importantes:
+   #   -netdelay none           → sem delay rede
+   #   -netspeed full           → velocidade rede full
+   #   -avd Pixel8_Test         → AVD target
+   #   -qt-hide-window          → CHAVE! Esconde janela Qt MAS mantém Qt
+   #                              process (gRPC streaming OK pra Studio Mirror).
+   #                              DIFERE de -no-window (headless puro, sem Qt
+   #                              UI = Studio Mirror NÃO pega frames).
+   #   -grpc-use-token          → gRPC com token auth (Studio espera isso)
+   #   -idle-grpc-timeout 300   → timeout 300s gRPC idle
+   $ANDROID_HOME/emulator/emulator.exe -netdelay none -netspeed full \
+     -avd Pixel8_Test -qt-hide-window -grpc-use-token -idle-grpc-timeout 300
+   # via tool run_in_background: true (não usar `&` no shell — recebe SIGHUP)
    until [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
    ```
+
+   **Se houver emulator externo Qt já rodando** (sintoma: janela `Android Emulator
+   - Pixel8_Test:5554` apareceu em monitor externo, teclado físico não funciona),
+   significa Studio Mirror auto-detect off OU emulator lançado sem `-qt-hide-window`.
+   Kill + relança com flags acima:
+   ```powershell
+   Get-Process | Where-Object { $_.ProcessName -match "qemu|emulator|crashpad|netsimd" } | Stop-Process -Force
+   ```
+
+3. **Login programático via Chrome DevTools Protocol (CDP)** (input text não
+   funciona em webview HTML form fields via ADB):
+   ```bash
+   # Find webview PID + setup forward
+   APP_PID=$(adb -s emulator-5554 shell pidof com.dosyapp.dosy.dev | tr -d '\r')
+   adb -s emulator-5554 forward tcp:9222 localabstract:webview_devtools_remote_$APP_PID
+
+   # Lista pages DevTools
+   PAGE=$(curl -s http://localhost:9222/json | grep -oE '"id": "[A-F0-9]+"' | head -1 | grep -oE '[A-F0-9]+$')
+
+   # Auth via REST direto + set localStorage + reload (mais confiável que click form)
+   node scripts/cdp_login.mjs "$PAGE" daffiny.estevam@gmail.com 123456
+   ```
+   Script `scripts/cdp_login.mjs` faz POST `/auth/v1/token`, salva session no
+   localStorage no formato Supabase v2 esperado, redireciona `/`. Funciona com
+   qualquer conta sem precisar interagir com form HTML.
 
 3. **Build APK CLI + install:**
    ```bash
@@ -450,9 +527,9 @@ Antes de pedir validação device pro user, verifique se o item pode ser validad
 - ⚠️ Reboot test (`adb reboot`) takes ~30-60s emulator restart.
 - ⚠️ Push FCM real (não data-only) — emulator Google Play Services OK, mas FCM token diferente device físico (test token).
 
-### 12c — Validação device manual (fallback user-driven)
+### 11c — Validação device manual (fallback user-driven)
 
-> Usar APENAS quando §12b não cobre (Samsung One UI quirks, AdMob real PROD ad units, biometric, Privacy Screen FLAG_SECURE recents, In-App Updates Play Core flexible flow).
+> Usar APENAS quando §11b não cobre (Samsung One UI quirks, AdMob real PROD ad units, biometric, Privacy Screen FLAG_SECURE recents, In-App Updates Play Core flexible flow).
 
 Cenários device-only que IA NÃO consegue autonomous:
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` Samsung One UI 7 / Xiaomi MIUI behaviour
@@ -471,14 +548,33 @@ Cenários device-only que IA NÃO consegue autonomous:
 4. IA verifica Sentry breadcrumbs/issues 24h pós-install + painel admin
 
 **Antes de pedir validação device manual, IA:**
-1. Listar itens da release que precisam device-only (vs §12a web-validável OR §12b emulator-autônomo)
-2. Validar TUDO que cabe web via Chrome MCP (§12a)
-3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§12b)
-4. Reportar resultado §12a+§12b pro user
-5. **Atualizar [`contexto/Validar.md`](Validar.md) OBRIGATÓRIO** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §12a+§12b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
+1. Listar itens da release que precisam device-only (vs §11a web-validável OR §11b emulator-autônomo)
+2. Validar TUDO que cabe web via Chrome MCP (§11a)
+3. Validar TUDO que cabe emulator via CLI + ADB + Supabase MCP (§11b)
+4. Reportar resultado §11a+§11b pro user
+5. **Atualizar [`contexto/Validar.md`](Validar.md) OBRIGATÓRIO** adicionando seção nova no TOPO com a release atual (`## 🆕 Release vX.Y.Z — versionCode N`) contendo SOMENTE os itens não cobertos por §11a+§11b. Cada item tem 3 partes: **Como fazer**, **O que esperar**, **Se falhar**.
 6. Pedir validação manual ao user, apontando pra `Validar.md`
 
-> 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os bugs foram cobertos §12a+§12b runtime, criar entry vazia com nota `**Validação device:** TODOS cenários cobertos autonomous §12a+§12b — nada pra user fazer.`. NUNCA pular esse passo — Validar.md é histórico/auditoria.
+> 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os bugs foram cobertos §11a+§11b runtime, criar entry vazia com nota `**Validação device:** TODOS cenários cobertos autonomous §11a+§11b — nada pra user fazer.`. NUNCA pular esse passo — Validar.md é histórico/auditoria.
+
+## Passo 12 — Build + Upload Play Store (SÓ após validação §11 + autorização Passo 10.5)
+
+> ⚠️ **NUNCA buildar antes de validar.** Chegou aqui significa: §11a + §11b feitos, Validar.md atualizado, user deu OK explícito no Passo 10.5.
+
+- Bump `versionCode + 1` em `android/app/build.gradle`
+- Build AAB via CLI (autônomo, sem Studio GUI):
+  ```bash
+  cd android
+  TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+    JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+    PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease
+  ```
+  - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
+  - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
+  - Output: `android/app/build/outputs/bundle/release/app-release.aab`
+- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
+- **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
+- Internal Testing track ativa em ~1h
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)
 - Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
@@ -565,11 +661,32 @@ Reportar:
 > Atualizado a cada release no Passo 13. Se contradisser `git log`, fonte da verdade é o git.
 
 **App:** Dosy — Controle de Medicação · pkg `com.dosyapp.dosy`
-**Versão atual:** master @ tag `v0.2.3.5` (vc 68, Play Console Internal Testing publicado 2026-05-15, Vercel prod dosymed.app). v0.2.3.5 entregou: UI/UX redesign 5 telas + sistema gradiente unificado + signup branded + email template Dosy + self-patient checkbox + share Plus fix (client+server) + 3 bug-fixes P1 (#239 skipDose cache, #243 Reports date, #251 Plus gating). Sem release em curso.
-**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.2 via auto-deploy)
+**Versão atual:** `release/v0.2.3.6` EM CURSO (vc 69, AAB pendente autorização user Passo 10.5). HEAD `15f46b3`. Master @ tag `v0.2.3.5` (vc 68, Play Console Internal Testing 2026-05-15, Vercel prod dosymed.app).
+**Vercel prod:** `https://dosymed.app/` (sincronizado master v0.2.3.5 via auto-deploy)
 **Contas teste:** `teste-free@teste.com / 123456` (free) + `teste-plus@teste.com / 123456` (plus)
 
+**🔄 Release em curso `release/v0.2.3.6`:**
+- ✅ **#250** P3 ANVISA autocomplete medicamentos (764 rows + RPC unaccent + MedNameInput 3-fontes)
+- ✅ **#253b** email wordmark texto (img→CSS)
+- ✅ **#254b** self-patient signup (user_metadata + session mutex + cache invalidate)
+- ✅ **#255** P1 idle longo >1h token expirado → skeleton (fix `inactiveMs > SUPABASE_TOKEN_LIFETIME_MS` em useAppResume)
+- ✅ **#256b** P1 SOS submit window.confirm bug Capacitor (ConfirmDialog + p_force RPC)
+- ✅ **#257b** P1 lockAcquireTimeout 15s skeleton pós-idle
+- ✅ **#258b** P1 sharing Dashboard RPC `get_dashboard_payload` CTE inclui shares
+- ✅ **#264** P1 dose 1ª passada pulada create_treatment_with_doses (SQL + Form type=date)
+- ✅ **#265** P2 total doses incorreto (SQL count exato)
+- ✅ **#266** P1 PatientDetail não mostra treatment recém-criado (insertEntityIntoLists)
+- ✅ **#267** P1 Dashboard skeleton hour boundary (placeholderData cross-key)
+
+**Bugs abertos (próxima release):** #259 #260 #261 #262 #263 — P2-P4 ver [`Validar.md`](Validar.md) e [`CHECKLIST.md`](CHECKLIST.md).
+
+**QA report completo:** [`qa/QA_REPORT.md`](qa/QA_REPORT.md)
+
 **Última release fechada master:**
+
+- ✅ v0.2.3.5 (2026-05-15) — UI/UX redesign 5 telas + sistema gradiente unificado + signup branded + email template Dosy + self-patient checkbox + share Plus fix (client+server) + 3 bug-fixes P1 (#239 skipDose cache, #243 Reports date, #251 Plus gating). vc 68 Play Console Internal Testing. Tag `bf447d3`. Vercel prod auto-deploy.
+
+**Releases anteriores fechadas master:**
 
 - ✅ v0.2.3.2 (2026-05-14) — **Bug-fixes #227-#230 + CLI gradlew destravado.** 4 bugs P1/P2 descobertos durante validação device v0.2.3.1 via Appium UiAutomator2 (Pixel 8 + Pixel 10 Pro XL): (a) **#227 P1** RLS audit log multi-policy fix — `alarm_audit_config` sem SELECT pra authenticated + `alarm_audit_log` sem SELECT own; 2 migrations applied, audit infrastructure 6 sources populando; (b) **#228 P1** `unsubscribeFcm` cross-device contamination — fix `fcm.js` filtra delete por `device_id_uuid`; (c) **#229 P1** snooze persist async race em reboot — fix `AlarmScheduler.java` 5 callsites `apply()` → `commit()` sync; (d) **#230 P2** Edge `dose-trigger-handler` v21 BATCH agrupa por (ownerId, patientId, minute_bucket) + query group siblings + CSV completo. **CLI gradlew destravado (bonus técnico):** root cause descoberto definitivo — filter driver bloqueia AF_UNIX especificamente em `C:\Users\<user>\AppData\Local\Temp` (não é Kaspersky, não é JDK, não é Winsock). Diagnóstico binário: bind+connect AF_UNIX OK em `C:\temp`, FAIL em `AppData\Local\Temp`. Fix `TEMP/TMP` redirect → `C:\temp\gradle_tmp` + JDK 25 Adoptium Temurin 25.0.3.9. AAB CLI 33s autônomo (substitui Studio GUI manual). Documentado `android/gradle.properties` + README §11. Validar.md 62 [x] / 0 pending. AAB vc 65 publicado Play Console Internal Testing 14:46 BRT. Master merge `c0cb372` → Vercel auto-deploy. Tag `v0.2.3.2` em `e277aa6`.
 

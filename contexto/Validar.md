@@ -19,7 +19,345 @@
 
 ---
 
-## 🆕 Release v0.2.3.5 — versionCode 68 (em curso, AAB pendente autorização user)
+## 🛠️ Manual de Validação Autônoma (IA executa, sem device físico)
+
+> Receita testada release v0.2.3.6. IA usa pra reproduzir bugs + validar fixes ANTES de pedir validação device pro user.
+
+### Setup (1× por sessão Studio aberta)
+
+**Pre-requisito Android Studio:** Settings → Tools → Device Mirroring →
+- ✓ "Activate mirroring when a new physical device is connected"
+- ✓ "Activate mirroring when the IDE launches an emulator"
+
+Garante Studio "Running Devices" panel auto-pega emulator lançado via CLI.
+
+### 1. Emulator com flags Studio (keyboard físico funciona via Mirror)
+
+```bash
+# Kill emulators velhos primeiro (evita "Running multiple emulators" erro)
+powershell -c "Get-Process | Where-Object { \$_.ProcessName -match 'qemu|emulator|crashpad|netsimd' } | Stop-Process -Force"
+
+# Lança com flags EXATAS que Studio usa (Win32_Process extraído)
+$ANDROID_HOME/emulator/emulator.exe -netdelay none -netspeed full \
+  -avd Pixel8_Test -qt-hide-window -grpc-use-token -idle-grpc-timeout 300
+# tool run_in_background: true — NÃO usar `&` no shell (SIGHUP)
+```
+
+**`-qt-hide-window` ≠ `-no-window`:**
+- `-no-window` = headless puro, sem Qt UI, Studio Mirror NÃO pega frames
+- `-qt-hide-window` = Qt UI escondida MAS processo Qt vivo + gRPC streaming → Studio Mirror pega
+
+Wait boot:
+```bash
+until [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
+```
+
+### 2. Build + install APK debug
+
+```bash
+cd android
+TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' \
+  JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' \
+  PATH="$JAVA_HOME/bin:$PATH" ./gradlew assembleDebug
+
+adb -s emulator-5554 install -r -t app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST_NOTIFICATIONS
+adb -s emulator-5554 shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity
+```
+
+### 3. Login programático (DOIS caminhos — escolher conforme build target)
+
+**3A. Native APK build (SecureStorage) → Appium + plugin SecureStorage direct**
+
+App native usa `@aparajita/capacitor-secure-storage` (KeyStore Android) como
+storage adapter, NÃO localStorage. Login REST + write SecureStorage via plugin
+positional API `SS.set(key, value)` (não `SS.set({key,value})`).
+
+Setup uma vez:
+```bash
+# Install deps (uma vez por máquina)
+npm install -g appium
+appium driver install uiautomator2
+# Webdriverio local devDep do projeto
+npm install --no-save webdriverio
+```
+
+Start Appium server:
+```bash
+# Allow chromedriver autodownload (Chrome WebView versão custom Capacitor)
+node "$(npm root -g)/appium/build/lib/main.js" --port 4723 \
+  --allow-insecure uiautomator2:chromedriver_autodownload
+# run_in_background: true
+until curl -s http://localhost:4723/status | grep -q '"ready"'; do sleep 1; done
+```
+
+Login via WebView context + REST + SecureStorage:
+```bash
+node scripts/appium_login.mjs daffiny.estevam@gmail.com 123456
+# OR: teste-plus@teste.com 123456 (conta teste — preferir)
+```
+
+Script `scripts/appium_login.mjs` fluxo:
+1. Conecta Appium emulator-5554 sem reset
+2. `getContexts()` → encontra `WEBVIEW_com.dosyapp.dosy.dev`
+3. `switchContext` para webview
+4. `executeAsync`: POST `/auth/v1/token?grant_type=password` → recebe session
+5. `localStorage.setItem('sb-...-auth-token', JSON.stringify(session))`
+6. `Capacitor.Plugins.SecureStorage.set('sb-...-auth-token', sessionStr)` ← chave!
+7. `location.reload()` → Supabase JS detecta session restaurada → SIGNED_IN
+
+⚠️ **Pegadinha plugin SecureStorage:** API é POSITIONAL `set(key, value)` não
+`set({key, value})`. Versões antigas usavam object — falham com "data in the
+store is in an invalid format". `@aparajita/capacitor-secure-storage` v3.x
+positional confirmed v0.2.3.6 release.
+
+**3B. Web/PWA build (localStorage) → CDP simples**
+
+ADB `input text` NÃO funciona em webview HTML form fields. CDP é o caminho.
+
+```bash
+# Setup forward porta 9222 → webview devtools socket
+APP_PID=$(adb -s emulator-5554 shell pidof com.dosyapp.dosy.dev | tr -d '\r')
+adb -s emulator-5554 forward tcp:9222 localabstract:webview_devtools_remote_$APP_PID
+PAGE=$(curl -s http://localhost:9222/json | grep -oE '"id": "[A-F0-9]+"' | head -1 | grep -oE '[A-F0-9]+$')
+node scripts/cdp_login.mjs "$PAGE" daffiny.estevam@gmail.com 123456
+```
+
+**Por que NÃO usar form fill tap (CDP click button)?**
+Click programático via `btn.click()` em React Capacitor webview frequentemente
+NÃO dispara `onClick` handler. `dispatchEvent(new PointerEvent(...))` também
+falha em alguns React Synthetic Event handlers. Native tap via coords também
+é frágil (offset status bar/dpr scaling/safe-area). Auth REST + storage
+write + reload é mais determinístico.
+
+### 4. Interação UI (após login)
+
+**4A. Navegação SPA via History API (mais confiável que tap)**
+
+Click em React Router `<Link>` programaticamente pode falhar. Use history:
+```bash
+node -e "const {WebSocket} = require('ws'); const ws = new WebSocket('ws://localhost:9222/devtools/page/PAGE_ID');
+ws.on('open', () => {
+  ws.send(JSON.stringify({id:1,method:'Runtime.evaluate',params:{
+    expression: \"window.history.pushState({},'','/pacientes'); window.dispatchEvent(new PopStateEvent('popstate')); 'navigated'\",
+    returnByValue:true
+  }}));
+  ws.on('message', d => { console.log(JSON.parse(d).result?.result?.value); ws.close(); process.exit(0) });
+});"
+```
+
+Routes principais Dosy:
+- `/` Dashboard
+- `/pacientes` Lista
+- `/pacientes/:id` PatientDetail
+- `/tratamento/novo` TreatmentForm
+- `/ajustes` Settings
+- `/sos` SOS
+
+**4B. Tap nativo via ADB (para botões fora React/Routes)**
+
+Coords reais Pixel 8 1080×2400. Screenshot pull é 540×1200 (scale 0.5) — multiplicar por 2.
+
+```bash
+adb -s emulator-5554 shell input tap <x> <y>
+adb -s emulator-5554 shell input keyevent 4  # back
+adb -s emulator-5554 shell input keyevent KEYCODE_HOME  # home (background app)
+adb -s emulator-5554 shell input swipe <x1> <y1> <x2> <y2> 300  # swipe 300ms
+```
+
+**4C. Bottom Nav (Início / Pacientes / + / SOS / Mais)**
+
+Real coords Pixel 8 bottom nav (y=2280 aprox):
+- Início (Dashboard): `(116, 2280)`
+- Pacientes: `(348, 2280)`
+- `+` (FAB Novo tratamento): `(540, 2240)`
+- SOS: `(733, 2280)`
+- Mais: `(965, 2280)`
+
+**4D. Permissions system dialogs (não tap — usar pm grant)**
+
+```bash
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.POST_NOTIFICATIONS
+adb -s emulator-5554 shell pm grant com.dosyapp.dosy.dev android.permission.SCHEDULE_EXACT_ALARM
+adb -s emulator-5554 shell input keyevent 4  # dismiss any leftover dialog
+```
+
+Para parsing UI: `adb shell uiautomator dump /data/local/tmp/ui.xml` + pull.
+Webview nodes NÃO aparecem (só wrapper). Use DOM via CDP/Appium:
+```js
+document.querySelector('selector').getBoundingClientRect()
+// CSS px → device px: (x * window.devicePixelRatio, y * dpr + 132 status bar)
+```
+
+### 5. Screenshot
+
+```bash
+MSYS_NO_PATHCONV=1 adb -s emulator-5554 shell screencap -p /data/local/tmp/d.png
+MSYS_NO_PATHCONV=1 adb -s emulator-5554 pull '//data/local/tmp/d.png' 'C:\temp\d.png'
+# IA: Read C:\temp\d.png pra ver
+```
+
+### 6. SQL state validation via Supabase MCP
+
+Verificar DB state pré/pós ação UI:
+```
+mcp__supabase__execute_sql({
+  project_id: 'guefraaqbkcehofchnrc',
+  query: 'SELECT ... FROM medcontrol.<table> WHERE ...'
+})
+```
+
+### Limites conhecidos do fluxo autônomo
+
+| Cenário | Bloqueador | Workaround |
+|---|---|---|
+| Password field via ADB `input text` | Webview HTML form não recebe ADB input | CDP login programático (passo 3) |
+| Reboot test | Emulator restart 30-60s | Aceitar custo OR fazer em batch fim sessão |
+| FCM real push device físico | Emulator tem token sandbox | Validar Java AlarmScheduler.fired via logcat |
+| Biometric / SecureStorage hardware | Sensor real / KeyStore real | Device físico user obrigatório |
+| AdMob PROD ad units | Emulator só TEST_AD_UNIT | Device físico user obrigatório |
+| Privacy screen FLAG_SECURE recents | Hardware blur | Device físico user obrigatório |
+
+---
+
+## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
+
+**Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.
+
+### v0.2.3.6 #268 #269 #270 #271 #262-revert — Bugs cascata pós idle validation falso positivo
+> Bug original: validação idle anterior reportada OK foi falso positivo — dados eram cache stale, não fetch fresh. User identificou: badge sino "2 atrasadas" mas Dashboard "0 atrasadas", filtro Atrasada vazio, dose deletada ainda no overdue cache.
+
+**#268 — supabase-js travado pós idle (getSession timeout)**
+- Root: refresh transient error + token expired durante idle → supabase-js fica em pending fetching forever. Fix #255b (inactiveMs > 1h) insuficiente — 30-60min idle quebra.
+- Fix: useAppResume valida session pós-refresh via `Promise.race([supabase.auth.getSession(), timeout 5s])`. Session inválida OU timeout → signOut forçado.
+- `[x]` Validado emulador 23:39 UTC: idle 53min com fixes aplicados, Dashboard renderiza dados consistentes (não trava supabase-js).
+
+**#269 — Stale cache órfã overdue badge (AppHeader)**
+- Root: `useDoses({status:'overdue'})` sem refetchInterval — cache mantém doses deletadas/mudadas indefinidamente.
+- Fix: AppHeader passa `pollIntervalMs: 60_000` no `useDoses(overdueFilter, {pollIntervalMs:60_000})` pra revalidar a cada 1min.
+- `[x]` Validado emulador: badge "3" sempre consistente com DB overdue count (3 doses passadas) durante idle + cross hour boundary.
+
+**#270 — placeholderData mascara fetch travado (Dashboard sync indicator)**
+- Root: Fix #267 `placeholderData` cross-key resolve hour boundary mas oculta query atual travada — user vê dados old como se fossem corretos.
+- Fix: Dashboard mostra banner "Sincronizando dados... (mostrando última versão conhecida)" quando `isFetching=true` + data age >8s + <60s.
+- `[x]` Validado emulador 23:39 UTC: 0 banner sync após resume (queries completam <8s)
+
+**#271 — createTreatment não invalida dashboard-payload**
+- Root: `mutationRegistry.createTreatment.onSuccess` invalida treatments/doses/user_medications mas esquece `['dashboard-payload']`. Dashboard mostra dados stale pós-criar treatment.
+- Fix: invalidateQueries dashboard-payload em createTreatment + registerSos + updateTreatment + deleteTreatment + createPatient + updatePatient + deletePatient (parity).
+- `[x]` Validado emulador: pós-criar TesteFuturo Med, Dashboard mostra 21 doses recém criadas + 3 overdue corretamente.
+
+**#262 REVERT — Banner AdMob TOP (não BOTTOM)**
+- Root: fix #262 inicial moveu banner TOP→BOTTOM_CENTER pensando que TOP era intrusivo. User confirmou: TOP era posição correta. BOTTOM causou: (a) hero card cortado no topo (CSS padding errado); (b) banner cobre BottomNav.
+- Fix: revert TOP_CENTER + padding-top CSS + remove BottomNav offset --ad-banner-height.
+- `[x]` Validado emulador 23:12 UTC: banner Bradesco test renderiza acima do header Dosy, hero card inteiro, BottomNav visível.
+
+### v0.2.3.6 #267 — Dashboard skeleton em troca de hora (placeholderData cross-key)
+- **Bug reportado:** user deixou app idle, voltou ao Dashboard — skeleton infinito mesmo com cache populado.
+- **Root cause:** `useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`. Cada hora gera queryKey diferente. Quando hora muda (19→20), nova query criada — `placeholderData: previousData` retorna undefined porque essa key nunca renderizou. Cache tinha 5 queries com data nas horas anteriores mas Dashboard só usava a CURRENT.
+- **Fix aplicado:** `placeholderData` fallback varre `qc.getQueryCache().findAll(['dashboard-payload'])` e pega data mais recente de qualquer queryKey. Cobre same-key refetch + cross-key transition.
+- `[x]` Validado Chrome MCP localhost teste-plus 2026-05-15 16:46 BRT: bug reproduzido (4 skeletons), pós-fix 0 skeletons, dashboard renderiza dados imediatamente
+- `[x]` Validado emulador Pixel8_Test APK debug teste-plus 2026-05-15 22:12 UTC: idle 53min total (2× 25min), cruzou hour boundary 21→22 UTC, query nova `22:00` pending fetching MAS placeholderData pegou cache `21:00` (3320s ago) → skeleton=0 Dashboard renderiza dados imediato (validação cobre fluxo real device físico)
+
+### v0.2.3.6 #255 — Idle longo → skeleton infinito (fix useAppResume)
+- **Root cause:** idle >1h + token expirado + `ProcessLockAcquireTimeoutError` no `refreshSession()` → classificado "transient" → `refetchQueries()` com token morto → skeleton
+- **Fix aplicado:** `inactiveMs > 3600s (SUPABASE_TOKEN_LIFETIME_MS)` + `!isAuthFailure` → `supabase.auth.signOut()` → useAuth redireciona login. Funciona para localStorage (web) E SecureStorage (nativo Android).
+- **Commits:** `de90af7` (fix inicial v1 — era localStorage, incorreto), `6ac556e` (fix correto v2 — inactiveMs)
+- `[x]` Fix lógica verificada CDP 2026-05-15: `inactiveMs=7200s > token_lifetime=3600s → wouldSignOut=true` ✅; `inactiveMs=1800s < 3600s → wouldSignOut=false` ✅
+- `[x]` APK debug rebuilt (bundle `index-IR-YtBbE.js`, build 15:57 BRT pós-commit `6ac556e`)
+- `[x]` App carrega Dashboard pós-install sem skeleton (session SecureStorage preservada)
+- `[x]` Validado emulador 2026-05-15 22:12 UTC: idle 53min cobriu hour boundary + token quase expirado (350s restantes). Dashboard carregou sem skeleton via fix #267 cross-key placeholderData. Fix #255 inactiveMs+signOut só dispara token genuinamente expirado >1h — não testado ainda autonomamente.
+- `[ ]` **Device físico:** 1h+ background com token expirando → resume → app deve redirecionar para tela de login (sem skeleton infinito). **Como fazer:** logar, aguardar 1h sem usar app (ou editar `expires_at` do token no Supabase console para forçar expiração), colocar em background, aguardar mais 10min, retomar. **O que esperar:** tela de login. **Se falhar:** skeleton loop → bug ainda presente.
+
+### v0.2.3.6 #264 — Dose passada pulada no create_treatment_with_doses
+- **Bug reportado:** user cadastrou Acetilcisteina 16:00 BRT às 16:07 BRT, dose das 16:00 não foi criada (pulada por WHILE loop).
+- **Root cause:** `create_treatment_with_doses` (e `update_treatment_schedule`) tem `WHILE v_first < v_now LOOP v_first := v_first + step` que avança a 1ª dose para o futuro, pulando completamente qualquer dose passada — mesmo por minutos.
+- **Fix aplicado:** SQL — remover WHILE pula-passado. 1ª dose sempre = `dataInicio + firstDoseTime`. Doses passadas inseridas com `status='pending'` → cliente recomputa overdue via `recomputeOverdue()` em `dosesService.js` → Dashboard mostra como "atrasada".
+- **Form UX (Opção 1):** Renomear "Início" → "Data de início", trocar `type="datetime-local"` → `type="date"`. Hora vem só de `firstDoseTime`. Elimina confusão de 2 horas conflitantes.
+- `[x]` SQL migration applied (`fix_create_treatment_doses_past_and_exact_count_v0_2_3_6`) + 1ª dose passada cria com status='pending'
+- `[x]` Form mostra "Data de início" como input type="date" + hint visível
+- `[x]` Validação Chrome MCP localhost teste-plus@teste.com 2026-05-15 16:35 BRT: tratamento Acetilcisteina QA Teste hoje 15:35 → 1ª dose 15:35 BRT criada com status pending no DB (`past_doses: 1`) → Dashboard mostra "atrasada" via recomputeOverdue
+- `[ ]` **Device físico:** mesma validação no APK release
+
+### v0.2.3.6 #265 — Total doses incorreto: esperado 15, gerou 12
+- **Bug reportado:** preview mostrou "15 doses" mas DB tem 12.
+- **Root cause:** `create_treatment_with_doses` usa `doseHorizon = startDate (00:00 local) + durationDays days`. Loop while `v_first + v_t < v_horizon`. Quando 1ª dose é no meio do dia (ex: 16:00), horizonte termina antes de completar `durationDays × 24 / intervalHours` doses.
+- **Fix aplicado:** SQL — substituir loop horizonte por contador exato: `for v_t in 0..(total_doses - 1) loop` onde `total_doses = ceil(durationDays × 24 / intervalHours)`. Garante `15 doses` para `5 days × 8h`.
+- `[x]` SQL: tratamento 7d 8h gerou exatamente 21 doses (validado 2026-05-15 emulator Chrome MCP — `total_doses: 21`, `first_dose: 15/05 18:35 UTC`, `last_dose: 22/05 10:35 UTC`)
+- `[x]` Preview frontend "21 doses no total" bateu com DB count
+- `[ ]` SQL times mode: validar tratamento 3 horários/dia × 5 dias = 15 doses (não testado autônomo, padrão é interval)
+
+### v0.2.3.6 #266 — PatientDetail não mostra tratamento recém-criado como ativo
+- **Bug reportado:** Acetilcisteina aparece em /tratamentos mas NÃO em /pacientes/rael (Tratamentos ativos vazio).
+- **Root cause:** `createTreatment.onMutate` em `mutationRegistry.js:389` faz `qc.setQueryData(['treatments'], ...)` que só atinge queryKey EXATA. Variações `['treatments', { patientId }]` não são atualizadas. Combinado com `useTreatments` `refetchOnMount: false` + `invalidateQueries` que não re-fetcha queries não montadas, PatientDetail mostra cache stale.
+- **Fix aplicado:** JS — usar `insertEntityIntoLists(qc, 'treatments', tempTreatment, ...)` (função já existe linha 104, criada mas nunca usada). Mesmo padrão já aplicado em pause/resume/end via `patchEntityListsInCache`. onSuccess também patcheia todas variações para substituir temp por real.
+- `[x]` JS: criar tratamento (Chrome MCP localhost teste-plus 2026-05-15) → navegar /pacientes/9f09348b... → seção "Tratamentos ativos 2 / Acetilcisteina QA Teste 5ml · a cada 8h · 7 dias" visível ✅
+- `[x]` JS: /tratamentos continua mostrando (não quebrou caso existente)
+
+### v0.2.3.6 #259-#263 — Bugs QA fechados 2026-05-15 (segunda batelada)
+> Relatório original: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) | Itens detalhados [CHECKLIST.md](CHECKLIST.md) #259-#263
+
+**#259 P2 BUG — "Cancelada" persiste em Reports após pause/resume** ✅ FIXADO
+- **Root cause:** 2 overloads de `update_treatment_schedule` existiam — versão antiga `(uuid, jsonb)` sem `v_is_resume` logic. Client chamava com 2 args → resolvia versão antiga → não deletava cancelled futuras + não regenerava pending.
+- **Fix:** (a) migration `fix_update_treatment_schedule_resume_cleans_cancelled_v0_2_3_6` adiciona `v_is_resume := old_status IN ('paused','cancelled') AND new_status='active'` + DELETE inclui `cancelled` futuras + regenerate; (b) DROP overload antigo `(uuid, jsonb)`.
+- `[x]` Validado Chrome MCP localhost teste-plus 2026-05-15 18:09: pause→19 cancelled, resume→21 pending novas + 1 cancelled passada (preserva histórico)
+
+**#260 P2 BUG — Console errors `[object Object]`** ✅ FIXADO
+- **Root cause:** `fcm.js:162` `console.error('[FCM] upsert RPC FAILED:', error)` — `error` é objeto Supabase serializado como `[object Object]`. Idem `:164` catch.
+- **Fix:** serializar via `error?.message || error?.code || JSON.stringify(error)` em ambos call sites.
+- `[x]` Validado: catch blocks agora geram texto legível, sem `[object Object]`
+
+**#261 P3 BUG — HORÁRIO SOS formato en-US** ✅ FIXADO
+- **Root cause:** `<input type="datetime-local">` herda locale OS (en-US no emulator Android).
+- **Fix:** SOS.jsx split em 2 inputs: `type="date"` + `type="time"`. State separado `dateVal/timeVal`, combina via `${dateVal}T${timeVal}` para submit.
+- `[x]` Validado Chrome MCP localhost 2026-05-15 18:05: labels "Data" + "Hora" separadas, valores `2026-05-15` + `18:05` formato consistente
+
+**#262 P3 UX — Ad banner acima do header** ✅ FIXADO
+- **Root cause:** `useAdMobBanner.js` usava `BannerAdPosition.TOP_CENTER` (banner acima do header Dosy).
+- **Fix:** `BannerAdPosition.BOTTOM_CENTER` + BottomNav `bottom` calc inclui `var(--ad-banner-height)` + CSS `body.has-ad-banner { padding-bottom }` (era padding-top).
+- `[ ]` **Device físico:** banner aparece BELOW conteúdo + BottomNav fica ACIMA do banner (não testável em web — AdMob é native only)
+
+**#263 P4 UX — "1 dias" + "Termina hoje"** ✅ FIXADO
+- **Root cause:** TreatmentList.jsx line 446 `${durationDays} dias` (sem singular) + line 454 sempre "Termina em DD/MM".
+- **Fix:** (a) singular: `${days} ${days === 1 ? 'dia' : 'dias'}`; (b) relative: se `diffDays === 0` → "Termina hoje", `=== 1` → "Termina amanhã", else `Termina em DD/MM/YYYY`.
+- `[x]` Validado Chrome MCP localhost 2026-05-15 17:48: tratamento 1 day startDate=hoje → display "1 dia" + "Termina amanhã"
+
+
+
+### v0.2.3.6 #250 — ANVISA autocomplete medicamentos
+- `[x]` Migration `medications_catalog` + GIN trigram + RLS public read aplicada
+- `[x]` ETL 764 rows ANVISA carregados (full 6989 via SUPABASE_SERVICE_KEY pendente)
+- `[x]` RPC `search_medications` retorna correto (testado SQL direto)
+- `[x]` Migration accent-insensitive `unaccent` extension + `immutable_unaccent` wrapper + indexes recriados
+- `[x]` SQL "magne" retorna MAGNÉSIO/ESOMEPRAZOL MAGNÉSICO/PANTOPRAZOL MAGNÉSICO/SULFATO DE MAGNÉSIO
+- `[x]` SQL "aspirina" sem acento retorna ASPIRINA PREVENT
+- `[x]` Frontend `MedNameInput` autocomplete local + ANVISA + userMeds (Chrome MCP localhost "dipir" → Dipirona/Dipirona sódica, "novalgi" → Novalgina, "amoxic" → Amoxicilina/Clavulanato)
+- `[ ]` **Device físico:** TreatmentForm "dipir" mostra Dipirona com subtitle principio_ativo
+- `[ ]` **Device físico:** TreatmentForm "Magne" sem acento mostra Magnésio
+
+### v0.2.3.6 #SHARING-FIX — sistema compartilhamento quebrado (CRÍTICO)
+- **Bug reportado:** Daffiny vê "Bem-vindo ao Dosy" sem shares; Luiz vê SharePatientSheet de Liam "Carregando..." pra sempre; Skeleton loop Dashboard pós-idle
+- **Fixes aplicados:**
+  - Migration `get_dashboard_payload_include_shares_v0_2_3_6` — RPC consolidado inclui shares via CTE accessible (UNION próprios + patient_shares)
+  - `services/supabase.js` — `lock: processLock` substitui navigatorLock orphan
+  - `hooks/usePatients.js` — remove `refetchOnMount: false`
+  - `hooks/useAuth.jsx` — INITIAL_SESSION + SIGNED_IN invalidate ['patients']/['received_shares']/['dashboard-payload']/['patient_shares']
+- `[x]` Migration aplicada Supabase prod
+- `[x]` SQL test: `get_dashboard_payload()` simulando Daffiny role retorna patients=2/treatments=20/doses=678
+- `[x]` Chrome MCP localhost Daffiny: pré-fix Dashboard 0 doses + "Bem-vindo"; pós-fix 4/11 doses HOJE + 7 pendentes + 3 atrasadas + 61% adesão + cards Liam (5 doses) + Rael (6 doses) + lista Pacientes mostra Liam+Rael
+- `[x]` Build verde `npm run build` 19s 0 warnings
+- `[x]` Build debug APK gradlew CLI 33s sucesso (vc 69 vn 0.2.3.6)
+- `[x]` APK instalado emulator Pixel 8 Android 15 → app launch OK + login screen render
+- `[ ]` **Device físico Luiz:** SharePatientSheet abre Liam mostra Daffiny dentro de 2s (sem "Carregando..." pra sempre)
+- `[ ]` **Device físico Daffiny:** Dashboard mostra Rael + Liam + doses dos 2 pacientes após cold start
+- `[ ]` **Device físico Daffiny:** deixar app idle 10min + voltar → cache refresh, sem skeleton loop infinito
+- `[ ]` **Device físico:** background→foreground 5× consecutivos → sem auth lock orphan no Sentry breadcrumbs
+
+> Validação device-only via emulator Pixel 8 CLI parou em login (limitação ADB `input text` em webview HTML form fields; web Chrome MCP cobre 100% mudanças JS+RPC, sem código nativo afetado).
+
+---
+
+## 🟢 Release v0.2.3.5 — versionCode 68 (em curso, AAB pendente autorização user)
 
 **Escopo:** UI/UX redesign 5 telas + critical bug Reports + sistema gradiente unificado + dark warm migration + cleanup icon style.
 

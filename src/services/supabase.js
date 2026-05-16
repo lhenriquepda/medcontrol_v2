@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, processLock } from '@supabase/supabase-js'
 import { Capacitor } from '@capacitor/core'
 import { SecureStorage } from '@aparajita/capacitor-secure-storage'
 
@@ -36,7 +36,22 @@ export const supabase = hasSupabase
         // Native: encrypted KeyStore. Web: default localStorage (browser session-isolated)
         ...(isNative ? { storage: SecureStorageAdapter } : {}),
         // Required on native — no URL redirect for OAuth in WebView
-        detectSessionInUrl: !isNative
+        detectSessionInUrl: !isNative,
+        // v0.2.3.6 — processLock substitui navigatorLock default.
+        // navigator.locks API fica órfão em StrictMode + remount rápido + WebView
+        // background→foreground: orphan lock bloqueia TODAS queries auth-dependentes
+        // (skeleton loop infinito Dashboard, SharePatientSheet Carregando..., etc).
+        // processLock é mutex em memória do processo, não usa Web Lock API.
+        lock: processLock,
+        // v0.2.3.6 — lockAcquireTimeout obrigatório p/ Capacitor WebView mobile.
+        // Cenário sem timeout (default infinito): JS pausa em background mid-refresh
+        // → promise nunca resolve → processLock chain trava → todas auth-dependent
+        // queries pending forever quando app resume (skeleton infinito).
+        // Com timeout 15s: lock trava → ProcessLockAcquireTimeoutError → supabase-js
+        // trata como transient (não dispara SIGNED_OUT) → useAppResume refresh retry.
+        // User "fica logado pra sempre" — token interno renova silencioso, percepção
+        // é de sessão eterna até deslogar manual.
+        lockAcquireTimeout: 15_000
       },
       db: { schema: SCHEMA },
       // Item #079 (release v0.1.7.1) — heartbeat explicit + reconnect rápido.

@@ -240,6 +240,7 @@ export function registerMutationDefaults(qc) {
         }
       }
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -280,6 +281,7 @@ export function registerMutationDefaults(qc) {
         )
       }
       qc.invalidateQueries({ queryKey: ['patients'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -313,6 +315,7 @@ export function registerMutationDefaults(qc) {
         qc.setQueryData(['patients', data.id], data)
       }
       qc.invalidateQueries({ queryKey: ['patients'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -323,6 +326,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['patients'] })
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -384,9 +388,16 @@ export function registerMutationDefaults(qc) {
         treatmentId: tempId,
         _optimistic: true,
       }))
-      const prevTreatments = qc.getQueryData(['treatments'])
-      const prevDoses = qc.getQueryData(['doses'])
-      qc.setQueryData(['treatments'], (old = []) => [tempTreatment, ...(old || [])])
+      // v0.2.3.6 #266 fix: insert em TODAS variações ['treatments', *] (sem
+      // filter + por patientId, etc). setQueryData(['treatments']) sozinho só
+      // atinge queryKey exata — PatientDetail (`useTreatments({patientId})`)
+      // não recebia o novo tratamento até refetch.
+      // Filter match: queryKey filter pode ter {patientId} — inserir se bate
+      // ou se filter sem patientId (lista geral).
+      const treatmentSnapshots = insertEntityIntoLists(
+        qc, 'treatments', tempTreatment,
+        (item, filter) => !filter?.patientId || filter.patientId === item.patientId
+      )
       // Cache doses pode ter múltiplas queryKeys (filter por patientId/from/to). Faz
       // findAll + patch cada — mesma estratégia patchDoseInCache pra confirm/skip.
       const doseQueries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
@@ -397,13 +408,14 @@ export function registerMutationDefaults(qc) {
         qc.setQueryData(q.queryKey, [...tempDoses, ...data])
       }
       return {
-        prevTreatments, prevDoses, tempId,
+        treatmentSnapshots, tempId,
         tempDoseIds: tempDoses.map((d) => d.id),
         doseSnapshots,
       }
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prevTreatments !== undefined) qc.setQueryData(['treatments'], ctx.prevTreatments)
+      // Rollback treatments via snapshots (todas queryKeys ['treatments', *])
+      rollback(qc, ctx?.treatmentSnapshots)
       // Rollback doses por snapshot (todas queryKeys ['doses'] afetadas)
       for (const [key, data] of (ctx?.doseSnapshots ?? [])) {
         qc.setQueryData(key, data)
@@ -413,13 +425,19 @@ export function registerMutationDefaults(qc) {
       track(EVENTS.TREATMENT_CREATED)
       // RPC retorna treatment + doses jsonb. Substitui temp pelo real.
       const real = data?.treatment || data
+      // v0.2.3.6 #266: substitui temp por real em TODAS variações ['treatments', *]
       if (ctx?.tempId && real?.id) {
-        qc.setQueryData(['treatments'], (old = []) =>
-          (old || []).map((t) => t.id === ctx.tempId
-            ? { ...real, _tempIdSource: ctx.tempId }
-            : t
+        const treatmentQueries = qc.getQueryCache().findAll({ queryKey: ['treatments'] })
+        for (const q of treatmentQueries) {
+          const arr = q.state.data
+          if (!Array.isArray(arr)) continue
+          qc.setQueryData(q.queryKey,
+            arr.map((t) => t.id === ctx.tempId
+              ? { ...real, _tempIdSource: ctx.tempId }
+              : t
+            )
           )
-        )
+        }
       }
       // Remove doses temp via tempDoseIds; invalidate busca doses reais do server.
       if (ctx?.tempDoseIds?.length) {
@@ -433,6 +451,10 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      // v0.2.3.6 #271 fix: createTreatment não invalidava ['dashboard-payload'],
+      // resultado: Dashboard não mostrava doses recém-criadas até next mount/focus.
+      // Mantém parity com createPatient (line 142) que já invalida.
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -463,6 +485,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -472,6 +495,7 @@ export function registerMutationDefaults(qc) {
       track(EVENTS.TREATMENT_DELETED)
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -514,6 +538,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -540,6 +565,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 
@@ -578,6 +604,7 @@ export function registerMutationDefaults(qc) {
       qc.invalidateQueries({ queryKey: ['treatments'] })
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['user_medications'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     },
   })
 }

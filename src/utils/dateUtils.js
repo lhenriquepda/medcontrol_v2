@@ -37,6 +37,22 @@ export function fromDatetimeLocalInput(value) {
   return new Date(value).toISOString()
 }
 
+// v0.2.3.6 #264 — TreatmentForm Início type=date (sem hora).
+// Hora vem só de firstDoseTime. Elimina confusão de 2 horas conflitantes
+// (startAt datetime + firstDoseTime time, sendo que SQL ignorava hora do startAt).
+export function toDateInput(iso) {
+  const d = iso ? new Date(iso) : new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+export function fromDateInput(value) {
+  // value = 'YYYY-MM-DD'. Constrói meia-noite local + converte pra ISO.
+  // Hora da 1ª dose virá de firstDoseTime via SQL date_trunc('day', startDate) + hora.
+  if (!value) return new Date().toISOString()
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString()
+}
+
 export function rangeNow(rangeKey) {
   // Janela assimétrica: forward = N, backward = N/2 (mostra tomadas/puladas
   // recentes do contexto). Overdue sempre adicionadas via merge no Dashboard

@@ -8300,3 +8300,221 @@ Análise cross-source dificultada — admin panel `/alarm-audit` não consegue f
 | RPC `upsert_push_subscription` precisa update assinatura | 🟢 Baixo | Adicionar `p_device_id` parâmetro opcional, backward-compat | OK |
 
 **Egress save:** Zero. Higiene observabilidade.
+
+---
+
+## QA v0.2.3.6 — Bugs detectados (2026-05-15)
+
+> Relatório completo: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) — rodado em emulator Pixel8_Test, conta teste-plus@teste.com.
+
+---
+
+### #255 — Idle longo (>1h) → skeleton infinito Dashboard ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 — idle 3h10min, token expirou durante freeze Android
+- **Fix commit:** `de90af7` branch `release/v0.2.3.6`
+
+**Root cause:**
+
+`useAppResume.onResume()` chama `supabase.auth.refreshSession()`. Com `processLock + lockAcquireTimeout: 15s`, o lock timeout dispara `ProcessLockAcquireTimeoutError` sem fazer request HTTP. Código classificava como "transient error" (`isAuthFailure=false`) → mantinha session → `refetchQueries()` disparava com token expirado → todas queries retornavam 401 → skeleton infinito. **Zero network requests** observados via CDP Network Monitor em 10+ minutos de foreground.
+
+**Fix aplicado (`src/hooks/useAppResume.js`):**
+
+Adicionada `_readStoredTokenExpiry()` — lê `expires_at` direto do localStorage (bypass processLock). Se token expirado + refresh transient → `supabase.auth.signOut()` → `useAuth` redireciona login. Comportamento `#190/#202` preservado para network glitches reais (token válido + erro de rede → keep session).
+
+**Critério aceitação (validação device físico pendente):**
+- 🧪 App em foreground após 1h+ background com token expirado → redireciona tela login (sem skeleton)
+- ✅ Token válido + network timeout → mantém session (não faz logout desnecessário)
+
+---
+
+### #259 — Status "Cancelada" em Relatórios após pause/resume tratamento
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #4)
+
+**Sintoma:** Relatórios → DETALHAMENTO mostra dose de tratamento com status "Cancelada" após ciclo pause+resume. Dashboard mostra dose como "pendente". Inconsistência entre views.
+
+**Reprodução:**
+1. Criar tratamento Dipirona 8h/8h para paciente
+2. Confirmar dose → Desfazer (undo)
+3. Pausar tratamento → Retomar
+4. `/relatorios` → DETALHAMENTO → dose aparece "Cancelada"
+
+**Investigação necessária:**
+- Verificar status real no DB: `SELECT status FROM medcontrol.doses WHERE id='...'`
+- Verificar se `pause_treatment` RPC cancela doses pending e `resume_treatment` não as recria
+- Verificar se Reports frontend mapeia `cancelled` → "Cancelada" vs Dashboard que mapeia para "pendente"
+
+---
+
+### #260 — Console errors `[object Object]` silenciosos Dashboard/Patients
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md OBSERVAÇÃO #5)
+
+**Sintoma:** CDP Console listener captura `[error] [object Object]` (2 ocorrências) ao carregar Dashboard e navegar para `/pacientes`. Erros são objetos JS logados sem `.message` serializado — mascaram possíveis erros de fetch silenciosos.
+
+**Investigação:** Auditar todos `catch(err)` + `onError(err)` em hooks React Query e services JS. Substituir `console.error(err)` por `console.error(err?.message || err)` ou `Sentry.captureException(err)`.
+
+---
+
+### #261 — HORÁRIO SOS exibe formato en-US (05/15/2026 3:06PM)
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟢 P3
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #1)
+
+**Sintoma:** Campo `<input type="datetime-local">` no formulário SOS exibe `05/15/2026, 3:06PM` em vez de `15/05/2026 15:06`. Emulator/WebView Android usa locale `en-US`.
+
+**Fix options:**
+1. Componente customizado de datepicker (recomendado — controle total do formato)
+2. Overlay CSS/JS que re-formata o valor displayed via `Intl.DateTimeFormat('pt-BR')`
+3. Adicionar `lang="pt-BR"` no `<html>` root (pode ou não funcionar dependendo do WebView)
+
+---
+
+### #262 — Ad banner Plus renderiza acima do header Dosy
+
+- **Categoria:** 🐛 BUGS / UX
+- **Prioridade:** 🟢 P3
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #2)
+
+**Sintoma:** Tela "Mais" e outras telas com ad (tier Plus = 1 ad discreto): o banner AdMob renderiza ACIMA do header Dosy (logo + saudação). Primeiro elemento visível é o ad, não a identidade visual.
+
+**Fix:** Mover posicionamento do ad para posição discreta — bottom da tela (acima do bottom nav), ou no meio de lista de conteúdo. Nunca acima do header.
+
+---
+
+### #263 — Tratamentos exibe "1 dias" quando termina hoje
+
+- **Categoria:** 🐛 BUGS / UX
+- **Prioridade:** ⚪ P4
+- **Origem:** QA autônomo v0.2.3.6 2026-05-15 (QA_REPORT.md BUG #3)
+
+**Sintoma:** Card de tratamento exibe "1 dias" de duração restante quando `endDate === today`. Deveria exibir "Termina hoje" ou "Último dia".
+
+**Fix:** No cálculo de dias restantes, se `daysRemaining <= 0`, exibir "Termina hoje" (se `daysRemaining === 0`) ou considerar encerrado automaticamente.
+
+---
+
+### #264 — Dose 1ª passada pulada no create_treatment_with_doses ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15 — criou tratamento Acetilcisteina 16:00 BRT às 16:07 BRT, dose 16:00 não foi criada
+- **Fix commits:** `4113639` (SQL + form), `fix_create_treatment_doses_past_and_exact_count_v0_2_3_6` migration
+
+**Root cause:**
+
+`create_treatment_with_doses` (e `update_treatment_schedule`) tinha:
+```sql
+WHILE v_first < v_now LOOP
+  v_first := v_first + make_interval(hours => v_step_hours);
+END LOOP;
+```
+Avançava 1ª dose pro futuro pulando qualquer dose no passado — mesmo passada por minutos. Cenário user "iniciei ontem" também ficava quebrado.
+
+**Fix aplicado:**
+
+1. SQL: removido WHILE pula-passado. 1ª dose mantida em `dataInicio + firstDoseTime` mesmo se passada. Status='pending' → cliente recompute overdue via `recomputeOverdue()` em `dosesService.js` → Dashboard mostra "atrasada".
+2. Frontend: TreatmentForm "Início" `type=datetime-local` → "Data de início" `type=date`. Hora vem só de `firstDoseTime`. Hint explica: "Hora vem do campo 'Horário da 1ª dose' acima. Pode ser data passada (doses anteriores aparecem como atrasadas)".
+3. Helpers `toDateInput`/`fromDateInput` em `dateUtils.js`.
+
+**Validado Chrome MCP localhost teste-plus 2026-05-15:**
+- DB: `past_doses: 1`, `first_dose: 15/05 18:35 UTC` (= 15:35 BRT preservada)
+- Dashboard mostra "Acetilcisteina QA Teste · Hoje 15:35 atrasada" ✅
+
+---
+
+### #265 — Total doses incorreto (15 esperado, 12 gerado) ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🟡 P2
+- **Origem:** User reportado 2026-05-15 (mesmo cenário #264)
+- **Fix commit:** `4113639`
+
+**Root cause:**
+
+SQL usava `doseHorizon = startDate (00:00 local) + durationDays days` + `WHILE v_first + v_t < v_horizon`. Quando 1ª dose era no meio do dia (ex: 16:00), horizonte terminava antes de completar `durationDays × 24 / intervalHours` doses.
+
+**Fix aplicado:**
+
+Substituído loop horizonte por `FOR v_i IN 0..(total_doses - 1)` onde `total_doses = CEIL(durationDays × 24 / intervalHours)`. Garante count exato.
+
+**Validado:** 7d × 8h gerou exatamente 21 doses (DB `total_doses: 21`).
+
+---
+
+### #266 — PatientDetail não mostra tratamento recém-criado como ativo ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15
+- **Fix commit:** `4113639`
+
+**Root cause:**
+
+`createTreatment.onMutate` em `mutationRegistry.js:389` usava:
+```js
+qc.setQueryData(['treatments'], (old = []) => [tempTreatment, ...(old || [])])
+```
+Só atinge queryKey **exata** `['treatments']`. Variações `['treatments', { patientId }]` não eram atualizadas. Combinado com `useTreatments` `refetchOnMount: false` + `invalidateQueries` (não re-fetcha queries não montadas) → PatientDetail mostrava cache stale sem o novo med.
+
+Função `insertEntityIntoLists` (linha 104) existia mas nunca era usada — código morto.
+
+**Fix aplicado:**
+
+1. `onMutate`: usa `insertEntityIntoLists(qc, 'treatments', tempTreatment, filterMatchFn)` com filter match `(item, filter) => !filter?.patientId || filter.patientId === item.patientId`.
+2. `onSuccess`: loop em todas queries `findAll({ queryKey: ['treatments'] })` substituindo temp→real (não só queryKey exata).
+3. `onError`: rollback via snapshots de todas variações.
+
+Padrão alinhado com `pauseTreatment`/`resumeTreatment`/`endTreatment` que já usavam `patchEntityListsInCache` (fix #204 v0.2.1.8).
+
+**Validado:** /pacientes/{id} → seção "Tratamentos ativos 2 / Acetilcisteina QA Teste 5ml · a cada 8h · 7 dias" ✅
+
+---
+
+### #267 — Dashboard skeleton infinito em troca de hora ✅ FIXADO
+
+- **Categoria:** 🐛 BUGS
+- **Prioridade:** 🔴 P1
+- **Origem:** User reportado 2026-05-15 — deixou app idle Dashboard, voltou e ficou skeleton
+- **Fix commit:** `20efdbf`
+
+**Root cause:**
+
+`useDashboardPayload` usa `roundToHour(from/to)` no `queryKey`:
+```js
+queryKey: ['dashboard-payload', { from: roundToHour(from), to: roundToHour(to), daysAhead }]
+```
+
+Cada hora gera queryKey diferente. Cache mantém 5 queries (uma por hora). Quando hora muda (ex: 19→20), nova queryKey criada — `placeholderData: previousData` retorna `undefined` porque essa key nunca renderizou antes.
+
+`isLoading: true` → `<SkeletonList count={4} />` renderiza permanente. Cache com dados das horas anteriores existe mas Dashboard só olha a query CURRENT.
+
+**Fix aplicado:**
+
+`placeholderData` fallback varre cache cross-key:
+```js
+placeholderData: (previousData) => {
+  if (previousData) return previousData
+  const all = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+  const withData = all.filter((q) => q.state.data)
+  if (withData.length === 0) return undefined
+  withData.sort((a, b) => (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0))
+  return withData[0].state.data
+}
+```
+
+Cobre:
+- Same-key refetch (previousData ainda first match)
+- Cross-key transition (hour boundary OR filter change OR daysAhead change)
+
+**Validado Chrome MCP localhost 2026-05-15 16:46 BRT:**
+- Bug reproduzido (4 shimmer skeletons visíveis com 5 queries cached)
+- Pós fix: 0 skeletons, dashboard renderiza dados imediatamente

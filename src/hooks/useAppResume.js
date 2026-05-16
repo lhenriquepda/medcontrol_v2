@@ -25,7 +25,7 @@ import { supabase } from '../services/supabase'
  *
  * Mount once em App.jsx top-level.
  */
-const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5min
+const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5 min
 
 // Item #202 (release v0.2.1.5+) — mutex + debounce pra prevenir refresh storm.
 // Bug observado em prod 2026-05-08 09:00 BRT: 5 tokens rotacionados em 1.48s
@@ -87,11 +87,49 @@ export function useAppResume() {
               errStatus === 403 ||
               /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
             if (!isAuthFailure) {
+              // v0.2.3.6 #255 idle fix: erro "transient" pode ser ProcessLockAcquireTimeout
+              // pós-idle longo (>1h token Supabase padrão). Se ficamos inativos mais que
+              // o token lifetime, o access_token certamente expirou e refetchQueries()
+              // vai falhar com 401 em TODAS as queries → skeleton infinito.
+              // Usa inactiveMs (já calculado) — independe do storage backend
+              // (funciona para localStorage/web E SecureStorage/nativo Android).
+              const SUPABASE_TOKEN_LIFETIME_MS = 60 * 60 * 1000 // 1h padrão Supabase
+              if (inactiveMs > SUPABASE_TOKEN_LIFETIME_MS) {
+                console.warn('[useAppResume] idle', Math.round(inactiveMs / 1000), 's > token lifetime + refresh falhou (transient) → signOut forçado')
+                await supabase.auth.signOut()
+                return
+              }
               console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
             } else {
               console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
             }
           }
+
+          // v0.2.3.6 #268 fix — validar session pós-refresh com timeout 5s.
+          // Cenário: refreshSession() retorna OK mas session interna ainda inválida
+          // (token expirou DURANTE idle ~30-60min, refresh chain quebrou silencioso,
+          // queries subsequentes ficam travadas em fetching/401 retry loop).
+          // Sem este check, skeleton infinito mascarado por placeholderData cross-key
+          // (fix #267). User vê dashboard com dados stale + queries fetching forever.
+          try {
+            const sessionCheck = await Promise.race([
+              supabase.auth.getSession(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 5000))
+            ])
+            const sess = sessionCheck?.data?.session
+            const nowSec = Math.floor(Date.now() / 1000)
+            const sessionInvalid = !sess || (sess.expires_at && sess.expires_at < nowSec)
+            if (sessionInvalid) {
+              console.warn('[useAppResume] pós-refresh session inválida (exp:', sess?.expires_at, 'now:', nowSec, ') → signOut forçado')
+              await supabase.auth.signOut()
+              return
+            }
+          } catch (e) {
+            console.warn('[useAppResume] getSession timeout/error → signOut forçado:', e?.message)
+            await supabase.auth.signOut()
+            return
+          }
+
           // 2. Drop dead websocket channels — useRealtime resubscribe via
           //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
           await supabase.removeAllChannels()

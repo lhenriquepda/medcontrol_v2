@@ -12,8 +12,11 @@ export function usePatients() {
     // v0.2.3.4 #165: 5min → 30min combinado com IDB persist (main.jsx). App abre renderiza
     // cache local instant + background refetch só se >30min stale. Realtime + invalidate
     // em mutations cobrem updates cross-device pra cenários < 30min staleness.
+    // v0.2.3.6 [bug fix sharing] — removido `refetchOnMount: false`. Cenário quebrado:
+    // Daffiny tinha cache IDB persistido com `[]` antigo (antes de receber shares).
+    // Hidrate → cache vazio → refetchOnMount=false bloqueia refresh → sees "Bem-vindo".
+    // Mantém staleTime 30min: refetch on mount só dispara se cache>30min stale.
     staleTime: 30 * 60_000,
-    refetchOnMount: false,
   })
 }
 export function usePatient(id) {

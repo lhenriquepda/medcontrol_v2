@@ -1,8 +1,8 @@
-v0.2.3.5 — Visual repaginado + cadastro mais simples
+v0.2.3.6 — Estabilidade + cadastro mais rápido
 
-• Telas principais redesenhadas: SOS, Tratamentos, Análises, Relatórios, Histórico
-• Novo cadastro de tratamento em etapas guiadas + foto do paciente no seletor
-• Compartilhamento de paciente liberado para plano Plus
-• Cadastro: opção rápida pra criar paciente com seu nome + e-mail de confirmação com identidade Dosy
-• Modo escuro mais quente e elegante
-• Correções: Relatórios mostram período correto e pular dose atualiza imediato
+• Busca de medicamentos com autocomplete (base ANVISA)
+• Cadastro de tratamento aceita data passada — doses anteriores viram "atrasada"
+• Dashboard não trava ao voltar do segundo plano (correções cache e sessão)
+• Compartilhamento de paciente corrigido — Dashboard mostra pacientes compartilhados
+• SOS: cadastro mais rápido + alerta over-limit (você decide se prossegue)
+• Correções: doses recém-criadas aparecem imediato em todas as telas

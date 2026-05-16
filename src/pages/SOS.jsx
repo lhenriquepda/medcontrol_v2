@@ -8,13 +8,14 @@ import MedNameInput from '../components/MedNameInput'
 import OfflineNotice from '../components/OfflineNotice'
 import { Card, Button, Input, Avatar } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
+import ConfirmDialog from '../components/ConfirmDialog'
 import PatientAvatar from '../components/PatientAvatar'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses, useRegisterSos, useSosRules, useUpsertSosRule, useDeleteSosRule } from '../hooks/useDoses'
 import { useOfflineGuard } from '../hooks/useOfflineGuard'
 import { validateSos } from '../services/dosesService'
 import { useToast } from '../hooks/useToast'
-import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '../utils/dateUtils'
+import { formatDateTime, fromDatetimeLocalInput, toDateInput } from '../utils/dateUtils'
 
 // v0.2.3.5 #238 — SOS redesign: card-grid dinâmico inspirado em dashboard mobile premium.
 // Mantém colors Dosy (peach/danger), adiciona hero card stat + chips pacientes scroll +
@@ -25,7 +26,13 @@ export default function SOS() {
   const [patientId, setPatientId] = useState('')
   const [medName, setMedName] = useState('')
   const [unit, setUnit] = useState('')
-  const [when, setWhen] = useState(toDatetimeLocalInput(new Date().toISOString()))
+  // v0.2.3.6 #261 fix: split datetime-local em date + time separados.
+  // WebView Android usa locale OS (en-US emulator) ignorando lang="pt-BR".
+  // Date type="date" + time type="time" renderizam consistentes pt-BR.
+  const _initialNow = new Date()
+  const [dateVal, setDateVal] = useState(toDateInput(_initialNow.toISOString()))
+  const [timeVal, setTimeVal] = useState(`${String(_initialNow.getHours()).padStart(2,'0')}:${String(_initialNow.getMinutes()).padStart(2,'0')}`)
+  const when = `${dateVal}T${timeVal}`
   const [observation, setObservation] = useState('')
 
   const { data: rules = [] } = useSosRules(patientId)
@@ -43,6 +50,10 @@ export default function SOS() {
   const [ruleMin, setRuleMin] = useState('')
   const [ruleMax, setRuleMax] = useState('')
   const [rulesExpanded, setRulesExpanded] = useState(false)
+  // v0.2.3.6 fix — window.confirm em Capacitor WebView retorna false sem mostrar
+  // dialog (bug Android Chromium WebView), travando submit silenciosamente.
+  // Substituído por ConfirmDialog component.
+  const [overLimitConfirm, setOverLimitConfirm] = useState(null) // { payload, reason, nextHint } | null
 
   // Stats hero card: SOS doses registradas últimas 24h pro paciente selecionado
   const sosStats = useMemo(() => {
@@ -112,32 +123,41 @@ export default function SOS() {
     }
     const scheduledAt = fromDatetimeLocalInput(when)
     const v = validateSos({ rules, history, medName, scheduledAt })
-    // v0.2.3.5 #238 — app NÃO bloqueia, apenas ALERTA. User decide se prossegue mesmo
-    // ultrapassando limite (decisão clínica do user, não app). Confirm dialog informativo.
+    const payload = { patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation }
+    // v0.2.3.5 #238 — app NÃO bloqueia, apenas ALERTA. User decide se prossegue.
+    // v0.2.3.6 fix — usa ConfirmDialog (não window.confirm que bug em Capacitor webview).
     if (!v.ok) {
-      const nextHint = v.nextAt ? `\nPróxima permitida: ${formatDateTime(v.nextAt)}` : ''
-      const proceed = window.confirm(
-        `⚠️ Atenção — limite de segurança atingido\n\n${v.reason}${nextHint}\n\nDeseja registrar mesmo assim?`
-      )
-      if (!proceed) {
-        toast.show({ message: 'Registro cancelado.', kind: 'info' })
-        return
-      }
-      // User confirmou — registra + log warn toast pós
+      const nextHint = v.nextAt ? `Próxima permitida: ${formatDateTime(v.nextAt)}` : ''
+      setOverLimitConfirm({ payload, reason: v.reason, nextHint })
+      return
+    }
+    await doSubmit(payload, false)
+  }
+
+  async function doSubmit(payload, overLimit) {
+    const finalPayload = overLimit ? { ...payload, force: true } : payload
+    if (overLimit) {
       toast.show({
-        message: `Dose registrada acima do limite. ${v.reason}`,
+        message: `Dose registrada acima do limite. ${overLimitConfirm?.reason || ''}`,
         kind: 'warning', duration: 6000,
       })
     }
-    const payload = { patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation }
     if (!onlineManager.isOnline()) {
-      register.mutate(payload)
+      register.mutate(finalPayload)
       toast.show({ message: 'Dose S.O.S salva offline — sincroniza ao reconectar.', kind: 'info' })
     } else {
-      await register.mutateAsync(payload)
-      toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
+      try {
+        await register.mutateAsync(finalPayload)
+        toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
+      } catch (e) {
+        toast.show({ message: 'Erro ao registrar: ' + (e?.message || 'desconhecido'), kind: 'error' })
+        return
+      }
     }
-    setMedName(''); setUnit(''); setObservation(''); setWhen(toDatetimeLocalInput(new Date().toISOString()))
+    setMedName(''); setUnit(''); setObservation('')
+    const _now = new Date()
+    setDateVal(toDateInput(_now.toISOString()))
+    setTimeVal(`${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`)
   }
 
   const selectedPatient = patients.find((p) => p.id === patientId)
@@ -341,12 +361,20 @@ export default function SOS() {
               onChange={(e) => setUnit(e.target.value)}
               placeholder="Ex: 1 cp"
             />
-            <Input
-              label="Horário"
-              type="datetime-local"
-              value={when}
-              onChange={(e) => setWhen(e.target.value)}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <Input
+                label="Data"
+                type="date"
+                value={dateVal}
+                onChange={(e) => setDateVal(e.target.value)}
+              />
+              <Input
+                label="Hora"
+                type="time"
+                value={timeVal}
+                onChange={(e) => setTimeVal(e.target.value)}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -540,6 +568,29 @@ export default function SOS() {
           </Button>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={!!overLimitConfirm}
+        title="⚠️ Limite de segurança atingido"
+        message={
+          overLimitConfirm
+            ? `${overLimitConfirm.reason}${overLimitConfirm.nextHint ? '\n\n' + overLimitConfirm.nextHint : ''}\n\nDeseja registrar mesmo assim?`
+            : ''
+        }
+        confirmLabel="Registrar mesmo assim"
+        cancelLabel="Cancelar"
+        danger
+        onConfirm={async () => {
+          const payload = overLimitConfirm?.payload
+          setOverLimitConfirm(null)
+          if (payload) await doSubmit(payload, true)
+        }}
+        onClose={() => {
+          // ConfirmDialog dispara onConfirm() + onClose() no confirm path.
+          // Sem toast aqui: user que clicou Cancelar sabe que cancelou.
+          setOverLimitConfirm(null)
+        }}
+      />
     </motion.div>
   )
 }

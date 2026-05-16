@@ -77,6 +77,9 @@ export function useAdMobBanner() {
           document.documentElement.style.setProperty('--ad-banner-height', '60px')
           document.body.classList.add('has-ad-banner')
 
+          // v0.2.3.6 #262 REVERT: banner TOP_CENTER. User feedback 2026-05-15
+          // confirmou que TOP era certo (ad no topo, abaixo da status bar e
+          // ANTES do header Dosy). BOTTOM_CENTER tentado causou regressão visual.
           await AdMob.showBanner({
             adId: ADMOB_BANNER_ANDROID,
             adSize: BannerAdSize.ADAPTIVE_BANNER,

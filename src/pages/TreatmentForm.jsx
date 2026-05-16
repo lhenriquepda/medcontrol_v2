@@ -10,7 +10,7 @@ import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useCreateTreatment, useDeleteTreatment, useTreatment, useTemplates, useCreateTemplate, useUpdateTreatment } from '../hooks/useTreatments'
 import { useToast } from '../hooks/useToast'
-import { toDatetimeLocalInput, fromDatetimeLocalInput } from '../utils/dateUtils'
+import { toDateInput, fromDateInput } from '../utils/dateUtils'
 import MedNameInput from '../components/MedNameInput'
 import PatientPicker from '../components/PatientPicker'
 import { CONTINUOUS_DAYS, deleteTreatment } from '../services/treatmentsService'
@@ -64,7 +64,7 @@ export default function TreatmentForm() {
     // Auto-switch baseado em intervalHours (semanal → semanas, etc).
     durationUnit: 'days', // 'days' | 'weeks' | 'months'
     durationValue: 7,
-    startAt: toDatetimeLocalInput(new Date().toISOString()),
+    startAt: toDateInput(new Date().toISOString()),
     firstDoseTime: '08:00',
     saveAsTemplate: false,
     templateName: '',
@@ -101,7 +101,7 @@ export default function TreatmentForm() {
         durationUnit: unit,
         durationValue: value,
         isContinuous: !!existing.isContinuous,
-        startAt: toDatetimeLocalInput(existing.startDate),
+        startAt: toDateInput(existing.startDate),
         firstDoseTime: mode === 'interval' ? (existing.firstDoseTime || '08:00') : '08:00',
       }))
     }
@@ -167,7 +167,7 @@ export default function TreatmentForm() {
       unit: form.unit.trim(),
       durationDays: form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays),
       isContinuous: form.isContinuous,
-      startDate: fromDatetimeLocalInput(form.startAt),
+      startDate: fromDateInput(form.startAt),
       mode: form.mode,
       intervalHours: form.mode === 'interval' ? Number(form.intervalHours) : null,
       firstDoseTime: form.mode === 'interval'
@@ -630,10 +630,11 @@ export default function TreatmentForm() {
               />
             )}
             <Input
-              label="Início"
-              type="datetime-local"
+              label="Data de início"
+              type="date"
               value={form.startAt}
               onChange={(e) => set('startAt', e.target.value)}
+              hint="Hora vem do campo 'Horário da 1ª dose' acima. Pode ser data passada (doses anteriores aparecem como atrasadas)."
             />
           </div>
         </Card>

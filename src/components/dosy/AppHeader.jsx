@@ -85,7 +85,11 @@ export default function DosyAppHeader() {
     from.setDate(from.getDate() - 90)
     return { from: from.toISOString(), status: 'overdue' }
   }, [])
-  const { data: overdueDoses = [] } = useDoses(overdueFilter)
+  // v0.2.3.6 #269 fix: pollIntervalMs 60s pra detectar:
+  // (a) doses pending recém-virando overdue (cross hour boundary)
+  // (b) doses externamente modificadas (outro device, cuidador, etc)
+  // (c) doses deletadas (cancel treatment) ficando órfãs no cache
+  const { data: overdueDoses = [] } = useDoses(overdueFilter, { pollIntervalMs: 60_000 })
   // Filter por status atual: cache patch (mark taken/skipped) muta dose dentro do
   // array sem alterar length. Sem este filter, sino fica com count stale após
   // user marcar overdue como tomada/pulada/encerrar tratamento.
