@@ -220,6 +220,31 @@ mcp__supabase__execute_sql({
 
 ---
 
+## 🆕 Release v0.2.3.7 — versionCode 70 (perf bundle low-risk F1+F3+F6+F5)
+
+**Escopo:** auditoria perf device lento ([contexto/auditoria/2026-05-15-perf-audit-device-slow.md](auditoria/2026-05-15-perf-audit-device-slow.md)). 3 regressões cascateadas v0.2.3.1→v0.2.3.6 amplificaram custo por interação. Bundle low-risk: F1 (alarmWindow shrink) + F3 (placeholderData memoize) + F6 (React.memo) + F5 (throttleTime). HOLD F2/F4/F7.
+
+### v0.2.3.7 #272 F1 — App.jsx alarmWindow -30d/+60d → -1d/+14d
+
+> **Bug original protegido:** #092 v0.1.7.5 — "Egress reduction Supabase, App.jsx alarm scope -1d/+14d". Reverte expansão da v0.2.3.1 Bloco 7 A-04 (commit `0cfef80`) cuja razão ("compartilhar cache com Dashboard") foi obsoletizada pela v0.2.3.4 #163 (Dashboard migrou pra useDashboardPayload).
+>
+> **Regressão a prevenir:** doses fora da janela -1d/+14d deixariam de ser carregadas em App.jsx → AlarmScheduler nativo poderia perder agendamento. Mitigação: AlarmScheduler.java HORIZON_HOURS=168 (7 dias) cobre folga, FCM cron horizon 72h. Janela -1d/+14d (15 dias) cobre ambos com margem.
+
+- `[x]` **Localhost Chrome MCP teste-plus@teste.com 2026-05-16 02:50 UTC:** criado tratamento 60 dias × 8h/dose = 180 doses server-side. Cache TanStack mostra novo queryKey `['doses', {from:"2026-05-15T02:00", to:"2026-05-30T02:00"}]` (15 dias exato) com dataLen=44 doses, sizeBytes ~15KB. Confirma alarmWindow -1d/+14d aplicado. Bug original #092 não voltou (janela original validada produção desde v0.1.7.5).
+- `[x]` **Localhost mark dose optimistic:** click "Tomada" em dose 08:00 atrasada → UI atualiza imediato (0/2→1/2, "2 pendentes"→"1 pendente", Adesão 0%→50%, dose some), banner verde "Dose de F1Validacao confirmada" + Desfazer. Supabase confirma status='done' no servidor. **Sem regressão flow optimistic/patch cache.**
+- `[x]` **Bundle code verified:** grep `getDate()-1)` em `dist/assets/index-*.js` retornou 1 match (compilado F1 presente). cap sync + APK rebuild + install Pixel8_Test AVD OK, app launches sem crash.
+- `[ ]` **Device físico (S25 Ultra):** instalar AAB Internal Testing pós-build. Validar:
+  - Marcação sequencial 10 doses — sem lag perceptível (era engasgando)
+  - Navegação BottomNav 20× Início↔Pacientes↔Tratamentos↔Mais — sem trava
+  - Alarme dispara horário programado próximas 24h-72h-7d (cobrir janela 7d com FCM horizon)
+  - Sentry breadcrumbs sem erro novo
+
+### v0.2.3.7 #273 F3 — placeholderData ref module-scope (pending)
+### v0.2.3.7 #274 F6 — React.memo BottomNav + AppHeader (pending)
+### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms (pending)
+
+---
+
 ## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
 
 **Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.
