@@ -17,7 +17,7 @@
  * UpdateBanner verde no topo é mantido (redundância intencional —
  * banner full-width chama atenção, ícone permite acesso rápido).
  */
-import { useMemo, useEffect, useRef, useState } from 'react'
+import { memo, useMemo, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Settings as SettingsIcon,
@@ -71,7 +71,7 @@ function endingSoon(t, msHorizon) {
   return end >= now && end - now <= msHorizon
 }
 
-export default function DosyAppHeader() {
+function DosyAppHeader() {
   const { user } = useAuth()
   const nav = useNavigate()
   const hour = new Date().getHours()
@@ -290,3 +290,10 @@ export default function DosyAppHeader() {
     </header>
   )
 }
+
+// v0.2.3.7 #274 (F6 perf audit 2026-05-15) — React.memo previne re-render desnecessário
+// em cada render do App.jsx. AppHeader não recebe props; hooks internos (useAuth,
+// useDoses, useTreatments, usePatients, useReceivedShares, useAppUpdate) controlam
+// re-render quando dados mudam. Sem memo, AppHeader re-renderiza a cada cache patch
+// / query refetch no App.jsx, inflacionando custo de cada navegação.
+export default memo(DosyAppHeader)
