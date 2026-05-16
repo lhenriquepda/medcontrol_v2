@@ -138,11 +138,27 @@ Deno.serve(async (req) => {
       // helper unificado Java AlarmScheduler.scheduleDoseAlarm decide branch local
       // baseado em prefs SharedPreferences sincronizadas.
 
+      // v0.2.3.7 #279 fix-caregiver-daily-sync:
+      // Inclui pacientes compartilhados (cuidador) além dos próprios. Antes só pegava
+      // ownPatients — cuidador ficava sem self-healing diário se Edge dose-trigger-handler
+      // falhar (FCM data-only deferred Doze, app force-stopped, etc).
       const { data: ownPatients } = await supabase
         .from('patients').select('id, name').eq('userId', userId)
-      const patientIds = ownPatients?.map(p => p.id) ?? []
+      const ownIds = ownPatients?.map(p => p.id) ?? []
+
+      const { data: shares } = await supabase
+        .from('patient_shares').select('patientId').eq('sharedWithUserId', userId)
+      const sharedIds = (shares ?? []).map(s => s.patientId)
+
+      // Lookup nomes dos pacientes compartilhados (RLS bypass via service_role)
+      const sharedPatients = sharedIds.length > 0
+        ? (await supabase.from('patients').select('id, name').in('id', sharedIds)).data ?? []
+        : []
+
+      const allPatients = [...(ownPatients ?? []), ...sharedPatients]
+      const patientIds = Array.from(new Set([...ownIds, ...sharedIds]))
       if (patientIds.length === 0) { totalSkippedNoDoses++; continue }
-      const patientNameById = new Map((ownPatients ?? []).map(p => [p.id, p.name]))
+      const patientNameById = new Map(allPatients.map(p => [p.id, p.name]))
 
       // Fetch janela full 48h primeiro pra calcular projeção
       const horizonEndFull = new Date(now.getTime() + HORIZON_HOURS_FULL * 60 * 60 * 1000)
