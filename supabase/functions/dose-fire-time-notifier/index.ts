@@ -62,17 +62,20 @@ async function getFcmAccessToken(): Promise<string> {
   return json.access_token
 }
 
-async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>, collapseKey?: string): Promise<boolean> {
+async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>, collapseKey?: string, notifTag?: string): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
   // deno-lint-ignore no-explicit-any
   const androidCfg: any = { priority: 'HIGH' }
-  // v0.2.3.7 Bug B fix — collapseKey unique per logical event (e.g., doseId)
-  // prevents Android auto-collapse with sibling notifs (e.g., "Dose programada"
-  // + "Hora da dose" same dose). Without unique key, tap on collapsed group
-  // loses last message's data extras → MainActivity.handleAlarmAction sees
-  // intent.getExtras() == null. Setting collapseKey forces each notif into
-  // distinct tray slot, preserving its data payload on tap.
+  // v0.2.3.7 Bug B fix — collapseKey + notification.tag + click_action.
+  // collapseKey: FCM-level dedupe key.
+  // notification.tag: Android NotificationManager slot key (distinct tray).
+  // click_action: forces Android to resolve Intent via MainActivity intent-filter
+  // (com.dosyapp.dosy.DOSE_FCM_TAP). Each notif gets fresh PendingIntent with
+  // data fields propagated as Intent extras. Without click_action, Android
+  // shares launcher template Intent → tap loses extras.
   if (collapseKey) androidCfg.collapseKey = collapseKey
+  androidCfg.notification = { click_action: 'com.dosyapp.dosy.DOSE_FCM_TAP' }
+  if (notifTag) androidCfg.notification.tag = notifTag
   const message: any = {
     token: deviceToken,
     notification: { title, body },
@@ -187,12 +190,10 @@ Deno.serve(async (_req) => {
         .not('deviceToken', 'is', null)
 
       if (subs?.length) {
-        // collapseKey = `fire_${doseId}` ensures uniqueness across both
-        // "Dose programada" (dose-trigger-handler insert path) and "Hora da
-        // dose" (this fire-time path) for the same dose.
         const collapseKey = `fire_${dose.id}`
+        const notifTag = `fire_${dose.id}`
         for (const sub of subs) {
-          const ok = await sendFcmNotification(sub.deviceToken, title, body, data, collapseKey)
+          const ok = await sendFcmNotification(sub.deviceToken, title, body, data, collapseKey, notifTag)
           if (ok) totalSent++; else totalErrors++
         }
       }

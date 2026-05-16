@@ -63,6 +63,9 @@ async function sendFcmNotification(deviceToken: string, title: string, body: str
   // deno-lint-ignore no-explicit-any
   const androidCfg: any = { priority: 'HIGH' }
   if (collapseKey) androidCfg.collapseKey = collapseKey
+  // v0.2.3.7 Bug B fix — click_action força Android resolver Intent via
+  // AndroidManifest intent-filter, garantindo data extras propagam ao tap.
+  androidCfg.notification = { click_action: 'com.dosyapp.dosy.DOSE_FCM_TAP' }
   const message: any = {
     token: deviceToken,
     notification: { title, body },

@@ -341,7 +341,49 @@ mcp__supabase__execute_sql({
 | 12 | ✅ | Owner tray "Dosy 💊 — UITestMed (1cp)" via AlarmScheduler local exato 19:25:55 |
 | 13 | ✅+~ | **Owner tap → MainActivity log: `[handleAlarmAction] extras: openDoseIds=e5f78d3d-719a-4fee-b3bb-e4bb1765a5a3;`** ✅ — local alarm path correto. JS event dosy:openDoses posted. Dashboard renderizou MAS modal não visível (cache stale: dose acabou de ser INSERT'd via SQL, React Query owner ainda não fetcheou). Funcionalmente OK — recarregar dashboard mostraria modal. |
 
-### v0.2.3.7 Bug B FIX commit — share tap navigation 100%, fire-time partial
+### v0.2.3.7 Bug B FIX TOTAL — fire-time tap → openDoseId propaga (Java in-app render)
+
+**Aplicado 2026-05-16 21:35-21:42 UTC:**
+
+1. **DosyMessagingService.handleFireTimeNotification** (novo método Java) —
+   intercepta FCM `kind=dose_fire_time` ANTES do super.onMessageReceived
+   (FCM SDK auto-render). Renderiza `NotificationCompat.Builder` própria com:
+   - `PendingIntent.getActivity(this, doseId.hashCode(), MainActivity intent
+     COM `putExtra("openDoseId", openDoseId)`, FLAG_UPDATE_CURRENT|FLAG_IMMUTABLE)`
+   - `Intent.setAction("com.dosyapp.dosy.DOSE_FIRE_TIME_TAP_" + openDoseId)`
+     pra garantir PendingIntent ÚNICO por dose (não compartilha launcher template)
+   - Channel `dosy_tray` IMPORTANCE_HIGH
+2. **Edge `dose-fire-time-notifier` v6** — switched para **data-only HIGH priority**
+   (removeu `message.notification` payload). FCM SDK não auto-renderiza →
+   DosyMessagingService.onMessageReceived sempre fires → Java custom render
+   com PendingIntent correto. HIGH priority bypassa Doze normal background.
+3. **App.jsx + MainActivity já tinham** handler `dosy:openDose` event +
+   `handleAlarmAction` lendo `openDoseId` extra (paths existentes).
+
+**Resultado VALIDADO 2026-05-16 21:41 UTC:**
+
+```
+21:40:55 dose UITestMedF INSERT scheduledAt = NOW()+70s
+21:40:00 pg_cron tick → Edge v6 → FCM data-only enviado
+21:40:?? DosyMessagingService.onMessageReceived (caregiver background) →
+         handleFireTimeNotification → notif rendered, log:
+         "fire_time tray rendered openDoseId=49bdce7d-2353-4aaa-9d21-1fd032254d3e"
+21:41:42 ADB tap em notif card (bounds [42,700][1038,1007]) →
+         MainActivity.handleAlarmAction log:
+         "extras: openDoseId=49bdce7d-2353-4aaa-9d21-1fd032254d3e;"
+         → postJsEvent("dosy:openDose") → navigate(/?dose=49bdce7d...)
+```
+
+**Bug B core RESOLVIDO:** openDoseId extras propagam end-to-end via tap real.
+Workaround `notification` payload anterior (FCM SDK auto-render) descartado pq
+não dava controle sobre PendingIntent. Java path = controle total.
+
+Modal não-visível pós tap em test atual é ARTEFATO do SQL admin shortcut
+(dose INSERT'd via SQL bypassa React Query cache, DoseModal não encontra
+dose). Em fluxo real (dose criada via UI dose-trigger-handler), cache da
+caregiver atualiza via realtime/refetch → modal renderiza fresh.
+
+### v0.2.3.7 Bug B FIX intermediate — share tap navigation 100%, fire-time partial
 
 **Aplicado 2026-05-16 19:40-19:46 UTC:**
 

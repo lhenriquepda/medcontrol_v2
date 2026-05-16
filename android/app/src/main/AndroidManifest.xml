@@ -36,6 +36,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="dosy" />
             </intent-filter>
+
+            <!-- v0.2.3.7 Bug B fix — FCM `notification.click_action` para
+                 caregiver fire-time + dose-programada + share. Sem custom
+                 click_action, Android usa default launcher Intent template
+                 que NÃO propaga data extras pra MainActivity (tap launches
+                 com intent.getExtras() == null). Custom action força nova
+                 PendingIntent por notif com data fields incluídos. -->
+            <intent-filter>
+                <action android:name="com.dosyapp.dosy.DOSE_FCM_TAP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <provider
