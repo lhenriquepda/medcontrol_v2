@@ -21,6 +21,22 @@ function roundToHour(iso) {
   return d.toISOString()
 }
 
+// v0.2.3.7 #273 (F3 perf audit 2026-05-15) — cache module-scope do último payload
+// bem-sucedido. Mantém proteção #267 (skeleton infinito on hour boundary) MAS sem
+// custo `qc.getQueryCache().findAll() + sort` em CADA render do Dashboard.
+//
+// Antes (#267): placeholderData varria todo cache + sortava por dataUpdatedAt em todo
+// render. O(N) onde N = todas entries `['dashboard-payload', *]` no cache.
+//
+// Agora: useEffect atualiza ref module-scope quando query bem-sucedida. placeholderData
+// lê ref O(1). Mesmo benefício pra cross-key transition (hour 19→20), zero custo render.
+//
+// Edge case raríssimo (<0.1%): primeira abertura exata no minuto da virada de hora
+// antes de qualquer fetch completar — ref ainda undefined → skeleton momentâneo. Mesmo
+// comportamento do código pre-#267. Aceitável.
+let _lastDashboardPayload = null
+let _lastDashboardPayloadUpdatedAt = 0
+
 export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
   const qc = useQueryClient()
 
@@ -38,26 +54,25 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     refetchOnMount: true,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
-    // v0.2.3.4 #237 fix — user reportou Dashboard skeleton infinito pós-resume longo.
-    // Causa: RPC consolidado falhar silentemente (401 token expirado, network drop) →
-    // query stays isError=true SEM placeholderData → Dashboard só checa isLoading →
-    // SkeletonList eterno.
+    // v0.2.3.4 #237 fix — placeholderData cobre RPC falhar silentemente (401/network
+    // drop) mantendo Dashboard UI com último dado conhecido em vez de SkeletonList eterno.
     //
-    // v0.2.3.6 #267 fix — placeholderData precisa cobrir TROCA de queryKey (hora muda
-    // de 19→20 cria nova query, previousData é undefined). Fallback: pega data mais
-    // recente de QUALQUER ['dashboard-payload', *] do cache. Cobre tanto same-key
-    // refetch (previousData) quanto cross-key transition (hour boundary, filter change).
-    placeholderData: (previousData) => {
-      if (previousData) return previousData
-      const all = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
-      const withData = all.filter((q) => q.state.data)
-      if (withData.length === 0) return undefined
-      withData.sort((a, b) => (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0))
-      return withData[0].state.data
-    },
+    // v0.2.3.6 #267 — cross-key transition (hour 19→20 cria nova queryKey, previousData
+    // undefined). Cache do último payload via ref module-scope (v0.2.3.7 #273 F3) atende
+    // sem custo O(N) per-render.
+    placeholderData: (previousData) => previousData || _lastDashboardPayload || undefined,
     retry: 5,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30_000),
   })
+
+  // v0.2.3.7 #273 — atualiza ref module-scope quando query bem-sucedida (1× por update).
+  // Substitui findAll+sort O(N) por render do placeholderData pre-fix.
+  useEffect(() => {
+    if (query.isSuccess && query.data) {
+      _lastDashboardPayload = query.data
+      _lastDashboardPayloadUpdatedAt = Date.now()
+    }
+  }, [query.isSuccess, query.data])
 
   // Side-effect: popula caches individuais quando payload chega.
   // Outras telas (Patients, Treatments, DoseHistory) que usam hooks separados
