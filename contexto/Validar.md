@@ -314,9 +314,23 @@ mcp__supabase__execute_sql({
 - `[x]` **Step 5:** Caregiver app HOME (PID alive, background).
 - `[x]` **Step 6:** Owner UI TreatmentForm → MEDICAMENTO=UITestMed + DOSE/UNIDADE=1cp + defaults (interval 8h, duration 7 dias) + tap "Criar tratamento" → Dashboard mostra "TestePaciente 3 doses 2 atrasadas / UITestMed 1cp· Hoje 08:00 atrasada / 16:00 atrasada".
 - `[x]` **Step 7:** Caregiver tray 4× "Dose programada — TestePaciente / UITestMed às {HH:MM}" (05:00, 13:00, 21:00 — corresponde aos 3 horários próximos da janela 48h dose-trigger-handler).
-- `[ ]` **Step 9-10 — fire-time → caregiver tray:** não validável em UI session curta — próxima dose futura é 21:00 BRT (~8h espera). Fire-time só dispara janela [-90s, +30s] da scheduledAt. Validação requer (a) esperar 21:00, OR (b) criar tratamento com dose +90s (UI freq mínima é 4h, não permite seconds), OR (c) manipular scheduledAt via SQL (admin cleanup, fora do fluxo).
-- `[ ]` **Step 11 — tap fire-time tray → DoseModal:** depende fire-time validar primeiro.
-- `[ ]` **Step 12-13 — owner alarm + modal já-tomada cross-user sync:** depende step 11.
+- `[x]` **Step 9-10 — fire-time → caregiver tray:** validado 2026-05-16 18:58 UTC via SQL INSERT fresh dose +90s (autorizado user). Caregiver background → cron tick 18:58:00 → Edge processou → FCM "Hora da dose — TestePaciente / UITestMed às 15:58" rendered na tray channel=fcm_fallback_notification_channel ✅.
+- `[~]` **Step 11 — tap fire-time tray → DoseModal:** PARCIAL. Tap fire-time tray opens app to Dashboard (Capacitor PushNotifications plugin não dispara `pushNotificationActionPerformed` callback em FCM `notification`+`data` payload — known limitation). Workaround: caregiver tap manual no dose card UITestMed 18:58 atrasada na Dashboard → DoseModal abriu → tap "Tomada" → status='done' confirmado. **Funcional via UI manual mas auto-nav-from-tap está broken.** Bug B.
+- `[x]` **Step 12 — owner local alarm fires:** validado. Owner emulator-5554 recebeu local tray "Dosy 💊 — UITestMed / UITestMed (1cp)" via AlarmScheduler.scheduleDoseAlarm channel=dosy_tray no scheduledAt exato 18:58:43 UTC. (Owner não force-stoppado, AlarmManager.setExactAndAllowWhileIdle fired.)
+- `[~]` **Step 13 — owner modal já-tomada:** PARCIAL. Owner tap tray "Dosy 💊 — UITestMed" → app abre Dashboard mas DoseModal não auto-open (mesmo bug B). DB state confirmed: dose `463e2085` status='done' (caregiver tap propagou). Manual nav owner → patient detail → dose card → modal abriria mostrando done state. **Funcional via DB mas auto-nav-from-tap broken.**
+
+**Bugs descobertos durante teste E2E (não-bloqueador ship, mas degradam UX):**
+- **Bug A — UPDATE pending→pending não dispara dose-change-handler:** função `notify_doses_batch_change` só fires status transitions OUT of pending. Se user edita dose schedule via UI (muda scheduledAt mantendo pending), AlarmScheduler não recebe FCM reschedule → local alarm fica preso na old scheduledAt. **Gap pré-existente.**
+- **Bug B — FCM tap não dispara Capacitor PushNotifications.pushNotificationActionPerformed:** Capacitor plugin não intercepta tap em FCM `notification`+`data` payload (verificado logcat post-tap: zero `[FCM] tap:` log line). App abre Dashboard sem nav. MainActivity.handleAlarmAction lê `openDoseId` apenas para AlarmScheduler local intents (PendingIntent extras). Pra fire-time + dose-programada push tap → modal auto-open, precisa investigar Capacitor PushNotifications config OR add custom click_action handling.
+- **Bug C — Mutation share UI "Enviando…" hung após app reload pós force-stop:** primeira tentativa não completou. Fresh re-launch resolveu. Pre-existente similar #255/#268.
+
+**Diagnóstico Step 11 (manual tap dose card → modal):**
+- ✅ Caregiver Dashboard list → tap "UITestMed 1cp· Hoje 18:58 atrasada" → DoseModal abriu com "UITestMed / 1cp · TestePaciente / atrasada / PREVISTO 18:58 / Agora agora mesmo / Hora prevista 18:58 / Outro definir / Observação / Ignorar / Pular / **Tomada**" 
+- ✅ Tap "Tomada" → modal fechou → Dashboard "1/3 doses, 2 pendentes / 2 atrasadas, ADESÃO 7D 33%" → "UITestMed 1cp· Hoje 18:58 **tomada**" 
+- ✅ DB confirmed: dose `463e2085` status='done'
+
+**Reposta user "estava no meio de um processo":**
+Sim — full caregiver flow now WORKS server-side + via UI manual nav, mas o "tap notification → modal auto-open" UX está broken (Bug B). Pra release v0.2.3.7 ship, server fixes (#280/#281) são deploys robustos. UX gap Bug B é polish próxima release (precisa investigar Capacitor PushNotifications plugin behavior). Bug A é gap pré-existente — UI edição dose schedule não-suportada via current trigger.
 
 **Bug encontrado durante teste:**
 - ⚠️ Após reload owner app pós force-stop, primeira tentativa share UI ficou em "Enviando…" indefinidamente (RPC `share_patient_by_email` não completou via PostgREST). Refresh sequente resolveu — pode ser session token stale OU PostgREST connection cache. **Não-bloqueador** mas merece investigar nas próximas sessões (similar a #255/#268 idle session bugs).
