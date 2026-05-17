@@ -30,7 +30,8 @@ export function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={{ show, dismiss }}>
       {children}
-      <div className="fixed bottom-24 inset-x-0 px-4 flex flex-col items-center gap-2 z-[60] pointer-events-none">
+      <div className="fixed inset-x-0 px-4 flex flex-col items-center gap-2 z-[60] pointer-events-none"
+           style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}>
         <AnimatePresence initial={false}>
           {toasts.map((t) => (
             <motion.div

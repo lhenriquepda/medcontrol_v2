@@ -269,8 +269,45 @@ export function AuthProvider({ children }) {
                     if (error) console.warn('[useAuth] re-upsert push_sub err:', error.message)
                     else console.log('[useAuth] push_sub re-bound to user', s.user.id, 'device_id_uuid:', deviceIdUuid)
                   })
+                } else {
+                  // #0001 fix — sem token cached em SIGNED_IN: auto-registra se perm já granted
+                  // Cobre users que instalaram antes do PermissionsOnboarding existir
+                  // Não prompta (verifica granted antes) — sem dialog surpresa no login
+                  ;(async () => {
+                    try {
+                      const { PushNotifications } = await import('@capacitor/push-notifications')
+                      const { receive } = await PushNotifications.checkPermissions()
+                      if (receive === 'granted') {
+                        const { subscribeFcm } = await import('../services/notifications/fcm')
+                        await subscribeFcm(15)
+                        console.log('[useAuth #0001] auto-subscribed FCM on SIGNED_IN (perm=granted)')
+                      }
+                    } catch (e) {
+                      if (e?.code !== 'NOTIFICATIONS_BLOCKED') console.warn('[useAuth #0001] auto-subscribe err:', e?.message)
+                    }
+                  })()
                 }
               } catch (e) { console.warn('[useAuth] re-upsert push_sub catch:', e?.message) }
+            }
+            // #0001 fix — INITIAL_SESSION: users já logados sem push_subscription
+            // Só subscreve se perm=granted (sem prompt em app restore)
+            if (event === 'INITIAL_SESSION' && isNative) {
+              const cachedToken = localStorage.getItem('dosy_fcm_token')
+              if (!cachedToken) {
+                ;(async () => {
+                  try {
+                    const { PushNotifications } = await import('@capacitor/push-notifications')
+                    const { receive } = await PushNotifications.checkPermissions()
+                    if (receive === 'granted') {
+                      const { subscribeFcm } = await import('../services/notifications/fcm')
+                      await subscribeFcm(15)
+                      console.log('[useAuth #0001] auto-subscribed FCM on INITIAL_SESSION (perm=granted)')
+                    }
+                  } catch (e) {
+                    if (e?.code !== 'NOTIFICATIONS_BLOCKED') console.warn('[useAuth #0001] INITIAL_SESSION auto-subscribe err:', e?.message)
+                  }
+                })()
+              }
             }
           } else if (event === 'SIGNED_OUT') {
             // #215 v0.2.3.0 fix falha de segurança device-validation 2026-05-13:

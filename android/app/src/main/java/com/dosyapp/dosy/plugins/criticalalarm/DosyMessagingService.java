@@ -427,14 +427,11 @@ public class DosyMessagingService extends MessagingService {
     }
 
     /**
-     * v0.2.3.10 #297 — propaga patient_unshared pra JS via Intent broadcast.
+     * v0.2.3.11 #0003/#0004 fix — propaga patient_unshared pra JS sem abrir app.
      *
-     * App ativo: MainActivity registra BroadcastReceiver pra DOSE_FCM_TAP-like
-     * intent, dispatcha CustomEvent('dosy:patientUnshared'). JS App.jsx listener
-     * invalida caches + remove paciente local + dose entries órfãs.
-     *
-     * App killed: broadcast intent persiste no MainActivity __dosyPendingUnsharePatientId
-     * window var, JS lê no mount.
+     * App ativo: MainActivity.sWeakRef → runOnUiThread → postJsEvent direto.
+     *   Sem startActivity = app não vem pro foreground.
+     * App killed: SharedPreferences "dosy_pending_unshare" → lido em onResume().
      *
      * Payload esperado:
      *   data.kind = "patient_unshared"
@@ -450,24 +447,17 @@ public class DosyMessagingService extends MessagingService {
         }
 
         Context ctx = getApplicationContext();
-        Log.i(TAG, "patient_unshared dispatched patientId=" + patientId);
+        Log.i(TAG, "patient_unshared patientId=" + patientId);
 
-        // Dispatch broadcast pra MainActivity intercept (handleAlarmAction route)
-        Intent intent = new Intent(ctx, com.dosyapp.dosy.MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra("unsharePatientId", patientId);
-        intent.setAction("com.dosyapp.dosy.PATIENT_UNSHARED_" + patientId);
-        // Aciona MainActivity se app vivo (no-op se já top). Killed: intent fica
-        // pendente até próximo open.
-        try {
-            ctx.startActivity(intent);
-        } catch (Exception e) {
-            // Background activity launch restriction Android 10+: tentar
-            // alternativa via PendingIntent silenciosa não-bloqueante.
-            Log.w(TAG, "startActivity unshare blocked (BAL Android 10+): " + e.getMessage());
-            // Fallback: salva em SharedPreferences pra JS ler no próximo open
-            SharedPreferences sp = ctx.getSharedPreferences("dosy_pending_unshare", Context.MODE_PRIVATE);
-            sp.edit().putString("patientId", patientId).putLong("ts", System.currentTimeMillis()).apply();
+        // Salva SharedPreferences como fallback (app killed → lido no próximo onResume)
+        SharedPreferences sp = ctx.getSharedPreferences("dosy_pending_unshare", Context.MODE_PRIVATE);
+        sp.edit().putString("patientId", patientId).putLong("ts", System.currentTimeMillis()).apply();
+
+        // Se app está vivo, despacha direto na UI thread sem startActivity
+        MainActivity activity = MainActivity.sWeakRef != null ? MainActivity.sWeakRef.get() : null;
+        if (activity != null && !activity.isFinishing()) {
+            sp.edit().remove("patientId").remove("ts").apply();
+            activity.dispatchUnshareOnUiThread(patientId);
         }
 
         // Audit
