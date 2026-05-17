@@ -160,7 +160,10 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo: perf bundle low-risk F1+F3+F6+F5 + bug fixes server-side caregiver flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284. **QA exaustivo re-validação 21/21 OK 2026-05-17** ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)). Pendente: autorização user Passo 10.5 pra build AAB + validação device físico Samsung S25 Ultra.
+**Branch ativa:** `master` @ tag `v0.2.3.7` (vc 70, Play Console Internal Testing publicado 2026-05-17 11:04 BRT, merge linear `e0933f8`, Vercel prod dosymed.app v0.2.3.7 confirmado). Escopo fechado: 10 itens (perf bundle F1+F3+F6+F5 + server flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284). **QA 21/21 OK 2026-05-17**.
+
+**Bugs reportados device físico pós-v0.2.3.7 (próxima release):**
+- ⏳ **#285** P2 BUG UX — Banner "Desfazer" 5s não aparece após marcar dose como tomada/pulada em device físico Samsung S25 Ultra. Código intacto ([DoseModal.jsx:72-86](../src/components/DoseModal.jsx:72), [Dashboard.jsx:542-555](../src/pages/Dashboard.jsx:542), [useToast.jsx:33-62](../src/hooks/useToast.jsx:33) duration default 5000ms). Hipóteses: (a) toast position `fixed bottom-24` (96px) obscured por BottomNav + safe-area Capacitor device; (b) z-index 60 colide com outro overlay; (c) optimistic patch dispara re-render antes do botão renderizar. Investigar em device físico via Logcat/CDP. User reportou 2026-05-17 pós install vc 70.
 
 **Auditoria de origem:** [`contexto/auditoria/2026-05-15-perf-audit-device-slow.md`](auditoria/2026-05-15-perf-audit-device-slow.md) — 11 seções, identifica 3 regressões cascateadas (v0.2.3.1 Bloco 7 expansão janela 90 dias + v0.2.3.4 #163 duplo namespace cache + v0.2.3.5 #239 patch ambos) que multiplicaram custo por interação. Cada fix tem ANTES/DEPOIS, bug original protegido, justificativa de regressão segura.
 
