@@ -454,13 +454,15 @@ export default function PatientDetail() {
         </Card>
 
         {/* #160 v2 — 3 seções tratamentos por status (Ativos / Pausados / Encerrados) — TODAS collapsable */}
-        {/* Tratamentos Ativos — collapsable + Botão Novo */}
+        {/* Tratamentos Ativos — collapsable + Botão Novo (apenas owner).
+            v0.2.3.7 QA fix — caregiver shared não deve criar tratamentos (RLS
+            server-side bloqueia mas UI mostrava botão confuso). */}
         <TreatmentSection
           title="Tratamentos ativos"
           treatments={treatmentGroups.active}
           collapsed={collapsed.active}
           onToggle={() => toggleSection('active')}
-          actionRight={
+          actionRight={isOwner ? (
             <Link
               to={`/tratamento/novo?patientId=${id}`}
               style={{
@@ -473,7 +475,7 @@ export default function PatientDetail() {
             >
               <Plus size={14} strokeWidth={2}/> Novo
             </Link>
-          }
+          ) : null}
           emptyLabel="Sem tratamentos ativos"
         />
 
