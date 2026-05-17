@@ -74,12 +74,24 @@ public class DosyMessagingService extends MessagingService {
             }
         }
 
-        // v0.2.3.7 Bug B fix — fire-time caregiver tray rendered IN-APP com
-        // PendingIntent customizado contendo openDoseId. FCM SDK auto-render
-        // não propaga data extras pro MainActivity tap (click_action insuficiente).
-        // Renderizando aqui com explicit Intent + PutExtra garante tap fires
-        // handleAlarmAction com openDoseId presente → JS modal abre.
+        // v0.2.3.8 #287 — fire_now_alarm: dispara AlarmService FG IMEDIATO no horário exato.
+        // Edge dose-fire-time-notifier v7 envia DATA-ONLY HIGH com kind=fire_now_alarm.
+        // FCM SDK obrigado a chamar onMessageReceived (sem notification block bloqueando).
+        // Handler aqui invoca startForegroundService(AlarmService) → som loop + AlarmActivity
+        // lockscreen — caregiver killed acorda + dispara alarme real com som.
         String kind = data != null ? data.get("kind") : null;
+        if ("fire_now_alarm".equals(kind)) {
+            try {
+                handleFireNowAlarm(remoteMessage);
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "fire_now_alarm handler error: " + e.getMessage(), e);
+            }
+        }
+
+        // v0.2.3.7 Bug B fix (legacy compat) — fire-time tray-only rendered IN-APP.
+        // Mantido pra compat com AABs antigos cacheados que ainda recebem kind=dose_fire_time.
+        // Próxima release v0.2.3.9+ poderá remover.
         if ("dose_fire_time".equals(kind)) {
             try {
                 handleFireTimeNotification(remoteMessage);
@@ -334,6 +346,72 @@ public class DosyMessagingService extends MessagingService {
             int notifId = ("fire_" + openDoseId).hashCode();
             nm.notify("fire_" + openDoseId, notifId, builder.build());
             Log.i(TAG, "fire_time tray rendered openDoseId=" + openDoseId);
+        }
+    }
+
+    /**
+     * v0.2.3.8 #287 — handleFireNowAlarm.
+     *
+     * Recebe FCM data-only com kind=fire_now_alarm enviado por dose-fire-time-notifier
+     * no horário exato da dose. Dispara AlarmService FG imediato (sound loop +
+     * AlarmActivity lockscreen). Substitui handleFireTimeNotification (tray silenciosa)
+     * pra caregivers — alarme nativo com som agora dispara mesmo com app killed.
+     *
+     * Payload esperado (data fields):
+     *   kind=fire_now_alarm
+     *   doseId, openDoseId, medName, unit, patientName, scheduledAt
+     */
+    private void handleFireNowAlarm(RemoteMessage msg) {
+        Map<String, String> data = msg.getData();
+        String doseId = data.get("doseId");
+        if (doseId == null) doseId = data.get("openDoseId");
+        if (doseId == null) {
+            Log.w(TAG, "fire_now_alarm: missing doseId, skip");
+            return;
+        }
+
+        Context ctx = getApplicationContext();
+
+        // Build doses JSON array com single dose entry (formato esperado AlarmService)
+        try {
+            JSONObject dose = new JSONObject();
+            dose.put("doseId", doseId);
+            dose.put("medName", data.getOrDefault("medName", "Dose"));
+            dose.put("unit", data.getOrDefault("unit", ""));
+            dose.put("patientName", data.getOrDefault("patientName", ""));
+            dose.put("scheduledAt", data.getOrDefault("scheduledAt", ""));
+            JSONArray arr = new JSONArray();
+            arr.put(dose);
+
+            Intent svc = new Intent(ctx, AlarmService.class);
+            svc.putExtra("id", AlarmScheduler.idFromString(doseId));
+            svc.putExtra("doses", arr.toString());
+
+            // startForegroundService permite AlarmService startar mesmo Android 8+ Doze
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(svc);
+            } else {
+                ctx.startService(svc);
+            }
+
+            Log.i(TAG, "fire_now_alarm dispatched AlarmService doseId=" + doseId);
+
+            // Audit
+            try {
+                JSONObject meta = new JSONObject();
+                meta.put("source_scenario", "fcm_fire_now_alarm");
+                meta.put("doseId", doseId);
+                AlarmAuditLogger.logScheduled(
+                    ctx, "java_fcm_received",
+                    doseId,
+                    data.getOrDefault("scheduledAt", null),
+                    data.getOrDefault("patientName", null),
+                    data.getOrDefault("medName", null),
+                    meta
+                );
+            } catch (JSONException ignore) {}
+        } catch (JSONException e) {
+            Log.e(TAG, "fire_now_alarm JSON build error: " + e.getMessage(), e);
         }
     }
 
