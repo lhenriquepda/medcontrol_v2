@@ -90,14 +90,25 @@ public class DosyMessagingService extends MessagingService {
         }
 
         // v0.2.3.7 Bug B fix (legacy compat) — fire-time tray-only rendered IN-APP.
-        // Mantido pra compat com AABs antigos cacheados que ainda recebem kind=dose_fire_time.
-        // Próxima release v0.2.3.9+ poderá remover.
         if ("dose_fire_time".equals(kind)) {
             try {
                 handleFireTimeNotification(remoteMessage);
                 return;
             } catch (Exception e) {
                 Log.e(TAG, "fire_time handler error: " + e.getMessage(), e);
+            }
+        }
+
+        // v0.2.3.10 #297 — patient_unshared: forward pra JS via JsBridge intent.
+        // App ativo dispara dosy:patientUnshared event → invalida caches +
+        // remove paciente fantasma. App killed: chega no próximo open via
+        // intent extra. Java aqui só propaga.
+        if ("patient_unshared".equals(kind)) {
+            try {
+                handlePatientUnshared(remoteMessage);
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "patient_unshared handler error: " + e.getMessage(), e);
             }
         }
 
@@ -413,6 +424,59 @@ public class DosyMessagingService extends MessagingService {
         } catch (JSONException e) {
             Log.e(TAG, "fire_now_alarm JSON build error: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * v0.2.3.10 #297 — propaga patient_unshared pra JS via Intent broadcast.
+     *
+     * App ativo: MainActivity registra BroadcastReceiver pra DOSE_FCM_TAP-like
+     * intent, dispatcha CustomEvent('dosy:patientUnshared'). JS App.jsx listener
+     * invalida caches + remove paciente local + dose entries órfãs.
+     *
+     * App killed: broadcast intent persiste no MainActivity __dosyPendingUnsharePatientId
+     * window var, JS lê no mount.
+     *
+     * Payload esperado:
+     *   data.kind = "patient_unshared"
+     *   data.patientId = "<uuid>"
+     *   data.ownerId   = "<uuid>" (informativo)
+     */
+    private void handlePatientUnshared(RemoteMessage msg) {
+        Map<String, String> data = msg.getData();
+        String patientId = data.get("patientId");
+        if (patientId == null) {
+            Log.w(TAG, "patient_unshared: missing patientId, skip");
+            return;
+        }
+
+        Context ctx = getApplicationContext();
+        Log.i(TAG, "patient_unshared dispatched patientId=" + patientId);
+
+        // Dispatch broadcast pra MainActivity intercept (handleAlarmAction route)
+        Intent intent = new Intent(ctx, com.dosyapp.dosy.MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra("unsharePatientId", patientId);
+        intent.setAction("com.dosyapp.dosy.PATIENT_UNSHARED_" + patientId);
+        // Aciona MainActivity se app vivo (no-op se já top). Killed: intent fica
+        // pendente até próximo open.
+        try {
+            ctx.startActivity(intent);
+        } catch (Exception e) {
+            // Background activity launch restriction Android 10+: tentar
+            // alternativa via PendingIntent silenciosa não-bloqueante.
+            Log.w(TAG, "startActivity unshare blocked (BAL Android 10+): " + e.getMessage());
+            // Fallback: salva em SharedPreferences pra JS ler no próximo open
+            SharedPreferences sp = ctx.getSharedPreferences("dosy_pending_unshare", Context.MODE_PRIVATE);
+            sp.edit().putString("patientId", patientId).putLong("ts", System.currentTimeMillis()).apply();
+        }
+
+        // Audit
+        try {
+            JSONObject meta = new JSONObject();
+            meta.put("source_scenario", "fcm_patient_unshared");
+            meta.put("patientId", patientId);
+            AlarmAuditLogger.logCancelled(ctx, "java_fcm_received", patientId, meta);
+        } catch (JSONException ignore) {}
     }
 
     private void ensureFireTimeChannel() {

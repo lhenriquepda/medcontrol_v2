@@ -142,6 +142,15 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
+        // v0.2.3.10 #297 — patient unshared FCM. Java handler dispatch silent
+        // pra JS invalidate caches local. Não navega — só limpa.
+        String unsharePatientId = intent.getStringExtra("unsharePatientId");
+        if (unsharePatientId != null) {
+            intent.removeExtra("unsharePatientId");
+            postJsEvent("dosy:patientUnshared", "patientId", unsharePatientId);
+            return;
+        }
+
         // v0.2.3.7 Bug B fix — FCM share notification tap branch.
         // Edge `patient-share-handler` sends data.kind=patient_share_added +
         // data.patientId. App navigates to /pacientes/:id on tap.
