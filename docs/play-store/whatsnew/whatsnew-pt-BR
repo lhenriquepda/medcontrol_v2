@@ -1,7 +1,6 @@
-v0.2.3.7 — Mais ágil + notificações de cuidador
+v0.2.3.8 — Alarme do cuidador 100% confiável
 
-• App mais responsivo ao marcar doses e navegar entre telas
-• Cuidador recebe notificação no momento exato da dose, mesmo com app fechado
-• Cuidador é avisado por push quando é adicionado para acompanhar um paciente
-• Alarmes não duplicam após reiniciar o celular ou fechar o app por dias
-• Correções no fluxo entre proprietário e cuidador para que ambos vejam tudo em tempo real
+• Correção crítica: alarme com som dispara no cuidador mesmo com app fechado
+• Hora da dose agora desperta o cuidador, não só uma notificação silenciosa
+• Cobertura para casos em que o app foi encerrado dias antes da dose
+• Estabilidade reforçada na entrega de avisos entre proprietário e cuidador

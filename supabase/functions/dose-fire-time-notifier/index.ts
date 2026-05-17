@@ -62,23 +62,18 @@ async function getFcmAccessToken(): Promise<string> {
   return json.access_token
 }
 
-async function sendFcmNotification(deviceToken: string, title: string, body: string, data: Record<string, string>, collapseKey?: string, notifTag?: string): Promise<boolean> {
+async function sendFcmDataOnly(deviceToken: string, data: Record<string, string>, collapseKey?: string): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
+  // v0.2.3.8 #287 — DATA-ONLY HIGH priority sem notification block.
+  // Antes (v6): notification + data → Firebase Android SDK app killed renderiza tray
+  // sozinho + NÃO chama onMessageReceived → Java handler nunca dispara AlarmService som loop.
+  // Fix: data-only HIGH → SDK obrigado a acordar app + chamar onMessageReceived → Java
+  // handler `kind=fire_now_alarm` invoca startForegroundService(AlarmService) IMEDIATO.
   // deno-lint-ignore no-explicit-any
   const androidCfg: any = { priority: 'HIGH' }
-  // v0.2.3.7 Bug B fix — collapseKey + notification.tag + click_action.
-  // collapseKey: FCM-level dedupe key.
-  // notification.tag: Android NotificationManager slot key (distinct tray).
-  // click_action: forces Android to resolve Intent via MainActivity intent-filter
-  // (com.dosyapp.dosy.DOSE_FCM_TAP). Each notif gets fresh PendingIntent with
-  // data fields propagated as Intent extras. Without click_action, Android
-  // shares launcher template Intent → tap loses extras.
   if (collapseKey) androidCfg.collapseKey = collapseKey
-  androidCfg.notification = { click_action: 'com.dosyapp.dosy.DOSE_FCM_TAP' }
-  if (notifTag) androidCfg.notification.tag = notifTag
   const message: any = {
     token: deviceToken,
-    notification: { title, body },
     data,
     android: androidCfg
   }
@@ -167,17 +162,20 @@ Deno.serve(async (_req) => {
 
       const patientName = patientNameById.get(dose.patientId) ?? 'paciente'
       const hhmm = formatHHMM(dose.scheduledAt)
-      const title = `Hora da dose — ${patientName}`
-      const body = `${dose.medName ?? 'Medicamento'} às ${hhmm}`
       const data: Record<string, string> = {
-        kind: 'dose_fire_time',
-        // openDoseId matches MainActivity.handleAlarmAction Intent extra key →
-        // existing JS handler (App.jsx dosy:openDose) opens DoseModal on tap.
+        // v0.2.3.8 #287 — kind=fire_now_alarm sinaliza Java handler pra disparar
+        // AlarmService FG som loop + AlarmActivity lockscreen IMEDIATO.
+        // Title/body movidos pra data (Java handler renderiza tray custom).
+        kind: 'fire_now_alarm',
+        title: `Hora da dose — ${patientName}`,
+        body: `${dose.medName ?? 'Medicamento'} às ${hhmm}`,
         openDoseId: dose.id,
         doseId: dose.id,
         patientId: dose.patientId,
         scheduledAt: dose.scheduledAt,
         medName: String(dose.medName ?? ''),
+        patientName: String(patientName),
+        unit: String(dose.unit ?? ''),
         ownerUserId: String(dose.userId ?? '')
       }
 
@@ -191,9 +189,8 @@ Deno.serve(async (_req) => {
 
       if (subs?.length) {
         const collapseKey = `fire_${dose.id}`
-        const notifTag = `fire_${dose.id}`
         for (const sub of subs) {
-          const ok = await sendFcmNotification(sub.deviceToken, title, body, data, collapseKey, notifTag)
+          const ok = await sendFcmDataOnly(sub.deviceToken, data, collapseKey)
           if (ok) totalSent++; else totalErrors++
         }
       }

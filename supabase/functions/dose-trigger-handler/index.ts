@@ -442,26 +442,20 @@ Deno.serve(async (req) => {
         .not('deviceToken', 'is', null)
       if (!subs?.length) continue
 
-      // v0.2.3.7 #279 fix-caregiver-fcm:
-      // Pra cuidador (isOwner=false) incluir `notification` payload junto com data.
-      // Android renderiza tray IMEDIATO via notification path, bypassing Doze/AppStandby
-      // delay que afeta data-only delivery (observed delay ~2.5min Pixel9Pro emulator;
-      // em Samsung One UI 7 production pode chegar HORAS no Restricted bucket).
-      // Owner mantém data-only — próprio app ativo, alarme local agendado sem precisar tray.
+      // v0.2.3.8 #287 fix-killed-caregiver:
+      // REMOVED notification payload pra TODOS (owner + cuidador). Antes (v24):
+      // cuidador recebia notification+data → Firebase Android SDK app killed renderiza
+      // tray sozinho + NÃO chama onMessageReceived → AlarmScheduler.scheduleDoseAlarm
+      // NUNCA executa → AlarmManager vazio → alarme nativo NUNCA dispara no horário.
+      // Fix: data-only HIGH priority pra ambos. Handler nativo Java (DosyMessagingService)
+      // renderiza tray custom IDÊNTICA + agenda AlarmManager.setAlarmClock local.
+      // Trade-off Samsung: data-only HIGH é throttled em Restricted bucket sem notification
+      // visible — mitigação: handler renderiza tray como user-visible action no recebimento,
+      // sai do "data-only invisible" pattern + cron fire-time 1×/min cobre delay residual.
       const isOwner = userId === ownerId
-      const notification = isOwner ? undefined : {
-        title: `Dose programada — ${patient?.name || 'paciente'}`,
-        body: `${record.medName} às ${new Date(record.scheduledAt).toLocaleTimeString('pt-BR', {
-          hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'
-        })}`
-      }
-
-      // collapseKey only for caregiver (notification path) — unique per dose
-      // prevents Android merging "Dose programada" + "Hora da dose" trays
-      // for same dose. Owner path stays without collapseKey (data-only, no tray).
-      const collapseKey = isOwner ? undefined : `fire_${doseId}`
+      const collapseKey = `fire_${doseId}`
       for (const sub of subs) {
-        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload }, notification, collapseKey)
+        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload }, undefined, collapseKey)
         if (ok) sent++; else errors++
 
         if (auditEnabledUsers.has(userId)) {
@@ -472,7 +466,7 @@ Deno.serve(async (req) => {
             device_id: sub.deviceToken.slice(-12),
             metadata: {
               kind: 'fcm_schedule_alarms', source_scenario: 'dose_inserted_or_updated',
-              isOwner: userId === ownerId, type, fcmOk: ok
+              isOwner: isOwner, type, fcmOk: ok, withNotification: false
             }
           })
         }
