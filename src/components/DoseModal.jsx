@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pill } from 'lucide-react'
 import { Sheet, Button, StatusPill, Input } from './dosy'
-import { formatDateTime, fromDatetimeLocalInput, toDatetimeLocalInput } from '../utils/dateUtils'
+import { formatDateTime, fromDatetimeLocalInput, toDateInput } from '../utils/dateUtils'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
@@ -23,6 +23,7 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
   usePrivacyScreen(open)
 
   const [timingMode, setTimingMode] = useState('agora') // agora | prevista | outro
+  const [actualDateVal, setActualDateVal] = useState('')
   const [actualTime, setActualTime] = useState('')
   const [observation, setObservation] = useState('')
   // Item #138 (egress-audit-2026-05-05 F4) — listDoses agora exclui observation
@@ -33,7 +34,9 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
   useEffect(() => {
     if (dose) {
       setTimingMode('agora')
-      setActualTime(toDatetimeLocalInput(new Date().toISOString()))
+      const _now = new Date()
+      setActualDateVal(toDateInput(_now.toISOString()))
+      setActualTime(`${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`)
       setObservation(dose.observation || '')
       setLoadedObs(null)
       // Lazy-load observation se não veio na lista (DOSE_COLS_LIST exclui)
@@ -59,7 +62,7 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
 
   function computeActualIso() {
     if (timingMode === 'prevista') return dose.scheduledAt
-    if (timingMode === 'outro') return fromDatetimeLocalInput(actualTime)
+    if (timingMode === 'outro') return fromDatetimeLocalInput(`${actualDateVal}T${actualTime}`)
     return new Date().toISOString() // agora
   }
 
@@ -215,12 +218,20 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
           </div>
 
           {timingMode === 'outro' && (
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 8 }}>
               <Input
-                label="Horário real"
-                type="datetime-local"
+                label="Data"
+                type="date"
+                value={actualDateVal}
+                onChange={(e) => setActualDateVal(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <Input
+                label="Hora"
+                type="time"
                 value={actualTime}
                 onChange={(e) => setActualTime(e.target.value)}
+                style={{ flex: 1 }}
               />
             </div>
           )}

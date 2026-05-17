@@ -353,24 +353,27 @@ export default function Reports() {
     w.document.open(); w.document.write(html); w.document.close()
   }
 
-  const adherencePct = doses.length > 0
-    ? Math.round((doses.filter((d) => d.status === 'done').length / doses.length) * 100)
+  // #0005 fix — excluir cancelled do cálculo de aderência e stats.
+  // Cancelled = doses do período de pausa (histórico correto, não "dose perdida").
+  const activeDoses = doses.filter(d => d.status !== 'cancelled')
+  const adherencePct = activeDoses.length > 0
+    ? Math.round((activeDoses.filter((d) => d.status === 'done').length / activeDoses.length) * 100)
     : null
 
   // v0.2.3.5 #242 — stats agregados pro hero + distribuição
   const stats = (() => {
-    const total = doses.length
-    const done = doses.filter(d => d.status === 'done').length
-    const skipped = doses.filter(d => d.status === 'skipped').length
-    const overdue = doses.filter(d => d.status === 'overdue').length
-    const pending = doses.filter(d => d.status === 'pending').length
+    const total = activeDoses.length
+    const done = activeDoses.filter(d => d.status === 'done').length
+    const skipped = activeDoses.filter(d => d.status === 'skipped').length
+    const overdue = activeDoses.filter(d => d.status === 'overdue').length
+    const pending = activeDoses.filter(d => d.status === 'pending').length
     return { total, done, skipped, overdue, pending }
   })()
 
-  // Top 5 medicamentos do período (count + done count)
+  // Top 5 medicamentos do período (count + done count) — exclui cancelled
   const topMeds = (() => {
     const map = new Map()
-    for (const d of doses) {
+    for (const d of activeDoses) {
       const m = map.get(d.medName) || { count: 0, done: 0 }
       m.count += 1
       if (d.status === 'done') m.done += 1
