@@ -12,7 +12,7 @@
 
 | Passo | O que fazer | Ação |
 |---|---|---|
-| [0](#-passo-0--varrer-validarmd-validações-manuais-pendentes) | **Varrer Validar.md** — alertar user se tiver `[ ]` pendentes | Obrigatório antes de qualquer coisa |
+| [0](#-passo-0--varrer-validarmd-validações-manuais-pendentes) | **Varrer Validar.md + BUGS.md** — alertar user se tiver `[ ]` pendentes ou bugs abertos | Obrigatório antes de qualquer coisa |
 | [1](#-passo-1--carregar-contexto-3-reads-paralelos) | **Carregar contexto** — PROJETO.md + ROADMAP §3 + CHECKLIST | 3 reads paralelos |
 | [2](#-passo-2--estado-git-fonte-da-verdade) | **Estado git** — branch ativa, commits ahead, working tree | `git status` + `git log -5` |
 | [3](#-passo-3--memória-durável-auto-injetada) | **Memória** — feedback/user/project/reference files | Auto-injetado, revisar prioridades 🔴 |
@@ -49,21 +49,25 @@
 
 ---
 
-## 🚨 PASSO 0 — Varrer `Validar.md` (validações manuais pendentes)
+## 🚨 PASSO 0 — Varrer `Validar.md` + `BUGS.md` (pendências e bugs abertos)
 
-**Antes de qualquer coisa**, abra [`contexto/Validar.md`](Validar.md) e conte os checkboxes `[ ]` na seção topo (release mais recente).
+**Antes de qualquer coisa**, abra ambos os arquivos em paralelo:
 
-**Se houver `[ ]` pendentes:**
+1. [`contexto/Validar.md`](Validar.md) — conte os checkboxes `[ ]` na seção topo (release mais recente).
+2. [`contexto/BUGS.md`](BUGS.md) — conte bugs por prioridade nas seções P0/P1/P2/P3/P4 (apenas seções acima do "📦 Histórico").
+
+**Se houver `[ ]` pendentes em Validar.md OU bugs abertos em BUGS.md:**
 
 > ⚠️ **Alerta para o user no início da resposta:**
 >
-> *"Antes de começarmos: você tem **N validações pendentes** da release `vX.Y.Z` em `contexto/Validar.md` (lista resumida abaixo). Quer validar antes de iniciar trabalho novo, ou prefere acumular?"*
+> *"Antes de começarmos: você tem **N validações pendentes** em `contexto/Validar.md` e **M bugs abertos** em `contexto/BUGS.md` (resumo abaixo). Quer validar/atacar antes de iniciar trabalho novo, ou prefere acumular?"*
 >
-> Listar até 5 itens pendentes resumidos: `[ ] 204.1 — Avião mode + ações offline → banner amber`.
+> - Listar até 3 validações pendentes resumidas.
+> - Listar até 3 bugs abertos por ordem de prioridade (P0 > P1 > P2 > P3 > P4): `#0003 P2 — handlePatientUnshared força app abrir sozinho`.
 
-**Se todos `[x]` ou seção vazia:** prosseguir Passo 1 sem alerta.
+**Se ambos estão limpos:** prosseguir Passo 1 sem alerta.
 
-> O user decide se valida agora, posterga ou pula. **Você não decide por ele** — só alerta.
+> O user decide se valida/ataca agora, posterga ou pula. **Você não decide por ele** — só alerta.
 
 ---
 
