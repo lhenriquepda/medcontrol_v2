@@ -134,15 +134,25 @@ export default function App() {
     const t = setInterval(() => setHourTick(Math.floor(Date.now() / 3600_000)), 3600_000)
     return () => clearInterval(t)
   }, [])
-  // v0.2.3.1 Bloco 7 (A-04) — janela unificada com Dashboard (-30d/+60d).
-  // Antes: App.jsx -1d/+14d + Dashboard -30d/+60d = 2 queries TanStack distintas
-  // mesmo data overlapping = duas round-trip ao DB + 2x refetch a cada mutation.
-  // Agora: filter.patientId=undefined → mesma queryKey que Dashboard sem filter
-  // patient = cache compartilhado.
+  // v0.2.3.7 #272 (F1 perf audit 2026-05-15) — revertido pra -1d/+14d original (#092).
+  //
+  // Histórico:
+  //   v0.1.7.5 #092: janela -1d/+14d ("AlarmScheduler nativo só agenda doses futuras
+  //     ~72h FCM cron horizon. 14d cobre buffer FCM + safe margin").
+  //   v0.2.3.1 Bloco 7 A-04: expandido pra -30d/+60d ("unificar com Dashboard cache
+  //     compartilhado, evitar 2 round-trips DB + 2x refetch por mutation").
+  //   v0.2.3.4 #163: Dashboard migrou useDoses → useDashboardPayload (RPC consolidado).
+  //     Dashboard parou de usar queryKey ['doses', alarmWindow]. Cache "compartilhado"
+  //     não compartilha com ninguém — App.jsx é único consumidor.
+  //
+  // Razão revert: cache 90 dias era peso morto (~2160 doses × 500 bytes ≈ 1MB só essa
+  // query) que IDB persist serializa 80-200ms blocking main thread cada mutation. Janela
+  // -1d/+14d cobre o que AlarmScheduler nativo realmente precisa (FCM horizon 72h + buffer).
+  // Detalhe: contexto/auditoria/2026-05-15-perf-audit-device-slow.md §8 F1.
   const alarmWindow = useMemo(() => {
     const now = new Date(hourTick * 3600_000)
-    const past = new Date(now); past.setDate(past.getDate() - 30)
-    const future = new Date(now); future.setDate(future.getDate() + 60)
+    const past = new Date(now); past.setDate(past.getDate() - 1)
+    const future = new Date(now); future.setDate(future.getDate() + 14)
     return { from: past.toISOString(), to: future.toISOString() }
   }, [hourTick])
   const { data: allDoses = [], isSuccess: dosesLoaded } = useDoses(alarmWindow)
@@ -328,8 +338,20 @@ export default function App() {
       window.__dosyLastDoseIds = doseIds
       navigate(`/?doses=${doseIds}`)
     }
+    // v0.2.3.7 Bug B fix — FCM share notification tap navigation.
+    // MainActivity.handleAlarmAction reads data.patientId from share FCM tap
+    // intent extras → posts this event → navigate to patient detail.
+    const onOpenPatient = (e) => {
+      const { patientId } = e.detail || {}
+      if (!patientId) return
+      console.log('[dosy:openPatient]', patientId)
+      if (window.__dosyLastPatientId === patientId) return
+      window.__dosyLastPatientId = patientId
+      navigate(`/pacientes/${patientId}`)
+    }
     window.addEventListener('dosy:openDose', onOpenDose)
     window.addEventListener('dosy:openDoses', onOpenDoses)
+    window.addEventListener('dosy:openPatient', onOpenPatient)
     // Process any pending IDs set by MainActivity before listener was bound (cold start)
     if (window.__dosyPendingDoseIds) {
       const ids = window.__dosyPendingDoseIds
@@ -341,9 +363,15 @@ export default function App() {
       window.__dosyPendingDoseId = null
       onOpenDose({ detail: { doseId: id } })
     }
+    if (window.__dosyPendingPatientId) {
+      const id = window.__dosyPendingPatientId
+      window.__dosyPendingPatientId = null
+      onOpenPatient({ detail: { patientId: id } })
+    }
     return () => {
       window.removeEventListener('dosy:openDose', onOpenDose)
       window.removeEventListener('dosy:openDoses', onOpenDoses)
+      window.removeEventListener('dosy:openPatient', onOpenPatient)
     }
   }, [user, navigate])
 

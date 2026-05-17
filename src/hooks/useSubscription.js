@@ -56,16 +56,31 @@ export function useShowAds() {
   return tier !== 'pro' && tier !== 'admin'
 }
 
-// Retorna true se user free atingiu limite de pacientes
+// Retorna true se user free atingiu limite de pacientes.
+// v0.2.3.7 BUG fix — só conta pacientes PRÓPRIOS (não shared). Server trigger
+// `enforce_patient_limit` faz mesmo filtro (WHERE userId = new.userId).
+// Antes: caregiver Free recebendo paciente shared via patient_shares era
+// contado contra o limit → counter "2/1 paciente" + paywall falso quando
+// tentar criar paciente próprio sendo cuidador.
 export function usePatientLimitReached() {
+  const { user } = useAuth()
   const { data: tier, isLoading: tierLoading } = useMyTier()
   const { data: patients = [], isLoading: patientsLoading } = usePatients()
-  // BUG fix (v0.1.7.5): durante loading inicial, NÃO assumir worst case.
-  // Antes: tier undefined → !PRO_FEATURE_TIERS.includes(undefined) → true se >=1 paciente.
-  // Disparava paywall em users plus/pro durante mount race.
   if (tierLoading || patientsLoading || tier == null) return false
   if (PRO_FEATURE_TIERS.includes(tier)) return false
-  return patients.length >= FREE_PATIENT_LIMIT
+  const ownCount = user?.id
+    ? patients.filter((p) => p.userId === user.id).length
+    : patients.length
+  return ownCount >= FREE_PATIENT_LIMIT
+}
+
+// v0.2.3.7 BUG fix — counter `Plano Free: N/1 paciente` deve refletir apenas
+// pacientes próprios (não shared via patient_shares).
+export function useOwnPatientCount() {
+  const { user } = useAuth()
+  const { data: patients = [] } = usePatients()
+  if (!user?.id) return patients.length
+  return patients.filter((p) => p.userId === user.id).length
 }
 
 export function useAllUsers() {

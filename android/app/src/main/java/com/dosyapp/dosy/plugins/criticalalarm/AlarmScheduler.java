@@ -171,6 +171,13 @@ public class AlarmScheduler {
      * v0.2.3.1 — persiste em dosy_tray_scheduled SharedPrefs pra BootReceiver re-agendar.
      */
     private static void scheduleTrayNotification(Context ctx, int notifId, long triggerAtMs, JSONArray doses, String channelId) {
+        // v0.2.3.7 #282 — idempotente. Skip se mesmo notifId tem triggerAt + dosesHash
+        // + channelId iguais já persistidos. Backup defense-in-depth caso Worker /
+        // FCM / daily-sync rodem em paralelo no mesmo dose.
+        if (isTrayAlreadyScheduled(ctx, notifId, triggerAtMs, doses, channelId)) {
+            Log.d(TAG, "skip scheduleTrayNotification — already scheduled notifId=" + notifId + " at=" + triggerAtMs);
+            return;
+        }
         ensureTrayChannel(ctx, channelId);
 
         Intent intent = new Intent(ctx, TrayNotificationReceiver.class);
@@ -194,6 +201,79 @@ public class AlarmScheduler {
 
         // v0.2.3.1 Plano A — persiste pra BootReceiver re-agendar pos reboot
         persistTrayEntry(ctx, notifId, triggerAtMs, doses, channelId);
+    }
+
+    /**
+     * v0.2.3.7 #282 — checa SharedPrefs dosy_critical_alarms se id já tem
+     * triggerAt + dosesHash iguais ao que vai agendar. True = skip safe.
+     * Backup defense-in-depth pra Worker periodic + FCM + daily-sync não
+     * causarem reagendamento redundante.
+     */
+    private static boolean isAlarmAlreadyScheduled(Context ctx, int id, long triggerAt, JSONArray doses) {
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_SCHEDULED, null);
+            if (existing == null) return false;
+            JSONArray current = new JSONArray(existing);
+            String newHash = computeDosesHash(doses);
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("id", -1) != id) continue;
+                if (e.optLong("triggerAt", -1) != triggerAt) return false;
+                JSONArray persistedDoses = e.optJSONArray("doses");
+                if (persistedDoses == null) return false;
+                if (!newHash.equals(computeDosesHash(persistedDoses))) return false;
+                return true;
+            }
+            return false;
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
+    /**
+     * v0.2.3.7 #282 — checa TRAY_PREFS dosy_tray_scheduled se notifId já tem
+     * triggerAt + dosesHash + channelId iguais. True = skip safe.
+     */
+    private static boolean isTrayAlreadyScheduled(Context ctx, int notifId, long triggerAt, JSONArray doses, String channelId) {
+        SharedPreferences sp = ctx.getSharedPreferences(TRAY_PREFS, Context.MODE_PRIVATE);
+        try {
+            String existing = sp.getString(KEY_TRAY_SCHEDULED, null);
+            if (existing == null) return false;
+            JSONArray current = new JSONArray(existing);
+            String newHash = computeDosesHash(doses);
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject e = current.getJSONObject(i);
+                if (e.optInt("notifId", -1) != notifId) continue;
+                if (e.optLong("triggerAt", -1) != triggerAt) return false;
+                if (!channelId.equals(e.optString("channelId", ""))) return false;
+                JSONArray persistedDoses = e.optJSONArray("doses");
+                if (persistedDoses == null) return false;
+                if (!newHash.equals(computeDosesHash(persistedDoses))) return false;
+                return true;
+            }
+            return false;
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Hash determinístico de doseIds sorted — paridade JS scheduler groupKey.
+     * Mudou doses = mudou hash = reagendamento necessário.
+     */
+    private static String computeDosesHash(JSONArray doses) {
+        try {
+            String[] ids = new String[doses.length()];
+            for (int i = 0; i < doses.length(); i++) {
+                JSONObject d = doses.getJSONObject(i);
+                ids[i] = d.optString("doseId", "");
+            }
+            java.util.Arrays.sort(ids);
+            return String.join("|", ids);
+        } catch (JSONException e) {
+            return "";
+        }
     }
 
     /**
@@ -399,6 +479,14 @@ public class AlarmScheduler {
         if (triggerAt <= System.currentTimeMillis()) {
             Log.d(TAG, "skip past trigger id=" + id + " at=" + triggerAt);
             return false;
+        }
+
+        // v0.2.3.7 #282 — idempotente. Worker / FCM / daily-sync agora podem chamar
+        // sem causar reagendamento redundante. Persisted SharedPrefs verifica se
+        // mesmo id já tem triggerAt + dosesHash idênticos → skip.
+        if (isAlarmAlreadyScheduled(ctx, id, triggerAt, doses)) {
+            Log.d(TAG, "skip scheduleDose — already scheduled id=" + id + " at=" + triggerAt);
+            return true;
         }
 
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);

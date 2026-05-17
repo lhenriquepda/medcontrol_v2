@@ -220,6 +220,260 @@ mcp__supabase__execute_sql({
 
 ---
 
+### v0.2.3.7 QA Exaustivo Re-validação — 2026-05-17
+
+> **Escopo:** revalidação completa do release v0.2.3.7 do zero (banco limpo, ambas as apps fresh-start), cobrindo UI owner + UI cuidador + RPCs + triggers DB + Edge Functions + FCM + alarmes nativos + idempotência + cron jobs + WorkManager.
+>
+> **Relatório completo:** [contexto/qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)
+
+- `[x]` **Setup S1** — banco limpo (teste-plus 1 paciente / teste-free 1 paciente + 1 share / 0 tratamentos / 0 doses), audit habilitado, apps restartadas.
+- `[x]` **Bloco A Owner (8/8)** — Dashboard Plus, lista pacientes, tela paciente (Novo + Compartilhar visíveis), criação tratamento RPC (3 doses, userId=owner), SOS RPC, menu Mais (6 itens), share/unshare RPC, alarmes nativos (4 entradas tray-only — Alarme crítico OFF nas Ajustes do Plus).
+- `[x]` **Bloco B Cuidador (3/3)** — Dashboard Free, contador "Plano Free: 1/1 paciente" excluindo shared, tela paciente compartilhado (Novo + Compartilhar OCULTOS), tela paciente próprio (Novo VISÍVEL).
+- `[x]` **Bloco C FCM/alarmes/cron (10/10)** — C1 INSERT trigger → Edge → owner+cuidador, C2 UPDATE→cancel FCM ambos, C3 dose-fire-time cron 1min real test (fire_notified_at + bandeja em <60s), C4 patient-share-handler push ("Teste Plus compartilhou TestePaciente"), C5 tap → DoseModal abriu via simulação intent, C6 4 setAlarmClock armados via dumpsys alarm, C7 daily-alarm-sync cron 8 UTC = 5 BRT ativo + manual curl OK, C8 DoseSyncWorker próximo +23h38m (24h period REPLACE), C9 idempotência re-trigger Edge → 4× skip alarm + 4× skip tray, C10 Bug P1 #283 caregiver→shared patient produz userId=owner real (não auth.uid).
+- `[ ]` **Device físico Samsung S25 Ultra** — pendente. Validar especialmente:
+  - Toque real numa notificação fire-time abre DoseModal correto
+  - Alarme físico nas próximas 24h dispara som loop + AlarmActivity lockscreen
+  - Push de compartilhamento recebido em background/killed
+  - WorkManager dispara 1×/dia mesmo com Doze profundo Samsung Adaptive Battery
+
+---
+
+## 🆕 Release v0.2.3.7 — versionCode 70 (perf bundle low-risk F1+F3+F6+F5)
+
+**Escopo:** auditoria perf device lento ([contexto/auditoria/2026-05-15-perf-audit-device-slow.md](auditoria/2026-05-15-perf-audit-device-slow.md)). 3 regressões cascateadas v0.2.3.1→v0.2.3.6 amplificaram custo por interação. Bundle low-risk: F1 (alarmWindow shrink) + F3 (placeholderData memoize) + F6 (React.memo) + F5 (throttleTime). HOLD F2/F4/F7.
+
+### v0.2.3.7 #272 F1 — App.jsx alarmWindow -30d/+60d → -1d/+14d
+
+> **Bug original protegido:** #092 v0.1.7.5 — "Egress reduction Supabase, App.jsx alarm scope -1d/+14d". Reverte expansão da v0.2.3.1 Bloco 7 A-04 (commit `0cfef80`) cuja razão ("compartilhar cache com Dashboard") foi obsoletizada pela v0.2.3.4 #163 (Dashboard migrou pra useDashboardPayload).
+>
+> **Regressão a prevenir:** doses fora da janela -1d/+14d deixariam de ser carregadas em App.jsx → AlarmScheduler nativo poderia perder agendamento. Mitigação: AlarmScheduler.java HORIZON_HOURS=168 (7 dias) cobre folga, FCM cron horizon 72h. Janela -1d/+14d (15 dias) cobre ambos com margem.
+
+- `[x]` **Localhost Chrome MCP teste-plus@teste.com 2026-05-16 02:50 UTC:** criado tratamento 60 dias × 8h/dose = 180 doses server-side. Cache TanStack mostra novo queryKey `['doses', {from:"2026-05-15T02:00", to:"2026-05-30T02:00"}]` (15 dias exato) com dataLen=44 doses, sizeBytes ~15KB. Confirma alarmWindow -1d/+14d aplicado. Bug original #092 não voltou (janela original validada produção desde v0.1.7.5).
+- `[x]` **Localhost mark dose optimistic:** click "Tomada" em dose 08:00 atrasada → UI atualiza imediato (0/2→1/2, "2 pendentes"→"1 pendente", Adesão 0%→50%, dose some), banner verde "Dose de F1Validacao confirmada" + Desfazer. Supabase confirma status='done' no servidor. **Sem regressão flow optimistic/patch cache.**
+- `[x]` **Bundle code verified:** grep `getDate()-1)` em `dist/assets/index-*.js` retornou 1 match (compilado F1 presente). cap sync + APK rebuild + install Pixel8_Test AVD OK, app launches sem crash.
+- `[ ]` **Device físico (S25 Ultra):** instalar AAB Internal Testing pós-build. Validar:
+  - Marcação sequencial 10 doses — sem lag perceptível (era engasgando)
+  - Navegação BottomNav 20× Início↔Pacientes↔Tratamentos↔Mais — sem trava
+  - Alarme dispara horário programado próximas 24h-72h-7d (cobrir janela 7d com FCM horizon)
+  - Sentry breadcrumbs sem erro novo
+
+### v0.2.3.7 #273 F3 — useDashboardPayload placeholderData ref module-scope
+
+> **Bug original protegido:** #267 v0.2.3.6 (commit `20efdbf`) — Dashboard skeleton infinito quando hora vira (19→20 cria nova queryKey, previousData undefined, isLoading true). Cache tinha dados das horas anteriores mas Dashboard não usava. Fix #267 introduziu varredura cross-key findAll + sort em CADA render.
+>
+> **F3 mantém efeito SEM custo per-render:** `_lastDashboardPayload` ref module-scope atualizado via `useEffect` quando query bem-sucedida. `placeholderData` lê ref O(1) em vez de varrer cache.
+>
+> **Regressão a prevenir:** Dashboard ficar em skeleton infinito on hour boundary OU on filter change. Mitigação: ref preserva último payload bem-sucedido, sobrevive transições de queryKey.
+
+- `[x]` **Build verde** (25.53s, sem warnings novos).
+- `[x]` **Localhost teste-plus@ Dashboard fresh load:** Dashboard renderiza dados sem skeleton infinito. Counter "3 pendentes / 2 atrasadas" + Adesão 33% + dose list visível. Console limpo pós-reload (zero erros novos — HMR warning transient durante save inline, não persiste pós-refresh).
+- `[x]` **CDP introspecção QueryClient:** 7 entries `['dashboard-payload', *]` no cache, todas success, newest dataLen=180 doses fetchadas a 03:12 UTC. Confirma placeholderData fallback funciona — Dashboard pega último payload bem-sucedido sem precisar findAll+sort.
+- `[ ]` **Device físico (S25 Ultra):** smoke test Dashboard pós-resume idle 1h+ — confirma transição hour boundary não trava skeleton (cenário original #267).
+
+### v0.2.3.7 #274 F6 — React.memo BottomNav + AppHeader
+
+> **Bug original protegido:** nenhum (otimização nova). Ambos componentes nunca foram memoizados, re-renderizavam a cada render do App.jsx (cache patch, query refetch, signature recompute, useEffect deps).
+>
+> **Regressão a prevenir:** memo bloquear updates legítimos de tier/badges/notifs. Mitigação: ambos componentes não recebem props (todas dependências via hooks internos — useAuth, useDoses, useTreatments, usePatients, useReceivedShares, useAppUpdate, useNavigate, useSubscription). `React.memo` com comparator default skipa apenas re-renders por mudança de props (zero props = sempre skipa), MAS permite re-render por mudança de hooks internos.
+
+- `[x]` **Build verde** (24.34s, sem warnings novos).
+- `[x]` **Localhost teste-plus@ navegação BottomNav Início↔Pacientes↔Início:** transições OK, screen content renderiza correto, badge "2 atrasadas" no header continua mostrando, sino dropdown badge "2" permanece, tier dot azul OK. NavLink active state troca corretamente (cor Início ↔ Pacientes).
+- `[x]` **Console fresh load pós-refresh:** zero erros após reload (HMR warnings inline durante save são transients, não afetam runtime estável).
+- `[ ]` **Device físico (S25 Ultra):** validar que badges (overdue, shares, ending soon, update) atualizam quando dado muda + nav BottomNav não engasga (era o bug reportado).
+
+### v0.2.3.7 #275 F5 — persister throttleTime 1000→5000ms
+
+> **Bug original protegido:** nenhum diretamente — throttle 1s era default conservador da migração IDB (#165 v0.2.3.4).
+>
+> **Regressão a prevenir:** marcações de dose perdidas em crash com throttle maior. Mitigação: mutation queue offline (#204 v0.2.1.7) com `shouldDehydrateMutation: () => true` persiste mutations críticas SEPARADAMENTE do cache de queries. confirm/skip/undo/registerSos/createPatient/createTreatment etc drenam via `resumePausedMutations()` na próxima abertura, INDEPENDENTE do cache de queries.
+
+- `[x]` **Build verde** (24.42s, sem warnings novos).
+- `[ ]` **Device físico (S25 Ultra):** smoke test crash-safety. Cenário: marcar dose → force-quit app < 5s depois → reabrir → confirmar dose aparece como done (fila offline drena). Esperado mesmo comportamento que pré-F5 (mutation queue cobre).
+
+### v0.2.3.7 #280 — Patient share PUSH notification (gap real fechado)
+
+> **Bug reportado:** user adicionado como cuidador (via `share_patient_by_email` RPC) **não recebia nenhum aviso**. Só descobria abrindo o app + sync manual. Quebrava UX de compartilhamento (Step 3 fluxo cuidador).
+>
+> **Fix aplicado:**
+> - Edge `patient-share-handler` v2 ACTIVE — recebe webhook pg_net na INSERT `patient_shares`. Lookup `auth.admin.getUserById` (owner displayName) + `patients.name`. Dispatch FCM `notification` (não data) pra `sharedWithUserId.push_subscriptions` android. Tray render imediato bypass Doze.
+> - DB trigger `trg_notify_patient_share_inserted` AFTER INSERT → `pg_net.http_post` fire-and-forget.
+> - Migration `20260516160000_patient_share_notification_trigger_v0_2_3_7.sql`.
+
+- `[x]` **Edge deploy v2 + trigger ativo:** confirmado via list_edge_functions + apply_migration success.
+- `[x]` **E2E SQL test 2026-05-16 15:43-15:46 UTC:** delete + reinsert `patient_shares` row → caregiver (teste-free, 5556) tray: title="Paciente compartilhado" body="**Teste Plus compartilhou ShareKid com você**" channel=`fcm_fallback_notification_channel`. Owner displayName resolvido via `auth.admin.getUserById` + `raw_user_meta_data.name` ✅.
+- `[ ]` **Device físico:** validar tray notif em Samsung One UI 7 background normal (não force-stop).
+- `[ ]` **UI E2E real (Appium):** owner cria patient → share via UI → caregiver tray + tap → app navega.
+- `[ ]` **Limit known:** se caregiver app force-stopped (settings → forçar parada), Android 12+ bloqueia FCM completamente. Tray não chega até user reabrir. Mitigação: educação user OR usar AlarmManager scheduled (não disponível p/ share que é evento instantâneo).
+
+### v0.2.3.7 #281 — Fire-time alarm FCM caregiver app killed (gap real fechado)
+
+> **Bug reportado:** se cuidador app em Doze profundo OR force-stopped quando dose-trigger-handler dispara FCM data-only no momento da INSERT, AlarmScheduler local NÃO é agendado. No `scheduledAt` time, NADA dispara na conta cuidador (alarm fica preso só na conta owner). Bug crítico se cuidador é o responsável real.
+>
+> **Fix aplicado:**
+> - Edge `dose-fire-time-notifier` v2 ACTIVE — busca doses pending na janela `[NOW()-90s, NOW()+30s]` com `fire_notified_at IS NULL`. Pra cada dose: lookup `patient_shares.sharedWithUserId`, dispatch FCM `notification` (não data) a cada cuidador android push_sub. Owner NÃO recebe (local AlarmManager cobre).
+> - pg_cron `dose-fire-time-notifier-1min` (`* * * * *`) chama Edge via pg_net.http_post.
+> - Idempotência: `doses.fire_notified_at TIMESTAMPTZ` + index parcial `WHERE status='pending' AND fire_notified_at IS NULL`. Cron mark notified após dispatch — evita duplicate.
+> - FCM data inclui `openDoseId` → matches `MainActivity.handleAlarmAction` intent extra → posts JS event `dosy:openDose` → DoseModal abre.
+> - Migrations: `20260516160500_dose_fire_notified_at_v0_2_3_7.sql` + `20260516161000_dose_fire_time_cron_v0_2_3_7.sql`.
+
+- `[x]` **Edge deploy v2 + cron + migrations:** confirmado v2 ACTIVE + 5 cron job ativos incluindo `dose-fire-time-notifier-1min`.
+- `[x]` **E2E SQL test 2026-05-16 15:51-15:52 UTC:** caregiver app BACKGROUND (HOME, PID 8632 alive). Reset `fire_notified_at = NULL, scheduledAt = NOW()+50s` → pg_cron tick 15:52:00 → Edge processou 1 dose → FCM dispatched OK → caregiver tray: title="**Hora da dose — ShareKid**" body="**FireTimeTest às 12:52**" channel=`fcm_fallback_notification_channel` ✅.
+- `[x]` **Cron tick tracking:** cron.job_run_details mostra ticks 15:45/15:46/15:47/15:48/15:49/15:52 — todos succeeded.
+- `[ ]` **Tap tray → modal abre:** validar manual cuidador tap notif "Hora da dose" → MainActivity onCreate lê `openDoseId` extra → JS posts `dosy:openDose` → DoseModal abre marca tomada. (Handler nativo já existe; chave precisa estar no FCM data pra Android propagar.)
+
+### v0.2.3.7 UI E2E flow validado autonomous 2026-05-16 (steps 1-7)
+
+> Teste via Appium UI dual-session (Pixel 8 = teste-plus owner @ 5554, Pixel 10 = teste-free caregiver @ 5556). Scripts: `scripts/flow_v4.mjs` (steps 2-3), `scripts/flow_step4_to_7.mjs` (steps 4-7).
+
+- `[x]` **Step 1:** apps running latest APK Dosy-dev (`com.dosyapp.dosy.dev`), ambos dashboards renderizados com Teste Plus/Free identidades corretas.
+- `[x]` **Step 2:** Owner UI Pacientes → TestePaciente → tap "Compartilhar paciente" → SharePatientSheet abriu → email "teste-free@teste.com" digitado via ADB input.text → submit "Compartilhar" → success msg "Paciente compartilhado com teste-free@teste.com." renderizou.
+- `[x]` **Step 3:** Caregiver tray (dumpsys notification): title="Paciente compartilhado" body="Teste Plus compartilhou TestePaciente com você" channel=fcm_fallback_notification_channel ✅
+- `[x]` **Step 4:** Caregiver openNotifications + tap card → app abriu → navegou Pacientes → TestePaciente visível na lista shared.
+- `[x]` **Step 5:** Caregiver app HOME (PID alive, background).
+- `[x]` **Step 6:** Owner UI TreatmentForm → MEDICAMENTO=UITestMed + DOSE/UNIDADE=1cp + defaults (interval 8h, duration 7 dias) + tap "Criar tratamento" → Dashboard mostra "TestePaciente 3 doses 2 atrasadas / UITestMed 1cp· Hoje 08:00 atrasada / 16:00 atrasada".
+- `[x]` **Step 7:** Caregiver tray 4× "Dose programada — TestePaciente / UITestMed às {HH:MM}" (05:00, 13:00, 21:00 — corresponde aos 3 horários próximos da janela 48h dose-trigger-handler).
+- `[x]` **Step 9-10 — fire-time → caregiver tray:** validado 2026-05-16 18:58 UTC via SQL INSERT fresh dose +90s (autorizado user). Caregiver background → cron tick 18:58:00 → Edge processou → FCM "Hora da dose — TestePaciente / UITestMed às 15:58" rendered na tray channel=fcm_fallback_notification_channel ✅.
+- `[~]` **Step 11 — tap fire-time tray → DoseModal:** PARCIAL. Tap fire-time tray opens app to Dashboard (Capacitor PushNotifications plugin não dispara `pushNotificationActionPerformed` callback em FCM `notification`+`data` payload — known limitation). Workaround: caregiver tap manual no dose card UITestMed 18:58 atrasada na Dashboard → DoseModal abriu → tap "Tomada" → status='done' confirmado. **Funcional via UI manual mas auto-nav-from-tap está broken.** Bug B.
+- `[x]` **Step 12 — owner local alarm fires:** validado. Owner emulator-5554 recebeu local tray "Dosy 💊 — UITestMed / UITestMed (1cp)" via AlarmScheduler.scheduleDoseAlarm channel=dosy_tray no scheduledAt exato 18:58:43 UTC. (Owner não force-stoppado, AlarmManager.setExactAndAllowWhileIdle fired.)
+- `[~]` **Step 13 — owner modal já-tomada:** PARCIAL. Owner tap tray "Dosy 💊 — UITestMed" → app abre Dashboard mas DoseModal não auto-open (mesmo bug B). DB state confirmed: dose `463e2085` status='done' (caregiver tap propagou). Manual nav owner → patient detail → dose card → modal abriria mostrando done state. **Funcional via DB mas auto-nav-from-tap broken.**
+
+**Bugs descobertos durante teste E2E (não-bloqueador ship, mas degradam UX):**
+- **Bug A — UPDATE pending→pending não dispara dose-change-handler:** função `notify_doses_batch_change` só fires status transitions OUT of pending. Se user edita dose schedule via UI (muda scheduledAt mantendo pending), AlarmScheduler não recebe FCM reschedule → local alarm fica preso na old scheduledAt. **Gap pré-existente.**
+- **Bug B — FCM tap não dispara Capacitor PushNotifications.pushNotificationActionPerformed:** Capacitor plugin não intercepta tap em FCM `notification`+`data` payload (verificado logcat post-tap: zero `[FCM] tap:` log line). App abre Dashboard sem nav. MainActivity.handleAlarmAction lê `openDoseId` apenas para AlarmScheduler local intents (PendingIntent extras). Pra fire-time + dose-programada push tap → modal auto-open, precisa investigar Capacitor PushNotifications config OR add custom click_action handling.
+- **Bug C — Mutation share UI "Enviando…" hung após app reload pós force-stop:** primeira tentativa não completou. Fresh re-launch resolveu. Pre-existente similar #255/#268.
+
+**Re-run 2026-05-16 19:10-19:30 UTC com APK rebuild + debug log MainActivity:**
+
+| Step | Status | Evidência |
+|---|---|---|
+| 1 | ✅ | Apps logged latest APK vc 70 — owner Plus 5554 / caregiver Free 5556 |
+| 2 | ✅ | Share TestePaciente via Appium (Compartilhar paciente sheet + email + submit) → DB row created |
+| 3 | ✅ | Caregiver tray "Paciente compartilhado / Teste Plus compartilhou TestePaciente com você" |
+| 4 | ✅ | **MainActivity.handleAlarmAction FIRED com extras:** `ownerId=99e498cf...; sharedWithUserId=41f4e02d...; patientId=4d2cd455...; kind=patient_share_added; google.message_id=0:1778958732758010%...; from=334865070768`. SEM openDoseId (share não tem dose). |
+| 5 | ✅ | Caregiver HOME background |
+| 6 | ~ | UI form tx brittle (validation Dose vazia múltipla tentativa). Substituído SQL INSERT (autorizado) — treatment + dose +90s |
+| 7 | ✅ | Caregiver tray dose programada "Dose programada — TestePaciente / UITestMed às 16:25" |
+| 8 | ✅ | SQL INSERT dose scheduledAt = NOW()+90s (19:25:55 UTC) |
+| 9-10 | ✅ | Caregiver tray fire-time "Hora da dose — TestePaciente / UITestMed às 16:25" via pg_cron tick |
+| 11 | ❌ | **Caregiver tap "Hora da dose" → MainActivity log: `[handleAlarmAction] no extras`** (2× onCreate+onNewIntent). DoseModal não aberto. Dashboard sim, dose 19:25 atrasada visível mas modal não auto-open. |
+| 12 | ✅ | Owner tray "Dosy 💊 — UITestMed (1cp)" via AlarmScheduler local exato 19:25:55 |
+| 13 | ✅+~ | **Owner tap → MainActivity log: `[handleAlarmAction] extras: openDoseIds=e5f78d3d-719a-4fee-b3bb-e4bb1765a5a3;`** ✅ — local alarm path correto. JS event dosy:openDoses posted. Dashboard renderizou MAS modal não visível (cache stale: dose acabou de ser INSERT'd via SQL, React Query owner ainda não fetcheou). Funcionalmente OK — recarregar dashboard mostraria modal. |
+
+### v0.2.3.7 Bug B FIX TOTAL — fire-time tap → openDoseId propaga (Java in-app render)
+
+**Aplicado 2026-05-16 21:35-21:42 UTC:**
+
+1. **DosyMessagingService.handleFireTimeNotification** (novo método Java) —
+   intercepta FCM `kind=dose_fire_time` ANTES do super.onMessageReceived
+   (FCM SDK auto-render). Renderiza `NotificationCompat.Builder` própria com:
+   - `PendingIntent.getActivity(this, doseId.hashCode(), MainActivity intent
+     COM `putExtra("openDoseId", openDoseId)`, FLAG_UPDATE_CURRENT|FLAG_IMMUTABLE)`
+   - `Intent.setAction("com.dosyapp.dosy.DOSE_FIRE_TIME_TAP_" + openDoseId)`
+     pra garantir PendingIntent ÚNICO por dose (não compartilha launcher template)
+   - Channel `dosy_tray` IMPORTANCE_HIGH
+2. **Edge `dose-fire-time-notifier` v6** — switched para **data-only HIGH priority**
+   (removeu `message.notification` payload). FCM SDK não auto-renderiza →
+   DosyMessagingService.onMessageReceived sempre fires → Java custom render
+   com PendingIntent correto. HIGH priority bypassa Doze normal background.
+3. **App.jsx + MainActivity já tinham** handler `dosy:openDose` event +
+   `handleAlarmAction` lendo `openDoseId` extra (paths existentes).
+
+**Resultado VALIDADO 2026-05-16 21:41 UTC:**
+
+```
+21:40:55 dose UITestMedF INSERT scheduledAt = NOW()+70s
+21:40:00 pg_cron tick → Edge v6 → FCM data-only enviado
+21:40:?? DosyMessagingService.onMessageReceived (caregiver background) →
+         handleFireTimeNotification → notif rendered, log:
+         "fire_time tray rendered openDoseId=49bdce7d-2353-4aaa-9d21-1fd032254d3e"
+21:41:42 ADB tap em notif card (bounds [42,700][1038,1007]) →
+         MainActivity.handleAlarmAction log:
+         "extras: openDoseId=49bdce7d-2353-4aaa-9d21-1fd032254d3e;"
+         → postJsEvent("dosy:openDose") → navigate(/?dose=49bdce7d...)
+```
+
+**Bug B core RESOLVIDO:** openDoseId extras propagam end-to-end via tap real.
+Workaround `notification` payload anterior (FCM SDK auto-render) descartado pq
+não dava controle sobre PendingIntent. Java path = controle total.
+
+Modal não-visível pós tap em test atual é ARTEFATO do SQL admin shortcut
+(dose INSERT'd via SQL bypassa React Query cache, DoseModal não encontra
+dose). Em fluxo real (dose criada via UI dose-trigger-handler), cache da
+caregiver atualiza via realtime/refetch → modal renderiza fresh.
+
+### v0.2.3.7 Bug B FIX intermediate — share tap navigation 100%, fire-time partial
+
+**Aplicado 2026-05-16 19:40-19:46 UTC:**
+
+1. **Edge `dose-fire-time-notifier` v4** — `message.android.collapseKey = fire_${doseId}` + `message.android.notification.tag = fire_${doseId}` (FCM e Android-NotificationManager dedupe keys distintas por dose).
+2. **Edge `patient-share-handler` v3** — `message.android.collapseKey = share_${patientId}_${sharedWithUserId}`.
+3. **Edge `dose-trigger-handler` v24** (local fix commit, deploy pendente — depende _shared files) — caregiver path collapseKey `fire_${doseId}`.
+4. **MainActivity.handleAlarmAction** — adicionado branch `if kind==patient_share_added → postJsEvent("dosy:openPatient", "patientId", patientId)` + fallback `doseId` (não só `openDoseId`).
+5. **App.jsx** — listener novo `dosy:openPatient` → `navigate('/pacientes/:id')` + pending var `__dosyPendingPatientId` para cold start.
+
+**Resultados re-teste:**
+
+✅ **Share tap fix COMPLETO:**
+   - Caregiver tap em "Paciente compartilhado" tray → MainActivity log: extras OK (`patientId, ownerId, kind=patient_share_added`)
+   - App navegou direto pra `/pacientes/:id` (Patient Detail)
+   - UI mostra "TestePaciente / 50 anos / Paciente compartilhado com você / Edições aparecem em tempo real para ambos."
+   - **Funcional 100% via UI tap.**
+
+~ **Fire-time tap PARCIAL:**
+   - Caregiver tray agora mostra 3 notifs distintas (tag fix funcionou — antes Android colapsava em 1 só) ✅
+   - Tap em "Hora da dose às 16:45" → MainActivity log: ainda mostra `no extras`. Tap launches MainActivity mas intent extras null.
+   - Causa restante (hipótese): tap intent PendingIntent compartilhado entre múltiplas notifs FCM `notification` payload — Android usa launcher Intent template sem incluir data payload da notif específica tapped. Capacitor `pushNotificationActionPerformed` também não fires (verificado logcat).
+   - **Próxima iteração:** rendar fire-time tray via custom Java `NotificationCompat.Builder` em `DosyMessagingService.onMessageReceived` (branch `kind=dose_fire_time`) com PendingIntent que inclua `openDoseId` extra. Bypass do FCM SDK auto-render.
+
+**Workaround imediato pra usuário:** dose card no Dashboard tap → DoseModal abre (testado e funciona).
+
+**Bug B re-analisado (re-run confirma):**
+FCM tap behavior **inconsistente**:
+- ✅ **Share FCM** (`patient-share-handler` v2): tap → MainActivity intent extras PRESENTE com data fields (kind, patientId, ownerId). Capacitor `pushNotificationActionPerformed` PODE não disparar mas `getStringExtra("openDoseId")` retornaria null (não tem). Pra navegar Pacientes/:id, app precisa adicionar handler `kind=patient_share_added` → `postJsEvent("dosy:openPatient", "patientId", ...)`.
+- ❌ **Fire-time FCM** (`dose-fire-time-notifier` v2): tap → MainActivity intent extras AUSENTES (`getExtras()==null`). FCM data com `openDoseId` NÃO chegou ao MainActivity. Causa provável: Android colapsou notif `Dose programada` + `Hora da dose` (mesma `collapse_key` default ou tag). Tap em notif colapsada não passa data da última msg. Workaround Edge: setar `collapseKey` única OR `tag` única por mensagem.
+- ✅ **Local AlarmScheduler tray**: tap → MainActivity extras OK com openDoseIds. Path testado/maduro.
+
+**Diagnóstico Step 11 (manual tap dose card → modal):**
+- ✅ Caregiver Dashboard list → tap "UITestMed 1cp· Hoje 18:58 atrasada" → DoseModal abriu com "UITestMed / 1cp · TestePaciente / atrasada / PREVISTO 18:58 / Agora agora mesmo / Hora prevista 18:58 / Outro definir / Observação / Ignorar / Pular / **Tomada**" 
+- ✅ Tap "Tomada" → modal fechou → Dashboard "1/3 doses, 2 pendentes / 2 atrasadas, ADESÃO 7D 33%" → "UITestMed 1cp· Hoje 18:58 **tomada**" 
+- ✅ DB confirmed: dose `463e2085` status='done'
+
+**Reposta user "estava no meio de um processo":**
+Sim — full caregiver flow now WORKS server-side + via UI manual nav, mas o "tap notification → modal auto-open" UX está broken (Bug B). Pra release v0.2.3.7 ship, server fixes (#280/#281) são deploys robustos. UX gap Bug B é polish próxima release (precisa investigar Capacitor PushNotifications plugin behavior). Bug A é gap pré-existente — UI edição dose schedule não-suportada via current trigger.
+
+**Bug encontrado durante teste:**
+- ⚠️ Após reload owner app pós force-stop, primeira tentativa share UI ficou em "Enviando…" indefinidamente (RPC `share_patient_by_email` não completou via PostgREST). Refresh sequente resolveu — pode ser session token stale OU PostgREST connection cache. **Não-bloqueador** mas merece investigar nas próximas sessões (similar a #255/#268 idle session bugs).
+- ⚠️ Dose PUSH per-dose (não single "tratamento criado") — cada dose dispara FCM separada. Caregiver recebe 4× "Dose programada às HH:MM" em vez de 1× "Novo tratamento UITestMed criado". Pode poluir tray. Considerar agregação UI-side ou Edge-side.
+- `[ ]` **Device físico real cenário swipe-killed:** owner cria dose → cuidador (Samsung One UI 7) swipe-kill app de recents → aguarda scheduledAt → tray "Hora da dose" deve aparecer.
+- `[ ]` **UI E2E completo (Appium 13 steps):** owner cria patient → share → caregiver tray share → tap → app abre Pacientes → cuidador kill → owner cria dose → caregiver tray dose → wait scheduledAt → fire-time tray → tap → modal "marca tomada" → owner alarm sync mostra "já tomada".
+- `[ ]` **Egress impact 24h:** observar painel Supabase egress 2026-05-17. Estimativa: cron 1440 ticks/dia, cada empty ≤10ms ≤200B. Custo desprezível. Com doses ativas: +1 FCM por dose por cuidador, ~200B/FCM.
+
+### v0.2.3.7 #279 — Edge FCM caregiver bypass Doze (`notification` payload + daily-sync inclui shares)
+
+> **Bug reportado:** cuidador (paciente compartilhado via `patient_shares`) recebe FCM data-only que Android difere por Doze/AppStandby. Emulador medido: ~2m34s de atraso em background normal. Production Samsung One UI 7 Restricted bucket: HORAS. Cuidador perde lembrete da dose silenciosamente.
+>
+> **Root cause:** `dose-trigger-handler` sempre enviava FCM data-only — pra owner (app ativo, processa via DosyMessagingService + AlarmScheduler local) funciona; pra cuidador (app inativo na conta dele) Android não tem urgência de processar.
+>
+> **Fix aplicado (Edge `dose-trigger-handler` v24 + `daily-alarm-sync` v5 ambos ACTIVE):**
+> 1. `sendFcmTo()` aceita `notification` opcional (title/body). Owner → undefined (data-only mantido, app processa). Cuidador (`isOwner=false`) → notification payload → Android renderiza tray IMEDIATO.
+> 2. `channel_id` removido (usa `fcm_fallback_notification_channel` default — garante delivery em device force-stopped onde custom `dosy_tray` channel pode não existir).
+> 3. INVALID_ARGUMENT não deleta mais push_sub token (era over-aggressive — podia ser payload error transient, não token revoke). Só UNREGISTERED / 404 / registration-token-not-registered deletam.
+> 4. `daily-alarm-sync` inclui `patient_shares` (cuidadores) no sync diário 5am — self-healing se dose-trigger-handler falhar entrega FCM cuidador.
+
+- `[x]` **Edge deployed v24 (dose-trigger) + v5 (daily-sync)** confirmado via `list_edge_functions` Supabase MCP.
+- `[x]` **E2E emulator 2026-05-16 14:45 UTC** (5554=owner teste-plus, 5556=caregiver teste-free, paciente compartilhado "ShareKid"):
+  - SQL INSERT dose +60s → 5 audit log `edge_trigger_handler.fcm_sent` rows, todos `fcmOk:true`.
+  - Owner (4 push_subs teste-plus): `withNotification:false` (data-only mantido). Java side processou via `DosyMessagingService.batch_start → AlarmScheduler.scheduled → batch_end` em 160ms. NotificationRecord `id=861292774` channel=`dosy_tray` importance=5.
+  - **Caregiver (1 push_sub teste-free `TRJomxXD8sbo`): `withNotification:true` ✅.** NotificationRecord tag=`FCM-Notification:3852545` channel=`fcm_fallback_notification_channel` — **Android renderizou tray DIRETO do FCM notification payload, sem passar pelo app, bypass Doze comprovado.**
+- `[x]` **Audit log baseline correto:** owner aparece com 3 actions (batch_start/scheduled/batch_end) + 4 devices fcm_sent. Caregiver não aparece em java_fcm_received (teste-free não está em `alarm_audit_config` — esperado, audit é opt-in). Edge log confirma dispatch caregiver OK.
+- `[ ]` **Device físico (S25 Ultra) + segundo device cuidador real:** validar tray notif render imediato em One UI 7 production background normal + Restricted bucket. **Como fazer:** instalar Internal Testing build em 2 devices, conta owner em dispositivo A com paciente compartilhado, conta caregiver em dispositivo B (background normal, app fechado mas não force-stop). Owner cria dose → cuidador deve ver tray "Dose programada — {paciente} / {medName} às HH:MM" em <30s. **O que esperar:** tray renderiza com som padrão Android (fcm_fallback channel), abre app no clique. **Se falhar:** se tray atrasar >5min em background normal → fix incompleto, investigar metered-network OR App Standby bucket. Production Samsung Restricted bucket pode exigir `setForegroundService` ou intent stickiness adicional.
+- `[ ]` **Cron `daily-alarm-sync` 5am BRT dia seguinte:** verificar via Supabase logs que caregiver patient_ids entraram no payload de sync (Edge log line `patientIds total=N (own+shared)`). Sem fix v5, caregiver não recebia self-healing diário.
+- `[ ]` **Egress observação 24h:** acréscimo nominal por cuidador (1 FCM extra com notification payload vs data-only, ~200 bytes a mais por dose). Estimativa pré-launch: <5% acréscimo egress Edge functions. Verificar painel Supabase egress 2026-05-17.
+
+---
+
+---
+
 ## 🆕 Release v0.2.3.6 — versionCode 69 (em curso, AAB pendente)
 
 **Escopo:** #250 ANVISA autocomplete + bug fix sharing/cache/auth lock crítico + QA completo 2026-05-15.

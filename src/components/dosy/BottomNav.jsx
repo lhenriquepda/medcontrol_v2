@@ -12,6 +12,7 @@
  * - aria-label em todos itens
  * - safe-area-inset-bottom respect
  */
+import { memo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, Users, Plus, Siren, MoreHorizontal } from 'lucide-react'
 import { usePatients } from '../../hooks/usePatients'
@@ -24,7 +25,7 @@ const TABS = [
   { id: 'mais',      to: '/mais',      end: false, icon: MoreHorizontal,    label: 'Mais' },
 ]
 
-export default function DosyBottomNav() {
+function DosyBottomNav() {
   const nav = useNavigate()
   const { data: patients = [] } = usePatients()
   const fabTarget = patients.length === 0 ? '/pacientes/novo' : '/tratamento/novo'
@@ -118,3 +119,9 @@ export default function DosyBottomNav() {
     </nav>
   )
 }
+
+// v0.2.3.7 #274 (F6 perf audit 2026-05-15) — React.memo previne re-render desnecessário
+// em cada render do App.jsx. BottomNav não recebe props; hooks internos (usePatients,
+// useNavigate) controlam re-render quando dados mudam. Sem memo, BottomNav re-renderiza
+// a cada cache patch / query refetch no App.jsx, inflacionando custo de cada navegação.
+export default memo(DosyBottomNav)

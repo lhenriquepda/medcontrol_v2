@@ -160,15 +160,21 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo: perf bundle low-risk F1+F3+F6+F5 — reduzir lentidão device reportada pelo user pós últimas releases.
+**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo: perf bundle low-risk F1+F3+F6+F5 + bug fixes server-side caregiver flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284. **QA exaustivo re-validação 21/21 OK 2026-05-17** ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)). Pendente: autorização user Passo 10.5 pra build AAB + validação device físico Samsung S25 Ultra.
 
 **Auditoria de origem:** [`contexto/auditoria/2026-05-15-perf-audit-device-slow.md`](auditoria/2026-05-15-perf-audit-device-slow.md) — 11 seções, identifica 3 regressões cascateadas (v0.2.3.1 Bloco 7 expansão janela 90 dias + v0.2.3.4 #163 duplo namespace cache + v0.2.3.5 #239 patch ambos) que multiplicaram custo por interação. Cada fix tem ANTES/DEPOIS, bug original protegido, justificativa de regressão segura.
 
-**Itens release/v0.2.3.7 (ABERTOS):**
-- ⏳ **#272** P1 BUG PERF — F1 alarmWindow App.jsx -30d/+60d → -1d/+14d (motivo original obsoletizado por #163)
-- ⏳ **#273** P1 BUG PERF — F3 useDashboardPayload placeholderData via ref module-scope (manter proteção #267, eliminar findAll por render)
-- ⏳ **#274** P1 BUG PERF — F6 React.memo BottomNav + AppHeader (sem regressão — otimização nova)
-- ⏳ **#275** P2 BUG PERF — F5 persister throttleTime 1000ms → 5000ms (fila offline #204 protege contra crash)
+**Itens release/v0.2.3.7 (FECHADOS sessão 2026-05-16/17):**
+- ✅ **#272** P1 BUG PERF — F1 alarmWindow App.jsx -30d/+60d → -1d/+14d (motivo original obsoletizado por #163) — commit `96b6071`
+- ✅ **#273** P1 BUG PERF — F3 useDashboardPayload placeholderData via ref module-scope (manter proteção #267, eliminar findAll por render) — commit `a8a396e`
+- ✅ **#274** P1 BUG PERF — F6 React.memo BottomNav + AppHeader (sem regressão — otimização nova) — commit `0431fc7`
+- ✅ **#275** P2 BUG PERF — F5 persister throttleTime 1000ms → 5000ms (fila offline #204 protege contra crash) — commit `410a352`
+- ✅ **#279** P1 SERVER BUG — Edge FCM caregiver bypass Doze (`notification` payload pra `isOwner=false` + `daily-alarm-sync` inclui `patient_shares`). Edge `dose-trigger-handler` v24 + `daily-alarm-sync` v5 ACTIVE. Commit `c58e9c7`.
+- ✅ **#280** P1 SERVER BUG — Patient share PUSH notification (gap real). Edge `patient-share-handler` v4 ACTIVE + DB trigger `trg_notify_patient_share_inserted` → pg_net.http_post na INSERT. Migration `20260516160000_patient_share_notification_trigger_v0_2_3_7.sql`. Commit `0d819bb`.
+- ✅ **#281** P1 SERVER BUG — Fire-time alarm FCM cuidador app killed. Edge `dose-fire-time-notifier` v6 ACTIVE + pg_cron 1min + `doses.fire_notified_at` index parcial (idempotência). FCM data inclui `openDoseId` → MainActivity.handleAlarmAction → JS dispatch dosy:openDose → DoseModal abre no tap. Migrations `20260516160500/20260516161000_v0_2_3_7.sql`. Commits `3874521 e7f72a7`.
+- ✅ **#282** P1 BUG — Idempotência AlarmScheduler + WorkManager backup Samsung Doze. `scheduleDose` + `scheduleTrayNotification` skipam reagendamento se `triggerAt + dosesHash` iguais (SharedPrefs cache). WorkManager `DoseSyncWorker` 6h → 24h com `ExistingPeriodicWorkPolicy.REPLACE` — backup local cobre Samsung Adaptive Battery / Doze profundo 3+ dias inatividade. Sem conflito com cron servidor `daily-alarm-sync` 5am BRT. Commit `37ba3fd`.
+- ✅ **#283** P1 BUG — RPCs `create_treatment_with_doses` + `register_sos_dose` usavam `auth.uid()` para `userId`. Cuidador criando dose para paciente compartilhado gerava `dose.userId=cuidador` → Edge `dose-trigger-handler` tratava cuidador como ownerId → query `shares WHERE ownerId=cuidador` vazia → owner real ficava órfão de push. Fix: derivar `v_uid := patient.userId` do paciente real, salvar dose com userId=owner. Migration `20260517130000_rpc_use_patient_owner_userid_v0_2_3_7.sql`. Commit `917f061`.
+- ✅ **#284** DOCS — QA exaustivo re-validação completa 21/21 do zero (banco limpo, apps fresh). Bloco A Owner (8/8) + Bloco B Cuidador (3/3) + Bloco C FCM/alarmes/cron (10/10). Relatório [`contexto/qa/QA_REPORT_v0_2_3_7_full_rerun.md`](qa/QA_REPORT_v0_2_3_7_full_rerun.md). Scripts Appium reutilizáveis em `scripts/qa_*.mjs`. Commit `34bb2bd`.
 
 **Itens HOLD (auditados, decisão posterior):**
 - ⏸️ **#276** F4 — refetchDoses não invalida dashboard-payload pós-patch. HOLD aguardar resultado v0.2.3.7. Risco: doses irmãs BATCH_UPDATE não atualizam até próximo focus.
@@ -773,6 +779,16 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 **Auditoria detalhada com plano por fix:** seções 8-11 do doc — cada fix tem ANTES/DEPOIS de código, commit origem investigado, bug original protegido, justificativa de regressão segura, validação obrigatória.
 
 **Counter:** 146 fechados / 80 abertos (+ #272-#275 abertos + #276-#278 HOLD).
+
+**Δ 2026-05-16/17 release/v0.2.3.7 (server-side caregiver flow + idempotência + RPC ownerId + QA exaustivo):** mid-release +6 itens server/native fechados:
+- **#279** P1 — Edge `dose-trigger-handler` v24 caregiver `notification` payload bypass Doze + `daily-alarm-sync` v5 inclui patient_shares
+- **#280** P1 — Edge `patient-share-handler` v4 + DB trigger ON `patient_shares` INSERT → FCM push share notification
+- **#281** P1 — Edge `dose-fire-time-notifier` v6 + pg_cron 1min + `doses.fire_notified_at` index parcial idempotência → cuidador app killed recebe fire-time tray
+- **#282** P1 — `AlarmScheduler` idempotente (skip se triggerAt+dosesHash iguais) + `DoseSyncWorker` período 6h → 24h `REPLACE` policy backup Samsung Doze
+- **#283** P1 — RPCs `create_treatment_with_doses` + `register_sos_dose` derivam userId de `patient.userId` em vez de `auth.uid()` (cuidador criando dose pra paciente compartilhado agora gera `dose.userId=owner real` → Edge dispatch FCM corretamente cross-owner)
+- **#284** DOCS — QA exaustivo re-validação 21/21 OK ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)) + scripts Appium reutilizáveis em `scripts/qa_*.mjs`
+
+**Counter:** 152 fechados / 80 abertos (release v0.2.3.7 fecha 10 itens: #272-#275 + #279-#284).
 
 **Δ 2026-05-15 release/v0.2.3.6 SHIPPED (Play Console Internal Testing 2026-05-15):** bump vc 68→69, vn 0.2.3.5→0.2.3.6. **11 itens fechados:** #250 P3 ANVISA autocomplete medicamentos (764 rows ETL + RPC unaccent + MedNameInput 3-fontes) + 9 bug-fixes P1/P2 (#253b email wordmark, #254b self-patient signup, #255 idle skeleton token expirado, #256b SOS submit window.confirm Capacitor, #257b lockAcquireTimeout, #258b sharing Dashboard RPC, #264 dose passada create_treatment, #265 count exato, #266 PatientDetail insertEntityIntoLists, #267 Dashboard skeleton hour boundary). QA completo Chrome MCP localhost teste-plus@. **5 P2-P4 abertos próxima release:** #259 (Reports Cancelada), #260 (console errors `[object Object]`), #261 (SOS horário en-US format), #262 (Ad acima header), #263 (1 dias termina hoje). Tag `v0.2.3.6` commit `348eff7` merge master. AAB vc 69 publicado.
 

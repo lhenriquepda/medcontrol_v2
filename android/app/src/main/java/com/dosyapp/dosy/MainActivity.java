@@ -61,19 +61,30 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Item #081 (release v0.1.7.1) — agenda DoseSyncWorker periódico (6h).
-     * Worker fetcha doses pendentes próximas 72h via Supabase REST e agenda
-     * alarmes nativos via setAlarmClock(). Idempotente (KEEP policy reusa
-     * registro existente, seguro chamar em todo onCreate).
+     * Item #081 (release v0.1.7.1) — agenda DoseSyncWorker periódico.
+     * Worker fetcha doses pendentes próximas 48h via Supabase REST e agenda
+     * alarmes nativos via setAlarmClock(). Idempotente — AlarmScheduler.scheduleDose
+     * agora verifica SharedPrefs antes de chamar AlarmManager (#282 v0.2.3.7),
+     * skip se mesmo id já tem triggerAt + dosesHash iguais.
+     *
+     * v0.2.3.7 #282 — período 6h → 24h. Conjunto com server-side cron
+     * daily-alarm-sync (5am UTC). Worker é backup local pra cobrir Samsung
+     * Adaptive Battery / Doze profundo que matam aplicativo por 3+ dias
+     * inatividade. 1×/dia mantém aplicativo "ativo" aos olhos do sistema +
+     * realimenta cache de alarmes locais (recovery se Samsung os esqueceu).
+     * Sem storm: AlarmScheduler idempotent skipa reagendamento se igual.
      */
     private void enqueueDoseSyncWorker() {
         try {
             PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
-                DoseSyncWorker.class, 6, TimeUnit.HOURS
+                DoseSyncWorker.class, 24, TimeUnit.HOURS
             ).build();
+            // v0.2.3.7 #282 — REPLACE policy força adoção do novo intervalo 24h.
+            // KEEP manteria registro 6h antigo de instalações existentes.
+            // Idempotência runtime preservada via AlarmScheduler skip-if-same.
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "dosy-dose-sync",
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.REPLACE,
                 req
             );
         } catch (Exception e) {
@@ -94,7 +105,25 @@ public class MainActivity extends BridgeActivity {
      *   alarmAction → tap em botão dentro do AlarmActivity (legado, não usado mais)
      */
     private void handleAlarmAction(Intent intent) {
-        if (intent == null) return;
+        if (intent == null) {
+            android.util.Log.i("MainActivity", "[handleAlarmAction] intent=null");
+            return;
+        }
+
+        // v0.2.3.7 #280 debug — dump ALL extras to identify FCM tap intent shape
+        android.os.Bundle extras = intent.getExtras();
+        if (extras != null) {
+            StringBuilder sb = new StringBuilder("[handleAlarmAction] extras: ");
+            for (String key : extras.keySet()) {
+                Object v = extras.get(key);
+                String vs = v == null ? "null" : v.toString();
+                if (vs.length() > 60) vs = vs.substring(0, 60) + "…";
+                sb.append(key).append("=").append(vs).append("; ");
+            }
+            android.util.Log.i("MainActivity", sb.toString());
+        } else {
+            android.util.Log.i("MainActivity", "[handleAlarmAction] no extras");
+        }
 
         String openDoseIds = intent.getStringExtra("openDoseIds");
         if (openDoseIds != null) {
@@ -112,13 +141,42 @@ public class MainActivity extends BridgeActivity {
             postJsEvent("dosy:openDose", "doseId", openDoseId);
             return;
         }
+
+        // v0.2.3.7 Bug B fix — FCM share notification tap branch.
+        // Edge `patient-share-handler` sends data.kind=patient_share_added +
+        // data.patientId. App navigates to /pacientes/:id on tap.
+        String kind = intent.getStringExtra("kind");
+        if ("patient_share_added".equals(kind)) {
+            String patientId = intent.getStringExtra("patientId");
+            if (patientId != null) {
+                intent.removeExtra("kind");
+                intent.removeExtra("patientId");
+                postJsEvent("dosy:openPatient", "patientId", patientId);
+                return;
+            }
+        }
+
+        // FCM fire-time tap fallback — data.doseId present even though
+        // openDoseId may be null on some Android FCM intent serialization paths.
+        String doseId = intent.getStringExtra("doseId");
+        String fcmKind = kind != null ? kind : intent.getStringExtra("kind");
+        if (doseId != null && ("dose_fire_time".equals(fcmKind) || fcmKind == null)) {
+            intent.removeExtra("doseId");
+            AlarmService.stopActiveAlarm(this);
+            postJsEvent("dosy:openDose", "doseId", doseId);
+            return;
+        }
     }
 
     private void postJsEvent(String eventName, String key, String value) {
         // Set global var IMMEDIATELY (covers cold start: JS reads on mount)
         // Plus dispatch event with retries (covers warm start: listener already bound)
         String safeVal = value.replace("'", "\\'");
-        String varName = key.equals("doseIds") ? "__dosyPendingDoseIds" : "__dosyPendingDoseId";
+        // v0.2.3.7 Bug B fix — support patientId var alongside doseId/doseIds.
+        String varName;
+        if ("doseIds".equals(key)) varName = "__dosyPendingDoseIds";
+        else if ("patientId".equals(key)) varName = "__dosyPendingPatientId";
+        else varName = "__dosyPendingDoseId";
         String setVar = String.format("window.%s = '%s';", varName, safeVal);
         String dispatch = String.format(
             "window.dispatchEvent(new CustomEvent('%s', { detail: { %s: '%s' } }));",

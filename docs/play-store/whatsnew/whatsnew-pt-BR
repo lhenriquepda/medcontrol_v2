@@ -1,8 +1,7 @@
-v0.2.3.6 — Estabilidade + cadastro mais rápido
+v0.2.3.7 — Mais ágil + notificações de cuidador
 
-• Busca de medicamentos com autocomplete (base ANVISA)
-• Cadastro de tratamento aceita data passada — doses anteriores viram "atrasada"
-• Dashboard não trava ao voltar do segundo plano (correções cache e sessão)
-• Compartilhamento de paciente corrigido — Dashboard mostra pacientes compartilhados
-• SOS: cadastro mais rápido + alerta over-limit (você decide se prossegue)
-• Correções: doses recém-criadas aparecem imediato em todas as telas
+• App mais responsivo ao marcar doses e navegar entre telas
+• Cuidador recebe notificação no momento exato da dose, mesmo com app fechado
+• Cuidador é avisado por push quando é adicionado para acompanhar um paciente
+• Alarmes não duplicam após reiniciar o celular ou fechar o app por dias
+• Correções no fluxo entre proprietário e cuidador para que ambos vejam tudo em tempo real

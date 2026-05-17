@@ -114,22 +114,48 @@ async function getRecipientUserIds(patientId: string, ownerId: string): Promise<
   return Array.from(recipients)
 }
 
-async function sendFcmTo(deviceToken: string, dataPayload: Record<string, string>): Promise<boolean> {
+// v0.2.3.7 #279 fix-caregiver-fcm:
+// `notification` payload opcional pra cuidador. Garante Android tray render IMEDIATO
+// mesmo se DosyMessagingService deferred por Doze/AppStandby. Owner mantém data-only
+// (próprio app já tá ativo, alarme local agendado direto sem precisar de tray).
+async function sendFcmTo(
+  deviceToken: string,
+  dataPayload: Record<string, string>,
+  notification?: { title: string; body: string },
+  collapseKey?: string
+): Promise<boolean> {
   const accessToken = await getFcmAccessToken()
+  // deno-lint-ignore no-explicit-any
+  const androidCfg: any = { priority: 'HIGH' }
+  // v0.2.3.7 Bug B fix — collapseKey unique per dose prevents Android merge
+  // between "Dose programada" (this path) + "Hora da dose" (fire-time) trays.
+  // Without it, tap on merged group loses data extras → MainActivity sees
+  // intent.getExtras() == null. Set collapseKey only for caregiver notification
+  // path (owner data-only path doesn't render tray, so collapseKey moot).
+  if (collapseKey) androidCfg.collapseKey = collapseKey
+  // deno-lint-ignore no-explicit-any
+  const message: any = { token: deviceToken, data: dataPayload, android: androidCfg }
+  if (notification) {
+    message.notification = notification
+    // android.notification omitted — FCM v1 API doesn't accept `priority` here
+    // (campo é message.android.priority já set). Channel_id também omitted —
+    // default FCM channel usado, garante delivery em device force-stopped onde
+    // `dosy_tray` custom channel pode não ter sido criado pelo JS path.
+  }
   try {
     const resp = await fetch(
       `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT}/messages:send`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: { token: deviceToken, data: dataPayload, android: { priority: 'HIGH' } }
-        })
+        body: JSON.stringify({ message })
       }
     )
     if (resp.ok) return true
     const err = await resp.text()
-    if (resp.status === 404 || err.includes('UNREGISTERED') || err.includes('INVALID_ARGUMENT')) {
+    // Fix: NÃO deletar token em INVALID_ARGUMENT (pode ser payload error, não
+    // token error). Só deletar quando explicitamente UNREGISTERED ou 404 not-found.
+    if (resp.status === 404 || err.includes('UNREGISTERED') || err.includes('registration-token-not-registered')) {
       await supabase.from('push_subscriptions').delete().eq('deviceToken', deviceToken)
     }
     return false
@@ -385,7 +411,11 @@ Deno.serve(async (req) => {
     const data: Record<string, string> = {
       action: 'schedule_alarms',
       doses: JSON.stringify(dosePayload),
-      source_scenario: 'dose_inserted_or_updated'
+      source_scenario: 'dose_inserted_or_updated',
+      // openDoseId matches MainActivity.handleAlarmAction Intent extra key →
+      // existing JS handler (App.jsx dosy:openDose) opens DoseModal on tap.
+      // Used by caregiver path (isOwner=false) — owner relies on AlarmActivity.
+      openDoseId: doseId
     }
 
     const recipients = await getRecipientUserIds(patientId, ownerId)
@@ -412,8 +442,26 @@ Deno.serve(async (req) => {
         .not('deviceToken', 'is', null)
       if (!subs?.length) continue
 
+      // v0.2.3.7 #279 fix-caregiver-fcm:
+      // Pra cuidador (isOwner=false) incluir `notification` payload junto com data.
+      // Android renderiza tray IMEDIATO via notification path, bypassing Doze/AppStandby
+      // delay que afeta data-only delivery (observed delay ~2.5min Pixel9Pro emulator;
+      // em Samsung One UI 7 production pode chegar HORAS no Restricted bucket).
+      // Owner mantém data-only — próprio app ativo, alarme local agendado sem precisar tray.
+      const isOwner = userId === ownerId
+      const notification = isOwner ? undefined : {
+        title: `Dose programada — ${patient?.name || 'paciente'}`,
+        body: `${record.medName} às ${new Date(record.scheduledAt).toLocaleTimeString('pt-BR', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'
+        })}`
+      }
+
+      // collapseKey only for caregiver (notification path) — unique per dose
+      // prevents Android merging "Dose programada" + "Hora da dose" trays
+      // for same dose. Owner path stays without collapseKey (data-only, no tray).
+      const collapseKey = isOwner ? undefined : `fire_${doseId}`
       for (const sub of subs) {
-        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload })
+        const ok = await sendFcmTo(sub.deviceToken, { ...data, prefs: prefsPayload }, notification, collapseKey)
         if (ok) sent++; else errors++
 
         if (auditEnabledUsers.has(userId)) {

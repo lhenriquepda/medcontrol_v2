@@ -11,11 +11,12 @@ import PageHeader from '../components/dosy/PageHeader'
 import PatientAvatar from '../components/PatientAvatar'
 import { usePatients } from '../hooks/usePatients'
 import { pruneStalePhotoCaches } from '../hooks/usePatientPhoto'
-import { usePatientLimitReached, useMyTier, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
+import { usePatientLimitReached, useMyTier, useOwnPatientCount, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
 
 export default function Patients() {
   const { data: patients = [], isLoading } = usePatients()
   const limitReached = usePatientLimitReached()
+  const ownCount = useOwnPatientCount()
   const { data: tier } = useMyTier()
   const [paywall, setPaywall] = useState(false)
   const nav = useNavigate()
@@ -42,7 +43,7 @@ export default function Patients() {
       <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
 
-        {tier === 'free' && patients.length > 0 && (
+        {tier === 'free' && ownCount > 0 && (
           <button
             type="button"
             onClick={() => setPaywall(true)}
@@ -60,7 +61,7 @@ export default function Patients() {
           >
             <Info size={18} strokeWidth={1.75}/>
             <div style={{ flex: 1, fontSize: 12.5, fontWeight: 600, lineHeight: 1.4 }}>
-              Plano Free: {patients.length}/{FREE_PATIENT_LIMIT} paciente.{' '}
+              Plano Free: {ownCount}/{FREE_PATIENT_LIMIT} paciente.{' '}
               <span style={{ textDecoration: 'underline' }}>Conhecer Pro</span>
             </div>
           </button>

@@ -1,12 +1,20 @@
 package com.dosyapp.dosy.plugins.criticalalarm;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 
 import com.capacitorjs.plugins.pushnotifications.MessagingService;
+import com.dosyapp.dosy.MainActivity;
+import com.dosyapp.dosy.R;
 import com.google.firebase.messaging.RemoteMessage;
 
 import org.json.JSONArray;
@@ -63,6 +71,21 @@ public class DosyMessagingService extends MessagingService {
                 return;
             } catch (Exception e) {
                 Log.e(TAG, "schedule_alarms handler error: " + e.getMessage(), e);
+            }
+        }
+
+        // v0.2.3.7 Bug B fix — fire-time caregiver tray rendered IN-APP com
+        // PendingIntent customizado contendo openDoseId. FCM SDK auto-render
+        // não propaga data extras pro MainActivity tap (click_action insuficiente).
+        // Renderizando aqui com explicit Intent + PutExtra garante tap fires
+        // handleAlarmAction com openDoseId presente → JS modal abre.
+        String kind = data != null ? data.get("kind") : null;
+        if ("dose_fire_time".equals(kind)) {
+            try {
+                handleFireTimeNotification(remoteMessage);
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "fire_time handler error: " + e.getMessage(), e);
             }
         }
 
@@ -244,4 +267,85 @@ public class DosyMessagingService extends MessagingService {
     // v0.2.2.4 (#214) — REMOVIDO método reportAlarmScheduled().
     // Tabela dose_alarms_scheduled órfã pós-#209 (notify-doses-1min cron removido).
     // alarm_audit_log v0.2.2.0 substitui rastreio completamente.
+
+    /**
+     * v0.2.3.7 Bug B fix — render fire-time notification IN-APP com PendingIntent
+     * customizado contendo openDoseId extra. Tap dispara MainActivity.handleAlarmAction
+     * com extras corretos → JS event dosy:openDose → DoseModal abre.
+     *
+     * Payload esperado (data-only ou notification+data, ambos OK):
+     *   data.kind = "dose_fire_time"
+     *   data.openDoseId = "<uuid>"
+     *   data.patientId / data.medName / data.scheduledAt (optional, for UI)
+     *
+     * Notification fields (title/body) lidos de remoteMessage.getNotification()
+     * se presente, senão fallback usando data.medName + data.scheduledAt.
+     */
+    private void handleFireTimeNotification(RemoteMessage msg) {
+        Map<String, String> data = msg.getData();
+        String openDoseId = data.get("openDoseId");
+        if (openDoseId == null) openDoseId = data.get("doseId");
+        if (openDoseId == null) {
+            Log.w(TAG, "fire_time: missing openDoseId, skip render");
+            return;
+        }
+
+        String title;
+        String body;
+        RemoteMessage.Notification notif = msg.getNotification();
+        if (notif != null && notif.getTitle() != null) {
+            title = notif.getTitle();
+            body = notif.getBody() != null ? notif.getBody() : "";
+        } else if (data.containsKey("title")) {
+            // v0.2.3.7 v6 — data-only FCM payload com title/body em data fields
+            title = data.get("title");
+            body = data.getOrDefault("body", "");
+        } else {
+            String medName = data.getOrDefault("medName", "Medicamento");
+            title = "Hora da dose";
+            body = medName;
+        }
+
+        ensureFireTimeChannel();
+
+        // Build Intent → MainActivity com openDoseId extra (handleAlarmAction reads).
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra("openDoseId", openDoseId);
+        intent.setAction("com.dosyapp.dosy.DOSE_FIRE_TIME_TAP_" + openDoseId);
+
+        // Unique requestCode per dose pra PendingIntent não compartilhar entre doses.
+        int requestCode = openDoseId.hashCode();
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getActivity(this, requestCode, intent, flags);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "dosy_tray")
+            .setSmallIcon(R.drawable.ic_stat_dosy)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(pi)
+            .setAutoCancel(true);
+
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            int notifId = ("fire_" + openDoseId).hashCode();
+            nm.notify("fire_" + openDoseId, notifId, builder.build());
+            Log.i(TAG, "fire_time tray rendered openDoseId=" + openDoseId);
+        }
+    }
+
+    private void ensureFireTimeChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel existing = nm.getNotificationChannel("dosy_tray");
+        if (existing == null) {
+            NotificationChannel ch = new NotificationChannel("dosy_tray", "Lembretes de Dose", NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription("Lembretes de doses agendadas");
+            nm.createNotificationChannel(ch);
+        }
+    }
 }
