@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, useRef } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
@@ -100,6 +100,11 @@ export default function App() {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
+  // v0.2.3.9 P3 — pathname ref atualizado pra closures de listeners persistentes
+  // (notif tap + back button). Evita rebind dos listeners a cada navegação.
+  const pathnameRef = useRef(location.pathname)
+  useEffect(() => { pathnameRef.current = location.pathname }, [location.pathname])
+
   // Auto-prompt notif permissions on first login (once per user per device)
   // Note: subscribe activates LOCAL CriticalAlarm + LocalNotifications scheduling.
   // FCM register happens inside but server-side push is suppressed (no foreground
@@ -186,20 +191,32 @@ export default function App() {
     return () => { cancelled = true }
   }, [])
 
-  // v0.2.2.2 (#212) — signature guard previne storm rescheduleAll. Audit
-  // v0.2.2.0 revelou: useDoses refetch (disparado por realtime watchdog +
-  // invalidations) retorna new array ref a cada call MESMO QUANDO conteúdo
-  // idêntico. structuralSharing TanStack helps mas timestamps microsec
-  // diferem. useEffect dep `allDoses` flipa identity → scheduleDoses fires
-  // → storm 1/min. Signature por id+status+scheduledAt detecta mudança real.
+  // v0.2.3.9 P6 — signature simplificada via length + XOR hash. Antes:
+  // map+sort+join O(N log N) sobre todos os ids. Agora hash linear O(N)
+  // sem alocação intermediária. Mesma propriedade: muda quando algum id/
+  // status/scheduledAt muda; estável quando nada relevante mudou.
   const dosesSignature = useMemo(() => {
     if (!dosesLoaded) return ''
-    // Sort + serialize só campos que importam pra scheduling.
-    // mudanças em campos não-sched (medName, etc) NÃO retrigger scheduleDoses.
-    return (allDoses || [])
-      .map(d => `${d.id}:${d.status}:${d.scheduledAt}`)
-      .sort()
-      .join('|')
+    const arr = allDoses || []
+    if (arr.length === 0) return '0:0'
+    // Hash rolling sem sort. Cada dose contribui via FNV-1a-style mixing.
+    // status convertido a int (pending=1, done=2, skipped=3, overdue=4, cancelled=5, outros=0)
+    // scheduledAt convertido a timestamp ms.
+    const statusInt = { pending: 1, done: 2, skipped: 3, overdue: 4, cancelled: 5 }
+    let hash = 2166136261 // FNV offset
+    for (let i = 0; i < arr.length; i++) {
+      const d = arr[i]
+      // Mix id (string hash via charCode sum), status int, scheduledAt ms
+      const idStr = String(d.id || '')
+      let idH = 0
+      for (let j = 0; j < idStr.length; j++) idH = (idH * 31 + idStr.charCodeAt(j)) | 0
+      const sInt = statusInt[d.status] || 0
+      const tMs = d.scheduledAt ? Date.parse(d.scheduledAt) : 0
+      hash ^= idH; hash = Math.imul(hash, 16777619)
+      hash ^= sInt; hash = Math.imul(hash, 16777619)
+      hash ^= tMs; hash = Math.imul(hash, 16777619)
+    }
+    return `${arr.length}:${hash}`
   }, [allDoses, dosesLoaded])
 
   const patientsSignature = useMemo(() => {
@@ -239,7 +256,7 @@ export default function App() {
         if (!extra) return
         if (extra.type === 'dailySummary') {
           setShowSummary(true)
-          if (location.pathname !== '/') navigate('/')
+          if (pathnameRef.current !== '/') navigate('/')
         } else if (extra.doseIds) {
           // Grouped (multi) — open queue
           navigate(`/?doses=${extra.doseIds}`)
@@ -316,7 +333,8 @@ export default function App() {
       pushFgHandle?.remove?.()
       localFireHandle?.remove?.()
     }
-  }, [user, navigate, location.pathname])
+    // v0.2.3.9 P3 — removido location.pathname dos deps; pathnameRef cobre via closure
+  }, [user, navigate])
 
   // ─── Open DoseModal quando user toca notif persistente do alarme ──────
   useEffect(() => {
@@ -381,7 +399,7 @@ export default function App() {
     let listenerHandle
     const setup = async () => {
       listenerHandle = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-        if (canGoBack && location.pathname !== '/') {
+        if (canGoBack && pathnameRef.current !== '/') {
           navigate(-1)
         } else {
           CapacitorApp.exitApp()
@@ -390,7 +408,8 @@ export default function App() {
     }
     setup()
     return () => { listenerHandle?.remove() }
-  }, [location.pathname, navigate])
+    // v0.2.3.9 P3 — pathnameRef cobre via closure; listener registra 1× só
+  }, [navigate])
 
   // Deep link callbacks (Capacitor):
   //   - dosy://auth/callback?code=...  (OAuth — Google/Facebook future)

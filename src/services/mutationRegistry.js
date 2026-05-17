@@ -49,25 +49,15 @@ const makeTempId = () => `${TEMP_ID_PREFIX}${uuid()}`
 // Sem isso, FK violation server-side → mutation status=error → descarta.
 let _qcRef = null
 
-// ─── helpers cache patch (movidos de useDoses.js — mesmas semânticas) ───
+// ─── helpers cache patch ───────────────────────────────────────────
+// v0.2.3.9 P4 — dual namespace eliminado. Dashboard agora lê APENAS
+// `['dashboard-payload', *].doses` (RPC consolidado é a única fonte).
+// useDashboardPayload (P4 part 2) deixou de escrever em `['doses', *]`,
+// logo só `['dashboard-payload']` precisa ser patchado aqui. Outras telas
+// (DoseHistory, Reports) que usam useDoses(filter) refetcham on-mount.
 function patchDoseInCache(qc, id, patch) {
-  // findAll() em vez de setQueriesData partial key — mais confiável em v5
-  const queries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
-  const snapshots = queries.map((q) => [q.queryKey, q.state.data])
-  for (const q of queries) {
-    const data = q.state.data
-    if (!Array.isArray(data)) continue
-    qc.setQueryData(
-      q.queryKey,
-      data.map((d) => (d.id === id ? { ...d, ...patch } : d))
-    )
-  }
-  // v0.2.3.5 #239 fix — v0.2.3.4 #163 introduziu cache ['dashboard-payload', ...]
-  // que Dashboard usa via useDashboardPayload (RPC consolidado). patch não chegava
-  // lá → user clicava Skip, optimistic atualizava ['doses', ...] mas Dashboard lia
-  // payload.doses do cache dashboard-payload separado → UI mostrava dose ainda
-  // pending, permitia click skip novamente. Patchar ambos caches resolve.
   const dpQueries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+  const snapshots = []
   for (const q of dpQueries) {
     const data = q.state.data
     if (!data || !Array.isArray(data.doses)) continue
@@ -76,6 +66,18 @@ function patchDoseInCache(qc, id, patch) {
       ...data,
       doses: data.doses.map((d) => (d.id === id ? { ...d, ...patch } : d))
     })
+  }
+  // Também patcha `['doses', *]` se houver (DoseHistory aberto, etc) —
+  // findAll retorna [] se nenhum consumidor ativo, custo zero.
+  const queries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
+  for (const q of queries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    snapshots.push([q.queryKey, data])
+    qc.setQueryData(
+      q.queryKey,
+      data.map((d) => (d.id === id ? { ...d, ...patch } : d))
+    )
   }
   return snapshots
 }
@@ -137,8 +139,9 @@ let _refetchDosesTimer = null
 function refetchDoses(qc) {
   if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
   _refetchDosesTimer = setTimeout(() => {
-    qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
-    // v0.2.3.5 #239 — invalidate dashboard-payload também (Dashboard usa RPC consolidado)
+    // v0.2.3.9 P4 — invalida só dashboard-payload (single source of truth).
+    // ['doses', *] consumers que estiverem ativos (DoseHistory/Reports) decidem
+    // refetch via staleTime próprio. Reduz RPCs por mutação 2× → 1×.
     qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     _refetchDosesTimer = null
   }, 2000)

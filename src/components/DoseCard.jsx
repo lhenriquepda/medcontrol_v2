@@ -100,7 +100,7 @@ function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
 
   const renderInner = (bare = false) => (
     <button
-      onClick={() => { if (Math.abs(delta) < 4) onClick?.() }}
+      onClick={() => { if (Math.abs(delta) < 4) onClick?.(dose) }}
       className="dosy-press"
       style={{
         width: '100%', textAlign: 'left',

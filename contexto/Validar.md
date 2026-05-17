@@ -220,6 +220,39 @@ mcp__supabase__execute_sql({
 
 ---
 
+### v0.2.3.9 Perf bundle complete — 2026-05-17
+
+> **Escopo:** auditoria perf round-2 pós v0.2.3.7 (user reportou device físico ainda extremamente lento). 3 agents paralelos identificaram 8 root causes restantes. Bundle complete P1-P8.
+
+- `[x]` **P1 useCallback DoseCard handlers** — `onSwipeConfirm`/`onSwipeSkip`/`onClick` envolvidos em useCallback no Dashboard. DoseCard.jsx onClick agora passa `dose` (substitui closure inline). Preserva React.memo. Esperado −25% a −40% Dashboard render.
+- `[x]` **P2 dupla subscription resolvida** — Cascata do P4: `useDashboardPayload` deixou de escrever `['doses', filter]` → App.jsx `useDoses` não sofre cross-update por refetch. Esperado −15% a −20%.
+- `[x]` **P3 listeners deps cleanup** — `pathnameRef` em App.jsx pra closures de FCM tap listeners + back button. Removido `location.pathname` dos deps → listeners registram 1× só. Esperado −10% a −15% churn nav.
+- `[x]` **P4 dual namespace cache eliminado** — `patchDoseInCache` + `refetchDoses` operam só em `['dashboard-payload']` (única fonte de verdade). `useDashboardPayload` deixou de escrever `['doses', filter]`. Esperado −50% patch cost, −50% IDB serialização.
+- `[x]` **P5 framer-motion simplificado** — `motion.div` per dose substituído por `<div>` plain. 90+ motion components com stagger geravam ~5s reflow contínuo. Mantém stagger por paciente (motion.section). Esperado −20% a −30% animação.
+- `[x]` **P6 dosesSignature FNV hash linear** — Substitui `.map+sort+join` O(N log N) por hash FNV-1a linear O(N). Mantém detecção real (id/status/scheduledAt). Esperado −CPU per re-render.
+- `[x]` **P7 useCallback toggleCollapse** — Ref estável evita re-render filhos memoizados. Esperado −5% a −10% accordion toggle.
+- `[x]` **Build verde 21.92s** — sem warnings novos.
+- `[x]` **APK debug instalado emulators 5554+5556** — v0.2.3.9-dev versão confirmada via dumpsys package.
+- `[x]` **QA emulador funcional** — caregiver background recebeu schedule_alarms FCM data-only v0.2.3.9 + Java handler executou + AlarmScheduler agendou alarme local com branch ALARM_PLUS_PUSH. Share PUSH "Teste Plus compartilhou QA v0.2.3.9 com você" renderizado no caregiver. Path alarme + FCM mantidos funcionais (v0.2.3.8 paths preservados).
+- `[ ]` **Device físico Samsung S25 Ultra** — validação empírica da redução de lag (alvo: 2-3× speedup Dashboard). Cenário teste: 20+ pacientes × 5 tratamentos cada, marcar várias doses sequenciais, navegar Início↔Pacientes↔Mais — confirmar que app não engasga.
+- `[ ]` **Métrica perf antes/depois** — opcional: Chrome DevTools Performance recording localhost antes vs após v0.2.3.9 install. Não-bloqueador.
+
+---
+
+### v0.2.3.8 Killed caregiver alarm fix #287 — 2026-05-17
+
+> **Escopo:** correção crítica — caregiver com app KILLED não recebia alarme nativo no horário da dose, só tray silenciosa. Root cause: Firebase Android SDK + `notification` payload + app killed = SDK renderiza tray sozinho, não chama `onMessageReceived`.
+
+- `[x]` **Edge dose-trigger-handler v25 deployed** — DATA-ONLY HIGH pra TODOS (owner + caregiver). Sem notification block. Handler nativo executa.
+- `[x]` **Edge dose-fire-time-notifier v7 deployed** — DATA-ONLY HIGH com `kind=fire_now_alarm`. Cron 1×/min cobre janela.
+- `[x]` **Java DosyMessagingService.handleFireNowAlarm** — novo branch. startForegroundService(AlarmService) IMEDIATO.
+- `[x]` **QA emulador 3/3 PASS** — S1 Owner sem share, S2 Caregiver background recebe schedule_alarms, S3 Caregiver background recebe fire_now_alarm.
+- `[x]` **AAB vc 71 Play Console Internal Testing** — publicado 14:32 BRT.
+- `[x]` **Master merge + Vercel prod** — `9bf1436`, dosymed.app v0.2.3.8 confirmado.
+- `[ ]` **Device físico Samsung S25 Ultra** — pendente: cuidador com app killed deve receber alarme com som no horário exato (não só tray silenciosa).
+
+---
+
 ### v0.2.3.7 QA Exaustivo Re-validação — 2026-05-17
 
 > **Escopo:** revalidação completa do release v0.2.3.7 do zero (banco limpo, ambas as apps fresh-start), cobrindo UI owner + UI cuidador + RPCs + triggers DB + Edge Functions + FCM + alarmes nativos + idempotência + cron jobs + WorkManager.

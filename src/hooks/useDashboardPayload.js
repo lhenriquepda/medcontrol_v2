@@ -74,33 +74,22 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     }
   }, [query.isSuccess, query.data])
 
-  // Side-effect: popula caches individuais quando payload chega.
-  // Outras telas (Patients, Treatments, DoseHistory) que usam hooks separados
-  // pegam cache fresh sem refetch quando mount após Dashboard.
+  // v0.2.3.9 P4 — dual write removido. Antes populava ['doses', filter] também,
+  // criando duplo namespace que dobrava custo de patch/invalidate por mutação +
+  // serializava 2× no IDB. Agora payload.doses fica APENAS em ['dashboard-payload', *]
+  // (single source of truth). ['patients'] + ['treatments', {}] mantidos —
+  // são caches pequenos sem patch-heavy hot path.
   useEffect(() => {
     if (!query.data) return
-    const { patients, treatments, doses } = query.data
+    const { patients, treatments } = query.data
 
     if (Array.isArray(patients)) {
       qc.setQueryData(['patients'], patients)
     }
     if (Array.isArray(treatments)) {
-      // useTreatments({}) é a queryKey padrão (sem filter)
       qc.setQueryData(['treatments', {}], treatments)
     }
-    if (Array.isArray(doses)) {
-      // Aplica recomputeOverdue + popula cache useDoses(filter) padrão Dashboard
-      const computed = recomputeOverdueDoses(doses)
-      qc.setQueryData(['doses', {
-        from: roundToHour(from),
-        to: roundToHour(to),
-        patientId: undefined,
-        status: undefined,
-        type: undefined,
-        withObservation: false
-      }], computed)
-    }
-  }, [query.data, qc, from, to])
+  }, [query.data, qc])
 
   // Expose recomputed doses diretamente (sem precisar caller fazer)
   const dosesComputed = useMemo(() => {

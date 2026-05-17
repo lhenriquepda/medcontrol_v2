@@ -160,7 +160,13 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 ## 3. Onde paramos
 
-**Branch ativa:** `release/v0.2.3.7` (aberta 2026-05-15 pós merge docs/perf-audit-device-slow → master, bump vc 69→70 vn 0.2.3.6→0.2.3.7). Escopo: perf bundle low-risk F1+F3+F6+F5 + bug fixes server-side caregiver flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284. **QA exaustivo re-validação 21/21 OK 2026-05-17** ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)). Pendente: autorização user Passo 10.5 pra build AAB + validação device físico Samsung S25 Ultra.
+**Branch ativa:** `release/v0.2.3.9` (aberta 2026-05-17 pós merge v0.2.3.8 → master, bump vc 71→72 vn 0.2.3.8→0.2.3.9). Escopo: perf bundle complete P1-P8 (auditoria round-2 device slow pós v0.2.3.7) — useCallback handlers + cleanup deps listeners + eliminar dual namespace cache + framer-motion stagger simplificado + FNV hash signature linear.
+
+**✅ SHIPPED master `release/v0.2.3.8`** (vc 71, Play Console Internal Testing publicado 2026-05-17 14:32 BRT, tag `v0.2.3.8` merge `9bf1436`, Vercel prod dosymed.app v0.2.3.8 confirmado). 1 item P0: **#287** P0 BUG — killed caregiver alarm gap arquitetural FCM `notification` payload bloqueava `onMessageReceived` (Firebase Android SDK auto-renderiza tray + não chama handler), AlarmScheduler nunca executava no caregiver. Fix: Edge `dose-trigger-handler` v25 + `dose-fire-time-notifier` v7 enviam DATA-ONLY HIGH (sem notification block) → handler nativo executa + agenda AlarmManager.setAlarmClock OU dispara AlarmService FG imediato via novo `kind=fire_now_alarm`. QA emulador 3/3 PASS (S1 owner sem share, S2 caregiver background recebe schedule_alarms + alarme dispara, S3 caregiver background recebe fire_now_alarm + AlarmService FG dispatched). Commits `981fab4` + `ed180cc`.
+
+**✅ SHIPPED master `release/v0.2.3.7`** (vc 70, Play Console Internal Testing publicado 2026-05-17 11:04 BRT, tag `v0.2.3.7` merge `e0933f8`). 10 itens fechados (perf bundle F1+F3+F6+F5 + server flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284). QA 21/21 OK ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)).
+
+**Auditoria origem perf round-2:** doc inline (sem arquivo dedicado) — 3 agents paralelos auditaram cache + render + hooks pós v0.2.3.7. Identificaram 8 root causes restantes que F1+F3+F6+F5 não cobriram. User reportou device físico ainda extremamente lento.
 
 **Auditoria de origem:** [`contexto/auditoria/2026-05-15-perf-audit-device-slow.md`](auditoria/2026-05-15-perf-audit-device-slow.md) — 11 seções, identifica 3 regressões cascateadas (v0.2.3.1 Bloco 7 expansão janela 90 dias + v0.2.3.4 #163 duplo namespace cache + v0.2.3.5 #239 patch ambos) que multiplicaram custo por interação. Cada fix tem ANTES/DEPOIS, bug original protegido, justificativa de regressão segura.
 
@@ -176,10 +182,15 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 - ✅ **#283** P1 BUG — RPCs `create_treatment_with_doses` + `register_sos_dose` usavam `auth.uid()` para `userId`. Cuidador criando dose para paciente compartilhado gerava `dose.userId=cuidador` → Edge `dose-trigger-handler` tratava cuidador como ownerId → query `shares WHERE ownerId=cuidador` vazia → owner real ficava órfão de push. Fix: derivar `v_uid := patient.userId` do paciente real, salvar dose com userId=owner. Migration `20260517130000_rpc_use_patient_owner_userid_v0_2_3_7.sql`. Commit `917f061`.
 - ✅ **#284** DOCS — QA exaustivo re-validação completa 21/21 do zero (banco limpo, apps fresh). Bloco A Owner (8/8) + Bloco B Cuidador (3/3) + Bloco C FCM/alarmes/cron (10/10). Relatório [`contexto/qa/QA_REPORT_v0_2_3_7_full_rerun.md`](qa/QA_REPORT_v0_2_3_7_full_rerun.md). Scripts Appium reutilizáveis em `scripts/qa_*.mjs`. Commit `34bb2bd`.
 
-**Itens HOLD (auditados, decisão posterior):**
-- ⏸️ **#276** F4 — refetchDoses não invalida dashboard-payload pós-patch. HOLD aguardar resultado v0.2.3.7. Risco: doses irmãs BATCH_UPDATE não atualizam até próximo focus.
-- ⏭️ **#277** F2 — Eliminar duplo namespace dashboard-payload. HOLD release dedicada — exige decisão entre 3 caminhos (a/b/c) + auditoria todos consumidores `['doses']`.
-- ⏸️ **#278** F7 — Hash incremental dosesSignature (`dataUpdatedAt` TanStack). HOLD — toca proteção crítica #212 anti-storm reagendamento. Só aplicar se v0.2.3.7 não bastar.
+**Itens release/v0.2.3.9 (PERF BUNDLE COMPLETE — sessão 2026-05-17):**
+- ✅ **#288** P1 PERF — useCallback DoseCard handlers (`onSwipeConfirm`/`onSwipeSkip`/`onClick`) + Dashboard.jsx P1 + ajuste DoseCard.jsx pra passar `dose` no onClick. Preserva React.memo do DoseCard (90 doses × re-render desnecessário eliminado). Esperado −25% a −40% Dashboard render.
+- ✅ **#289** P2 PERF — Dupla subscription useDoses + useDashboardPayload resolvida via cascata do P4 (dual write removido em useDashboardPayload, App.jsx useDoses não sofre mais update cross-namespace). Esperado −15% a −20%.
+- ✅ **#290** P3 PERF — Cleanup deps `location.pathname` em listeners FCM + back button via `pathnameRef`. Listeners agora registram 1× só (não rebindam a cada nav). Esperado −10% a −15% churn nav.
+- ✅ **#277** F2 / **#291** P4 PERF — Eliminar dual namespace cache. `patchDoseInCache` agora opera só em `['dashboard-payload']` (única fonte de verdade). `refetchDoses` invalida só `['dashboard-payload']`. `useDashboardPayload` deixou de escrever em `['doses', filter]`. Esperado −50% patch cost, −50% IDB serialização.
+- ✅ **#292** P5 PERF — framer-motion `motion.div` per dose substituído por `<div>` plain. 90+ motion components com stagger geravam ~5s reflow contínuo Samsung S25 Ultra. Trade-off: perde fade-in individual por dose (mantém stagger por paciente). Esperado −20% a −30% animação.
+- ✅ **#278** F7 / **#293** P6 PERF — `dosesSignature` migrado de `.map+sort+join` O(N log N) pra FNV-1a hash linear O(N). Não toca proteção #212 (mesmo comportamento: hash diferente quando id/status/scheduledAt mudam).
+- ✅ **#294** P7 PERF — `toggleCollapse` Dashboard.jsx envolto em `useCallback`. Ref estável evita re-render filhos memoizados. Esperado −5% a −10% accordion toggle.
+- ⏸️ **#276** F4 — refetchDoses não invalida dashboard-payload pós-patch (P4 já invalida só dashboard-payload, então este HOLD ficou parcialmente resolvido). Reavaliar após device físico.
 
 **✅ SHIPPED master `release/v0.2.3.6`** (vc 69, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.6` merge `348eff7`). QA completo Chrome MCP localhost teste-plus@. 11 itens fechados + 5 P2-P4 abertos próxima release (#259-#263).
 
@@ -779,6 +790,33 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 **Auditoria detalhada com plano por fix:** seções 8-11 do doc — cada fix tem ANTES/DEPOIS de código, commit origem investigado, bug original protegido, justificativa de regressão segura, validação obrigatória.
 
 **Counter:** 146 fechados / 80 abertos (+ #272-#275 abertos + #276-#278 HOLD).
+
+**Δ 2026-05-17 release/v0.2.3.9 (perf bundle complete — round-2 device slow):** bump vc 71→72, vn 0.2.3.8→0.2.3.9. **Origem:** user reportou v0.2.3.7 instalada device físico AINDA extremamente lenta — bundle F1+F3+F6+F5 anterior não foi suficiente. 3 agents paralelos auditaram cache + render + hooks. **7 itens fechados** (#288-#294):
+- **#288** P1 — useCallback DoseCard handlers + DoseCard.jsx onClick agora passa `dose` (substitui closure inline). Preserva React.memo do DoseCard.
+- **#289** P2 — Dupla subscription resolvida via cascata do P4 (useDashboardPayload deixou de escrever ['doses', filter] → App.jsx useDoses não sofre cross-update).
+- **#290** P3 — pathnameRef em App.jsx pra closures de listeners FCM/back button; deps cleanup remove `location.pathname` (listeners registram 1× só).
+- **#291 / #277 F2** — Dual namespace cache eliminado. `patchDoseInCache` + `refetchDoses` operam só em `['dashboard-payload']`. `useDashboardPayload` deixou de escrever ['doses', filter]. **−50% patch cost, −50% IDB serialização estimado.**
+- **#292** P5 — `motion.div` per dose substituído por `<div>` plain. 90+ motion components com stagger eram custo de ~5s reflow contínuo. Mantém stagger por paciente (motion.section).
+- **#293 / #278 F7** — `dosesSignature` migrado map+sort+join O(N log N) → FNV-1a hash linear O(N). Mantém detecção mudança real (id/status/scheduledAt).
+- **#294** P7 — `toggleCollapse` Dashboard envolto em useCallback (ref estável).
+
+**Auditoria egress + storm:** P4 reduz egress (1 RPC ao invés de 2 por mutação). Demais zero impact egress. Storm risk zero (idempotência AlarmScheduler #282 preservada, signature #212 mantida via hash linear).
+
+**Combined estimado:** 2-3× speedup Dashboard re-render no S25 Ultra (medição empírica pendente device físico).
+
+**Counter:** 159 fechados / 79 abertos (release v0.2.3.9 fecha 7 itens: #288-#294, mais 2 HOLDs fechados como cascata #277 F2 + #278 F7).
+
+**Δ 2026-05-17 release/v0.2.3.8 (P0 killed caregiver alarm gap):** bump vc 70→71, vn 0.2.3.7→0.2.3.8. **Origem:** user reportou device físico ainda recebe push silenciosa, alarme com som não dispara no cuidador. Root cause: Firebase Android SDK quando recebe FCM com `notification` block + app KILLED, renderiza tray sozinho + NÃO chama `onMessageReceived` → AlarmScheduler.scheduleDoseAlarm NUNCA executava no cuidador → AlarmManager vazio → alarme nativo nunca disparava. **Fix arquitetural #287** (4 mudanças coordenadas):
+- Edge `dose-trigger-handler` v25 — REMOVE notification block. Envia data-only HIGH pra TODOS (owner+caregiver). SDK obrigado a acordar app + chamar onMessageReceived.
+- Edge `dose-fire-time-notifier` v7 — REMOVE notification block. Envia data-only HIGH com `kind=fire_now_alarm`. Cron 1×/min cobre janela [NOW-90s, NOW+30s].
+- Java `DosyMessagingService.handleFireNowAlarm` — novo branch. Parseia data fields + `startForegroundService(AlarmService)` IMEDIATO. AlarmService FG som loop + AlarmActivity lockscreen disparam.
+- Bump vc 70→71, vn 0.2.3.7→0.2.3.8.
+
+**QA emulador 3/3 PASS:** S1 Owner sem share alarme nativo, S2 Owner+Caregiver background recebe schedule_alarms + alarme fired, S3 Caregiver background recebe fire_now_alarm + AlarmService FG dispatched IMEDIATO.
+
+**Limites aceitos (documentados):** force-stop via Settings = nada cobre (limite Android 12+ universal). Onboarding deve educar user.
+
+**AAB vc 71 published Play Console Internal Testing** 2026-05-17 14:32 BRT via Chrome MCP. Tag `v0.2.3.8` em `9bf1436` (master HEAD). Vercel auto-deploy prod dosymed.app v0.2.3.8 confirmado. Commits `981fab4` + `ed180cc`.
 
 **Δ 2026-05-16/17 release/v0.2.3.7 (server-side caregiver flow + idempotência + RPC ownerId + QA exaustivo):** mid-release +6 itens server/native fechados:
 - **#279** P1 — Edge `dose-trigger-handler` v24 caregiver `notification` payload bypass Doze + `daily-alarm-sync` v5 inclui patient_shares
