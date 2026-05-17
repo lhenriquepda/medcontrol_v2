@@ -51,3 +51,8 @@ android/.idea/usage.statistics.xml
 android/.idea/shelf/
 android/.idea/jarRepositories.xml
 .keys-temp*
+
+# Appium MCP QA (local dev)
+screenshots/
+.mcp.json
+appium-capabilities.json

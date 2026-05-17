@@ -220,6 +220,24 @@ mcp__supabase__execute_sql({
 
 ---
 
+### v0.2.3.7 QA Exaustivo Re-validação — 2026-05-17
+
+> **Escopo:** revalidação completa do release v0.2.3.7 do zero (banco limpo, ambas as apps fresh-start), cobrindo UI owner + UI cuidador + RPCs + triggers DB + Edge Functions + FCM + alarmes nativos + idempotência + cron jobs + WorkManager.
+>
+> **Relatório completo:** [contexto/qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)
+
+- `[x]` **Setup S1** — banco limpo (teste-plus 1 paciente / teste-free 1 paciente + 1 share / 0 tratamentos / 0 doses), audit habilitado, apps restartadas.
+- `[x]` **Bloco A Owner (8/8)** — Dashboard Plus, lista pacientes, tela paciente (Novo + Compartilhar visíveis), criação tratamento RPC (3 doses, userId=owner), SOS RPC, menu Mais (6 itens), share/unshare RPC, alarmes nativos (4 entradas tray-only — Alarme crítico OFF nas Ajustes do Plus).
+- `[x]` **Bloco B Cuidador (3/3)** — Dashboard Free, contador "Plano Free: 1/1 paciente" excluindo shared, tela paciente compartilhado (Novo + Compartilhar OCULTOS), tela paciente próprio (Novo VISÍVEL).
+- `[x]` **Bloco C FCM/alarmes/cron (10/10)** — C1 INSERT trigger → Edge → owner+cuidador, C2 UPDATE→cancel FCM ambos, C3 dose-fire-time cron 1min real test (fire_notified_at + bandeja em <60s), C4 patient-share-handler push ("Teste Plus compartilhou TestePaciente"), C5 tap → DoseModal abriu via simulação intent, C6 4 setAlarmClock armados via dumpsys alarm, C7 daily-alarm-sync cron 8 UTC = 5 BRT ativo + manual curl OK, C8 DoseSyncWorker próximo +23h38m (24h period REPLACE), C9 idempotência re-trigger Edge → 4× skip alarm + 4× skip tray, C10 Bug P1 #283 caregiver→shared patient produz userId=owner real (não auth.uid).
+- `[ ]` **Device físico Samsung S25 Ultra** — pendente. Validar especialmente:
+  - Toque real numa notificação fire-time abre DoseModal correto
+  - Alarme físico nas próximas 24h dispara som loop + AlarmActivity lockscreen
+  - Push de compartilhamento recebido em background/killed
+  - WorkManager dispara 1×/dia mesmo com Doze profundo Samsung Adaptive Battery
+
+---
+
 ## 🆕 Release v0.2.3.7 — versionCode 70 (perf bundle low-risk F1+F3+F6+F5)
 
 **Escopo:** auditoria perf device lento ([contexto/auditoria/2026-05-15-perf-audit-device-slow.md](auditoria/2026-05-15-perf-audit-device-slow.md)). 3 regressões cascateadas v0.2.3.1→v0.2.3.6 amplificaram custo por interação. Bundle low-risk: F1 (alarmWindow shrink) + F3 (placeholderData memoize) + F6 (React.memo) + F5 (throttleTime). HOLD F2/F4/F7.
