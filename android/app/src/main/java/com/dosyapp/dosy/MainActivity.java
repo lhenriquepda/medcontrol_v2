@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
     // WeakRef exposto pra DosyMessagingService despachar unshare sem startActivity
-    static WeakReference<MainActivity> sWeakRef = null;
+    public static WeakReference<MainActivity> sWeakRef = null;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -100,7 +100,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         checkPendingUnshare();
     }
@@ -112,7 +112,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     // Chamado por DosyMessagingService via sWeakRef quando app está vivo
-    void dispatchUnshareOnUiThread(String patientId) {
+    public void dispatchUnshareOnUiThread(String patientId) {
         runOnUiThread(() -> postJsEvent("dosy:patientUnshared", "unsharePatientId", patientId));
     }
 
