@@ -1,6 +1,5 @@
-v0.2.3.9 — Velocidade muito maior
+v0.2.3.10 — Correções importantes
 
-• App muito mais rápido ao marcar doses e abrir/fechar grupos de pacientes
-• Navegação entre telas sem engasgar (Início, Pacientes, Mais)
-• Otimizações internas reduzem trabalho do celular ao receber atualizações
-• Menos consumo de bateria e processamento durante uso intenso
+• Alarme agora exibe o nome correto do paciente (em vez de "Sem paciente")
+• Atualizar puxando a tela limpa pacientes/doses removidos por outro dispositivo
+• Quando um cuidador é removido, o app dele remove automaticamente o paciente e as doses (privacidade)
