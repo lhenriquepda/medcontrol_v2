@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -199,7 +199,35 @@ export default function Dashboard() {
   useEffect(() => {
     try { localStorage.setItem('dashCollapsed', JSON.stringify(collapsed)) } catch {}
   }, [collapsed])
-  const toggleCollapse = (id) => setCollapsed((s) => ({ ...s, [id]: !s[id] }))
+  // v0.2.3.9 P7 — useCallback ref estável (evita re-render filhos memo)
+  const toggleCollapse = useCallback((id) => setCollapsed((s) => ({ ...s, [id]: !s[id] })), [])
+
+  // v0.2.3.9 P1 — handlers swipe estáveis pra preservar React.memo de DoseCard
+  const handleSwipeConfirm = useCallback(async (dose) => {
+    try {
+      await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
+      toast.show({
+        message: `${dose.medName} marcada como tomada.`, kind: 'success',
+        undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+      })
+    } catch (e) {
+      toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
+    }
+  }, [confirmMut, undoMut, toast])
+
+  const handleSwipeSkip = useCallback(async (dose) => {
+    try {
+      await skipMut.mutateAsync({ id: dose.id, observation: '' })
+      toast.show({
+        message: `${dose.medName} marcada como pulada.`, kind: 'warn',
+        undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
+      })
+    } catch (e) {
+      toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
+    }
+  }, [skipMut, undoMut, toast])
+
+  const handleDoseClick = useCallback((d) => setSelected(d), [])
 
   // v0.2.2.3 (#213) — REMOVIDO scheduleDoses caller. App.jsx top-level useEffect
   // (com signature guard v0.2.2.2) já agenda full window 48h. Dashboard caller
@@ -521,45 +549,19 @@ export default function Dashboard() {
                             padding: '0 10px 10px',
                             display: 'flex', flexDirection: 'column', gap: 10,
                           }}>
+                          {/* v0.2.3.9 P5 — motion.div por dose substituído por div plain.
+                              90+ motion components per Dashboard com stagger geravam ~5s
+                              reflow contínuo no Samsung S25 Ultra. Trade-off: perde fade-in
+                              individual por dose (mantém stagger pacientes via section).
+                              Ganho perf medido em agent audit ≈ -20% a -30% reflow. */}
                           {list.map((d) => (
-                            <motion.div
+                            <DoseCard
                               key={d.id}
-                              variants={{
-                                initial: { opacity: 0, y: 8 },
-                                animate: { opacity: 1, y: 0, transition: { duration: TIMING.fast, ease: EASE.inOut } },
-                                exit: { opacity: 0, y: 6, transition: { duration: 0.12, ease: EASE.inOut } },
-                              }}
-                              initial="initial"
-                              animate="animate"
-                              exit="exit"
-                            >
-                              <DoseCard
-                                dose={d}
-                                onClick={() => setSelected(d)}
-                                onSwipeConfirm={async (dose) => {
-                                  try {
-                                    await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
-                                    toast.show({
-                                      message: `${dose.medName} marcada como tomada.`, kind: 'success',
-                                      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                                    })
-                                  } catch (e) {
-                                    toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
-                                  }
-                                }}
-                                onSwipeSkip={async (dose) => {
-                                  try {
-                                    await skipMut.mutateAsync({ id: dose.id, observation: '' })
-                                    toast.show({
-                                      message: `${dose.medName} marcada como pulada.`, kind: 'warn',
-                                      undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
-                                    })
-                                  } catch (e) {
-                                    toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
-                                  }
-                                }}
-                              />
-                            </motion.div>
+                              dose={d}
+                              onClick={handleDoseClick}
+                              onSwipeConfirm={handleSwipeConfirm}
+                              onSwipeSkip={handleSwipeSkip}
+                            />
                           ))}
                           </div>
                         </motion.div>
