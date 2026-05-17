@@ -61,19 +61,30 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Item #081 (release v0.1.7.1) — agenda DoseSyncWorker periódico (6h).
-     * Worker fetcha doses pendentes próximas 72h via Supabase REST e agenda
-     * alarmes nativos via setAlarmClock(). Idempotente (KEEP policy reusa
-     * registro existente, seguro chamar em todo onCreate).
+     * Item #081 (release v0.1.7.1) — agenda DoseSyncWorker periódico.
+     * Worker fetcha doses pendentes próximas 48h via Supabase REST e agenda
+     * alarmes nativos via setAlarmClock(). Idempotente — AlarmScheduler.scheduleDose
+     * agora verifica SharedPrefs antes de chamar AlarmManager (#282 v0.2.3.7),
+     * skip se mesmo id já tem triggerAt + dosesHash iguais.
+     *
+     * v0.2.3.7 #282 — período 6h → 24h. Conjunto com server-side cron
+     * daily-alarm-sync (5am UTC). Worker é backup local pra cobrir Samsung
+     * Adaptive Battery / Doze profundo que matam aplicativo por 3+ dias
+     * inatividade. 1×/dia mantém aplicativo "ativo" aos olhos do sistema +
+     * realimenta cache de alarmes locais (recovery se Samsung os esqueceu).
+     * Sem storm: AlarmScheduler idempotent skipa reagendamento se igual.
      */
     private void enqueueDoseSyncWorker() {
         try {
             PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
-                DoseSyncWorker.class, 6, TimeUnit.HOURS
+                DoseSyncWorker.class, 24, TimeUnit.HOURS
             ).build();
+            // v0.2.3.7 #282 — REPLACE policy força adoção do novo intervalo 24h.
+            // KEEP manteria registro 6h antigo de instalações existentes.
+            // Idempotência runtime preservada via AlarmScheduler skip-if-same.
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "dosy-dose-sync",
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.REPLACE,
                 req
             );
         } catch (Exception e) {
