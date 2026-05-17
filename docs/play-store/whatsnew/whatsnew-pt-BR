@@ -1,6 +1,6 @@
-v0.2.3.8 — Alarme do cuidador 100% confiável
+v0.2.3.9 — Velocidade muito maior
 
-• Correção crítica: alarme com som dispara no cuidador mesmo com app fechado
-• Hora da dose agora desperta o cuidador, não só uma notificação silenciosa
-• Cobertura para casos em que o app foi encerrado dias antes da dose
-• Estabilidade reforçada na entrega de avisos entre proprietário e cuidador
+• App muito mais rápido ao marcar doses e abrir/fechar grupos de pacientes
+• Navegação entre telas sem engasgar (Início, Pacientes, Mais)
+• Otimizações internas reduzem trabalho do celular ao receber atualizações
+• Menos consumo de bateria e processamento durante uso intenso
