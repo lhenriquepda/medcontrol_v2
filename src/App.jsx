@@ -35,6 +35,7 @@ import { useAdMobBanner } from './hooks/useAdMobBanner'
 import { useNotifications as usePushNotifications } from './services/notifications'
 import { useDoses } from './hooks/useDoses'
 import { usePatients } from './hooks/usePatients'
+import { useQueryClient } from '@tanstack/react-query'
 import DailySummaryModal from './components/DailySummaryModal'
 import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
@@ -70,6 +71,8 @@ export default function App() {
   // useRealtime()
   useAppResume()
   useAdMobBanner()
+  // v0.2.3.10 #297 — QueryClient ref pra cache cleanup on patient_unshared FCM
+  const qc = useQueryClient()
   // #170 (v0.2.1.3) — In-App Review smart prompt trigger.
   // Hook agenda check 30s pós mount + verifica conditions
   // (≥7d install + ≥3 doses confirmed + ≥1 alarm fired + active <24h).
@@ -367,9 +370,46 @@ export default function App() {
       window.__dosyLastPatientId = patientId
       navigate(`/pacientes/${patientId}`)
     }
+    // v0.2.3.10 #297 — patient unshared FCM → invalida cache + remove paciente
+    // fantasma + doses/tratamentos órfãos. Silent (sem nav/toast intrusive).
+    const onPatientUnshared = (e) => {
+      const { patientId } = e.detail || {}
+      if (!patientId) return
+      console.log('[dosy:patientUnshared]', patientId)
+      // Remove paciente local + doses/treatments do paciente do cache
+      try {
+        // Remove paciente dos arrays ['patients', *]
+        const patientsKeys = qc.getQueryCache().findAll({ queryKey: ['patients'] })
+        for (const q of patientsKeys) {
+          const data = q.state.data
+          if (!Array.isArray(data)) continue
+          qc.setQueryData(q.queryKey, data.filter((p) => p.id !== patientId))
+        }
+        // Remove doses do paciente em ['doses', *]
+        const dosesKeys = qc.getQueryCache().findAll({ queryKey: ['doses'] })
+        for (const q of dosesKeys) {
+          const data = q.state.data
+          if (!Array.isArray(data)) continue
+          qc.setQueryData(q.queryKey, data.filter((d) => d.patientId !== patientId))
+        }
+        // Remove tratamentos em ['treatments', *]
+        const treatKeys = qc.getQueryCache().findAll({ queryKey: ['treatments'] })
+        for (const q of treatKeys) {
+          const data = q.state.data
+          if (!Array.isArray(data)) continue
+          qc.setQueryData(q.queryKey, data.filter((t) => t.patientId !== patientId))
+        }
+        // Refetch dashboard-payload pra refletir state sem paciente
+        qc.invalidateQueries({ queryKey: ['dashboard-payload'] })
+        qc.invalidateQueries({ queryKey: ['received-shares'] })
+      } catch (err) {
+        console.warn('[patientUnshared] cache cleanup err:', err?.message)
+      }
+    }
     window.addEventListener('dosy:openDose', onOpenDose)
     window.addEventListener('dosy:openDoses', onOpenDoses)
     window.addEventListener('dosy:openPatient', onOpenPatient)
+    window.addEventListener('dosy:patientUnshared', onPatientUnshared)
     // Process any pending IDs set by MainActivity before listener was bound (cold start)
     if (window.__dosyPendingDoseIds) {
       const ids = window.__dosyPendingDoseIds
@@ -390,8 +430,9 @@ export default function App() {
       window.removeEventListener('dosy:openDose', onOpenDose)
       window.removeEventListener('dosy:openDoses', onOpenDoses)
       window.removeEventListener('dosy:openPatient', onOpenPatient)
+      window.removeEventListener('dosy:patientUnshared', onPatientUnshared)
     }
-  }, [user, navigate])
+  }, [user, navigate, qc])
 
   // Android hardware back button: history back if possible, else exit app
   useEffect(() => {

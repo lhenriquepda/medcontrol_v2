@@ -24,8 +24,24 @@ function recomputeOverdue(rows) {
 // sem necessidade (UI lista exibe só medName + horário + paciente + status).
 // observation só é mostrada em DoseModal detail / Reports export / DoseHistory
 // search — esses callers explicitam DOSE_COLS_FULL no listDoses({withObservation:true}).
-const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type'
+// v0.2.3.10 #295 — JOIN patients(name) inline pra garantir patientName em toda
+// dose retornada. Antes: enrichDose dependia de patientsMap (usePatients cache)
+// que ficava stale quando paciente recém-criado por outro device → AlarmActivity
+// agrupava "Sem paciente". Fix server-side: patient.name vem direto via PostgREST
+// embed, sem dependência de cache cliente. Custo: 1 LEFT JOIN, ~10 bytes/row.
+const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, patients(name)'
 const DOSE_COLS_FULL = DOSE_COLS_LIST + ', observation'
+
+// Flatten patients(name) embed pra dose.patientName direto.
+function flattenPatientEmbed(rows) {
+  return rows.map((d) => {
+    if (d.patients?.name) {
+      const { patients, ...rest } = d
+      return { ...rest, patientName: patients.name }
+    }
+    return d
+  })
+}
 
 // #092 (release v0.1.7.5) — egress reduction.
 // Default range fail-safe: se caller não passar from/to, aplica janela
@@ -82,7 +98,7 @@ export async function listDoses({ from, to, patientId, status, type, withObserva
       if (data.length < PAGE) break
       page++
     }
-    const data = all
+    const data = flattenPatientEmbed(all)
     const now = new Date()
     let rows = (data || []).map((d) => {
       if (d.status === 'pending' && new Date(d.scheduledAt) < now) return { ...d, status: 'overdue' }

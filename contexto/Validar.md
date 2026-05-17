@@ -220,6 +220,22 @@ mcp__supabase__execute_sql({
 
 ---
 
+### v0.2.3.10 Sem paciente + cache stale + unshare LGPD — 2026-05-17
+
+> **Escopo:** 3 bugs reportados device físico pós v0.2.3.9. Foco LGPD: cuidador removido não pode mais ver dados do paciente.
+
+- `[x]` **#295 P2 BUG "Sem paciente"** — `listDoses` agora faz JOIN inline `patients(name)` via PostgREST embed. `useDashboardPayload` enriquece doses com patientName do `payload.patients` ANTES de cachear. Garante patientName sempre presente sem cache stale.
+- `[x]` **#296 P2 BUG pull-to-refresh stale** — `Dashboard.handleRefresh` invalida TODOS namespaces (`dashboard-payload`, `doses`, `patients`, `treatments`, `received-shares`, `user_prefs`, `my_tier`).
+- `[x]` **#297 P1 BUG LGPD unshare patient** — Edge `patient-unshare-handler` v1 ACTIVE + DB trigger `trg_notify_patient_share_deleted` ON `patient_shares` DELETE → pg_net.http_post → FCM data-only HIGH `kind=patient_unshared` → Java `handlePatientUnshared` propaga via MainActivity intent → JS event `dosy:patientUnshared` → invalida caches + remove paciente fantasma + doses/tratamentos do paciente.
+- `[x]` **QA emulador #297** — caregiver background recebeu unshare FCM, Java handler logou "patient_unshared dispatched patientId=...", MainActivity extras propagados, JS handler executou cache cleanup.
+- `[x]` **Build verde 16.17s + APK debug instalado emul 5554+5556 (v0.2.3.10-dev)**.
+- `[ ]` **Device físico Samsung S25 Ultra** — validar:
+  - Alarme NÃO mostra "Sem paciente" mais (criar paciente novo + dose +1min, observar alarme).
+  - Pull-to-refresh Dashboard remove paciente compartilhado + doses fantasma após owner revogar share.
+  - Unshare em background: app caregiver killed quando owner revoga share → ao abrir app, paciente já não está visível (cache limpo via FCM data-only).
+
+---
+
 ### v0.2.3.9 Perf bundle complete — 2026-05-17
 
 > **Escopo:** auditoria perf round-2 pós v0.2.3.7 (user reportou device físico ainda extremamente lento). 3 agents paralelos identificaram 8 root causes restantes. Bundle complete P1-P8.

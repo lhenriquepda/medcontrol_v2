@@ -91,10 +91,17 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     }
   }, [query.data, qc])
 
-  // Expose recomputed doses diretamente (sem precisar caller fazer)
+  // v0.2.3.10 #295 — enriquecer doses com patientName via payload.patients
+  // ANTES de cachear. Garante consumer (App.jsx scheduler, AlarmService, etc)
+  // sempre tem patientName sem depender de patientsMap cache stale.
   const dosesComputed = useMemo(() => {
     if (!query.data?.doses) return undefined
-    return recomputeOverdueDoses(query.data.doses)
+    const patientsMap = new Map((query.data.patients || []).map(p => [p.id, p]))
+    const enriched = query.data.doses.map((d) => ({
+      ...d,
+      patientName: d.patientName || patientsMap.get(d.patientId)?.name || '',
+    }))
+    return recomputeOverdueDoses(enriched)
   }, [query.data])
 
   return {

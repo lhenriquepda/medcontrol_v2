@@ -237,16 +237,19 @@ export default function Dashboard() {
   // Daily summary é agendado dentro do mesmo rescheduleAll de App.jsx, sem perda.
 
   // Pull-to-refresh — overlay bar (não wrapa content, preserva sticky FilterBar)
+  // v0.2.3.10 #296 — invalida TODOS namespaces relacionados pra evitar paciente/
+  // tratamento/dose fantasma após share revoke ou edição em outro device.
+  // dashboard-payload é fonte primária pós-P4 v0.2.3.9 mas listas isoladas
+  // (Pacientes, Tratamentos, DoseHistory) usam queryKeys separados.
   const handleRefresh = async () => {
     await Promise.all([
+      qc.refetchQueries({ queryKey: ['dashboard-payload'] }),
       qc.refetchQueries({ queryKey: ['doses'] }),
       qc.refetchQueries({ queryKey: ['patients'] }),
+      qc.refetchQueries({ queryKey: ['treatments'] }),
+      qc.refetchQueries({ queryKey: ['received-shares'] }),
       qc.refetchQueries({ queryKey: ['user_prefs'] }),
       qc.refetchQueries({ queryKey: ['my_tier'] }),
-      // Item #014 — refresh sob-demanda do horizon de tratamentos contínuos.
-      // BUG-035 (#107): supabase.rpc() retorna PostgrestFilterBuilder (PromiseLike,
-      // só .then), NÃO Promise nativo. .catch() direto throws TypeError. Usa
-      // .then(handler, errHandler) — 2-arg form funciona em PromiseLike.
       hasSupabase
         ? supabase.schema('medcontrol').rpc('extend_continuous_treatments', { p_days_ahead: 5 })
             .then(undefined, err => console.warn('[refresh] extend_continuous err:', err?.message))
