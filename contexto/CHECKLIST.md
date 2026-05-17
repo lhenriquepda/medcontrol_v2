@@ -49,6 +49,92 @@
 - **Backend:** zero impacto frontend-only release.
 - **Aceitação:** todos visuais validados Chrome MCP localhost user-driven (light + dark). Build verde `npm run build` 18.66s 0 warnings.
 
+### #299 — Banner verde "Nova versão disponível" sempre exibir versionName REAL via tabela DB autoritativa [próxima release]
+
+- **Status:** ⏳ PENDENTE próxima release. User reportou 2026-05-17: banner mostrou "Atualizar versão 0.2.3.9" mas instalou 0.2.3.10. Versão exibida fica atrasada por dessincronia entre fontes.
+- **Origem:** [User feedback] sessão 2026-05-17 pós-ship v0.2.3.10 — "quero plano definitivo simples sem mexer em vários locais na hora de subir AAB".
+- **Prioridade:** P2 (UX/credibilidade — não bloqueia release, mas confunde user e parece bug).
+- **Esforço estimado:** ~30min (1 migration + edit `useAppUpdate.js` + edit README Passo 12).
+- **Root cause atual:**
+  - `useAppUpdate.js:117-155` resolve versionName via cadeia de 4 fontes:
+    1. `info.availableVersion` da Play Core API → **vem null** em Internal Testing (bug Google conhecido).
+    2. Mapa hardcoded `VERSION_CODE_TO_NAME` (linhas 80-115) → desatualiza (parou no vc 70).
+    3. Vercel `/version.json` → reflete último build WEB master (pode ficar atrás se Play AAB shipou antes do master merge/deploy).
+    4. Fallback `"versão N"` → feio.
+  - Bug do user: vc 73 (0.2.3.10) shipped no Play Console, mas `VERSION_CODE_TO_NAME` não tinha vc 73, `version.json` Vercel ainda estava no deploy anterior (vc 72 = 0.2.3.9). Cadeia caiu pra fallback errado.
+- **Plano arquitetura — Fonte única autoritativa (tabela DB):**
+  - **Migration (1× só, idempotente):**
+    ```sql
+    CREATE TABLE medcontrol.app_releases (
+      version_code  INT PRIMARY KEY,
+      version_name  TEXT NOT NULL,
+      shipped_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE OR REPLACE FUNCTION medcontrol.get_release_name_by_code(p_code INT)
+    RETURNS TEXT
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = 'medcontrol'
+    AS $$
+      SELECT version_name FROM medcontrol.app_releases WHERE version_code = p_code;
+    $$;
+
+    GRANT EXECUTE ON FUNCTION medcontrol.get_release_name_by_code(INT) TO authenticated, anon;
+
+    -- Seed releases já no ar
+    INSERT INTO medcontrol.app_releases (version_code, version_name) VALUES
+      (70, '0.2.3.7'), (71, '0.2.3.8'), (72, '0.2.3.9'), (73, '0.2.3.10')
+    ON CONFLICT (version_code) DO NOTHING;
+    ```
+  - **Edit `src/hooks/useAppUpdate.js`:**
+    - REMOVER mapa hardcoded `VERSION_CODE_TO_NAME` inteiro (linhas 80-115).
+    - REMOVER fallback `versionData?.version` no caminho native.
+    - Substituir cadeia por:
+      ```js
+      const dbName = await supabase
+        .schema('medcontrol')
+        .rpc('get_release_name_by_code', { p_code: info.availableVersionCode })
+        .then(r => r.data, () => null)
+      const version =
+        info.availableVersion        // 1º Play Core (quando vier)
+        ?? dbName                    // 2º DB autoritativa
+        ?? `versão ${info.availableVersionCode}`  // 3º fallback final feio
+      ```
+    - Vercel `version.json` continua valendo só para o caminho `checkWeb` (browser web).
+  - **Edit `contexto/README.md` Passo 12:**
+    - Adicionar passo automático após "Salvar e publicar" no Play Console:
+      ```
+      Após confirmar publicação Play Console:
+      Executar via supabase MCP execute_sql:
+        INSERT INTO medcontrol.app_releases (version_code, version_name)
+        VALUES ({vc}, '{vn}')
+        ON CONFLICT (version_code) DO NOTHING;
+      ```
+    - 1 SQL adicional no fluxo Passo 12 (IA já roda automatizado).
+- **Aceitação:**
+  - ✅ Migration aplicada com seed para vc 70-73.
+  - ✅ RPC `get_release_name_by_code` retorna versionName correto via teste SQL.
+  - ✅ `useAppUpdate.js` consulta RPC + cadeia simplificada 3 fontes.
+  - ✅ Mapa hardcoded `VERSION_CODE_TO_NAME` removido.
+  - ✅ README Passo 12 atualizado com SQL INSERT obrigatório.
+  - ✅ Próxima release (vc 74) ship: IA insere row → banner em devices anteriores mostra "v0.2.3.11" correto.
+- **Egress impact:**
+  - 1 RPC `get_release_name_by_code` por device a cada `CHECK_INTERVAL_MS` (4h em useAppUpdate) — só quando há update disponível. ~50 bytes/query. ~6 queries/dia/user × 1000 users = ~300KB/dia. Desprezível.
+- **Storm risk:** zero. RPC read-only, sem trigger, sem cascata.
+- **Dependências:** nenhuma. Greenfield.
+- **Próximo passo concreto:**
+  1. Criar branch `release/v0.2.3.11` (próxima release que tiver outros fixes empacotados — preferencialmente junto de #0003+#0004 unshare UX).
+  2. Apply migration.
+  3. Edit `useAppUpdate.js` substitui cadeia.
+  4. Edit README Passo 12 com SQL INSERT.
+  5. Build verde + ship normal.
+  6. Confirmar via device: vc 74 mostra "v0.2.3.11" no banner.
+- **Bônus opcional (sem custo extra agora):**
+  - Adicionar coluna `whatsnew TEXT` em `app_releases` na mesma migration → permite banner exibir release notes no futuro sem nova infra. Decidir habilitar quando UX quiser.
+
+---
+
 ### #250 — API medicamentos ANVISA + disclaimers clínicos [v0.2.3.6 NEXT]
 
 - **Status:** ⏳ DEFERIDO próxima release. User pediu 2026-05-14: autocomplete medicamento via API real + info crítica (tarja, dose máx referência) pra disclaimers SOS + cadastro.

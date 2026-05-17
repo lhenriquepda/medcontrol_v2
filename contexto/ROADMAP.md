@@ -172,6 +172,10 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 **Releases shipped recentes:** ver §6.3 Δ release log e [`contexto/updates/`](updates/) — features, perf, refactors. Bugs específicos consolidados em [`BUGS.md`](BUGS.md) (abertos + histórico SHIPPED).
 
+**Próxima release planejada (sugerida v0.2.3.11):**
+- ⏳ **#299** P2 — Banner verde "Nova versão" exibir versionName REAL via tabela DB autoritativa `app_releases`. Elimina mapa hardcoded `VERSION_CODE_TO_NAME` desatualizado + fallback Vercel dessincronizado. IA shipa = SQL INSERT no Passo 12. Detalhe completo CHECKLIST §#299.
+- ⏳ **#0003 + #0004** (BUGS.md) — Fix unshare patient UX: remover `ctx.startActivity` intrusivo + separar var `__dosyPendingUnsharePatientId` do `__dosyPendingPatientId`. Devem ser fixados juntos.
+
 **✅ SHIPPED master `release/v0.2.3.6`** (vc 69, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.6` merge `348eff7`). QA completo Chrome MCP localhost teste-plus@. 11 itens fechados + 5 P2-P4 abertos próxima release (#259-#263).
 
 **🔄 EM CURSO `release/v0.2.3.6`** (vc 69, baseado em master vc 68 `bf447d3`) — itens fechados nesta sessão:
