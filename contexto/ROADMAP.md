@@ -162,9 +162,18 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 > 🚨 **IA: SEMPRE varrer [`contexto/BUGS.md`](BUGS.md) ANTES desta seção.** ROADMAP cobre **features, melhorias e roadmap de lançamento**. Bugs ativos ficam em `BUGS.md` com numeração própria (#0001+) e severidade P0/P1/P2/P3/P4. Alertar o user sobre bugs abertos no início de cada sessão (Passo 0 README), igual ao alerta de itens pendentes do Validar.md.
 
-**Branch ativa:** `master` @ tag `v0.2.3.10` (vc 73, Play Console Internal Testing 2026-05-17 15:28 BRT, merge `7c42b15`, Vercel prod dosymed.app v0.2.3.10 confirmado).
+**Branch ativa:** `release/v0.2.3.11` (vc 74, 3 commits). Bugs #0001–#0005 #0007 #0008 fixados. Aguardando: QA web + validação device + autorização Passo 10.5.
 
-**Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — 9 bugs abertos (#0001 a #0009).
+**Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — 2 bugs abertos (#0006 #0009).
+
+**🔄 EM CURSO `release/v0.2.3.11`** (vc 74, base master v0.2.3.10 vc 73):
+- ✅ **#0003+#0004** P2 — unshare background `startActivity` + tela "Paciente Carregando..." — WeakRef + SharedPrefs + var separada `__dosyPendingUnsharePatientId`
+- ✅ **#0002** P2 — Banner Desfazer invisível device físico — `useToast` bottom `calc(6rem + safe-area-inset-bottom)`
+- ✅ **#0001** P2 — Push subscription não registra auto — `useAuth` SIGNED_IN + INITIAL_SESSION auto-subscribe se perm=granted
+- ✅ **#0005** P2 — Status "Cancelada" em Reports pós pause/resume — `resumeTreatment` restaura cancelled→pending + Reports exclui cancelled do denominador
+- ✅ **#0007** P3 — SOS/DoseModal HORÁRIO en-US — `DoseModal` split `datetime-local` → `date`+`time`
+- ✅ **#0008** P4 — "1 dias" pluralização — `Number(t.durationDays) === 1`
+- ⏳ **#0006** P2 — Console errors `[object Object]` — não localizado sem stack trace, requer reconfirmação device
 
 **✅ SHIPPED master `release/v0.2.3.8`** (vc 71, Play Console Internal Testing publicado 2026-05-17 14:32 BRT, tag `v0.2.3.8` merge `9bf1436`, Vercel prod dosymed.app v0.2.3.8 confirmado). 1 item P0: **#287** P0 BUG — killed caregiver alarm gap arquitetural FCM `notification` payload bloqueava `onMessageReceived` (Firebase Android SDK auto-renderiza tray + não chama handler), AlarmScheduler nunca executava no caregiver. Fix: Edge `dose-trigger-handler` v25 + `dose-fire-time-notifier` v7 enviam DATA-ONLY HIGH (sem notification block) → handler nativo executa + agenda AlarmManager.setAlarmClock OU dispara AlarmService FG imediato via novo `kind=fire_now_alarm`. QA emulador 3/3 PASS (S1 owner sem share, S2 caregiver background recebe schedule_alarms + alarme dispara, S3 caregiver background recebe fire_now_alarm + AlarmService FG dispatched). Commits `981fab4` + `ed180cc`.
 

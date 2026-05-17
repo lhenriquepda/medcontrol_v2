@@ -29,7 +29,7 @@ Nenhum bug P1 aberto.
 ### #0001 — Push subscription Android não registra automaticamente
 
 **Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra
-**Status:** `OPEN`
+**Status:** `IN_PROGRESS v0.2.3.11`
 
 **Descrição:** Conta `lhenrique.pda@gmail.com` nunca havia registrado push_subscription Android no DB. Quando teste-plus criou paciente e compartilhou, o Edge `patient-share-handler` dispatchava mas a query de subs `platform='android'` retornava vazia → nenhum push chegava no device. Só funcionou depois de o user ir em Ajustes → Notificações push → toggle OFF/ON manualmente, que disparou o `subscribeFcm` + `upsert_push_subscription`.
 
@@ -45,7 +45,7 @@ Nenhum bug P1 aberto.
 ### #0002 — Banner "Desfazer" não aparece no device físico após marcar dose
 
 **Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.7
-**Status:** `OPEN`
+**Status:** `IN_PROGRESS v0.2.3.11`
 
 **Descrição:** Ao marcar uma dose como tomada/pulada via `DoseModal` no device físico, o toast com botão "Desfazer" (que deveria ficar 5s visível) **não aparece**. No web e no emulador funciona normal.
 
@@ -61,7 +61,7 @@ Nenhum bug P1 aberto.
 ### #0003 — `handlePatientUnshared` força o app abrir sozinho via `startActivity`
 
 **Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.10
-**Status:** `OPEN`
+**Status:** `IN_PROGRESS v0.2.3.11`
 
 **Descrição:** Quando o cuidador está com app fechado e o owner revoga o compartilhamento via web, o app do cuidador **abre sozinho** na tela do paciente — comportamento intrusivo e errado. O esperado é cache cleanup silencioso em background.
 
@@ -78,7 +78,7 @@ Nenhum bug P1 aberto.
 ### #0004 — Após unshare em background, app abre travado em "Paciente Carregando..."
 
 **Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.10
-**Status:** `OPEN`
+**Status:** `IN_PROGRESS v0.2.3.11`
 
 **Descrição:** Consequência do #0003. Quando o app é forçado a abrir pelo `startActivity` e propaga o `unsharePatientId` via `postJsEvent`, o JS App.jsx tenta navegar para `/pacientes/{id}` de um paciente que NÃO EXISTE mais → tela fica em "Paciente Carregando..." infinito. Solução manual atual: clicar Dashboard e voltar para Pacientes.
 
@@ -95,7 +95,7 @@ Nenhum bug P1 aberto.
 ### #0005 — Status "Cancelada" em Relatórios após ciclo pause/resume tratamento
 
 **Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #4 do relatório QA)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
+**Status:** `IN_PROGRESS v0.2.3.11` — necessita reconfirmação na v0.2.3.10
 
 **Descrição:** Após ciclo de pausa/resumo de tratamento, Relatórios mostra doses com status "Cancelada" indevidamente.
 
@@ -106,7 +106,7 @@ Nenhum bug P1 aberto.
 ### #0006 — Console errors `[object Object]` silenciosos
 
 **Reportado:** 2026-05-15 QA v0.2.3.6 (OBSERVAÇÃO #5)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
+**Status:** `OPEN` — necessita reconfirmação na v0.2.3.11 (stack trace não localizado)
 
 **Descrição:** Logs no console exibem `[object Object]` em vez de mensagem útil em alguns lugares (Dashboard/Patients).
 
@@ -119,7 +119,7 @@ Nenhum bug P1 aberto.
 ### #0007 — HORÁRIO no formulário SOS exibe formato en-US
 
 **Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #1)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
+**Status:** `IN_PROGRESS v0.2.3.11` — necessita reconfirmação na v0.2.3.10
 
 **Descrição:** No formulário SOS, o campo HORÁRIO mostra `05/15/2026 3:06PM` em vez de `15/05/2026 15:06`.
 
@@ -134,7 +134,7 @@ Nenhum bug P1 aberto.
 ### #0008 — Tratamentos exibe "1 dias" quando tratamento termina hoje
 
 **Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #3)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
+**Status:** `IN_PROGRESS v0.2.3.11` — necessita reconfirmação na v0.2.3.10
 
 **Descrição:** Quando um tratamento termina no mesmo dia, a lista de Tratamentos mostra "1 dias" em vez de "Termina hoje".
 
