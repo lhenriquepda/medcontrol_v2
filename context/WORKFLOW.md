@@ -296,6 +296,10 @@ Devices voltam ao banner verde em ≤30min sem reinstall.
 
 ## Passo 13 — Pós-release
 
+> ⚠️ **Para TODOS os tipos de branch:** antes de executar qualquer `git merge`, IA DEVE parar e perguntar ao user. "OK/sim" para fazer o trabalho NÃO autoriza merge automaticamente. Precisa de confirmação explícita: "merge", "finaliza", "sobe", "fecha".
+
+### Para `release/v*`:
+
 1. Atualizar memory `feedback_*.md` se padrão novo emergiu nesta release
 2. Criar `context/updates/YYYY-MM-DD-release-vX.Y.Z.md` (template em `context/updates/README.md`)
 3. `git tag vX.Y.Z.W` + `git push origin vX.Y.Z.W`
@@ -307,6 +311,22 @@ Devices voltam ao banner verde em ≤30min sem reinstall.
 5. Vercel deploy master: `npx vercel --prod --yes`
 6. **RE-LER `context/README.md` inteiro** (refrescar fluxo padrão para próximas sessões)
 7. Limpar TodoWrite
+
+### Para `docs/` / `chore/` / `server/` / `refactor/`:
+
+🛑 **STOP — não executar o merge sem autorização explícita do user.**
+
+Reportar ao user:
+- Trabalho concluído: o que foi feito + commit hash
+- **Pergunta explícita:** "Posso fazer merge de `{branch}` → master?"
+
+ESPERAR resposta afirmativa ("sim", "merge", "fecha", "ok merge"). Só então:
+```bash
+git checkout master && git merge --no-ff {branch}
+git push origin master
+```
+
+> **Raiz do erro:** "sim" para começar o trabalho NÃO é "sim" para merge. São autorizações distintas.
 
 ---
 
