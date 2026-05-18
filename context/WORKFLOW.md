@@ -221,7 +221,24 @@ git push origin release/v{X.Y.Z.W}
 
 > ⚠️ **Validação ANTES do Build AAB.** Ordem correta: validar → aprovar → buildar.
 
-### 11a — Web via Chrome MCP (SEMPRE executar primeiro)
+### 🛑 Decisão de prioridade — emulator OU web primeiro?
+
+**Tocou QUALQUER path nativo?**
+- ✅ Touch events / PTR / gestos
+- ✅ Capacitor plugin / bridge / `isNativePlatform()`
+- ✅ AlarmManager / WorkManager / FCM / push
+- ✅ Java service / receiver / Activity
+- ✅ `onlineManager` / `Capacitor.Network` bridge
+- ✅ StatusBar / safe-area-inset native
+- ✅ Plugin CriticalAlarm / lockscreen overlay
+
+**SIM** → **§11b emulator OBRIGATÓRIO PRIMEIRO** (Regra 16 RULES.md). §11a web só smoke test UI nessas mudanças. Bugs nativos NÃO aparecem em web Chrome MCP (`Capacitor.isNativePlatform()=false`).
+
+**NÃO** (mudança UI/JS/RPC pura) → §11a web primeiro (mais rápido). §11b emulator se relevante para cobertura adicional.
+
+> **Lição histórica:** bug PTR stuck v0.2.3.11 não apareceu em validação web — touch events + `onlineManager` bridge só ativam em Capacitor nativo. Se §11b fosse obrigatório, bug não chegava em produção.
+
+### 11a — Web via Chrome MCP
 
 → Ver `context/recipes/web-validation.md` para receita completa.
 
@@ -229,7 +246,9 @@ Após validação web: atualizar `context/Validar.md` com seção topo `## 🆕 
 
 > 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os cenários foram cobertos autonomous, criar entry com nota `**Validação device:** TODOS cenários cobertos autonomous §11a+§11b — nada para user fazer.`
 
-### 11b — Emulator autônomo via CLI (após §11a)
+### 11b — Emulator autônomo via CLI
+
+> **Obrigatório PRIMEIRO** se Regra 16 disparou (path nativo). Caso contrário, após §11a.
 
 → Ver `context/recipes/emulator-setup.md` para receita completa.
 
