@@ -10,13 +10,18 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.3.13` |
-| **versionCode** | `76` |
-| **Branch ativa** | `master` (sem release em curso) |
-| **Último tag** | `v0.2.3.13` · merge `3e27811` |
-| **Ship date** | 2026-05-18 |
-| **Play Console** | Internal Testing vc 76 — publicado 2026-05-18 18:04 BRT |
-| **Vercel prod** | `dosymed.app` — v0.2.3.13 confirmado 2026-05-18T23:09Z |
+| **Versão** | `v0.2.3.14` (EM CURSO) |
+| **versionCode** | `77` |
+| **Branch ativa** | `release/v0.2.3.14` |
+| **Último tag** | `v0.2.3.13` · merge `3e27811` (anterior) |
+| **Ship date** | TBD (pendente validação + Passo 10.5 STOP) |
+| **Play Console** | TBD (pré-ship) |
+| **Vercel prod** | TBD (pré-ship) — anterior `dosymed.app` v0.2.3.13 confirmado 2026-05-18T23:09Z |
+
+**Commits release/v0.2.3.14:**
+- `8daa0af` chore: abre release/v0.2.3.14 — bump vc 76→77
+- `2bd4139` fix(useAppUpdate): #0010 + #0011 banner update version_name + mandatory
+- `8fc5f03` fix(useShares): #0009 401 JWT expiry error UI + skip retry
 
 ---
 

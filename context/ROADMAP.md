@@ -118,9 +118,9 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 
 ### Próximo passo proposto
 
-Validar device físico Samsung S25 Ultra v0.2.3.13 (cenários disclaimer paciente compartilhado + cache offline + snooze + Samsung battery optimizer — itens em `Validar.md`) OU atacar P0 aberto:
+**release/v0.2.3.14 EM CURSO** (vc 77) — 3 fixes P2 atacados: #0010 + #0011 update banner + #0009 share error UI. Pendente: validação web + emulator + Passo 10.5 STOP autorização AAB. Após ship, retomar:
 
-- **#006** Device validation 3 devices físicos (FASE 17 manual user)
+- **#006** Device validation 3 devices físicos (FASE 17 manual user) — inclui validação device v0.2.3.13 disclaimer paciente compartilhado (#300 em STATE.md)
 - **#131** Recrutar 15-20 testers externos via Reddit/redes (meta 12+ ativos)
 - **#132** Gate 14 dias × 12+ testers ativos *(depende #131)*
 - **#133** Solicitar Production access Console *(depende #132)*
@@ -129,9 +129,9 @@ Validar device físico Samsung S25 Ultra v0.2.3.13 (cenários disclaimer pacient
 
 ### Releases recentes (top 3 — histórico completo em §6.3 + `context/updates/`)
 
+- **v0.2.3.14** (2026-05-18, vc 77) — 3 fixes P2 user-reported: #0010 banner mostra version_name correto (DB autoritativa primeiro, Play Core só se shape semver) + #0011 modal mandatory robusto a race `currentVersionCode=null` (query upper-bound-only) + #0009 share error UI com retry quando 401 JWT expira (em vez de "Carregando..." infinito)
 - **v0.2.3.13** (2026-05-18, vc 76) — Plano A primeira etapa: AlarmReceiver pre-check HTTP + cache SharedPrefs fallback + disclaimer destacado pra paciente compartilhado quando offline/erro server. Edge envia `isShared` por dose. Zero regressão pra paciente não shared. 5/6 cenários E2E validados em emulator + Appium
 - **v0.2.3.12** (2026-05-18, vc 75) — 7 fixes runtime stuck/silent (PTR, SOS, NB-4 throttle+persistImmediate, useUpdateUserPrefs, unshare, FCM await, useTreatments) + Bug #0009 descoberto
-- **v0.2.3.11** (2026-05-18, vc 74) — 8 bug-fixes UX (#0001-#0008) + feature #299 in-app update DB autoritativa
 
 > **Bloqueadores formais Console** (todos ✅ 2026-05-04/05): ver §6.4 P0 items (#003 #004 #008 #025 + Política Privacidade + Intent tela cheia).
 > **Refactor v0.2.3.1** (Plano A scheduler unificado + 4 auditorias linha-por-linha): ver §6.3 Δ entry + `context/auditoria/2026-05-13-alarme-push-*`.
@@ -217,6 +217,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 > Detalhe completo de cada release em [`context/updates/`](updates/). Δ aqui = 1 linha + pointer.
 
+- **Δ v0.2.3.14** (2026-05-18, vc 77) — 3 fixes P2 user-reported bugs banner+share: #0010 banner mostra "versão N" (versionCode) em vez de "0.2.3.X" → DB autoritativa primeiro, valida shape semver de `info.availableVersion` Play Core antes de aceitar. #0011 modal mandatory não renderizava quando `currentVersionCode=null` (race useEffect getRealVersion vs Play Core check) → query upper-bound-only, conservative falso-positivo aceitável em healthcare. #0009 `usePatientShares` 401 JWT expiry → SharePatientSheet renderiza error UI + retry button + useShares retry handler skip auth errors. Commits `2bd4139` + `8fc5f03`.
 - **Δ v0.2.3.13** (2026-05-18, vc 76) — Plano A primeira etapa anti-dose-duplicada: AlarmReceiver pre-check HTTP Supabase REST (1.5s timeout) + cache SharedPrefs fallback + disclaimer destacado pra paciente compartilhado quando offline/erro server. Edge envia `isShared=true` quando patient_shares match. Worker fallback 6h ainda isShared=false (TODO próxima iteração). 5/6 cenários E2E validados (D disclaimer offline, C-real cancel FCM, HTTP server=done preCheck, A regressão unshared, C indireto online pending). E (cache hit offline) code-reviewed. → [qa-reports/](qa-reports/2026-05-18-v0.2.3.13-appium.md)
 - **Δ v0.2.3.12** (2026-05-18, vc 75) — 7 fixes runtime: PTR timeout 20s + SOS timeout 15s + NB-4 throttle revert 5s→1s + flushPersistImmediate em 4 críticos + useUpdateUserPrefs timeout 15s + unsharePatient timeout 15s + Bug #7 FCM await registration + NB-1 useTreatments refetchOnMount:'always'. Regra 17 RULES.md (Appium mandatory) + auditoria 10 bugs teóricos → 5 acionáveis comprovados QA Appium. Bug #0009 descoberto (defer v0.2.3.13).
 - **Δ v0.2.3.11** (2026-05-18, vc 74) — 8 bugs UX (#0001-#0008 em BUGS.md) + #299 `app_releases` DB autoritativa → [updates/](updates/2026-05-18-release-v0.2.3.11.md)
