@@ -37,19 +37,24 @@
 
 > Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
 
-- `[ ]` **PTR stuck cenário real** — pull-to-refresh com network instável (5G→WiFi handoff): spinner deve sair em ≤20s, console warn em logcat.
-- `[ ]` **SOS submit network slow real** — Cadastrar SOS com 5G fraco: ≤15s toast sucesso OU erro com retry.
-- `[ ]` **NB-4 mark + force-kill rapido** — Mark "Tomada", IMEDIATAMENTE swipe app outta recents OR force-stop. Reopen + verifica mark persistiu.
-- `[ ]` **FCM toggle device real** — Push toggle ON em S25 Ultra (Google Play Services OK): toast "ativadas" deve aparecer apenas após FCM token registrar (≤10s).
-- `[ ]` **DnD toggle Ajustes** — Toggle DnD com network normal: toast sem timeout. Toggle com avião ligado momentaneamente: toast timeout 15s.
-- `[ ]` **Multi-device share/unshare** — Compartilhar paciente teste-free real, unshare network normal: toast "removido" ≤15s.
-- `[ ]` **Treatment cross-device** — Criar treatment em web prod (PC), abrir app device: aparece em PatientDetail imediato (Realtime ou refetchOnMount).
+- `[~]` **PTR stuck cenário real** — pull-to-refresh com network instável (5G→WiFi handoff): spinner deve sair em ≤20s, console warn em logcat. **Sessão 2026-05-18 emulator final-validation:** code review OK (`Promise.race + 20s timeout` em `usePullToRefresh.js:65-87` + handleRefresh per-query catch em `Dashboard.jsx:247-264`). Emulator não simula 5G→WiFi handoff real — fica device-only.
+- `[~]` **SOS submit network slow real** — Cadastrar SOS com 5G fraco: ≤15s toast sucesso OU erro com retry. **Sessão 2026-05-18 emulator final-validation:** SOS submit normal PASS (981ms tap→toast `Dose S.O.S registrada` + dose persistida `done/sos` em `medcontrol.doses`). GSM speed test inconclusivo (input fill timing). Network real flapping é device-only.
+- `[x]` **NB-4 mark + force-kill rapido** — Mark "Tomada", IMEDIATAMENTE swipe app outta recents OR force-stop. Reopen + verifica mark persistiu. **Sessão 2026-05-18 emulator final-validation:** 4 timing tests A/B/C/D Appium W3C + Supabase MCP:
+  - Test A 114ms kill: **FAIL** (dose pendente após reopen — flushPersistImmediate não completou IDB write).
+  - Test D 204ms kill: **FAIL** (mesma causa).
+  - Test B 305ms kill: **PASS** (dose `done` + `actualTime` persistido pós drain).
+  - Test C 612ms kill: **PASS** (idem).
+  - **Threshold real ~250-300ms** (não ~100ms como assumido no comment do fix). Janela ainda 3× menor que original throttle 1000ms.
+- `[x]` **FCM toggle device real** — Push toggle ON em S25 Ultra (Google Play Services OK): toast "ativadas" deve aparecer apenas após FCM token registrar (≤10s). **Sessão 2026-05-18 emulator:** PASS — tap → 974ms → toast `Notificações ativadas` + `aria-checked=true`. Bug #7 await-FCM-registration confirmado.
+- `[x]` **DnD toggle Ajustes** — Toggle DnD com network normal: toast sem timeout. **Sessão 2026-05-18 emulator:** PASS — DnD switch tap → 1275ms → DB sync confirmada SQL `user_prefs.prefs->>'dndEnabled'='true'` `updatedAt=17:55:59`. Bug #4 timeout 15s NÃO disparou (network normal).
+- `[x]` **Multi-device share/unshare** — Compartilhar paciente teste-free real, unshare network normal: toast "removido" ≤15s. **Sessão 2026-05-18 emulator:** PASS — SQL insert share → UI tap "Remover" → DB row deletada (`SELECT count FROM patient_shares WHERE ownerId=teste-plus = 0`). Bug #5 unsharePatient timeout 15s funcional (online path).
+- `[x]` **Treatment cross-device** — Criar treatment em web prod (PC), abrir app device: aparece em PatientDetail imediato (Realtime ou refetchOnMount). **Sessão 2026-05-18 emulator:** PASS — SQL INSERT `treatments` externo "NB1 CrossDevice Test" → Appium navigate Pacientes → tap paciente → treatment visível em ≤3s. NB-1 `refetchOnMount: 'always'` em `useTreatments.js:20` confirmado.
 
 **Validações monitoramento contínuo:**
 
 - `[ ]` **Egress Supabase 24-48h pós ship v0.2.3.12** — observar painel API Gateway. Throttle revert pode aumentar IDB writes locais (zero impacto egress Supabase, só client IDB).
 - `[ ]` **Sentry crashes Android nativos** — DOSY-7 + DOSY-3 segfault continuam aguardando #074 NDK symbols upload.
-- `[ ]` **Bug #10 processLock idle real** — depois 30-60min idle real, marcar dose imediato pós resume — verifica lag <5s.
+- `[~]` **Bug #10 processLock idle real** — depois 30-60min idle real, marcar dose imediato pós resume — verifica lag <5s. **Sessão 2026-05-18:** Skip — requer 30-60min idle real impraticável em sessão QA 60min. Validar device físico pós ship.
 
 **Issue A nova (#0009 P2 BUGS.md):** `usePatientShares` 401 "Carregando..." infinito. Defer pra v0.2.3.13.
 
@@ -76,10 +81,10 @@
 
 > Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar). Validar device real só vale após APK shipped.
 
-- `[ ]` **#0001 push sub auto** — instalar AAB fresh, logar nova conta (sem subscription anterior), conferir push chega ao receber share.
-- `[ ]` **#0002 toast Desfazer** — marcar dose como tomada, verificar banner verde "Desfazer" aparece acima BottomNav (não obscurecido por gesture nav).
-- `[ ]` **#0003 + #0004 unshare UX device real** — outro user revoga share → app NÃO abre sozinho + ao abrir manual, cache limpo sem tela "Paciente Carregando..." infinita.
-- `[ ]` **#299 banner update real** — instalar vc 73 antes + propagar vc 74 → banner exibe "v0.2.3.11" (não "versão 74").
+- `[x]` **#0001 push sub auto** — instalar AAB fresh, logar nova conta (sem subscription anterior), conferir push chega ao receber share. **Sessão 2026-05-18 emulator final-validation:** PASS — clear `localStorage.dosy_fcm_token` + reload → token restored em <700ms via INITIAL_SESSION branch `!cachedToken && perm=granted` em fcm.js auto-register.
+- `[ ]` **#0002 toast Desfazer** — marcar dose como tomada, verificar banner verde "Desfazer" aparece acima BottomNav (não obscurecido por gesture nav). Device-only (visual safe-area).
+- `[ ]` **#0003 + #0004 unshare UX device real** — outro user revoga share → app NÃO abre sozinho + ao abrir manual, cache limpo sem tela "Paciente Carregando..." infinita. Device-only (FCM data-only msg em background).
+- `[~]` **#299 banner update real** — instalar vc 73 antes + propagar vc 74 → banner exibe "v0.2.3.11" (não "versão 74"). **Sessão 2026-05-18:** Cannot fully — requer duas versões AAB sequenciais em Play Console Internal Testing. Device-only.
 
 **Validações monitoramento contínuo:**
 

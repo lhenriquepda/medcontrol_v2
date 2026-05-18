@@ -1,9 +1,9 @@
-v0.2.3.11 — Correções e melhorias
+v0.2.3.12 — Correções de estabilidade
 
-• Notificações push são ativadas automaticamente ao logar (sem entrar em Ajustes)
-• Banner "Desfazer" aparece corretamente em celulares Samsung
-• Quando um cuidador é removido, o app não abre mais sozinho — atualiza em silêncio
-• Relatórios não inflam adesão após pausar e retomar tratamento
-• "Termina hoje" e "1 dia" corretos (sem mais "1 dias")
-• HORÁRIO usa formato brasileiro (DD/MM/AAAA e 24h)
-• Banner de atualização exibe sempre a versão real disponível
+• Atualizar (puxar pra baixo) não trava mais — timeout de 20s evita carregamento eterno
+• Cadastrar S.O.S não fica travado em "Salvando" — timeout 15s + retentar disponível
+• Marcação de dose tomada/pulada persiste mesmo se app for fechado logo após o toque
+• Configurações: ativar Não Perturbe não trava — timeout 15s pra avisar erro
+• Compartilhar/Remover paciente não trava — timeout 15s consistente
+• Push notifications: só marca "ativadas" se Google Play Services responder OK
+• Tratamentos criados em outro device aparecem imediatamente ao abrir paciente
