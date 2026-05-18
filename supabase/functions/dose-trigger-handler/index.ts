@@ -400,12 +400,20 @@ Deno.serve(async (req) => {
     const { data: patient } = await supabase
       .from('patients').select('name').eq('id', patientId).maybeSingle()
 
+    // v0.2.3.13 — recipients computado UMA vez. isShared = qualquer recipient
+    // além do owner (cuidador associado). AlarmReceiver lê esse flag pra decidir
+    // se faz HTTP pre-check + disclaimer quando rede off/erro. Paciente NÃO
+    // compartilhado mantém fluxo atual sem pre-check pra evitar regressão.
+    const recipients = await getRecipientUserIds(patientId, ownerId)
+    const isShared = recipients.length > 1
+
     const dosePayload = [{
       doseId,
       medName: record.medName,
       unit: record.unit,
       scheduledAt: record.scheduledAt,
-      patientName: patient?.name || ''
+      patientName: patient?.name || '',
+      isShared
     }]
 
     const data: Record<string, string> = {
@@ -418,7 +426,6 @@ Deno.serve(async (req) => {
       openDoseId: doseId
     }
 
-    const recipients = await getRecipientUserIds(patientId, ownerId)
     let sent = 0, errors = 0
 
     for (const userId of recipients) {

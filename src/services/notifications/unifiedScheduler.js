@@ -129,6 +129,10 @@ export function buildSchedulePayload(group, prefs) {
         unit: d.unit,
         patientName: d.patientName || '',
         scheduledAt: d.scheduledAt,
+        // v0.2.3.13 — isShared default false. Foreground path JS ainda não enriquece
+        // (caller pode setar via dose.isShared se conhecer pelos shares). Edge FCM
+        // já envia isShared=true. Pre-check + disclaimer ativam quando true.
+        isShared: d.isShared === true,
       })),
     }
   }

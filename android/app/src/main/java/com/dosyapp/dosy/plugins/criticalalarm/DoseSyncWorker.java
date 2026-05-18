@@ -249,6 +249,12 @@ public class DoseSyncWorker extends Worker {
             entry.put("unit", d.optString("unit", ""));
             entry.put("patientName", patientName);
             entry.put("scheduledAt", d.optString("scheduledAt", ""));
+            // v0.2.3.13 — TODO Worker isShared enrichment.
+            // Fluxo primário (FCM dose-trigger-handler) já enriquece isShared via
+            // recipients.length > 1. Worker é fallback 6h: agendamento Worker-only
+            // (FCM falhou entrega) terá isShared=false → sem pre-check + sem disclaimer.
+            // Aceitável first-step. Próxima etapa: batch fetch patient_shares aqui.
+            entry.put("isShared", false);
             groups.get(minute).put(entry);
             doseIdsByMinute.get(minute).add(d.getString("id"));
         }

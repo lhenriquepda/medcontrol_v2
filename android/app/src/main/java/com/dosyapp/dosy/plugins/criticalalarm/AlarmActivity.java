@@ -60,6 +60,9 @@ public class AlarmActivity extends Activity {
 
     private int alarmId;
     private List<DoseItem> doses = new ArrayList<>();
+    // v0.2.3.13 — sinaliza paciente compartilhado + pre-check falhou (rede off/erro).
+    // Renderiza disclaimer destacado pra cuidador confirmar antes de medicar.
+    private boolean unverifiedShared = false;
 
     private static class DoseItem {
         String doseId, medName, unit, patientName, scheduledAt;
@@ -107,6 +110,7 @@ public class AlarmActivity extends Activity {
         Intent intent = getIntent();
         alarmId = intent.getIntExtra("id", 0);
         String dosesJson = intent.getStringExtra("doses");
+        unverifiedShared = intent.getBooleanExtra("unverifiedShared", false);
         parseDoses(dosesJson);
 
         setContentView(buildLayout());
@@ -349,6 +353,17 @@ public class AlarmActivity extends Activity {
         outer.addView(header, new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ));
+
+        // v0.2.3.13 — disclaimer banner: paciente compartilhado + sem rede pra
+        // verificar status server-side. Cuidador precisa confirmar antes de medicar.
+        if (unverifiedShared) {
+            LinearLayout disclaimer = buildUnverifiedSharedBanner();
+            LinearLayout.LayoutParams discLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            discLp.setMargins(dp(24), 0, dp(24), dp(12));
+            outer.addView(disclaimer, discLp);
+        }
 
         // ── SCROLLABLE DOSE LIST grouped by patient ──────────────────
         ScrollView scroll = new ScrollView(this);
@@ -604,6 +619,60 @@ public class AlarmActivity extends Activity {
         ));
 
         return root;
+    }
+
+    /**
+     * v0.2.3.13 — disclaimer card pra unverified shared dose. Card amarelo escuro
+     * com borda viva + ícone ⚠️ + título + corpo explicativo. Sobrepõe sunset bg
+     * com contraste alto pra cuidador NÃO ignorar antes de medicar.
+     */
+    private LinearLayout buildUnverifiedSharedBanner() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        GradientDrawable boxBg = new GradientDrawable();
+        // Amarelo âmbar bem opaco pra contrastar contra rosa/laranja do bg.
+        boxBg.setColor(Color.parseColor("#F2FFD54F"));
+        boxBg.setCornerRadius(dp(18));
+        boxBg.setStroke(dp(2), Color.parseColor("#FFB300"));
+        box.setBackground(boxBg);
+        box.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+        // Header row: ⚠️ + título
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView icon = new TextView(this);
+        icon.setText("⚠️");
+        icon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        icon.setPadding(0, 0, dp(10), 0);
+        headerRow.addView(icon);
+
+        TextView titleView = new TextView(this);
+        titleView.setText("CONFIRME ANTES DE MEDICAR");
+        titleView.setTextColor(Color.parseColor("#4A2C00"));
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        titleView.setTypeface(null, android.graphics.Typeface.BOLD);
+        titleView.setLetterSpacing(0.04f);
+        headerRow.addView(titleView);
+
+        box.addView(headerRow, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        TextView body = new TextView(this);
+        body.setText("Sem conexão com a internet pra checar se outro cuidador já registrou esta dose. Pergunte antes de medicar pra evitar dose duplicada.");
+        body.setTextColor(Color.parseColor("#3D2000"));
+        body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        body.setLineSpacing(dp(2), 1.0f);
+        LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        bodyLp.setMargins(0, dp(6), 0, 0);
+        box.addView(body, bodyLp);
+
+        return box;
     }
 
     /** Pulse animation: scale 1.0 ↔ 1.15 looped, ping-pong. */

@@ -38,7 +38,8 @@
 | Roadmap macro + itens abertos | `context/ROADMAP.md` |
 | Detalhe técnico por item `#XXX` | `context/CHECKLIST.md` |
 | Bugs abertos (P0-P4) | `context/BUGS.md` |
-| Validações device pendentes | `context/Validar.md` |
+| Validações device pendentes (checklist) | `context/Validar.md` |
+| Relatórios validação QA por release (execução) | `context/qa-reports/` |
 | Mapa funcional do app (páginas, flows) | `context/APP.md` |
 | ADRs / decisões arquitetura | `context/decisoes/` |
 | Updates cronológicos por release | `context/updates/` |

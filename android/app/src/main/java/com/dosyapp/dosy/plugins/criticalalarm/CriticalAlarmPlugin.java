@@ -137,6 +137,10 @@ public class CriticalAlarmPlugin extends Plugin {
                 d.put("unit", src.optString("unit", ""));
                 d.put("patientName", src.optString("patientName", ""));
                 d.put("scheduledAt", src.optString("scheduledAt", ""));
+                // v0.2.3.13 — JS pode passar isShared opcional. Default false mantém
+                // path foreground sem pre-check (sem regressão). FCM path (Edge) já
+                // envia isShared=true via DosyMessagingService.handleScheduleAlarms.
+                d.put("isShared", src.optBoolean("isShared", false));
                 doses.put(d);
             } catch (JSONException ignored) {}
         }

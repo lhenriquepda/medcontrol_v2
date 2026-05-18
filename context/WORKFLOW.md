@@ -254,6 +254,15 @@ Após validação web: atualizar `context/Validar.md` com seção topo `## 🆕 
 
 → Ver `context/recipes/emulator-setup.md` para receita completa.
 
+**Após rodar §11b com Appium**, criar relatório de execução em:
+```
+context/qa-reports/YYYY-MM-DD-vX.Y.Z.W-appium.md
+```
+com cabeçalho + setup + cenários (timestamps UTC + logs + screenshot paths) + tabela resumo. Convenção e template em `context/qa-reports/README.md`.
+
+> Distinção: `Validar.md` (raiz) = checklist `[ ]` de o que falta validar manualmente em device.
+> `qa-reports/` = registro detalhado de execução autônoma.
+
 ### 11c — Validação device manual (fallback — só quando §11a+§11b não cobrem)
 
 Cenários device-only que IA NÃO consegue autonomous:

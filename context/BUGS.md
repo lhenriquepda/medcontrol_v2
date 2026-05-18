@@ -27,6 +27,24 @@ Nenhum bug P1 aberto.
 ## 🟡 P2 — Média prioridade
 
 - **#0009** P2 — `usePatientShares` query 401 JWT expiry mostra "Carregando..." pra sempre, sem error toast/inline. Descoberto durante QA Appium v0.2.3.12 (sessão 2026-05-18). Reproduzido quando refresh tokens revogados + reload PatientDetail compartilhado. Sem retry boundary nem fallback UI. Fix: error state explícito + retry button OR ErrorBoundary específico pra queries que falham em 401. Hook em `src/hooks/useShares.js` (provavelmente `useReceivedShares`/`useListPatientShares`). Esforço ~30min.
+- **#0010** P2 — Update banner mostra `"versão 75. toque pra baixar"` em vez de `"0.2.3.12"`. Reportado user 2026-05-18 ao atualizar de v0.2.3.11 → v0.2.3.12 no Samsung S25 Ultra. **Causa-raiz:** `src/hooks/useAppUpdate.js:153-156` prefere `info.availableVersion` (Play Core API) sobre DB autoritativa. Plugin `@capawesome/capacitor-app-update` no Android retorna `availableVersion = "75"` (versionCode stringified) quando Play Store backend não popula versionName imediatamente pós-publish. `??` só pula null/undefined → `"75"` truthy curtocircuita DB lookup. **Fix:** inverter ordem — DB primeiro, validar shape `info.availableVersion` (contém ponto = semver real, só dígitos = versionCode), fallback final `versão N`:
+  ```js
+  const looksLikeSemver = (v) => typeof v === 'string' && /\d+\.\d+/.test(v)
+  const version =
+    dbInfo?.name                                              // 1º DB autoritativa
+    ?? (looksLikeSemver(info.availableVersion) ? info.availableVersion : null)  // 2º Play Core SE semver
+    ?? `versão ${availableVc}`                                // 3º fallback
+  ```
+  Esforço ~10min.
+- **#0011** P2 — Update banner mostra verde (dismissable) em vez de modal vermelho quando alguma release intermediária tem `is_mandatory=true`. Reportado user 2026-05-18 ao atualizar v0.2.3.11 → v0.2.3.12 (vc 75 era mandatory mas modal não apareceu). **Causa-raiz hipótese A (timing):** `is_mandatory=true` setado no DB DEPOIS do user atualizar (cenário benigno). **Causa-raiz hipótese B (race Play Core):** `info.currentVersionCode` retornou null/undefined em primeiro check → `useAppUpdate.js:148` cai em `currentVersionCode` state que ainda não populou (race com `useEffect` em linha 128-136). Linha 67 `if (currentVc != null && currentVc < availableVc)` PULA mandatory check inteiro → default false. **Fix:** quando `currentVc=null`, fazer query upper-bound-only (`gt` removido) — se ALGUMA release `<= availableVc` é mandatory, treat conservatively as mandatory:
+  ```js
+  let mandatory = false
+  let mandQuery = supabase.from('app_releases').select('version_code').lte('version_code', availableVc).eq('is_mandatory', true).limit(1)
+  if (currentVc != null && currentVc < availableVc) mandQuery = mandQuery.gt('version_code', currentVc)
+  const { data: mandRows } = await mandQuery
+  mandatory = !!mandRows?.length
+  ```
+  Trade-off: usuário com fresh install muito antigo pode ver mandatory falso-positivo. Aceitável — melhor errar pelo lado seguro em healthcare. Esforço ~10min. Confirmar root cause real (A vs B) via Sentry breadcrumbs antes de fix.
 
 ---
 

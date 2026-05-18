@@ -10,13 +10,13 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.3.12` |
-| **versionCode** | `75` |
-| **Branch ativa** | `master` (sem release em curso) |
+| **Versão** | `v0.2.3.13` |
+| **versionCode** | `76` |
+| **Branch ativa** | `release/v0.2.3.13` (merge pendente) |
 | **Último tag** | `v0.2.3.12` · merge `c9282e6` |
 | **Ship date** | 2026-05-18 |
-| **Play Console** | Internal Testing vc 75 — publicado 2026-05-18 15:19 BRT |
-| **Vercel prod** | `dosymed.app` — v0.2.3.12 (deploy em curso) |
+| **Play Console** | Internal Testing vc 76 — publicado 2026-05-18 18:04 BRT |
+| **Vercel prod** | `dosymed.app` — v0.2.3.12 (será atualizado pós merge master) |
 
 ---
 
@@ -27,6 +27,7 @@
 3. **#132** — gate 14d ≥12 testers (depende #131)
 4. **#133** — Production access Console (depende #132)
 5. **#191/#192** — RevenueCat + Play Billing (Fase 3)
+6. **#300** — Validação device físico v0.2.3.13 disclaimer paciente compartilhado + cenário E cache offline + snooze 10min + Samsung One UI battery optimizer impact
 
 ---
 
