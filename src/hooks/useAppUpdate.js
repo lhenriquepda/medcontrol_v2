@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { supabase, hasSupabase } from '../services/supabase'
 
 /* eslint-disable no-undef */
 const BUNDLE_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
@@ -7,36 +8,85 @@ const BUNDLE_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ 
 
 const isNative = Capacitor.isNativePlatform()
 
-// #095 fix (v0.1.7.5): native app version source-of-truth = Android packageInfo
-// (App.getInfo()), não JS bundle. Bundle pode ficar stale se cap sync não rodou
-// antes do AAB build. PackageInfo reflete versionName real do APK instalado.
-// Web continua usando bundle version (não tem nativo).
+// v0.2.3.11 #299 — native version source-of-truth = Android packageInfo
+// (App.getInfo()). Bundle pode ficar stale se cap sync não rodou antes do AAB.
 let cachedNativeVersion = null
+let cachedNativeVersionCode = null
 async function getRealVersion() {
-  if (!isNative) return BUNDLE_VERSION
-  if (cachedNativeVersion) return cachedNativeVersion
+  if (!isNative) return { name: BUNDLE_VERSION, code: null }
+  if (cachedNativeVersion) return { name: cachedNativeVersion, code: cachedNativeVersionCode }
   try {
     const { App } = await import('@capacitor/app')
     const info = await App.getInfo()
     cachedNativeVersion = info?.version || BUNDLE_VERSION
-    return cachedNativeVersion
+    cachedNativeVersionCode = info?.build ? parseInt(info.build, 10) : null
+    return { name: cachedNativeVersion, code: cachedNativeVersionCode }
   } catch {
-    return BUNDLE_VERSION
+    return { name: BUNDLE_VERSION, code: null }
   }
 }
 
-// Web-only fallback. Native ignora — usa Play Store In-App Updates API.
-// Item #103 BUG-032: URL hardcoded apontava 'dosy-teal.vercel.app' (preview
-// antigo). Domínio real prod = dosy-app.vercel.app. Fetch ia 404 silent →
-// latest=null → available=false → banner nunca aparecia. Fix: usar origin
-// runtime quando web (mesmo deployment). Native ignora essa URL.
+// Web fallback (mantém comportamento legacy /version.json para usuários web)
 const VERSION_URL = typeof window !== 'undefined' && window.location?.origin
   ? `${window.location.origin}/version.json`
   : 'https://dosy-app.vercel.app/version.json'
-const CHECK_INTERVAL_MS = 30 * 60 * 1000  // every 30 min while open
+const CHECK_INTERVAL_MS = 30 * 60 * 1000
 const DISMISS_KEY = 'dosy_update_dismissed_version'
+const VNAME_CACHE_PREFIX = 'dosy_vname_'  // localStorage cache por vcode (imutável)
 
-/** Compares "1.2.3" semver strings. Returns true if `a > b`. */
+/**
+ * v0.2.3.11 #299 — resolve version_name + is_mandatory via DB autoritativa.
+ *
+ * - version_name: cache localStorage por vcode (releases name nunca muda).
+ * - is_mandatory: NÃO cacheia (IA pode editar flag depois do ship em casos
+ *   excepcionais; query roda 1× por sessão, custo negligível).
+ *
+ * Retorna { name, mandatory } ou null se DB indisponível/sem linha.
+ */
+async function fetchReleaseFromDb(currentVc, availableVc) {
+  if (!hasSupabase || !availableVc) return null
+
+  // 1. version_name pelo cache (imutável)
+  let cachedName = null
+  try { cachedName = localStorage.getItem(VNAME_CACHE_PREFIX + availableVc) } catch {}
+
+  try {
+    // 2. Query única: pega available release + verifica mandatory entre current..available
+    const { data: availableRow } = await supabase
+      .from('app_releases')
+      .select('version_code, version_name, is_mandatory, whatsnew')
+      .eq('version_code', availableVc)
+      .maybeSingle()
+
+    if (availableRow?.version_name && !cachedName) {
+      try { localStorage.setItem(VNAME_CACHE_PREFIX + availableVc, availableRow.version_name) } catch {}
+      cachedName = availableRow.version_name
+    }
+
+    // is_mandatory: existe alguma release mandatory em (currentVc, availableVc]?
+    let mandatory = false
+    if (currentVc != null && currentVc < availableVc) {
+      const { data: mandRows } = await supabase
+        .from('app_releases')
+        .select('version_code')
+        .gt('version_code', currentVc)
+        .lte('version_code', availableVc)
+        .eq('is_mandatory', true)
+        .limit(1)
+      mandatory = !!mandRows?.length
+    }
+
+    return {
+      name: cachedName || availableRow?.version_name || null,
+      mandatory,
+      whatsnew: availableRow?.whatsnew || null,
+    }
+  } catch (e) {
+    console.warn('[useAppUpdate #299] DB fetch failed:', e?.message)
+    return cachedName ? { name: cachedName, mandatory: false, whatsnew: null } : null
+  }
+}
+
 function isNewer(a, b) {
   const as = a.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
   const bs = b.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
@@ -54,97 +104,64 @@ function isNewer(a, b) {
  *
  * NATIVE (Android): Google Play In-App Updates API (flexible mode).
  *   - getAppUpdateInfo() reads Play Store directly — source of truth = Play Console
- *   - Banner aparece sempre que availableVersion > currentVersion (NÃO dismiss)
+ *   - version_name resolvido via DB app_releases (v0.2.3.11 #299) — substituiu
+ *     mapa hardcoded + cadeia frágil de fallbacks Vercel
+ *   - is_mandatory=true → modal bloqueante (não dismissable, não pode usar app)
+ *   - Default banner verde (dismissable em web only; native = sempre exibe até atualizar)
  *   - Tap "Atualizar" → startFlexibleUpdate (download bg, app continua usável)
- *   - Download done → banner vira "Reiniciar" → completeFlexibleUpdate restarts app
- *   - Falha graceful: erro plugin = retorna available=false, app não trava
+ *   - Download done → completeFlexibleUpdate restarts app
  *
- * WEB: legacy fetch /version.json from Vercel (deployed bundle).
- *   - Tap → window.location.reload()
- *   - User pode dispensar (DISMISS_KEY persiste em localStorage)
+ * WEB: legacy /version.json (Vercel deploy). Sem is_mandatory (web não precisa
+ * força update; reload é suficiente).
  */
 export function useAppUpdate() {
   const [latest, setLatest] = useState(null)
   const [downloaded, setDownloaded] = useState(false)
-  const [progress, setProgress] = useState(0) // 0..1 download fraction
+  const [progress, setProgress] = useState(0)
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(DISMISS_KEY) } catch { return null }
   })
   const [currentVersion, setCurrentVersion] = useState(BUNDLE_VERSION)
+  const [currentVersionCode, setCurrentVersionCode] = useState(null)
   const listenerRef = useRef(null)
 
-  // #095 (v0.1.7.5): resolver versão real native (Android packageInfo)
   useEffect(() => {
     let active = true
-    getRealVersion().then(v => { if (active) setCurrentVersion(v) })
+    getRealVersion().then(({ name, code }) => {
+      if (!active) return
+      setCurrentVersion(name)
+      setCurrentVersionCode(code)
+    })
     return () => { active = false }
   }, [])
 
   // ─── Native check (Play Store) ──────────────────────────────────────
-  // #189 (v0.2.1.3): triple fallback chain pra resolver versionName ao invés
-  // de versionCode no banner. Play Core API frequentemente retorna
-  // info.availableVersion=undefined em Android < API 31 OR Play Core SDK older.
-  // Fix: paralelo Play Core + version.json Vercel (canônico versionName) +
-  // local map versionCode→versionName + fallback PT-BR friendly "versão N".
-  const VERSION_CODE_TO_NAME = {
-    46: '0.2.1.0',
-    47: '0.2.1.1',
-    48: '0.2.1.2',
-    49: '0.2.1.3',
-    50: '0.2.1.3',
-    51: '0.2.1.3',
-    52: '0.2.1.5',
-    53: '0.2.1.5',
-    54: '0.2.1.6',
-    55: '0.2.1.7',
-    56: '0.2.1.8',
-    57: '0.2.1.9',
-    58: '0.2.2.0',
-    59: '0.2.2.1',
-    60: '0.2.2.2',
-    61: '0.2.2.3',
-    62: '0.2.2.4',
-    63: '0.2.3.0',
-    64: '0.2.3.1',
-    65: '0.2.3.2',
-    66: '0.2.3.3',
-    67: '0.2.3.4',
-    68: '0.2.3.5',
-    69: '0.2.3.6',
-    70: '0.2.3.7',
-    // adicionar próximas releases aqui (sync map a CADA release no Passo 11 README)
-  }
   const checkNative = useCallback(async () => {
     try {
       const { AppUpdate } = await import('@capawesome/capacitor-app-update')
-      // Paralelo: Play Core + version.json Vercel
-      const [infoResult, webResult] = await Promise.allSettled([
-        AppUpdate.getAppUpdateInfo(),
-        fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ])
-      const info = infoResult.status === 'fulfilled' ? infoResult.value : null
-      const versionData = webResult.status === 'fulfilled' ? webResult.value : null
+      const info = await AppUpdate.getAppUpdateInfo()
 
-      // updateAvailability: 1=NOT_AVAILABLE, 2=UPDATE_AVAILABLE, 3=DEVELOPER_TRIGGERED_IN_PROGRESS
-      // installStatus: 0=UNKNOWN, 1=PENDING, 2=DOWNLOADING, 11=DOWNLOADED, 4=INSTALLED, 5=FAILED, 6=CANCELED
+      // updateAvailability: 1=NOT_AVAILABLE, 2=UPDATE_AVAILABLE, 3=IN_PROGRESS
+      // installStatus: 11=DOWNLOADED
       if (info?.updateAvailability === 2 && info.flexibleUpdateAllowed) {
-        // v0.2.3.4 #236 fix — reorder fallback chain:
-        // 1. Play Core availableVersion (versionName) — primary
-        // 2. **VERSION_CODE_TO_NAME local map** — secondary (movido pra cima — mais
-        //    confiável que Vercel /version.json que reflete WEB bundle, pode lag
-        //    Vercel deploy vs Android Play Console AAB publish — user reportou
-        //    banner "atualizar 0.2.3.2" mas AAB real era 0.2.3.3 quando map vc 66
-        //    ainda não estava no Vercel /version.json mas já estava no local map).
-        // 3. version.json Vercel (canônico web — fallback se vc não mapeado)
-        // 4. PT-BR friendly "versão N" — final fallback (vs ugly "code N")
+        const availableVc = info.availableVersionCode
+        const currentVc = info.currentVersionCode ?? currentVersionCode ?? null
+
+        // DB autoritativa: version_name + is_mandatory
+        const dbInfo = await fetchReleaseFromDb(currentVc, availableVc)
+
         const version =
-          info.availableVersion
-          ?? VERSION_CODE_TO_NAME[info.availableVersionCode]
-          ?? versionData?.version
-          ?? `versão ${info.availableVersionCode}`
-        setLatest({ version, source: 'play' })
+          info.availableVersion         // 1º Play Core (quando vem preenchido)
+          ?? dbInfo?.name               // 2º DB autoritativa (sempre atualizada via Passo 12)
+          ?? `versão ${availableVc}`    // 3º fallback final
+
+        setLatest({
+          version,
+          versionCode: availableVc,
+          mandatory: dbInfo?.mandatory || false,
+          whatsnew: dbInfo?.whatsnew || null,
+          source: 'play',
+        })
       } else {
         setLatest(null)
       }
@@ -152,7 +169,7 @@ export function useAppUpdate() {
     } catch (e) {
       console.log('[useAppUpdate] native check skipped:', e?.message || e)
     }
-  }, [])
+  }, [currentVersionCode])
 
   // ─── Web check (Vercel) ─────────────────────────────────────────────
   const checkWeb = useCallback(async () => {
@@ -160,7 +177,7 @@ export function useAppUpdate() {
       const res = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
-      setLatest({ ...data, source: 'web' })
+      setLatest({ ...data, source: 'web', mandatory: false })
     } catch {
       // network/404 → ignore silently
     }
@@ -191,7 +208,6 @@ export function useAppUpdate() {
         const { AppUpdate } = await import('@capawesome/capacitor-app-update')
         const handle = await AppUpdate.addListener('onFlexibleUpdateStateChange', (state) => {
           if (!active) return
-          // installStatus codes (Google Play Core)
           if (state.installStatus === 2 && state.bytesDownloaded && state.totalBytesToDownload) {
             setProgress(state.bytesDownloaded / state.totalBytesToDownload)
           }
@@ -216,11 +232,18 @@ export function useAppUpdate() {
     }
     try {
       const { AppUpdate } = await import('@capawesome/capacitor-app-update')
-      await AppUpdate.startFlexibleUpdate()
+      // v0.2.3.11 #299 — mandatory usa IMMEDIATE (Play UI full-screen)
+      // ao invés de FLEXIBLE (background download + restart). Mantém UX
+      // consistente com modal bloqueante exibido no app.
+      if (latest?.mandatory) {
+        await AppUpdate.performImmediateUpdate?.() ?? AppUpdate.startFlexibleUpdate()
+      } else {
+        await AppUpdate.startFlexibleUpdate()
+      }
     } catch (e) {
       console.error('[useAppUpdate] start failed:', e?.message)
     }
-  }, [])
+  }, [latest])
 
   const completeUpdate = useCallback(async () => {
     if (!isNative) return
@@ -232,21 +255,52 @@ export function useAppUpdate() {
     }
   }, [])
 
+  // ─── Debug toggles (runtime, dev only) ───────────────────────────
+  //   window.__dosyForceUpdate = true       → força banner verde
+  //   window.__dosyForceMandatory = true    → força modal bloqueante (preview layout)
+  //   window.__dosyDebugRecheck()           → re-avalia flags em TODAS instâncias
+  //
+  // Múltiplas instâncias do hook (UpdateBanner + AppHeader + Settings) precisam
+  // todas reagir ao toggle — usa CustomEvent global ao invés de setState direto.
+  // Debug-only tick que força re-render quando flags mudam em runtime
+  const [, setDebugTick] = useState(0)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => {
+      if (window.__dosyForceMandatory === true) {
+        setLatest(prev => prev?.mandatory
+          ? prev
+          : { version: prev?.version || '0.2.3.99', mandatory: true, whatsnew: 'Atualização obrigatória — preview de layout.', source: 'debug' })
+      } else if (window.__dosyForceUpdate === true && !latest) {
+        // Banner verde precisa de `latest.version` pra renderizar subtitle. Injeta fake.
+        setLatest({ version: '0.2.3.99', mandatory: false, source: 'debug' })
+      } else {
+        setDebugTick(t => t + 1)  // força re-render pra re-avaliar available
+      }
+    }
+    window.addEventListener('__dosyDebugRecheck', handler)
+    if (window.__dosyForceMandatory === true || window.__dosyForceUpdate === true) handler()
+    window.__dosyDebugRecheck = () => window.dispatchEvent(new Event('__dosyDebugRecheck'))
+    return () => window.removeEventListener('__dosyDebugRecheck', handler)
+  }, [latest])
+
   // ─── Availability flag ─────────────────────────────────────────────
-  // Native: banner só some quando versão atual = última (após restart)
-  // Web: banner desaparece quando user dispensa explicitamente
   const isWebNewer = !isNative && latest?.version && isNewer(latest.version, currentVersion)
   let available = isNative
-    ? !!latest                              // sempre exibe enquanto Play reporta update
+    ? !!latest
     : (isWebNewer && dismissed !== latest.version)
 
-  // Debug toggle: set window.__dosyForceUpdate=true em runtime pra forçar banner
-  // sem update real (preview visual). Default off em produção.
-  if (typeof window !== 'undefined' && window.__dosyForceUpdate === true) {
-    available = true
+  if (typeof window !== 'undefined') {
+    if (window.__dosyForceUpdate === true) available = true
+    if (window.__dosyForceMandatory === true) available = true
   }
 
+  // mandatory=true só vem do native (DB app_releases). Web /version.json não popula
+  // is_mandatory (sem coluna). __dosyForceMandatory debug bypassa isNative pra preview.
+  const mandatory = !!latest?.mandatory
+
   const dismiss = () => {
+    if (mandatory) return  // mandatory não pode ser dismissado
     if (latest) {
       localStorage.setItem(DISMISS_KEY, latest.version)
       setDismissed(latest.version)
@@ -255,6 +309,7 @@ export function useAppUpdate() {
 
   return {
     available,
+    mandatory,
     current: currentVersion,
     latest,
     downloaded,
@@ -263,6 +318,6 @@ export function useAppUpdate() {
     startUpdate,
     completeUpdate,
     dismiss,
-    recheck: check
+    recheck: check,
   }
 }

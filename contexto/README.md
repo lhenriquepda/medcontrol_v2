@@ -578,6 +578,15 @@ Cenários device-only que IA NÃO consegue autonomous:
   - Output: `android/app/build/outputs/bundle/release/app-release.aab`
 - Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
 - **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
+- **🆕 v0.2.3.11 #299 — Atualizar tabela `app_releases` (autoritativa pra in-app update banner):**
+  ```sql
+  INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew)
+  VALUES ({VC}, '{X.Y.Z.W}', false, '{whatsnew curto pt-BR opcional}')
+  ON CONFLICT (version_code) DO NOTHING;
+  ```
+  Executar via `mcp__supabase__execute_sql`. ON CONFLICT garante idempotente (rodar 2× não quebra).
+  Sem essa linha, banner mostra "versão {VC}" feio até Vercel deploy alcançar (fallback web).
+  Marcar `is_mandatory = true` SÓ pra security fixes, breaking schema, bugs críticos — força modal bloqueante full-screen sem dismiss até user atualizar.
 - Internal Testing track ativa em ~1h
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)

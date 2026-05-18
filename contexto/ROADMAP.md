@@ -162,18 +162,19 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 > 🚨 **IA: SEMPRE varrer [`contexto/BUGS.md`](BUGS.md) ANTES desta seção.** ROADMAP cobre **features, melhorias e roadmap de lançamento**. Bugs ativos ficam em `BUGS.md` com numeração própria (#0001+) e severidade P0/P1/P2/P3/P4. Alertar o user sobre bugs abertos no início de cada sessão (Passo 0 README), igual ao alerta de itens pendentes do Validar.md.
 
-**Branch ativa:** `release/v0.2.3.11` (vc 74, 3 commits). Bugs #0001–#0005 #0007 #0008 fixados. Aguardando: QA web + validação device + autorização Passo 10.5.
+**Branch ativa:** `release/v0.2.3.11` (vc 74). Todos os bugs #0001–#0008 fixados + feature #299 (in-app update DB autoritativo). Aguardando: validação localhost web + autorização Passo 10.5 + AAB upload.
 
-**Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — 2 bugs abertos (#0006 #0009).
+**Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — nenhum bug aberto.
 
 **🔄 EM CURSO `release/v0.2.3.11`** (vc 74, base master v0.2.3.10 vc 73):
-- ✅ **#0003+#0004** P2 — unshare background `startActivity` + tela "Paciente Carregando..." — WeakRef + SharedPrefs + var separada `__dosyPendingUnsharePatientId`
-- ✅ **#0002** P2 — Banner Desfazer invisível device físico — `useToast` bottom `calc(6rem + safe-area-inset-bottom)`
-- ✅ **#0001** P2 — Push subscription não registra auto — `useAuth` SIGNED_IN + INITIAL_SESSION auto-subscribe se perm=granted
-- ✅ **#0005** P2 — Status "Cancelada" em Reports pós pause/resume — `resumeTreatment` restaura cancelled→pending + Reports exclui cancelled do denominador
-- ✅ **#0007** P3 — SOS/DoseModal HORÁRIO en-US — `DoseModal` split `datetime-local` → `date`+`time`
-- ✅ **#0008** P4 — "1 dias" pluralização — `Number(t.durationDays) === 1`
-- ⏳ **#0006** P2 — Console errors `[object Object]` — não localizado sem stack trace, requer reconfirmação device
+- ✅ **#0001** P2 — Push subscription não registra auto — `useAuth` SIGNED_IN + INITIAL_SESSION auto-subscribe se perm=granted. Commit `7e043ab`. Validado emulador.
+- ✅ **#0002** P2 — Banner Desfazer invisível device físico — `useToast` bottom `calc(6rem + safe-area-inset-bottom)`. Commit `7e043ab`. Validado CDP.
+- ✅ **#0003+#0004** P2 — unshare background `startActivity` + tela "Paciente Carregando..." — WeakRef + SharedPrefs + var separada `__dosyPendingUnsharePatientId`. Commits `7e043ab` + `1062e62`. Validado behavioral 2-devices (Chrome web teste-plus + emulador teste-free).
+- ✅ **#0005** P2 — Status "Cancelada" em Reports pós pause/resume — `resumeTreatment` restaura cancelled→pending + Reports exclui cancelled do denominador. Commit `3d73a57`. Validado live (Adesão 67% durante pause, não 40%).
+- ✅ **#0006** P2 — Console `[object Object]` no logcat — root cause Capacitor bridge `console.dir(call)` debug-only + Sentry capture AppUpdate err -6 (emulador only). Fix: `capacitor.config.ts` `loggingBehavior: 'production'`.
+- ✅ **#0007** P3 — SOS/DoseModal HORÁRIO en-US — `DoseModal` split `datetime-local` → `date`+`time`. Commit `3d73a57`. Validado.
+- ✅ **#0008** P4 — "1 dias" pluralização — `Number(t.durationDays) === 1`. Commit `3d73a57`. Validado visual.
+- ✅ **#299** Feature — Tabela `medcontrol.app_releases` autoritativa pra in-app update banner. Substitui mapa hardcoded + cadeia frágil Vercel. Banner verde dismissable default + modal vermelho full-screen quando `is_mandatory=true`. IA atualiza no Passo 12 via INSERT idempotente. Migration `20260518000000_app_releases_v0_2_3_11.sql` aplicada + `useAppUpdate.js` + `UpdateBanner.jsx` refatorados + README Passo 12 atualizado.
 
 **✅ SHIPPED master `release/v0.2.3.8`** (vc 71, Play Console Internal Testing publicado 2026-05-17 14:32 BRT, tag `v0.2.3.8` merge `9bf1436`, Vercel prod dosymed.app v0.2.3.8 confirmado). 1 item P0: **#287** P0 BUG — killed caregiver alarm gap arquitetural FCM `notification` payload bloqueava `onMessageReceived` (Firebase Android SDK auto-renderiza tray + não chama handler), AlarmScheduler nunca executava no caregiver. Fix: Edge `dose-trigger-handler` v25 + `dose-fire-time-notifier` v7 enviam DATA-ONLY HIGH (sem notification block) → handler nativo executa + agenda AlarmManager.setAlarmClock OU dispara AlarmService FG imediato via novo `kind=fire_now_alarm`. QA emulador 3/3 PASS (S1 owner sem share, S2 caregiver background recebe schedule_alarms + alarme dispara, S3 caregiver background recebe fire_now_alarm + AlarmService FG dispatched). Commits `981fab4` + `ed180cc`.
 
