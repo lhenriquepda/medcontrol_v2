@@ -96,7 +96,10 @@ const queryClient = new QueryClient({
 // Item #204 — registra mutationFn + callbacks por chave (mutationRegistry).
 // Crítico: precisa rodar ANTES da hydrate do PersistQueryClientProvider, senão
 // resumePausedMutations não acha mutationFn e descarta mutations persistidas.
-registerMutationDefaults(queryClient)
+// v0.2.3.12 NB-4 — registerMutationDefaults movido pra DEPOIS da persister creation
+// (linha ~161 abaixo) pra passar persister como segundo arg. Healthcare critical
+// mutations chamam flushPersistImmediate(persister) em onMutate, garantindo persist
+// IDB ~100ms (era throttle 1s window) entre tap e potential force-kill.
 
 // Item #204 v0.2.1.8 fix-C — bridge connectivity real → TanStack onlineManager.
 // Substitui default subscriber TanStack via setEventListener pra Capacitor.Network
@@ -163,6 +166,10 @@ const persister = idbAvailable
       key: 'dosy-query-cache',
       throttleTime: 1000
     })
+
+// v0.2.3.12 NB-4 — registerMutationDefaults precisa do persister pra flushPersistImmediate
+// em mutations críticas. Chamado aqui após persister const, antes do render.
+registerMutationDefaults(queryClient, persister)
 
 // Native StatusBar overlay config one-time. Style + background color são
 // sincronizados dinamicamente pelo ThemeProvider conforme theme light/dark.

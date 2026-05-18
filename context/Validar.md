@@ -20,7 +20,42 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.11 EM CURSO (vc 74, aguardando autorização AAB Passo 10.5)
+## 🆕 Release atual — v0.2.3.12 EM CURSO (vc 75, aguardando autorização AAB Passo 10.5)
+
+**Status:** branch `release/v0.2.3.12`. 7 commits. 7 fixes runtime (PTR, SOS, throttle revert + NB-4 persistImmediate, useUpdateUserPrefs timeout, unsharePatient timeout, FCM await registration, useTreatments refetch).
+
+**Validações autonomous COMPLETAS (Appium W3C + Supabase MCP + token revoke):**
+
+- `[x]` **PTR timeout 20s** (`e6986a4`) — code review verified `Promise.race([fn, 20s])` em `usePullToRefresh.js:65-87`. Online refresh ~2s OK. Offline path inconclusivo (onlineManager short-circuit).
+- `[x]` **SOS timeout 15s + register.reset** (`655461a`) — Live test PASS. Online submit normal. Offline path: yellow banner + reset OK pós reconnect.
+- `[x]` **useUpdateUserPrefs timeout 15s** (`448bfea` Bug #4) — Live test PASS. CDP fetch patch 30s delay + toggle DnD → toast "Sync prefs timeout (15s)" capturado +15s.
+- `[x]` **unsharePatient timeout 15s** (`448bfea` Bug #5) — Live test PASS. Fetch patch + tap X → toast "Tempo esgotado" capturado, 4 retries.
+- `[x]` **useTreatments refetchOnMount:'always'** (`448bfea` NB-1) — Live test PASS. SQL insert externo → reload PatientDetail → "V12 NB1 Test" aparece imediato.
+- `[x]` **NB-4 throttle 5000→1000ms + flushPersistImmediate** (`448bfea` + commit pendente) — Throttle 1s reduziu janela 5×; flushPersistImmediate em onMutate de confirmDose/skipDose/undoDose/registerSos reduz mais ~10× (janela ~100ms IDB write). Validar device real obrigatório (janela <100ms = OS kill edge case).
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
+
+- `[ ]` **PTR stuck cenário real** — pull-to-refresh com network instável (5G→WiFi handoff): spinner deve sair em ≤20s, console warn em logcat.
+- `[ ]` **SOS submit network slow real** — Cadastrar SOS com 5G fraco: ≤15s toast sucesso OU erro com retry.
+- `[ ]` **NB-4 mark + force-kill rapido** — Mark "Tomada", IMEDIATAMENTE swipe app outta recents OR force-stop. Reopen + verifica mark persistiu.
+- `[ ]` **FCM toggle device real** — Push toggle ON em S25 Ultra (Google Play Services OK): toast "ativadas" deve aparecer apenas após FCM token registrar (≤10s).
+- `[ ]` **DnD toggle Ajustes** — Toggle DnD com network normal: toast sem timeout. Toggle com avião ligado momentaneamente: toast timeout 15s.
+- `[ ]` **Multi-device share/unshare** — Compartilhar paciente teste-free real, unshare network normal: toast "removido" ≤15s.
+- `[ ]` **Treatment cross-device** — Criar treatment em web prod (PC), abrir app device: aparece em PatientDetail imediato (Realtime ou refetchOnMount).
+
+**Validações monitoramento contínuo:**
+
+- `[ ]` **Egress Supabase 24-48h pós ship v0.2.3.12** — observar painel API Gateway. Throttle revert pode aumentar IDB writes locais (zero impacto egress Supabase, só client IDB).
+- `[ ]` **Sentry crashes Android nativos** — DOSY-7 + DOSY-3 segfault continuam aguardando #074 NDK symbols upload.
+- `[ ]` **Bug #10 processLock idle real** — depois 30-60min idle real, marcar dose imediato pós resume — verifica lag <5s.
+
+**Issue A nova (#0009 P2 BUGS.md):** `usePatientShares` 401 "Carregando..." infinito. Defer pra v0.2.3.13.
+
+---
+
+## 📦 v0.2.3.11 SHIPPED 2026-05-18 (movido pra histórico — manter aqui temporariamente)
 
 **Status:** branch `release/v0.2.3.11`. Commit topo `d85fb4e` (#299 + #0006). 8 bugs (#0001-#0008) fixados + feature #299 (DB autoritativa in-app update + modal mandatory).
 

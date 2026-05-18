@@ -26,6 +26,7 @@
  *   - usePushSubscription    — fallback FCM cron já cobre
  *   - sos_rules upsert       — settings de regra, não-crítico
  */
+import { dehydrate } from '@tanstack/react-query'
 import { confirmDose, skipDose, undoDose, registerSos } from './dosesService'
 import { createPatient, updatePatient, deletePatient } from './patientsService'
 import {
@@ -48,6 +49,30 @@ const makeTempId = () => `${TEMP_ID_PREFIX}${uuid()}`
 // real ID via cache patients onde createPatient onSuccess marcou _tempIdSource).
 // Sem isso, FK violation server-side → mutation status=error → descarta.
 let _qcRef = null
+// v0.2.3.12 NB-4 — persister ref pra flushPersistImmediate em mutations críticas.
+let _persisterRef = null
+
+// v0.2.3.12 NB-4 — força persist IDB imediato pra mutations críticas (healthcare).
+// Bypass do throttle 1000ms. Reduz janela force-kill 1000ms → ~100ms (IDB write).
+// Buster 'v1' DEVE bater com PersistQueryClientProvider (main.jsx:226).
+// `shouldDehydrateMutation: () => true` mesmo do provider — persist mutations
+// pausadas (offline) + mutation pendente atual em flight.
+async function flushPersistImmediate() {
+  if (!_persisterRef || !_qcRef) return
+  try {
+    await _persisterRef.persistClient({
+      buster: 'v1',
+      timestamp: Date.now(),
+      clientState: dehydrate(_qcRef, {
+        shouldDehydrateMutation: () => true,
+      })
+    })
+  } catch (e) {
+    // Log mas não bloqueia mutation. Pior caso: persist falha + force-kill rápido =
+    // perda. Best-effort. TanStack throttle 1s ainda cobre como backup ~1s depois.
+    console.warn('[mutationRegistry] flushPersistImmediate fail:', e?.message)
+  }
+}
 
 // ─── helpers cache patch ───────────────────────────────────────────
 // v0.2.3.9 P4 — dual namespace eliminado. Dashboard agora lê APENAS
@@ -152,8 +177,9 @@ function refetchDoses(qc) {
  * <PersistQueryClientProvider> hydrate (resumePausedMutations precisa achar
  * mutationFn nos defaults pra reexecutar mutations persistidas).
  */
-export function registerMutationDefaults(qc) {
+export function registerMutationDefaults(qc, persister = null) {
   _qcRef = qc
+  _persisterRef = persister
   // ─── Doses ──────────────────────────────────────────────────────────
   qc.setMutationDefaults(['confirmDose'], {
     mutationFn: ({ id, ...rest }) => confirmDose(id, rest),
@@ -163,6 +189,8 @@ export function registerMutationDefaults(qc) {
         status: 'done',
         actualTime: actualTime || new Date().toISOString()
       })
+      // v0.2.3.12 NB-4 — persist IDB imediato. Cobertura force-kill <1s.
+      await flushPersistImmediate()
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
@@ -178,6 +206,7 @@ export function registerMutationDefaults(qc) {
     onMutate: async ({ id }) => {
       await qc.cancelQueries({ queryKey: ['doses'] })
       const snapshots = patchDoseInCache(qc, id, { status: 'skipped' })
+      await flushPersistImmediate()
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
@@ -190,6 +219,7 @@ export function registerMutationDefaults(qc) {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['doses'] })
       const snapshots = patchDoseInCache(qc, id, { status: 'pending', actualTime: null })
+      await flushPersistImmediate()
       return { snapshots }
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
@@ -226,6 +256,8 @@ export function registerMutationDefaults(qc) {
         if (!Array.isArray(data)) continue
         qc.setQueryData(q.queryKey, [tempDose, ...data])
       }
+      // v0.2.3.12 NB-4 — persist IDB imediato. SOS é healthcare-critical.
+      await flushPersistImmediate()
       return { doseSnapshots, tempId }
     },
     onError: (_e, _v, ctx) => {
