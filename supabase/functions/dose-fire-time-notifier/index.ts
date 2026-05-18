@@ -176,7 +176,11 @@ Deno.serve(async (_req) => {
         medName: String(dose.medName ?? ''),
         patientName: String(patientName),
         unit: String(dose.unit ?? ''),
-        ownerUserId: String(dose.userId ?? '')
+        ownerUserId: String(dose.userId ?? ''),
+        // v0.2.3.13 — fire-time só dispara pra caregivers (caregivers.length > 0
+        // garantido linha 157). isShared=true por definição pra AlarmReceiver
+        // ativar pre-check + disclaimer quando rede off.
+        isShared: 'true'
       }
 
       // Dispatch to all caregivers' android push_subs

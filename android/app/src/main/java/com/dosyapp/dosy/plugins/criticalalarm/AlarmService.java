@@ -101,6 +101,10 @@ public class AlarmService extends Service {
         int alarmId = intent.getIntExtra("id", 0);
         String dosesJson = intent.getStringExtra("doses");
         if (dosesJson == null) dosesJson = "[]";
+        // v0.2.3.13 — flag propagado pelo AlarmReceiver pre-check.
+        // true = dose pertence a paciente compartilhado AND server/cache não confirmou
+        // status final → renderizar disclaimer destacado no AlarmActivity.
+        boolean unverifiedShared = intent.getBooleanExtra("unverifiedShared", false);
 
         int count = 0;
         StringBuilder bodyBuilder = new StringBuilder();
@@ -136,6 +140,7 @@ public class AlarmService extends Service {
         );
         fsActivityIntent.putExtra("id", alarmId);
         fsActivityIntent.putExtra("doses", dosesJson);
+        fsActivityIntent.putExtra("unverifiedShared", unverifiedShared);
 
         PendingIntent fullScreenPi = PendingIntent.getActivity(
             this,
@@ -153,6 +158,7 @@ public class AlarmService extends Service {
         );
         tapIntent.putExtra("id", alarmId);
         tapIntent.putExtra("doses", dosesJson);
+        tapIntent.putExtra("unverifiedShared", unverifiedShared);
 
         PendingIntent tapPi = PendingIntent.getActivity(
             this,
@@ -169,7 +175,16 @@ public class AlarmService extends Service {
         String title = count <= 1
             ? "🔔 ALARME Dosy — " + firstMed
             : "🔔 ALARME Dosy — " + count + " doses";
-        String subtext = "Toque pra abrir · Ciente / Adiar / Ignorar";
+        // v0.2.3.13 — disclaimer no FG notif quando sem confirmação cross-device.
+        if (unverifiedShared) {
+            title = "⚠️ " + title + " (verificar)";
+        }
+        String subtext = unverifiedShared
+            ? "Sem internet — confirme com outro cuidador"
+            : "Toque pra abrir · Ciente / Adiar / Ignorar";
+        String bodyDisplay = unverifiedShared
+            ? "Sem rede pra checar se a dose já foi dada por outro cuidador. Confirme antes de medicar.\n\n" + bodyBuilder.toString()
+            : bodyBuilder.toString();
 
         Notification fgNotif = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_dosy)
@@ -177,7 +192,7 @@ public class AlarmService extends Service {
             .setContentTitle(title)
             .setContentText(bodyBuilder.toString())
             .setSubText(subtext)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(bodyBuilder.toString()))
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(bodyDisplay))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -213,6 +228,7 @@ public class AlarmService extends Service {
             );
             directLaunch.putExtra("id", alarmId);
             directLaunch.putExtra("doses", dosesJson);
+            directLaunch.putExtra("unverifiedShared", unverifiedShared);
             startActivity(directLaunch);
         } catch (Exception e) {
             e.printStackTrace();

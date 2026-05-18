@@ -163,6 +163,13 @@ public class DosyMessagingService extends MessagingService {
             entry.put("medName", d.optString("medName", "Dose"));
             entry.put("unit", d.optString("unit", ""));
             entry.put("patientName", d.optString("patientName", ""));
+            // v0.2.3.13 — propaga isShared (Edge envia true se patient tem cuidadores).
+            // AlarmReceiver lê este flag pra decidir HTTP pre-check + disclaimer
+            // quando rede off. Dose não shared mantém fluxo atual (sem regressão).
+            entry.put("isShared", d.optBoolean("isShared", false));
+            // v0.2.3.13 — propaga scheduledAt pra cache de cancelamento usar
+            // janela curta (HTTP pre-check fallback em AlarmReceiver).
+            entry.put("scheduledAt", d.optString("scheduledAt", ""));
             groups.get(minute).put(entry);
             doseIdsByMinute.get(minute).add(d.getString("doseId"));
         }
@@ -238,10 +245,23 @@ public class DosyMessagingService extends MessagingService {
         String[] ids = doseIdsCsv.split(",");
         int cancelled = 0;
 
+        // v0.2.3.13 — cache status pra AlarmReceiver consultar quando rede off.
+        // Cenário: cuidador volta online APÓS dose cancelada → FCM cancel chega
+        // tarde mas antes do horário do alarme local pré-agendado. Cache evita
+        // disclaimer falso-positivo no fire local (HTTP pode falhar mas cache
+        // tem o status correto). TTL implícito 24h via cleanup oportunista.
+        SharedPreferences cache = ctx.getSharedPreferences("dosy_dose_status", Context.MODE_PRIVATE);
+        SharedPreferences.Editor cacheEd = cache.edit();
+        long nowMs = System.currentTimeMillis();
+
         // 1) Cancel cada doseId individualmente (single-dose groups)
         for (String doseId : ids) {
             String trimmed = doseId.trim();
             if (trimmed.isEmpty()) continue;
+            // v0.2.3.13 — gravamos status=cancelled (covers done/skipped/cancelled
+            // do server-side — todos disparam mesma action=cancel_alarms FCM).
+            cacheEd.putString("status:" + trimmed, "cancelled");
+            cacheEd.putLong("ts:" + trimmed, nowMs);
             int alarmId = AlarmScheduler.idFromString(trimmed);
             if (AlarmScheduler.cancelDoseAlarmAndBackup(ctx, alarmId)) {
                 cancelled++;
@@ -282,6 +302,34 @@ public class DosyMessagingService extends MessagingService {
                     } catch (JSONException ignore) {}
                 }
             }
+        }
+
+        // v0.2.3.13 — flush cache writes
+        cacheEd.apply();
+
+        // v0.2.3.13 — cleanup oportunista entries >24h pra não crescer indefinidamente.
+        try {
+            java.util.Map<String, ?> all = cache.getAll();
+            SharedPreferences.Editor cleanupEd = cache.edit();
+            int removed = 0;
+            for (String key : all.keySet()) {
+                if (!key.startsWith("ts:")) continue;
+                Object v = all.get(key);
+                if (!(v instanceof Long)) continue;
+                long ts = (Long) v;
+                if (nowMs - ts > 24L * 60L * 60L * 1000L) {
+                    String doseId = key.substring(3);
+                    cleanupEd.remove(key);
+                    cleanupEd.remove("status:" + doseId);
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                cleanupEd.apply();
+                Log.d(TAG, "dosy_dose_status cleanup removed=" + removed);
+            }
+        } catch (Exception cleanupErr) {
+            Log.w(TAG, "dosy_dose_status cleanup err: " + cleanupErr.getMessage());
         }
 
         Log.d(TAG, "cancel_alarms: requested=" + ids.length + " cancelled=" + cancelled);
@@ -391,6 +439,10 @@ public class DosyMessagingService extends MessagingService {
             dose.put("unit", data.getOrDefault("unit", ""));
             dose.put("patientName", data.getOrDefault("patientName", ""));
             dose.put("scheduledAt", data.getOrDefault("scheduledAt", ""));
+            // v0.2.3.13 — fire_now_alarm SEMPRE pra patient compartilhado (cron
+            // dose-fire-time-notifier só envia pra caregivers que dependem de
+            // share). isShared=true ativa pre-check + disclaimer no AlarmReceiver.
+            dose.put("isShared", "true".equals(data.getOrDefault("isShared", "true")));
             JSONArray arr = new JSONArray();
             arr.put(dose);
 
