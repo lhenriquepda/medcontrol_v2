@@ -14,7 +14,7 @@ export default function SharePatientSheet({ open, onClose, patient }) {
   const { data: tier } = useMyTier()
   const isPro = useIsPro()
   const patientId = patient?.id
-  const { data: shares = [], isLoading } = usePatientShares(patientId)
+  const { data: shares = [], isLoading, isError, error, refetch } = usePatientShares(patientId)
   const shareMut = useSharePatient()
   const unshareMut = useUnsharePatient()
   const guard = useOfflineGuard()
@@ -114,6 +114,28 @@ export default function SharePatientSheet({ open, onClose, patient }) {
             }}>Compartilhado com</p>
             {isLoading ? (
               <p style={{ fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: 0 }}>Carregando…</p>
+            ) : isError ? (
+              // v0.2.3.14 #0009 — fallback UI quando query falha (JWT expirado, network).
+              // Antes ficava em "Carregando..." infinito porque consumer só lia isLoading.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 4 }}>
+                <p style={{ fontSize: 12, color: 'var(--dosy-danger)', margin: 0 }}>
+                  Não foi possível carregar a lista{error?.code ? ` (${error.code})` : ''}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  style={{
+                    alignSelf: 'flex-start',
+                    fontSize: 12, fontWeight: 600,
+                    color: 'var(--dosy-primary)',
+                    background: 'transparent', border: 'none',
+                    padding: '4px 0', cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Tentar novamente
+                </button>
+              </div>
             ) : shares.length === 0 ? (
               <p style={{ fontSize: 12, color: 'var(--dosy-fg-tertiary)', margin: 0 }}>Ninguém ainda.</p>
             ) : (
