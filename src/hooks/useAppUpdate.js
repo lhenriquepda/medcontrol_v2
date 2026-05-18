@@ -63,18 +63,26 @@ async function fetchReleaseFromDb(currentVc, availableVc) {
       cachedName = availableRow.version_name
     }
 
-    // is_mandatory: existe alguma release mandatory em (currentVc, availableVc]?
+    // v0.2.3.14 #0011 — robusto a Play Core race condition (info.currentVersionCode
+    // pode vir null em primeiro check, antes do useEffect getRealVersion popular).
+    // Antes: `if (currentVc != null && currentVc < availableVc)` PULAVA mandatory check
+    // inteiro → mandatory=false default → modal vermelho nunca renderizava.
+    // Agora: query upper-bound-only sempre roda. Se currentVc disponível, refina com
+    // lower bound. Trade-off: fresh install muito antigo pode ver falso-positivo
+    // mandatory (release antiga marcada mandatory ainda existe na tabela) — aceitável
+    // em healthcare (errar pelo lado seguro).
     let mandatory = false
+    let mandQuery = supabase
+      .from('app_releases')
+      .select('version_code')
+      .lte('version_code', availableVc)
+      .eq('is_mandatory', true)
+      .limit(1)
     if (currentVc != null && currentVc < availableVc) {
-      const { data: mandRows } = await supabase
-        .from('app_releases')
-        .select('version_code')
-        .gt('version_code', currentVc)
-        .lte('version_code', availableVc)
-        .eq('is_mandatory', true)
-        .limit(1)
-      mandatory = !!mandRows?.length
+      mandQuery = mandQuery.gt('version_code', currentVc)
     }
+    const { data: mandRows } = await mandQuery
+    mandatory = !!mandRows?.length
 
     return {
       name: cachedName || availableRow?.version_name || null,
@@ -150,10 +158,16 @@ export function useAppUpdate() {
         // DB autoritativa: version_name + is_mandatory
         const dbInfo = await fetchReleaseFromDb(currentVc, availableVc)
 
+        // v0.2.3.14 #0010 — DB primeiro (autoritativa), Play Core SÓ se shape semver real.
+        // Plugin @capawesome/capacitor-app-update retorna `availableVersion="77"`
+        // (versionCode stringified) quando Play Store backend não populou versionName
+        // imediatamente pós-publish. `??` só pula null/undefined → `"77"` truthy
+        // curtocircuitava DB lookup → banner mostrava "versão 77" em vez de "0.2.3.14".
+        const looksLikeSemver = (v) => typeof v === 'string' && /\d+\.\d+/.test(v)
         const version =
-          info.availableVersion         // 1º Play Core (quando vem preenchido)
-          ?? dbInfo?.name               // 2º DB autoritativa (sempre atualizada via Passo 12)
-          ?? `versão ${availableVc}`    // 3º fallback final
+          dbInfo?.name                                                                  // 1º DB autoritativa
+          ?? (looksLikeSemver(info.availableVersion) ? info.availableVersion : null)    // 2º Play Core SE semver real
+          ?? `versão ${availableVc}`                                                    // 3º fallback final
 
         setLatest({
           version,
