@@ -23,7 +23,7 @@ Decisões de UX devem balancear todas essas personas — letras legíveis e flux
 
 **Repositório:** https://github.com/lhenriquepda/medcontrol_v2
 **Deploy web (Vercel):** https://dosy-app.vercel.app
-**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 43 / versionName 0.2.0.10. Closed Testing externo via Google Group #129-#133 pendente. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; v0.2.0.7 FLAG_SECURE off Dev + StatusBar tema; v0.2.0.8 P0 egress fixes #127 + #134-#136 + assets store + vídeo FGS + auditoria egress; v0.2.0.9 P1 egress fixes #137 (Dashboard 4→1) + #138 (DOSE_COLS_LIST) + #128 (patientName Edge) + filter '10 dias'; v0.2.0.10 P2 egress #139 (trigger 6h) + #140 (cron 24h) + #141 (shares 5min) + #143 (getSession) + #142 cleanup JWT cron + #147 BUG-041 catalogado; v0.2.0.11 P2 estrutural #144 (JWT claim tier Auth Hook) + #145 (realtime scoped refetch) + #146 (cron audit log) + #029 refactor Settings split + #030 split notifications + #034 virtualizar DoseHistory + #100 avatar emoji redesign + #009 PITR deferred (DR drill via daily backup).
+**Deploy Android (Play Store):** **Internal Testing ativo** — `com.dosyapp.dosy` versionCode 74 / versionName 0.2.3.11. Estado atual → [`context/STATE.md`](STATE.md). Closed Testing externo via Google Group #129-#133 pendente. BUG-016 fechado 100%; #084-#095 fechados v0.1.7.x; redesign v0.2.0.0; #099-#123 + #126 fechados em v0.2.0.1-v0.2.0.5; #010 + #017 fechados v0.2.0.6; v0.2.0.7 FLAG_SECURE off Dev + StatusBar tema; v0.2.0.8 P0 egress fixes #127 + #134-#136 + assets store + vídeo FGS + auditoria egress; v0.2.0.9 P1 egress fixes #137 (Dashboard 4→1) + #138 (DOSE_COLS_LIST) + #128 (patientName Edge) + filter '10 dias'; v0.2.0.10 P2 egress #139 (trigger 6h) + #140 (cron 24h) + #141 (shares 5min) + #143 (getSession) + #142 cleanup JWT cron + #147 BUG-041 catalogado; v0.2.0.11 P2 estrutural #144 (JWT claim tier Auth Hook) + #145 (realtime scoped refetch) + #146 (cron audit log) + #029 refactor Settings split + #030 split notifications + #034 virtualizar DoseHistory + #100 avatar emoji redesign + #009 PITR deferred (DR drill via daily backup).
 
 **Supabase plano:** Pro (upgrade 2026-05-05). Considerar downgrade Free pós validação 26 mai cycle.
 **Dev local:** `npm run dev` (web) / Android Studio Run (mobile) em `G:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2`
@@ -133,6 +133,10 @@ admins              — user_id PK, added_at, added_by — controla quem é admi
 security_events     — id, user_id, event_type, ip_address, user_agent, metadata, created_at
                       → log auditoria LGPD
 patient_shares      — id, "patientId", "ownerId", "sharedWithUserId" → cuidadores
+app_releases        — version_code PK, version_name, is_mandatory, whatsnew, shipped_at
+                      → fonte autoritativa UpdateBanner + modal mandatory (#299 v0.2.3.11)
+                      RLS: FOR SELECT USING (true) — público read-only
+                      IA insere via Passo 12.1 após publicar no Play Console
 ```
 
 > **camelCase no DDL:** colunas entre aspas (`"userId"`, `"scheduledAt"`). Não remover.
@@ -210,9 +214,14 @@ anonymize-old-doses    — Domingos 3h UTC, anonimiza observation +3 anos (LGPD 
 
 ### Edge Functions:
 ```
-notify-doses          — FCM HTTP v1 (cron 5min externo dispara)
-delete-account        — service_role + RPC delete_my_account
-send-test-push        — admin debug
+dose-trigger-handler     — statement-level trigger DB → FCM data-only HIGH (owner + caregivers)
+daily-alarm-sync         — cron 5am BRT, 48h horizon, FCM data schedule_alarms
+dose-fire-time-notifier  — cron 1min, janela [NOW-90s, NOW+30s], kind=fire_now_alarm
+patient-unshare-handler  — DB trigger patient_shares DELETE → FCM unshare + cache cleanup
+delete-account           — service_role + RPC delete_my_account
+send-test-push           — admin debug
+notify-doses             — DEPRECATED stub 410 Gone (substituído por dose-trigger-handler)
+schedule-alarms-fcm      — DEPRECATED stub 410 Gone (substituído por daily-alarm-sync)
 ```
 
 ---
@@ -344,7 +353,7 @@ public/
 android/
 ├── app/
 │   ├── google-services.json    # Firebase config (FCM)
-│   ├── build.gradle            # versionCode 25 / versionName 0.1.7.1
+│   ├── build.gradle            # versionCode 74 / versionName 0.2.3.11 (atualiza a cada release)
 │   │                             # signingConfigs.release env-based
 │   └── src/main/
 │       ├── AndroidManifest.xml # Permissions + AlarmActionReceiver registrado
@@ -813,12 +822,9 @@ npx vercel --prod --yes
 ### Android (local):
 ```bash
 npm run build:android       # vite build + cap sync
-# Studio Run ▶️  ou:
-cd android && .\gradlew.bat bundleRelease
-# → android/app/build/outputs/bundle/release/app-release.aab
+# Build AAB CLI (autônomo, sem Studio):
 ```
-
-> ⚠️ **Loopback bug:** `gradlew.bat` quebra com `Unable to establish loopback connection` em sandbox. Workaround: build via Android Studio (JBR patched) ou shell normal Windows.
+→ Ver `context/recipes/gradle-build.md` — TEMP redirect fix + JDK 25 obrigatório.
 
 ### Android (CI/CD):
 ```bash
@@ -884,7 +890,7 @@ Painel `/admin` lista usuários, `admin_grant_tier(target_user, tier, expires, s
 | **Android 14+ BAL block startActivity** | FG service + `SYSTEM_ALERT_WINDOW` + fullScreenIntent |
 | **Alarme dup (FCM + Local)** | Suprimir LocalNotif quando shouldRing |
 | **Doses simultâneas = N alarmes** | Agrupar por minuto (`scheduledAt.slice(0,16)`) → 1 alarm group |
-| **gradlew loopback Win11** | Build via Studio (workaround JBR) |
+| **gradlew loopback Win11** | TEMP redirect fix — ver `context/recipes/gradle-build.md` |
 | **PDF OOM crash 72MB** | JPEG quality 0.82, scale:1, chunked Filesystem.appendFile 512KB |
 | **PDF container leaking visualmente** | iframe `position:fixed; left:-99999px; opacity:0` |
 | **Share cancel triggered loader stuck** | setExporting(null) ANTES Share.share() (fire-and-forget) |

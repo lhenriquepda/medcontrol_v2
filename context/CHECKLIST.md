@@ -54,7 +54,6 @@
   - **Cache localStorage por vcode.** Releases name imutáveis após ship → cache `dosy_vname_{vcode}` evita 1 query por mount. Egress: 1 query por release nova (não recorrente).
   - **Coluna `is_mandatory BOOLEAN` adicionada já no MVP.** Permite modal vermelho full-screen bloqueante quando IA shipa security fix / breaking schema. Default `false` = banner verde dismissable normal. Lógica: query verifica se EXISTE alguma release mandatory em `(currentVc, availableVc]` — usuários atrasados em múltiplas releases ainda bloqueiam quando passam por uma mandatory.
   - **Coluna `whatsnew TEXT` adicionada.** Texto curto pt-BR aparece em bloco "Novidades" no modal. NULL = some o bloco. Não confundir com `docs/play-store/whatsnew/whatsnew-pt-BR` (Play Store, ≤500 chars, listagem completa de fixes).
-- **Origem:** [User feedback] sessão 2026-05-17 pós-ship v0.2.3.10.
 - **Origem:** [User feedback] sessão 2026-05-17 pós-ship v0.2.3.10 — "quero plano definitivo simples sem mexer em vários locais na hora de subir AAB".
 - **Prioridade:** P2 (UX/credibilidade — não bloqueia release, mas confunde user e parece bug).
 - **Esforço estimado:** ~30min (1 migration + edit `useAppUpdate.js` + edit README Passo 12).
@@ -105,7 +104,7 @@
         ?? `versão ${info.availableVersionCode}`  // 3º fallback final feio
       ```
     - Vercel `version.json` continua valendo só para o caminho `checkWeb` (browser web).
-  - **Edit `contexto/README.md` Passo 12:**
+  - **Edit `context/WORKFLOW.md` Passo 12:**
     - Adicionar passo automático após "Salvar e publicar" no Play Console:
       ```
       Após confirmar publicação Play Console:
@@ -131,9 +130,9 @@
 
 ---
 
-### #250 — API medicamentos ANVISA + disclaimers clínicos [v0.2.3.6 NEXT]
+### #250 — API medicamentos ANVISA + disclaimers clínicos [✅ SHIPPED v0.2.3.6]
 
-- **Status:** ⏳ DEFERIDO próxima release. User pediu 2026-05-14: autocomplete medicamento via API real + info crítica (tarja, dose máx referência) pra disclaimers SOS + cadastro.
+- **Status:** ✅ SHIPPED v0.2.3.6 (2026-05-15). Fase 1 autocomplete entregue. User pediu 2026-05-14: autocomplete medicamento via API real + info crítica (tarja, dose máx referência) pra disclaimers SOS + cadastro.
 - **Origem:** [User feedback] sessão v0.2.3.5 — "existe API medicamentos pra aplicar no dropdown? + informações criticas, doses maximas recomendadas → disclaimers SOS e cadastro"
 - **Prioridade:** P3 (feature opcional pre-launch — agrega trust + reduz erro user mas não bloqueia ship Closed Testing)
 - **Esforço estimado:** 12-16h (ETL 4h + schema/edge 4h + curadoria warnings top 100 8h)
@@ -201,10 +200,9 @@
 
 ---
 
-## 🚧 Release v0.2.3.3 em curso
+### #release-v0.2.3.3 — Fix #231 + cost escala #163+#164+#165 + #110 native crashes + Sentry triage ✅ SHIPPED
 
-### #release-v0.2.3.3 — Fix #231 + cost escala #163+#164+#165 + #110 native crashes + Sentry triage
-- **Status:** 🚧 branch `release/v0.2.3.3` aberta (commit `5487a30` bump vc 65→66). Esforço estimado 15-23h.
+- **Status:** ✅ SHIPPED v0.2.3.3 (2026-05-14). Detalhes em `context/updates/`. Esforço estimado 15-23h.
 - **Escopo expandido:**
   - **#231 P2 BUG layout** — banner AdMob safe-area-inset duplicado Android 15 (detalhe abaixo)
   - **#163 P1 cost escala** — RPC consolidado `get_dashboard_payload` (4 queries → 1, esperado -40% a -60% Dashboard egress)
@@ -267,10 +265,10 @@
   - `e0fde9d` build(v0.2.3.2): CLI gradlew destravado + release notes + AAB Play Console
   - `c0cb372` Merge release/v0.2.3.0 → master
 - **Docs atualizados:**
-  - `contexto/ROADMAP.md` §3 onde paramos (master) + §6.3 Δ release log entry expandido
-  - `contexto/Validar.md` topo SHIPPED status
-  - `contexto/CHECKLIST.md` (esta entrada)
-  - `contexto/README.md` §11 fluxo CLI documentado
+  - `context/ROADMAP.md` §3 onde paramos (master) + §6.3 Δ release log entry expandido
+  - `context/Validar.md` topo SHIPPED status
+  - `context/CHECKLIST.md` (esta entrada)
+  - `context/README.md` §11 fluxo CLI documentado
   - `android/gradle.properties` header CLI workaround
   - `docs/play-store/whatsnew/whatsnew-pt-BR` release notes pt-br user-facing
 - **Counter:** 142+4 = 146 fechados / 78 abertos
@@ -317,7 +315,7 @@
 - **Docs atualizados:**
   - `docs/alarm-scheduling-v0.2.3.1.md` NOVO (fluxos end-to-end completos + arquivos críticos + validação cenários)
   - `docs/archive/alarm-scheduling-shadows-pre-v0.2.3.1.md` (obsoleto arquivado)
-  - `contexto/Validar.md` substituído cenários granulares 230.1.1-230.5.2 por 5 FLUXOS LONGOS A-E + audit (cada fluxo executa várias ações em sequência cobrindo múltiplos cenários)
+  - `context/Validar.md` substituído cenários granulares 230.1.1-230.5.2 por 5 FLUXOS LONGOS A-E + audit (cada fluxo executa várias ações em sequência cobrindo múltiplos cenários)
 - **Aceitação device (Validar.md FLUXO-A a FLUXO-E + audit):**
   - FLUXO-A: 3 branches alarm/tray/DnD-tray + B-01 cancel race + Fix B re-rota
   - FLUXO-B: snooze 10min + reboot 5min depois → alarme horário snoozed
@@ -325,7 +323,7 @@
   - FLUXO-D: reboot re-agenda alarmes + trays + WorkManager 6h + cron 5am
   - FLUXO-E: logout deleta push_subscription + Device A para de receber FCM
   - audit: alarm_audit_log popula 5 sources após FLUXOS A-E
-- **Detalhe completo:** [`contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md`](auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md) (consolidado das 4 auditorias + plano 7 blocos)
+- **Detalhe completo:** [`context/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md`](auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md) (consolidado das 4 auditorias + plano 7 blocos)
 
 ---
 
@@ -398,7 +396,7 @@
   1. ✅ Confirmado via `SELECT id, name, encode(name::bytea, 'hex')` — bytes `ef bf bd` (U+FFFD literal) presentes em 1 paciente legacy (`46d9196f` "Jo�o Teste", owner `teste03@teste.com`)
   2. ✅ Deletado via REST DELETE service_role
   3. ✅ Inserido novo paciente "João da Silva ÃÕÉÍÇãõéíç" via REST como teste03 → re-lido do DB → bytes idênticos UTF-8 puros (`c3 a3` para "ã" etc) → cleanup
-  4. ⚠️ Playwright não está no repo. Substituído por **recipe documentado** em `contexto/updates/2026-05-01-fix-encoding-utf8-pacientes.md` (script Python pronto pra reauditoria periódica). Adicionar Playwright = item separado novo (P3).
+  4. ⚠️ Playwright não está no repo. Substituído por **recipe documentado** em `context/updates/2026-05-01-fix-encoding-utf8-pacientes.md` (script Python pronto pra reauditoria periódica). Adicionar Playwright = item separado novo (P3).
 - **Detalhe:** [auditoria/06-bugs.md#bug-001](auditoria/06-bugs.md#bug-001--encoding-utf-8-quebrado-em-nome-de-paciente)
 - **Causa raiz:** seed legacy inserido durante dev cedo via tooling com encoding ruim (Windows-1252). DB Postgres é UTF-8 default; PostgREST round-trip funciona corretamente. Sem mudança de código necessária.
 
@@ -480,7 +478,7 @@ Validação preview Vercel `release/v0.2.1.0` Chrome MCP (Regra 9.1 README) dete
 
 Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+.
 
-**Resolução real (descoberta sessão atual):** root cause = #157 (useRealtime cascade + publication vazia), não #007. Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm sumiu (9 reqs / 7min idle = 0.021 req/s vs 12 req/s antes). #007 restaurado via revert bisect (commit `ff431ca`). Ver #157 entry abaixo + ver `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`.
+**Resolução real (descoberta sessão atual):** root cause = #157 (useRealtime cascade + publication vazia), não #007. Após disable `useRealtime()` em App.jsx (commit `da61b04`), storm sumiu (9 reqs / 7min idle = 0.021 req/s vs 12 req/s antes). #007 restaurado via revert bisect (commit `ff431ca`). Ver #157 entry abaixo + ver `context/updates/2026-05-05-investigacao-157-storm-realtime.md`.
 
 **Lições (durable feedback memory):**
 - Validação preview Vercel via Chrome MCP **DEVE** rodar pré-merge release branch (Regra 9.1 README) — confirmado mais uma vez. Sem ela, storm seria descoberto pós-prod com user impact + custo egress.
@@ -518,7 +516,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   TZ fix em extend_continuous_treatments(p_user_id) — UTC raw → America/Sao_Paulo via AT TIME ZONE. Doses futuras com firstDoseTime array agora salvam horário correto. 3 tratamentos cleanup user lhenrique.pda. Migration 20260503025200_fix_extend_continuous_tz_bug.sql.
 - **Aceitação:** Validado em release v0.1.7.4 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.4.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.4.
 
 ### #092 — Egress reduction multi-frente
 - **Status:** ✅ Concluído @ commit 557dcd9 (2026-05-02)
@@ -528,7 +526,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Realtime postgres_changes filter userId=eq.X server-side. listDoses default range -30d/+60d. Paginate cap 20→5 pages. queryKey timestamps normalizados hour boundary. refetchInterval 60s→5min, staleTime 30s→2min. staleTime bumps useUserPrefs/usePatients/useTreatments/useMyTier. App.jsx alarm scope -1d/+14d.
 - **Aceitação:** Validado em release v0.1.7.5 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.5.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.5.
 
 ### #094 — Paywall falso pra users plus/pro
 - **Status:** ✅ Concluído @ commit 8b32245 (2026-05-02)
@@ -538,7 +536,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Fix paywall falso em mount race. teste03 (tier plus DB) tentou cadastrar paciente novo → paywall 'No plano grátis você pode ter até 1 paciente'. Causa: usePatientLimitReached retornava true quando tier=undefined; getMyTier auth.getUser() race null cache 30min. Fix: useMyTier enabled: !!user via useAuth + queryKey inclui userId + usePatientLimitReached retorna false durante loading.
 - **Aceitação:** Validado em release v0.1.7.5 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.5.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.5.
 
 ### #101 — Auditoria egress pós-#092
 - **Status:** ✅ Concluído (release v0.2.0.1)
@@ -548,7 +546,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Audit findings 2026-05-04 via pg_stat_statements + pg_replication_slots. Conclusão: nenhum query patológico, #092 fix manteve. Removido photo_url de PATIENT_COLS_LIST (egress 50KB-2MB × refetch frequente).
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #106 — Ícone launcher + splash atualizar
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -558,7 +556,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   REGRESSÃO IDENTIFICADA: pasta assets/ legacy com icon-only.png antigo tinha precedência sobre resources/ no @capacitor/assets generate. Fix: deletado assets/ legado, criado resources/icon-only.png composto, deletado mipmap-*/ic_launcher*.png stale, re-run generate → 86→61 outputs. ic_launcher peach pill + splash full peach.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #107 — schema rpc.catch is not a function
 - **Status:** ✅ Concluído (release v0.2.0.0+)
@@ -568,7 +566,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Sentry DOSY-J/F/G TypeError em Dashboard pull-to-refresh. supabase.schema().rpc() retorna PostgrestFilterBuilder (PromiseLike, só .then), .catch() throw TypeError. Fix: .then(undefined, errHandler) form 2-arg em Dashboard.jsx handleRefresh array Promise.all.
 - **Aceitação:** Validado em release v0.2.0.0+ (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.0+.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.0+.
 
 ### #109 — useRealtime concurrent subscribe race
 - **Status:** ✅ Concluído @ commit 09724c1 (2026-05-04)
@@ -578,7 +576,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Lock flag subscribing + try/catch ch.on() defensive previne 4 paths convergent (status reconnect + watchdog + TOKEN_REFRESHED + native resume). 9 events em 4 issues. #093 (v0.1.7.5) aplicou fix nome único + await removeChannel + generation counter mas erro voltou em vendor bundle Vr.on.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #115 — Avatar foto cache via photo_version
 - **Status:** ✅ Concluído (release v0.2.0.2)
@@ -588,7 +586,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Nova coluna photo_version SMALLINT em patients (migration replace_photo_thumb_with_photo_version). Lista carrega só photo_version (2B). Hook usePatientPhoto(id, version) checa localStorage[dosy_photo_<id>] = {v, data} — match version → render instant ZERO request. Mismatch → 1 fetch via getPatient → cache forever. PatientForm submit bump version. Foto baixa 1 vez por device.
 - **Aceitação:** Validado em release v0.2.0.2 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.2.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.2.
 
 ### #126 — Pre-commit secret scanning gitleaks
 - **Status:** ✅ Concluído (release v0.2.0.5)
@@ -598,7 +596,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   GitGuardian 4 incidents High: 3× postgres pwd + 1× VAPID. Fix: gitleaks 8.30.1 + .gitleaks.toml custom regras + .husky/pre-commit roda gitleaks protect --staged ANTES lint-staged + .github/workflows/gitleaks.yml CI camada não-bypassable. Full scan 27→0 leaks.
 - **Aceitação:** Validado em release v0.2.0.5 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.5.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.5.
 
 ### #148 — Dashboard rpc debounce 60s
 - **Status:** ✅ Concluído @ commit 7c8cf5b (2026-05-05)
@@ -608,7 +606,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Dashboard extend_continuous_treatments rpc 2× por mount. Causa: AnimatePresence popLayout mantém old + new Dashboard durante exit anim ~600ms → ambos useEffects firam. Fix: module-scope flag window.__dosyExtendContinuousAt debounce 60s. Identificado via Chrome MCP fetch interceptor preview Vercel.
 - **Aceitação:** Validado em release v0.2.0.11 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.11.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.11.
 
 ### #149 — useDoses mutation refetch debounce 2s
 - **Status:** ✅ Concluído @ commit 758035b (2026-05-05)
@@ -618,7 +616,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   useDoses mutation refetch storm — 12 fetches /doses em 200s sessão real (mark/skip/undo cascade). Causa: cada mutation onSettled invalida ['doses'] → todas active queryKeys (3-5) refetcham simultâneo. Optimistic update via patchDoseInCache já garante UI consistency. Fix: debounce 2s via module-scope timer. -75% storm.
 - **Aceitação:** Validado em release v0.2.0.11 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.11.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.11.
 
 ### #150 — useDoses refetchInterval 15min
 - **Status:** ✅ Concluído @ commit 017916d (2026-05-05)
@@ -628,7 +626,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   useDoses refetchInterval idle storm — 5 fetches /doses simultâneos cada 5min em IDLE. Causa: 5 active queryKeys × 5min interval. Math: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia idle polling. Fix: 5min → 15min = -67% polling rate.
 - **Aceitação:** Validado em release v0.2.0.11 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.11.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.11.
 
 ### #151 — useDoses refetchInterval opt-in
 - **Status:** ✅ Concluído @ commit 78127b7 (2026-05-05)
@@ -638,7 +636,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   useDoses refetchInterval opt-in only Dashboard. Antes: hardcoded 15min em TODAS queries. Agora: default OFF, opt-in via options.pollIntervalMs. Dashboard explicitamente passa 15min. Outras telas (Settings, DoseHistory, Reports) sem polling — refetch só on mount + Realtime + invalidate explícito. -80% adicional idle egress.
 - **Aceitação:** Validado em release v0.2.0.11 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.11.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.11.
 
 ### #154 — Custom SMTP Resend dosymed.app
 - **Status:** ✅ Concluído (release v0.2.0.12)
@@ -648,7 +646,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Built-in Supabase email rate-limited 2/h (não-prod). Resend SMTP 30/h Supabase (1000+ Resend free tier). DNS Hostinger 4 records (DKIM TXT resend._domainkey, MX send→feedback-smtp.sa-east-1.amazonses.com, SPF TXT, DMARC). Domain Resend VERIFIED <5min. Supabase Auth → SMTP Settings: smtp.resend.com:465 user resend pass=API key, sender Dosy <noreply@dosymed.app>. Recovery OTP funcionando real prod.
 - **Aceitação:** Validado em release v0.2.0.12 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.12.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.12.
 
 ---
 
@@ -956,7 +954,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Fix viewport-specific em useDoses: refetchOnMount: 'always' (Pixel 7 emulador). NÃO repro Samsung S25 Ultra device real. Fix preserva comportamento em devices modernos.
 - **Aceitação:** Validado em release v0.1.7.4 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.4.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.4.
 
 ### #089 — Layout AdSense banner empurrando header parcial (Pixel 7)
 - **Status:** ✅ Concluído organicamente entre v0.1.7.4-v0.2.0.12 (validado user print Pixel 7 emulador 2026-05-05)
@@ -983,7 +981,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   navigate('/', {replace:true}) explícito em Login.submit após signin/signup success se path atual não é '/' nem '/reset-password'. Causa: React Router preservava pathname /ajustes herdado pré-logout.
 - **Aceitação:** Validado em release v0.1.7.4 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.4.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.4.
 
 ### #093 — Race useRealtime postgres_changes
 - **Status:** ✅ Concluído @ commit 557dcd9 (2026-05-02)
@@ -993,7 +991,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Fix race condition useRealtime: nome único realtime:${userId}:${gen}:${Date.now()} por subscribe + await supabase.removeChannel() + generation counter ignora callbacks de canais antigos durante reconnect.
 - **Aceitação:** Validado em release v0.1.7.5 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.5.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.5.
 
 ### #095 — Versão real native packageInfo /Ajustes
 - **Status:** ✅ Concluído (release v0.1.7.5)
@@ -1003,7 +1001,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   /Ajustes mostra versão real native via packageInfo (era hardcoded ou stale).
 - **Aceitação:** Validado em release v0.1.7.5 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.1.7.5.
+- **Detalhe:** Ver `context/updates/` log da release v0.1.7.5.
 
 ### #096 — Admin panel tier consistente
 - **Status:** ✅ Concluído @ commit 60d4422 (2026-05-04)
@@ -1013,7 +1011,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   listAllUsers agora aplica mesmo promo free→plus que getMyTier — admin panel sincroniza com client view. Fix inconsistência tier display: AjustesScreen + AppHeader (TierBadge) liam plus mas /admin mostrava free.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #099 — Avatar paciente upload + crop
 - **Status:** ✅ Concluído @ commit 1fcff21 (2026-05-04)
@@ -1023,7 +1021,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Canvas client-side center-square-crop 512x512 + JPEG 0.78 (~50KB) antes de salvar. Resolve aspect 1:1 + reduz payload DB. Fix: handler upload PatientForm + invalidate queryClient ['patients'].
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #102 — Atalho hardware silenciar alarme
 - **Status:** ✅ Concluído @ commit f02bf12 (2026-05-04)
@@ -1033,7 +1031,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   AlarmActivity.onKeyDown override KEYCODE_VOLUME_UP/DOWN → toggleMute() + return true. Botões físicos volume silenciam ringtone instantaneamente sem dismiss. muteButton label sincroniza '🔇 Som off'.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #103 — UpdateBanner URL runtime
 - **Status:** ✅ Concluído @ commit 4a6e39c (2026-05-04)
@@ -1043,7 +1041,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   UpdateBanner apontava dosy-teal.vercel.app (preview antigo morto) → fetch 404 silent → available=false. Fix: usar window.location.origin runtime. App detecta nova versão Play Store via version.json corretamente.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #105 — MultiDoseModal Dosy primitives
 - **Status:** ✅ Concluído @ commit 65211cb (2026-05-04)
@@ -1053,7 +1051,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Sheet + Card per dose + StatusPill kind + Buttons ghost/secondary/primary com Lucide icons. Quando user clica Ciente no AlarmActivity nativo, app abre via deep link ?doses=id1,id2 → Dashboard renderiza MultiDoseModal. Refactor de classes legacy bg-slate-900 + btn-primary blue.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #108 — PatientForm weight.replace TypeError
 - **Status:** ✅ Concluído @ commit 09724c1 (2026-05-04)
@@ -1063,7 +1061,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Coerce String() em load + submit. Causa: campo weight passa pelo input já como number OR null, mas onSubmit chama weight.replace(',','.') esperando string. Fix: coerce String(weight) antes de replace.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #114 — Avatar foto crop manual react-easy-crop
 - **Status:** ✅ Concluído (release v0.2.0.2)
@@ -1073,7 +1071,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Integrado react-easy-crop em CropModal component novo. PatientForm onPhoto → modal abre com zoom slider 1-3x + drag pan (cropShape circular live preview) → confirm gera canvas 512×512 jpeg q0.78 (~50KB). Substitui auto-crop center-square v0.2.0.1.
 - **Aceitação:** Validado em release v0.2.0.2 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.2.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.2.
 
 ### #116 — Header alertas: sino → ícones diretos
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1083,7 +1081,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   HeaderAlertIcon primitive (4 tones: danger/warning/info/update). AppHeader renderiza condicionalmente: AlertCircle pulse (overdue → /?filter=overdue), Users (shares novos → /pacientes), Pill (tratamentos acabando ≤3d → /pacientes), Download (update → startUpdate). Padrão WhatsApp/Gmail. UpdateBanner verde mantido. BellAlerts deprecated.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #119 — Promo free→plus removida client
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1093,7 +1091,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   subscriptionService.getMyTier mapeava free→plus durante beta interno (bypass paywall). Agora: tier vem direto DB via RPC my_tier. Paywall ativo pra users free reais. Reais (lhenrique admin, daffiny+ela pro) não afetados. Mesmo bypass removido em listAllUsers.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #125 — Splash distorcido S25 Ultra
 - **Status:** ✅ Concluído (release v0.2.0.4)
@@ -1103,7 +1101,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   drawable/splash_icon.png era 3224×1292 stale. Theme.SplashScreen Android 12+ esticava pra preencher safe zone 240dp. Source resources/splash_icon.png já era 1024×1024. Fix: cp resources/splash_icon.png android/app/src/main/res/drawable/splash_icon.png. Bg color #FFF4EC em colors.xml dosy_splash_bg.
 - **Aceitação:** Validado em release v0.2.0.4 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.4.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.4.
 
 ### #152 — ChangePasswordModal em Ajustes
 - **Status:** ✅ Concluído @ commit b2f53ff (2026-05-05)
@@ -1113,7 +1111,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   ChangePasswordModal.jsx novo. Botão 'Alterar senha' Settings → Conta. Modal padrão Dosy (ícone Lock) + 3 inputs (atual + nova + repetir). Validação inline (≥8 chars, match repeat, atual ≠ nova). Re-autentica via signInWithPassword({email, password: current}) → updateUser({password: nova}). Toast success + close modal.
 - **Aceitação:** Validado em release v0.2.0.12 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.12.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.12.
 
 ### #153 — Recovery senha via OTP 6 dígitos
 - **Status:** ✅ Concluído @ commit b2f53ff..31da691 (2026-05-05)
@@ -1123,7 +1121,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Substitui magic-link broken #147. useAuth.sendRecoveryOtp(email) → signInWithOtp shouldCreateUser:false. verifyRecoveryOtp(email, token) → verifyOtp type:'email' + flag localStorage dosy_force_password_change=1. Login.jsx 2 sub-modes 'forgot-email' + 'forgot-otp'. App.jsx ForceNewPasswordModal aberto auto via useEffect [user]. Email OTP length 8→6 dígitos. Email template Magic Link customizado pra OTP code. Validado E2E Chrome MCP.
 - **Aceitação:** Validado em release v0.2.0.12 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.12.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.12.
 
 ---
 
@@ -1315,7 +1313,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   PARCIAL: PatientForm AVATAR_GROUPS reorganizado em 6 categorias (Família, Saúde NOVO, Pessoas, Animais, Atividades NOVO, Cores). Saúde inclui emojis médicos. Default '👤' → '🙂' via DEFAULT_AVATAR. Dedup duplicatas. Fallbacks atualizados em PatientAvatar/FilterBar/Dashboard/PatientDetail. Escopo SVG flat tinted + sliders cor + migration parqueado backlog.
 - **Aceitação:** Validado em release v0.2.0.11 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.11.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.11.
 
 ### #104 — Skeleton legacy → Dosy peach
 - **Status:** ✅ Concluído @ commit 8e093a0 (2026-05-04)
@@ -1325,7 +1323,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Card primitive bg-elevated + bg-sunken bars + dosy-shadow-xs. SkeletonList migrado de bg-slate-200 azul pra bg-dosy-bg-sunken (peach #FBE9DC) + shimmer warm.
 - **Aceitação:** Validado em release v0.2.0.1 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.1.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.1.
 
 ### #117 — Alerta paciente compartilhado novo
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1335,7 +1333,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Service listReceivedShares consulta patient_shares WHERE sharedWithUserId = me. Hook useReceivedShares (staleTime 60s, 5min após #141). Header conta shares cujo createdAt > localStorage[dosy_shares_seen_at]. Click → seenAt=now → nav /pacientes. Decay automático.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #118 — Alerta tratamento acabando ≤3 dias
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1345,7 +1343,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Computa endDate = startDate + durationDays*86400000ms em memória (sem coluna nova). Filtra: !isContinuous && status='active' && endDate >= now && endDate-now ≤ 3d. seenAt-based decay igual ao #117. Click → nav /pacientes. EndingSoonSheet componente novo (#118-followup).
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #120 — SharePatientSheet copy plus
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1355,7 +1353,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Copy condicional baseado em tier real. Hardcoded check em SharePatientSheet.jsx:10 mostrava 'Você está no plano Free' pra user Plus. Server-side check OK (RPC APENAS_PRO_COMPARTILHA), apenas client copy errado.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #121 — PaywallModal Escape close
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1365,7 +1363,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Fix em surfaces.jsx Sheet + Modal: keydown listener Escape chamando onClose. Cobre todos sheets/modals dosy (PaywallModal, SharePatientSheet, EndingSoonSheet, etc).
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #123 — Sessão invalida após DELETE auth.users
 - **Status:** ✅ Concluído (release v0.2.0.3)
@@ -1375,7 +1373,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Fix useAuth boot: após getSession(), chama supabase.auth.getUser() (bate na API). Se retornar erro/null, força signOut local + clear cache. Cobre: user deletado, banned, JWT key rotation.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ---
 
@@ -1517,7 +1515,7 @@ Sem repro cirúrgica, mecanismo exato pendente investigação dedicada v0.2.2.0+
 - **Descrição técnica:**
   Substituído firstName por shortName em userDisplay.js: retorna primeira+segunda palavra se ambas ≤6 chars (cobre 'Teste Free', 'Teste Plus'), senão só primeira.
 - **Aceitação:** Validado em release v0.2.0.3 (sem regressões reportadas)
-- **Detalhe:** Ver `contexto/updates/` log da release v0.2.0.3.
+- **Detalhe:** Ver `context/updates/` log da release v0.2.0.3.
 
 ### #075 — Reduzir agressividade React Query global (mitiga lentidão geral)
 - **Status:** ✅ Concluído @ commit a67c1b7 (2026-05-01)
@@ -1935,7 +1933,7 @@ public void onMessageReceived(RemoteMessage msg) {
 - [ ] `git log --all --full-history -p -- .env* supabase/functions/ | grep -iE "key|secret|token"`
 - [ ] Buscar em refs órfãos: `git fsck --lost-found` + inspect
 - [ ] Verificar tags com conteúdo sensível: `pre-secret-purge-backup` (já confirmada limpa em audit 2026-05-02 11:50 UTC)
-- [ ] Listar resultado consolidado em `contexto/updates/{data}-release-v0.1.7.3.md` antes prosseguir
+- [ ] Listar resultado consolidado em `context/updates/{data}-release-v0.1.7.3.md` antes prosseguir
 
 **FASE 2 — Reconectar Vercel↔GitHub (guided via Claude in Chrome):**
 - [ ] Agente navega `https://vercel.com/lhenriquepdas-projects/dosy/settings/git`
@@ -1986,8 +1984,8 @@ public void onMessageReceived(RemoteMessage msg) {
 
 **FASE 8 — Cleanup + release v0.1.7.3 (autônomo agente):**
 - [ ] Merge `release/v0.1.7.3` → master (--no-ff) + tag `v0.1.7.3` + push
-- [ ] Atualizar `contexto/`: ROADMAP §3+§12, PROJETO.md versão, README.md "Estado atual"
-- [ ] Criar `contexto/updates/2026-05-XX-release-v0.1.7.3.md` com log completo + audit findings
+- [ ] Atualizar `context/`: ROADMAP §3+§12, PROJETO.md versão, README.md "Estado atual"
+- [ ] Criar `context/updates/2026-05-XX-release-v0.1.7.3.md` com log completo + audit findings
 - [ ] Marcar #084 ✅ Concluído em CHECKLIST + ROADMAP
 - [ ] Decrementar P0: 7 → 6
 - [ ] Deletar `release/v0.1.7.3` local + remote
@@ -2030,7 +2028,7 @@ public void onMessageReceived(RemoteMessage msg) {
 | User cliente caches anon key velha em IndexedDB | Service worker bump cache version força refresh. |
 | OAuth Vercel↔GitHub falha | Fallback: continuar `vercel --prod` CLI até sessão futura. |
 
-- **Detalhe completo:** ver `contexto/updates/2026-05-02-release-v0.1.7.2.md` (incident report).
+- **Detalhe completo:** ver `context/updates/2026-05-02-release-v0.1.7.2.md` (incident report).
 
 ---
 
@@ -2323,7 +2321,7 @@ Gate Google: ≥12 testers ativos × 14 dias antes de Open Testing.
 
 ## Plano fixes egress (auditoria 2026-05-05)
 
-> **Detalhes em** `contexto/egress-audit-2026-05-05/README.md`. Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 v0.1.7.5 cobriu apenas ~30%. Causa raiz: `invalidateQueries()` em massa em events não-data-related (visibility/focus/resume) + Realtime sem debounce.
+> **Detalhes em** `context/egress-audit-2026-05-05/README.md`. Egress 35.79 GB / 5 GB Free (715%). Grace expira 06 May. Fix #092 v0.1.7.5 cobriu apenas ~30%. Causa raiz: `invalidateQueries()` em massa em events não-data-related (visibility/focus/resume) + Realtime sem debounce.
 
 ### #134 — `useAppResume` remover invalidate em short idle, scopear long idle
 - **Status:** ✅ Concluído @ commit e3d0d93 (2026-05-05)
@@ -2674,7 +2672,7 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 - publication realtime vazia + hook subscribe = silent rate-limit cascade (não-óbvio sem inspecionar BD direto)
 - Investigação multi-camada (cliente Chrome MCP + servidor Supabase MCP) é necessária pra root cause real
 
-**Detalhe completo:** `contexto/updates/2026-05-05-investigacao-157-storm-realtime.md`
+**Detalhe completo:** `context/updates/2026-05-05-investigacao-157-storm-realtime.md`
 
 ### #158 — Resolver rejection Google Play (org account required) NOVO P0 URGENTE
 - **Status:** ✅ FECHADO 2026-05-06 — Google APROVOU pós-fixes v0.2.1.2. Closed Testing track "Alpha" ativo desde 2026-05-06 mid-day (#130 ✅). **Fix path B aplicado:** reverter declarações Console (Apps de saúde 13 checkboxes Medicina desmarcados + categoria medical→saude/fitness + manifest categories medical→lifestyle). Path A (org account CNPJ + transfer app) NÃO necessário. Desbloqueou #131 #132 #133. ADR `decisoes/2026-05-06-001-rejection-google-fix.md`.
@@ -2682,7 +2680,7 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 - **Prioridade:** P0 URGENTE (bloqueador rollout Closed Testing público + Production track futuro)
 - **Esforço total:** 1-3 dias investigação + plano (passos 1-7) + 1-3 semanas execução plano (opção A/B/C escolhida)
 - **Dependências:** decisão user pós passo 7
-- **Escopo:** trabalho operacional Console + paperwork — **não precisa branch git** (zero código). Updates em `contexto/decisoes/` (ADR) + `contexto/updates/` (logs sessão).
+- **Escopo:** trabalho operacional Console + paperwork — **não precisa branch git** (zero código). Updates em `context/decisoes/` (ADR) + `context/updates/` (logs sessão).
 
 **Diretrizes execução (7 passos sequenciais — agente seguir em ordem):**
 
@@ -2690,7 +2688,7 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 - Console → Notificações (sino topo direito) → "App rejeitado · 5 de mai." → Mais detalhes
 - Click "Ver e-mail" → ler email Google completo (texto integral do reviewer)
 - Capturar: data, mensagem específica, link política violada, recursos/categorias citados especificamente
-- **Goal:** entender EXATAMENTE qual declaração foi flagged (não só "Política requisitos genérica"). Cole texto integral do email em `contexto/decisoes/{data}-rejection-google.md` como evidência.
+- **Goal:** entender EXATAMENTE qual declaração foi flagged (não só "Política requisitos genérica"). Cole texto integral do email em `context/decisoes/{data}-rejection-google.md` como evidência.
 
 #### Passo 2 — Entrar nos links sugeridos pela página Detalhes
 - Detalhes problema referenciam: `requisitos do Play Console` + `conteúdo do app` + Central de Ajuda transferir apps + Central de Ajuda configurar org account
@@ -2766,7 +2764,7 @@ Hook `src/hooks/useRealtime.js` preservado intacto — apenas invocação coment
 - **Pós-A success:** restaurar declaração "App de saúde" + categoria Medicina se quiser → re-submit com escopo healthcare completo
 
 **Output deliverables passo 7:**
-- ADR `contexto/decisoes/2026-05-XX-rejection-google-fix.md` documentando decisão escolhida + razão
+- ADR `context/decisoes/2026-05-XX-rejection-google-fix.md` documentando decisão escolhida + razão
 - Plano timeline execução (datas concretas)
 - Items derivados para ROADMAP (ex.: #159 "abrir empresa Dosy Med LTDA", #160 "transferir app Console", #161 "re-submit Closed Testing post-fix")
 
@@ -7441,7 +7439,7 @@ Tabela `medcontrol.dose_alarms_scheduled` criada em #083.7 (v0.1.7.2) pra `notif
 
 ## NOVOS items descobertos via auditoria 2026-05-13 Alarme + Push
 
-> Origem: `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (varredura ponta-a-ponta 11 arquivos Java + JS notifications + 6 Edge Functions + 22 migrations + Manifest + capacitor.config + sw.js). 19 bugs/riscos identificados P0→P3 + análise impacto egress + storm risk.
+> Origem: `context/auditoria/2026-05-13-alarme-push-auditoria.md` (varredura ponta-a-ponta 11 arquivos Java + JS notifications + 6 Edge Functions + 22 migrations + Manifest + capacitor.config + sw.js). 19 bugs/riscos identificados P0→P3 + análise impacto egress + storm risk.
 
 ### #215 — Refactor scheduler unificado + push backup co-agendado (cobre DnD/criticalAlarm-off)
 
@@ -7740,7 +7738,7 @@ Páginas admin `/alarm-audit` (filtros usuário/origem/ação/dose/período + mo
 
 **Referências:**
 
-- Auditoria seção §4.1 [B-01, B-02], §4.3 [B-09] — `contexto/auditoria/2026-05-13-alarme-push-auditoria.md`
+- Auditoria seção §4.1 [B-01, B-02], §4.3 [B-09] — `context/auditoria/2026-05-13-alarme-push-auditoria.md`
 - ROADMAP §6.7 #215
 
 ---
@@ -8387,7 +8385,7 @@ Análise cross-source dificultada — admin panel `/alarm-audit` não consegue f
 
 ## QA v0.2.3.6 — Bugs detectados (2026-05-15)
 
-> Relatório completo: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md) — rodado em emulator Pixel8_Test, conta teste-plus@teste.com.
+> Relatório completo: [`context/qa/QA_REPORT.md`](qa/QA_REPORT.md) — rodado em emulator Pixel8_Test, conta teste-plus@teste.com.
 
 ---
 
