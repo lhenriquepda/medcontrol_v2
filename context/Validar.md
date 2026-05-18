@@ -3,7 +3,7 @@
 > 🛑 **REGRA CRÍTICA — IA NUNCA valida em conta pessoal do user.**
 > Toda validação E2E autônoma (criar tratamento/paciente/dose/regra SOS) **DEVE** rodar em conta teste: `teste-free@teste.com`, `teste-plus@teste.com`, `teste-pro@teste.com` (senha `123456`).
 > ANTES de qualquer `left_click` em Criar/Salvar/Submit, IA verifica usuário logado. Se conta pessoal → logout + login conta teste.
-> Validar em conta pessoal polui dados reais → risco LGPD + drift + reprimenda forte. Ver README §4 Regra 15.
+> Validar em conta pessoal polui dados reais → risco LGPD + drift + reprimenda forte. Ver `context/RULES.md` Regra 15.
 
 > **Checklist de validações que exigem ação sua** (device físico, observação visual em produção, conferência manual em painéis externos). A IA não consegue executar sozinha.
 >
@@ -97,7 +97,7 @@
 > - **v0.2.2.x** (auditoria sistema alarmes + storm fixes) — todos resolvidos pelo refactor v0.2.3.x.
 > - **v0.2.1.x** (mutation queue offline + idle skeleton + storm refresh token) — todos resolvidos.
 
-Para histórico exaustivo: ver [`Validar_archive_2026-05-17_pre-reset.md`](Validar_archive_2026-05-17_pre-reset.md), `contexto/updates/`, e ROADMAP §6.3 Δ release log.
+Para histórico exaustivo: ver [`Validar_archive`](archive/Validar_archive_2026-05-17_pre-reset.md), `context/updates/`, e ROADMAP §6.3 Δ release log.
 
 ---
 

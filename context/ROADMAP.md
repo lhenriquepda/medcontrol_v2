@@ -10,7 +10,7 @@
 
 Antes de qualquer Chrome MCP `left_click` em botão Criar/Salvar/Submit, IA verifica usuário logado (header "Boa noite, X" + `SELECT auth.uid()`). Se conta pessoal → logout + login conta teste.
 
-Validação em conta pessoal polui dados reais → risco LGPD + drift + reprimenda forte. Ver README §4 Regra 15.
+Validação em conta pessoal polui dados reais → risco LGPD + drift + reprimenda forte. Ver `context/RULES.md` Regra 15.
 
 ---
 
@@ -112,7 +112,7 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 
 **Branch ativa:** master @ tag `v0.2.3.11` (vc 74). Play Console Internal Testing publicado 2026-05-17 22:55 BRT. Vercel prod dosymed.app v0.2.3.11 confirmado 2026-05-18T01:58Z. Master merge `21b6a0e`. Todos os bugs #0001–#0008 fixados + feature #299 (in-app update DB autoritativo + modal mandatory). Pendência: validações device físico Samsung S25 Ultra após propagação Internal Testing (~1h).
 
-**Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — nenhum bug aberto.
+**Bugs abertos:** ver [`context/BUGS.md`](BUGS.md) — nenhum bug aberto.
 
 **✅ SHIPPED master `release/v0.2.3.11`** (vc 74, base master v0.2.3.10 vc 73):
 - ✅ **#0001** P2 — Push subscription não registra auto — `useAuth` SIGNED_IN + INITIAL_SESSION auto-subscribe se perm=granted. Commit `7e043ab`. Validado emulador.
@@ -126,13 +126,9 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 
 **✅ SHIPPED master `release/v0.2.3.8`** (vc 71, Play Console Internal Testing publicado 2026-05-17 14:32 BRT, tag `v0.2.3.8` merge `9bf1436`, Vercel prod dosymed.app v0.2.3.8 confirmado). 1 item P0: **#287** P0 BUG — killed caregiver alarm gap arquitetural FCM `notification` payload bloqueava `onMessageReceived` (Firebase Android SDK auto-renderiza tray + não chama handler), AlarmScheduler nunca executava no caregiver. Fix: Edge `dose-trigger-handler` v25 + `dose-fire-time-notifier` v7 enviam DATA-ONLY HIGH (sem notification block) → handler nativo executa + agenda AlarmManager.setAlarmClock OU dispara AlarmService FG imediato via novo `kind=fire_now_alarm`. QA emulador 3/3 PASS (S1 owner sem share, S2 caregiver background recebe schedule_alarms + alarme dispara, S3 caregiver background recebe fire_now_alarm + AlarmService FG dispatched). Commits `981fab4` + `ed180cc`.
 
-**✅ SHIPPED master `release/v0.2.3.7`** (vc 70, Play Console Internal Testing publicado 2026-05-17 11:04 BRT, tag `v0.2.3.7` merge `e0933f8`). 10 itens fechados (perf bundle F1+F3+F6+F5 + server flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284). QA 21/21 OK ([qa/QA_REPORT_v0_2_3_7_full_rerun.md](qa/QA_REPORT_v0_2_3_7_full_rerun.md)).
+**✅ SHIPPED master `release/v0.2.3.7`** (vc 70, Play Console Internal Testing publicado 2026-05-17 11:04 BRT, tag `v0.2.3.7` merge `e0933f8`). 10 itens fechados (perf bundle F1+F3+F6+F5 + server flow #279/#280/#281 + idempotência+WorkManager #282 + RPC userId=owner #283 + QA exaustivo #284). QA 21/21 OK ([QA_REPORT_v0_2_3_7_full_rerun.md](archive/qa/QA_REPORT_v0_2_3_7_full_rerun.md)).
 
-**Releases shipped recentes:** ver §6.3 Δ release log e [`contexto/updates/`](updates/) — features, perf, refactors. Bugs específicos consolidados em [`BUGS.md`](BUGS.md) (abertos + histórico SHIPPED).
-
-**Próxima release planejada (sugerida v0.2.3.11):**
-- ⏳ **#299** P2 — Banner verde "Nova versão" exibir versionName REAL via tabela DB autoritativa `app_releases`. Elimina mapa hardcoded `VERSION_CODE_TO_NAME` desatualizado + fallback Vercel dessincronizado. IA shipa = SQL INSERT no Passo 12. Detalhe completo CHECKLIST §#299.
-- ⏳ **#0003 + #0004** (BUGS.md) — Fix unshare patient UX: remover `ctx.startActivity` intrusivo + separar var `__dosyPendingUnsharePatientId` do `__dosyPendingPatientId`. Devem ser fixados juntos.
+**Releases shipped recentes:** ver §6.3 Δ release log e [`context/updates/`](updates/) — features, perf, refactors. Bugs específicos consolidados em [`BUGS.md`](BUGS.md) (abertos + histórico SHIPPED).
 
 **✅ SHIPPED master `release/v0.2.3.6`** (vc 69, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.6` merge `348eff7`). QA completo Chrome MCP localhost teste-plus@. 11 itens fechados + 5 P2-P4 abertos próxima release (#259-#263).
 
@@ -150,19 +146,14 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 - ✅ **#267** P1 BUG Dashboard skeleton em troca de hora — fix `placeholderData` fallback varre cache `['dashboard-payload', *]` cross-key (`20efdbf`)
 
 **Bugs detectados no QA v0.2.3.6 2026-05-15 — abertos para próxima sessão:**
-> Relatório completo: [`contexto/qa/QA_REPORT.md`](qa/QA_REPORT.md)
+> Relatório completo: [`QA_REPORT.md`](archive/qa/QA_REPORT.md)
 - ⏳ **#259** P2 BUG Status "Cancelada" em Relatórios após ciclo pause/resume tratamento (QA BUG #4)
 - ⏳ **#260** P2 BUG Console errors `[object Object]` silenciosos no Dashboard/Patients (QA OBSERVAÇÃO #5)
 - ⏳ **#261** P3 BUG HORÁRIO no formulário SOS exibe formato en-US (`05/15/2026 3:06PM` vs `15/05/2026 15:06`) — `datetime-local` herda locale do Android WebView (QA BUG #1)
 - ⏳ **#262** P3 UX Ad banner Plus renderiza ACIMA do header Dosy na tela Mais (QA BUG #2)
 - ⏳ **#263** P4 UX Tratamentos exibe "1 dias" quando tratamento termina hoje (deveria "Termina hoje") (QA BUG #3)
 
-**Pendente antes fechar release/v0.2.3.6:**
-- ⏳ Build AAB vc 69 + upload Play Console (Passo 10.5 → aguardar OK user)
-- ⏳ Validação idle fix #255 em device físico (S25 Ultra) — token expirado + resume → deve redirecionar login
-- ⏳ Push resumo diário (disparo cron 5am BRT — requer timing manual)
-
-**Regra crítica adicionada README §4 Regra 15:** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456.
+**Regra crítica (`RULES.md` Regra 15):** IA NUNCA valida em conta pessoal — SEMPRE teste-free/teste-plus/teste-pro @teste.com pwd 123456.
 
 **✅ SHIPPED `release/v0.2.3.5`** (vc 68, Play Console Internal Testing publicado 2026-05-15, tag `v0.2.3.5` commit `bf447d3`, Vercel prod dosymed.app):
 - ✅ **#239** P1 BUG optimistic cache patch (regression #163)
@@ -197,7 +188,7 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 - **Não é JDK:** testado JDK 21 + 23 + 25 Adoptium Temurin — mesmo erro.
 - **Fix:** redirect TEMP/TMP pra pasta sem filter driver (testado `C:\temp\gradle_tmp` OK). JDK 25 obrigatório (assertion mais nova, anteriores funcionam mas 25 alinhado AGP).
 - **Comando:** `TEMP='C:\temp\gradle_tmp' TMP='C:\temp\gradle_tmp' JAVA_HOME='/c/Program Files/Eclipse Adoptium/jdk-25.0.3.9-hotspot' PATH="$JAVA_HOME/bin:$PATH" ./gradlew bundleRelease`
-- Documentado: `android/gradle.properties` (comment header), `contexto/README.md` §11.
+- Documentado: `android/gradle.properties` (comment header), `context/recipes/gradle-build.md`.
 
 **Commits v0.2.3.2:** `1802853` fix #227-#230 + `a1ea4cd` docs Validar 100% + `2d460b4` docs ROADMAP §3+§6.3 + `e0fde9d` build CLI fix + release notes + AAB published + `c0cb372` merge master.
 
@@ -251,11 +242,11 @@ CLI gradlew + Appium-style ADB UiAutomator2 fluxo COMPROVADO 100% autônomo end-
 
 **Refactor v0.2.3.1 — 4 auditorias + 7 blocos implementação (2026-05-13):**
 
-- `contexto/auditoria/2026-05-13-alarme-push-auditoria.md` (auditoria 1, 563 linhas — bugs B-01 a B-15)
-- `contexto/auditoria/2026-05-13-alarme-push-auditoria-FUNDO.md` (auditoria 2 — 4 root causes arquiteturais RC-1 a RC-4)
-- `contexto/auditoria/2026-05-13-alarme-push-codigo-morto.md` (auditoria 3 — 23 itens código morto)
-- `contexto/auditoria/2026-05-13-alarme-push-releitura-linha-por-linha.md` (auditoria 4 — 5 achados A-XX + 3 B-XX)
-- `contexto/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md` (consolidado + plano 7 blocos)
+- `context/auditoria/2026-05-13-alarme-push-auditoria.md` (auditoria 1, 563 linhas — bugs B-01 a B-15)
+- `context/auditoria/2026-05-13-alarme-push-auditoria-FUNDO.md` (auditoria 2 — 4 root causes arquiteturais RC-1 a RC-4)
+- `context/auditoria/2026-05-13-alarme-push-codigo-morto.md` (auditoria 3 — 23 itens código morto)
+- `context/auditoria/2026-05-13-alarme-push-releitura-linha-por-linha.md` (auditoria 4 — 5 achados A-XX + 3 B-XX)
+- `context/auditoria/2026-05-13-alarme-push-FINAL-fluxo-e-refactor.md` (consolidado + plano 7 blocos)
 - `docs/alarm-scheduling-v0.2.3.1.md` (novo doc fluxos atualizados, substitui `docs/archive/alarm-scheduling-shadows-pre-v0.2.3.1.md`)
 
 **7 blocos implementados (8 commits):**
@@ -798,7 +789,7 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 **Δ 2026-05-13 release/v0.2.3.0 RODADA 1 (#215 refactor scheduler 3-cenários):** +**#215 P0 TURNAROUND código mergeado** Refactor scheduler unificado 3-cenários + push backup co-agendado. 4 commits (`21f8f32` bump vc 62→63 + `e45d1d5` Etapa 1 helper unificado + `04bbbef` Etapa 2 scheduler.js + `a2eb69c` Etapas 3+4+5). Mudanças: (a) `src/services/notifications/unifiedScheduler.js` NOVO 165 linhas — decideBranch + computeHorizon + buildSchedulePayload; (b) `src/services/notifications/channels.js` canais `dosy_tray` + `dosy_tray_dnd` (vibração leve sem som — decisão 3); (c) `src/services/notifications/scheduler.js` rescheduleAll delega ao unifiedScheduler + janela dinâmica 24/48h (decisão 8); (d) `AlarmScheduler.java` helper `scheduleDoseAlarm` + `cancelDoseAlarmAndBackup` + `isInDndWindow` + hash alinhado `% 2147483647` (#220 incluído) + canais Java side; (e) `TrayNotificationReceiver.java` NOVO — dispara LocalNotification tray no horário; (f) `AlarmReceiver.java` cancela LocalNotification backup ao disparar (anti-duplicate); (g) `MainActivity.cleanupLegacyChannels` remove doses_v2 + doses_critical_v2; (h) `DoseSyncWorker` + `DosyMessagingService` chamam helper unificado; (i) Edge `daily-alarm-sync` v3 deployed — janela dinâmica + chunking 30 doses/FCM (#225 incluído) + source local commitada (#217 incluído); (j) Edge `dose-trigger-handler` v18 deployed — action `cancel_alarms` em UPDATE pending→non-pending + DELETE (#221 incluído) + envia cuidadores via `patient_shares` (decisão 6 + 10) + horizon 6h→48h (#215 B-09 incluído); (k) Migration `expand_dose_change_notify_to_delete_v0_2_3_0` applied — trigger AFTER INSERT/UPDATE/DELETE com OLD record; (l) `CriticalAlarmPlugin.syncUserPrefs` novo (criticalAlarm + DnD) + `useUserPrefs` chama no load + mudanças; (m) `BootReceiver` margem 2h alarme atrasado (#224 incluído); (n) `usePushNotifications.js` deletado (#223 incluído); (o) `AlarmActivity.java` cleanup ~80 linhas código morto (#222 incluído). audit log enriquecido em todos 4 paths com metadata `{branch, horizon, source_scenario}` — admin.dosymed.app `/alarm-audit` funcional. Counter: 142 fechados + 11 código mergeado (não-fechado até device validação).
 
-**Δ 2026-05-13 docs/auditoria-alarme-push (auditoria 2026-05-13):** +12 NOVOS items descobertos via auditoria ponta-a-ponta sistema Alarme + Push (`contexto/auditoria/2026-05-13-alarme-push-auditoria.md`). Varredura completa: 11 arquivos Java native (CriticalAlarm plugin), JS services/notifications/* + criticalAlarm + mutationRegistry + hooks core, 6 Edge Functions (5 locais + daily-alarm-sync deployed-only via MCP), 22 migrations DB confirmadas via Supabase MCP, AndroidManifest + capacitor.config + build.gradle + public/sw.js. **#215** 🔄 P0 TURNAROUND refactor scheduler unificado + push backup co-agendado (cobre B-01 DnD zone silêncio + B-02 criticalAlarm-off silêncio + B-09 horizon desalinhado). **#216-#221** 🐛 P1 BUGS: Edge `notify-doses` referencia tabela DROPADA + drift repo↔prod Edge daily-alarm-sync + drift 15 migrations locais + Edges órfãs expostas + hash JS↔Java mismatch + cancel_alarms sem caller. **#222 #225** ✨ P2 MELHORIAS: consolidar 3 channels Android + cleanup ~150 linhas código morto AlarmActivity + FCM payload chunking 4KB. **#224** 🐛 P2 BUG: BootReceiver perde alarmes <1h margem. **#223 #226** ✨ P3 MELHORIAS: deletar usePushNotifications deprecated + padronizar device_id UUID cross-source. **Análise egress + storm risk:** todas correções zero/baixo impacto egress (LocalNotification local, FCM chunking idempotente, hash alinhamento gera 1 storm transitória ~5s durante migration). Counter: 142 fechados / 82 abertos.
+**Δ 2026-05-13 docs/auditoria-alarme-push (auditoria 2026-05-13):** +12 NOVOS items descobertos via auditoria ponta-a-ponta sistema Alarme + Push (`context/auditoria/2026-05-13-alarme-push-auditoria.md`). Varredura completa: 11 arquivos Java native (CriticalAlarm plugin), JS services/notifications/* + criticalAlarm + mutationRegistry + hooks core, 6 Edge Functions (5 locais + daily-alarm-sync deployed-only via MCP), 22 migrations DB confirmadas via Supabase MCP, AndroidManifest + capacitor.config + build.gradle + public/sw.js. **#215** 🔄 P0 TURNAROUND refactor scheduler unificado + push backup co-agendado (cobre B-01 DnD zone silêncio + B-02 criticalAlarm-off silêncio + B-09 horizon desalinhado). **#216-#221** 🐛 P1 BUGS: Edge `notify-doses` referencia tabela DROPADA + drift repo↔prod Edge daily-alarm-sync + drift 15 migrations locais + Edges órfãs expostas + hash JS↔Java mismatch + cancel_alarms sem caller. **#222 #225** ✨ P2 MELHORIAS: consolidar 3 channels Android + cleanup ~150 linhas código morto AlarmActivity + FCM payload chunking 4KB. **#224** 🐛 P2 BUG: BootReceiver perde alarmes <1h margem. **#223 #226** ✨ P3 MELHORIAS: deletar usePushNotifications deprecated + padronizar device_id UUID cross-source. **Análise egress + storm risk:** todas correções zero/baixo impacto egress (LocalNotification local, FCM chunking idempotente, hash alinhamento gera 1 storm transitória ~5s durante migration). Counter: 142 fechados / 82 abertos.
 
 **Δ 2026-05-13 v0.2.1.9 (release/v0.2.1.9 em curso):** +**#209 NOVO P0 🚀 IMPLEMENTAÇÃO** — Refactor completo sistema alarmes + push pós 3 bugs reportados user 2026-05-13. **Bug 1** (alarme "Sem Paciente"): `DoseSyncWorker.java:191` hardcoded `patientName: ""` quando Worker periodic era fonte do alarme scheduling — DB query sem JOIN patients. **Bug 2** (push 5am dose 8am): RPC `update_treatment_schedule` sem `AT TIME ZONE` correction; `date_trunc('day', startDate) + make_interval(8h)` gerava `08:00 UTC = 05:00 BRT`. Compare `create_treatment_with_doses` (correto) que usa `AT TIME ZONE p_timezone`. **Bug 3** (cascata Bug 2 + 8am corretas tb falharam): cron `notify-doses-1min` rodando 5am BRT detectou dose 8am UTC como "agora" + Samsung One UI 7 mata Worker periodic + 5 caminhos concorrentes (cron 1min + cron 6h + Worker + JS + trigger) com lógica `shouldSkipPushBecauseAlarmScheduled` pula push se alarme local agendado, mas alarme local pode ter sido cancelado pelo OS. Fix completo: (a) Migration SQL `update_treatment_schedule` + `AT TIME ZONE` correction + parâmetro `p_timezone`; (b) Migration data-fix idempotente regenerando doses pending de todos treatments ativos via RPC fixada (zero perdas histórico, só pending futuras); (c) `DoseSyncWorker.java` PostgREST embed `patients(name)` + extract `patientName` payload + HORIZON 168h→48h; (d) Nova Edge Function `daily-alarm-sync` v1 (cron `0 8 * * *` UTC = 5am BRT, FCM data 48h horizon, retry exponential 3 attempts, multi-TZ via `user_prefs.timezone`); (e) Refactor `dose-trigger-handler` v16 horizon 6h→48h + action `cancel_alarms` em DELETE/UPDATE pending→non-pending/UPDATE scheduledAt mudou; (f) `DosyMessagingService.java` handler `cancel_alarms` chamando `AlarmScheduler.cancelAlarm`; (g) `AlarmScheduler.java` novo static `cancelAlarm(ctx, id)` + `removePersisted` helper; (h) UNSCHEDULE `notify-doses-1min` + `schedule-alarms-fcm-6h`; (i) SCHEDULE `daily-alarm-sync-5am`. **Egress -99%** estimado (1440 reqs/dia/user → ~5/dia/user). Plus fix #208 BUG superseded (VERSION_CODE_TO_NAME map +56 +57). Plus memory `feedback_release_lifecycle.md` checklist obrigatório.
 

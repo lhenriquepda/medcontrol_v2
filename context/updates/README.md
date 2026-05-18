@@ -113,7 +113,7 @@ Copie e preencha:
 
 ## Gates obrigatórios antes de marcar item concluído
 
-Ver também `../README.md §"Workflow operacional padrão"`.
+Ver também `../WORKFLOW.md`.
 
 | Gate | Quando | Comando | Critério |
 |---|---|---|---|
@@ -127,7 +127,7 @@ Pre-commit hooks (husky + lint-staged) ainda não configurados — item #024 do 
 
 ### Após gates passarem, fechar item em DOIS arquivos
 
-Itens não fecham em ROADMAP apenas — **ambos** ROADMAP + CHECKLIST devem ser atualizados. Ver `../README.md §"Regra 1"` para detalhe.
+Itens não fecham em ROADMAP apenas — **ambos** ROADMAP + CHECKLIST devem ser atualizados. Ver `../ROADMAP.md §"Regra de manutenção"` para detalhe.
 
 Resumo:
 - `ROADMAP.md §6`: marcar `[x]`
@@ -136,7 +136,7 @@ Resumo:
 
 **Validação cross-file:**
 ```bash
-grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*⏸️ Bloqueado" contexto/CHECKLIST.md
+grep -c "Status:.*⏳ Aberto\|Status:.*🟡 Em progresso\|Status:.*⏸️ Bloqueado" context/CHECKLIST.md
 ```
 Deve igualar P0+P1+P2+P3 abertos do ROADMAP §12.
 
@@ -144,7 +144,7 @@ Deve igualar P0+P1+P2+P3 abertos do ROADMAP §12.
 
 ## Convenções de commit (referência rápida)
 
-Detalhe completo em `../README.md §"Workflow operacional padrão"`. Resumo:
+Detalhe completo em `../WORKFLOW.md`. Resumo:
 
 ```
 {type}({version}): {sumário ≤72 chars}

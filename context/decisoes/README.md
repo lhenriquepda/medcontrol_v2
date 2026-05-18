@@ -29,7 +29,7 @@ Crie um ADR ANTES de implementar quando a sessão envolve:
 
 Se um item do `CHECKLIST.md` declara explicitamente **"parte de #001"** ou **"depende de #001"**, ele já está documentado no item pai. **Não cria ADR separada** pra dependência.
 
-Esses items entram no **mesmo commit** do pai e marcam `[x]` simultaneamente em ambos no `ROADMAP.md`. Ver `../README.md §"Workflow operacional padrão"`.
+Esses items entram no **mesmo commit** do pai e marcam `[x]` simultaneamente em ambos no `ROADMAP.md`. Ver `../WORKFLOW.md`.
 
 ---
 

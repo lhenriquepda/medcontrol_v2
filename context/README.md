@@ -1,7 +1,7 @@
 # 🛑 Dosy — Entry Point Obrigatório
 
 > **IA nova recebendo este projeto:** siga os 5 passos abaixo SEM PULAR. Pare no Passo 5 e espere comando do user antes de tocar código.
-> Histórico completo (fluxo anterior) → [`context/README_legacy.md`](README_legacy.md)
+> Histórico completo (fluxo anterior) → [`context/archive/README_legacy.md`](archive/README_legacy.md)
 
 ---
 

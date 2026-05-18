@@ -44,7 +44,7 @@ Nenhum bug P4 aberto.
 
 ## 📦 Histórico — Bugs SHIPPED (referência cronológica)
 
-> Ordem cronológica reversa. Releases anteriores: ver `contexto/updates/` + ROADMAP §6.3 Δ release log.
+> Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
 ### v0.2.3.11 (2026-05-18, vc 74)
 
@@ -99,4 +99,4 @@ Nenhum bug P4 aberto.
 - **#230** P2 — Edge `dose-trigger-handler` BATCH_UPDATE multi-dose group hash.
 
 ### Releases anteriores
-Ver `contexto/ROADMAP.md` §6.3 Δ release log para histórico completo (v0.2.1.x, v0.2.2.x, v0.2.3.0, v0.2.3.1).
+Ver `context/ROADMAP.md` §6.3 Δ release log para histórico completo (v0.2.1.x, v0.2.2.x, v0.2.3.0, v0.2.3.1).
