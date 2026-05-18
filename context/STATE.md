@@ -16,7 +16,7 @@
 | **Último tag** | `v0.2.3.13` · merge `3e27811` |
 | **Ship date** | 2026-05-18 |
 | **Play Console** | Internal Testing vc 76 — publicado 2026-05-18 18:04 BRT |
-| **Vercel prod** | `dosymed.app` — v0.2.3.13 (deploy em curso) |
+| **Vercel prod** | `dosymed.app` — v0.2.3.13 confirmado 2026-05-18T23:09Z |
 
 ---
 
