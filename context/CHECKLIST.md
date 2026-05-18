@@ -6,9 +6,7 @@
 
 ---
 
-## 🚧 Release v0.2.3.5 em curso
-
-### #release-v0.2.3.5 — UI/UX redesign 5 telas + crit bug Reports + sistema gradiente unificado
+### #release-v0.2.3.5 — UI/UX redesign 5 telas + crit bug Reports + sistema gradiente unificado ✅ SHIPPED
 
 - **Status:** 🚧 branch `release/v0.2.3.5` aberta (commit `8d1eb8f` bump vc 67→68). Validação web localhost iterativa user-driven. Esforço aplicado ~6h.
 - **Escopo:**

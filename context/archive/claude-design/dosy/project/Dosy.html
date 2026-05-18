@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dosy — App de remédios da família</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/app.css">
+  <style>
+    body { margin: 0; background: #F2E5D8; min-height: 100vh; }
+  </style>
+</head>
+<body data-dosy-root>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Foundations -->
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/Icon.jsx"></script>
+<script type="text/babel" src="src/Primitives.jsx"></script>
+<script type="text/babel" src="src/PhoneFrame.jsx"></script>
+
+<!-- Screens -->
+<script type="text/babel" src="src/screens/Inicio.jsx"></script>
+<script type="text/babel" src="src/screens/Modals.jsx"></script>
+<script type="text/babel" src="src/screens/Pacientes.jsx"></script>
+<script type="text/babel" src="src/screens/Forms.jsx"></script>
+<script type="text/babel" src="src/screens/Aux.jsx"></script>
+<script type="text/babel" src="src/screens/Onboarding.jsx"></script>
+
+<!-- App -->
+<script type="text/babel" src="src/App.jsx"></script>
+
+<!-- Design canvas + tweaks -->
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<!-- Bootstrap -->
+<script type="text/babel">
+const PHONE_W = 390;
+const PHONE_H = 820;
+
+const Frame = ({ label, theme = 'light', children, time = '08:42' }) => (
+  <PhoneFrame screenLabel={label} theme={theme} width={PHONE_W} height={PHONE_H} statusBarTime={time}>
+    {children}
+  </PhoneFrame>
+);
+
+const Boot = () => {
+  const [tweaks, setTweak] = useTweaks(window.TWEAK_DEFAULTS);
+
+  return (
+    <>
+      <DesignCanvas title="Dosy — fluxos completos" subtitle="App em pt-BR. Núcleo gratuito, Pro com pacientes ilimitados, análises e compartilhamento." initialZoom={0.7}>
+        <DCSection id="hero" title="Núcleo do app · Free" subtitle="Quem entra hoje, sem pagar. Início, Pacientes, S.O.S, Mais.">
+          <DCArtboard id="inicio-free" label="01 · Início" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="01 Início Free" theme={tweaks.theme}>
+                <App initialTab="inicio" initialTier="free" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="pacientes-free" label="02 · Pacientes (limite Free)" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="02 Pacientes Free" theme={tweaks.theme}>
+                <App initialTab="pacientes" initialTier="free" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="sos" label="03 · S.O.S com bloqueio" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="03 SOS bloqueado" theme={tweaks.theme}>
+                <App initialTab="sos" initialTier="free" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="mais" label="04 · Mais (conta + ajustes)" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="04 Mais" theme={tweaks.theme}>
+                <App initialTab="mais" initialTier="free" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="modals" title="Estados modais" subtitle="O que aparece sobre o Início.">
+          <DCArtboard id="dose-sheet" label="05 · Modal de dose" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="05 Modal dose" theme={tweaks.theme}>
+                <DemoWithSheet kind="dose" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="filtros-sheet" label="06 · Filtros" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="06 Filtros" theme={tweaks.theme}>
+                <DemoWithSheet kind="filtros" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="paywall" label="07 · Paywall (Free → Pro)" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="07 Paywall" theme={tweaks.theme}>
+                <DemoWithSheet kind="paywall" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="alarme" label="08 · Alarme tela cheia" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="08 Alarme" theme={tweaks.theme} time="08:00">
+                <App initialTab="inicio" initialTier="free" theme={tweaks.theme} initialAlarm={true}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="pro" title="Plano Pro · cuidando da família" subtitle="Análises, compartilhamento, pacientes ilimitados.">
+          <DCArtboard id="inicio-pro" label="09 · Início Pro (3 pacientes)" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="09 Inicio Pro" theme={tweaks.theme}>
+                <App initialTab="inicio" initialTier="pro" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="paciente-detail" label="10 · Detalhe do paciente" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="10 Paciente detalhe" theme={tweaks.theme}>
+                <DemoPatientDetail tier="pro" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="analises-pro" label="11 · Análises (Pro)" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="11 Analises" theme={tweaks.theme}>
+                <App initialTab="analises" initialTier="pro" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="historico" label="12 · Histórico" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="12 Historico" theme={tweaks.theme}>
+                <App initialTab="historico" initialTier="pro" theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="novo" label="13 · Novo tratamento" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="13 Novo tratamento" theme={tweaks.theme}>
+                <DemoNovo theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="ajustes" label="14 · Ajustes" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="14 Ajustes" theme={tweaks.theme}>
+                <DemoAjustes theme={tweaks.theme}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="onboarding" title="Entrada · onboarding & login" subtitle="Primeira impressão.">
+          <DCArtboard id="login" label="15 · Login" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="15 Login" theme={tweaks.theme}>
+                <LoginScreen onLogin={() => {}}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+
+          <DCArtboard id="onboarding-1" label="16 · Onboarding 1/4" width={PHONE_W + 60} height={PHONE_H + 60}>
+            <div style={{ padding: 30 }}>
+              <Frame label="16 Onb 1" theme={tweaks.theme}>
+                <OnboardingTour onDone={() => {}}/>
+              </Frame>
+            </div>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Tema">
+          <TweakRadio
+            value={tweaks.theme}
+            onChange={(v) => setTweak('theme', v)}
+            options={[
+              { value: 'light', label: 'Claro' },
+              { value: 'dark',  label: 'Escuro' },
+            ]}
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+};
+
+// Demo wrappers that pre-open sheets so reviewers can see them without clicking
+const DemoWithSheet = ({ kind, theme }) => {
+  const [open, setOpen] = React.useState(true);
+  React.useEffect(() => { setOpen(true); }, []);
+  const dose = window.DOSY_DATA.doses.find(d => d.status === 'pending');
+  return (
+    <>
+      <InicioScreen tier="free" onDoseClick={() => {}} onAddTreatment={() => {}} onOpenFilters={() => {}} onSettings={() => {}} onPaywall={() => {}}/>
+      <BottomNav active="inicio" onChange={() => {}} onPlus={() => {}}/>
+      {kind === 'dose'    && <DoseSheet open={open} dose={dose} onClose={() => setOpen(true)}/>}
+      {kind === 'filtros' && <FiltrosSheet open={open} onClose={() => setOpen(true)}/>}
+      {kind === 'paywall' && <PaywallSheet open={open} onClose={() => setOpen(true)} reason="Pacientes ilimitados, análises completas e relatórios pro médico."/>}
+    </>
+  );
+};
+
+const DemoPatientDetail = ({ tier, theme }) => (
+  <PacienteDetailScreen patient={window.DOSY_DATA.patients[0]} onBack={() => {}} onShare={() => {}} tier={tier} onAddTreatment={() => {}}/>
+);
+
+const DemoNovo = ({ theme }) => (
+  <NovoTratamentoScreen onBack={() => {}} onSave={() => {}}/>
+);
+
+const DemoAjustes = ({ theme }) => (
+  <AjustesScreen onBack={() => {}}/>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Boot/>);
+</script>
+</body>
+</html>

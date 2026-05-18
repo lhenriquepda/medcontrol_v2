@@ -1,0 +1,71 @@
+/* Dosy app — global app styles + utility primitives */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+button { font-family: inherit; }
+
+input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* hide native scrollbars on phone surfaces (mobile feel) */
+.dosy-scroll::-webkit-scrollbar { display: none; }
+.dosy-scroll { scrollbar-width: none; }
+
+/* Animations */
+@keyframes dosy-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dosy-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes dosy-slide-down {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes dosy-pop {
+  0% { transform: scale(0.92); opacity: 0; }
+  60% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes dosy-pulse-ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes dosy-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Press feedback on cards/buttons */
+.dosy-press {
+  transition: transform 150ms var(--ease-out), box-shadow 200ms var(--ease-out);
+}
+.dosy-press:active {
+  transform: scale(0.98);
+}
+
+/* Soft toast */
+.dosy-toast {
+  animation: dosy-pop 250ms var(--ease-out) both;
+}
+
+/* Dark mode tweaks for elements that need extra adjustment */
+.dark .pill-icon-bg-peach-100 { background: rgba(255, 153, 117, 0.15); }
+.dark .pill-icon-bg-peach-200 { background: rgba(255, 122, 91, 0.20); }
+.dark .pill-icon-bg-tan       { background: rgba(201, 133, 110, 0.20); }
+.dark .pill-icon-bg-rose      { background: rgba(255, 61, 127, 0.18); }
+
+/* Wordmark — invert in dark mode so the dark logo becomes light */
+.dark .dosy-wordmark { filter: invert(1) brightness(1.1); }

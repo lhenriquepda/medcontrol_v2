@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Dosy — App materials</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg:#FFF7F1; --fg:#2A1810; --fg-secondary:#6E5145;
+    --border:rgba(74,36,16,0.10); --border-strong:rgba(74,36,16,0.16);
+    --accent:#FF6B5B; --rose:#FF3D7F; --warm:#FFA56B;
+    --card:#FFFFFF;
+    --gradient-sunset: linear-gradient(135deg, #FF3D7F 0%, #FF6B5B 50%, #FFA56B 100%);
+    --shadow-sm: 0 2px 8px -2px rgba(74,24,8,0.10);
+    --shadow-md: 0 12px 28px -8px rgba(74,24,8,0.18);
+    --font-display:'Manrope',system-ui,sans-serif;
+    --font-body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;}
+  .wrap{max-width:1180px;margin:0 auto;padding:64px 32px 96px;}
+  header{margin-bottom:48px;display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap;}
+  h1{font-family:var(--font-display);font-weight:800;font-size:48px;letter-spacing:-0.035em;margin:0;line-height:1;}
+  h1 .accent{background:var(--gradient-sunset);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .sub{color:var(--fg-secondary);margin-top:10px;font-size:16px;max-width:560px;}
+  .meta{font-size:12px;color:var(--fg-secondary);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;}
+
+  section{margin-top:56px;}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:14px;}
+  h2{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-0.02em;margin:0;}
+  .desc{color:var(--fg-secondary);font-size:13.5px;max-width:520px;}
+
+  .grid{display:grid;gap:18px;}
+  .grid.cols-3{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
+  .grid.cols-4{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));}
+  .grid.cols-5{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
+  .grid.cols-2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr));}
+
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:20px;
+    padding:18px;display:flex;flex-direction:column;gap:12px;
+    transition:transform .25s ease, box-shadow .25s ease;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+  .preview{
+    border-radius:14px;
+    background:
+      linear-gradient(45deg, rgba(74,36,16,0.04) 25%, transparent 25%, transparent 75%, rgba(74,36,16,0.04) 75%),
+      linear-gradient(45deg, rgba(74,36,16,0.04) 25%, transparent 25%, transparent 75%, rgba(74,36,16,0.04) 75%) 8px 8px,
+      #FFFAF5;
+    background-size:16px 16px;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .preview.dark{
+    background:
+      linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
+      linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%) 8px 8px,
+      #2A1810;
+    background-size:16px 16px;
+  }
+  .preview img{display:block;}
+  .label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .name{font-weight:700;font-size:14px;letter-spacing:-0.01em;}
+  .size{font-size:11.5px;color:var(--fg-secondary);font-variant-numeric:tabular-nums;font-weight:600;}
+  .file{font-size:11px;color:var(--fg-secondary);word-break:break-all;font-family:ui-monospace,Menlo,monospace;}
+
+  /* Specific previews */
+  .pv-1024 img{width:160px;height:160px;}
+  .pv-512 img{width:130px;height:130px;}
+  .pv-192 img{width:96px;height:96px;}
+  .pv-144 img{width:72px;height:72px;}
+  .pv-96  img{width:64px;height:64px;}
+  .pv-72  img{width:56px;height:56px;}
+  .pv-48  img{width:48px;height:48px;}
+  .pv-180 img{width:120px;height:120px;}
+  .pv-fav32 img{width:32px;height:32px;image-rendering:pixelated;}
+  .pv-fav16 img{width:16px;height:16px;image-rendering:pixelated;}
+
+  /* Wide cards */
+  .card.wide .preview{padding:24px;}
+  .card.wide .preview img{width:100%;height:auto;max-height:520px;object-fit:contain;}
+
+  /* Adaptive icon stack */
+  .stacked{position:relative;width:160px;height:160px;}
+  .stacked img{position:absolute;inset:0;width:100%;height:100%;border-radius:999px;}
+  .stacked .fg{}
+  .stacked .bg{}
+  .layer-toggle{display:flex;gap:6px;margin-top:6px;justify-content:center;}
+  .layer-toggle button{font-family:var(--font-body);font-size:11px;font-weight:600;border:1px solid var(--border);background:#fff;color:var(--fg-secondary);padding:5px 10px;border-radius:999px;cursor:pointer;}
+  .layer-toggle button.active{background:var(--fg);color:#fff;border-color:var(--fg);}
+
+  /* Notification icon row needs dark preview */
+  .pv-notif img{width:48px;height:48px;}
+
+  /* In-context mockups */
+  .ctx-row{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
+  .ctx-card{background:#fff;border:1px solid var(--border);border-radius:20px;padding:0;overflow:hidden;}
+  .ctx-bar{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);}
+  .ctx-bar img{width:36px;height:36px;border-radius:8px;}
+  .ctx-name{font-weight:700;font-size:14px;}
+  .ctx-meta{font-size:11.5px;color:var(--fg-secondary);}
+  .ctx-shot{padding:18px;background:#FFFAF5;display:flex;justify-content:center;}
+  .ctx-shot img{max-width:100%;border-radius:12px;border:1px solid var(--border);}
+
+  /* Browser tab mockup */
+  .tab{display:inline-flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;padding:8px 14px 10px;font-size:13px;font-weight:500;color:var(--fg);box-shadow:0 -2px 8px -2px rgba(74,24,8,0.06);}
+  .tab img{width:16px;height:16px;}
+  .tab-row{padding:18px;background:#F4ECE3;border-radius:14px;display:flex;align-items:flex-end;}
+
+  /* Phone home screen mockup for launcher icon */
+  .phone-home{
+    width:240px;height:420px;border-radius:36px;
+    background: linear-gradient(160deg,#3B2418,#5A2E1C 50%,#874228);
+    padding:50px 24px 24px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:20px 16px;
+    align-content:start;
+    box-shadow:0 30px 60px -20px rgba(74,24,8,0.40), inset 0 0 0 6px #1A0F08;
+    position:relative;
+  }
+  .phone-home::before{content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);width:60px;height:18px;border-radius:99px;background:#0A0604;}
+  .phone-home .app{display:flex;flex-direction:column;align-items:center;gap:5px;}
+  .phone-home .app .ic{width:46px;height:46px;border-radius:11px;background:rgba(255,255,255,0.14);}
+  .phone-home .app .ic.real img{width:100%;height:100%;border-radius:11px;display:block;}
+  .phone-home .app .nm{font-size:9.5px;color:rgba(255,255,255,0.92);font-weight:600;text-align:center;}
+
+  .download-bar{
+    margin-top:48px;padding:22px 24px;border-radius:20px;
+    background:linear-gradient(135deg, rgba(255,61,127,0.06), rgba(255,107,91,0.06));
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  }
+  .download-bar .info{display:flex;flex-direction:column;gap:4px;}
+  .download-bar .ttl{font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:-0.02em;}
+  .download-bar .sub{color:var(--fg-secondary);font-size:13px;}
+  .download-bar a{
+    background:var(--gradient-sunset);color:#fff;text-decoration:none;font-weight:700;font-size:14px;
+    padding:11px 18px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;
+    box-shadow:0 8px 20px -6px rgba(255,61,127,0.45);
+  }
+
+  .lock-iphone{
+    width:280px;height:560px;border-radius:48px;
+    background:#000;padding:8px;
+    box-shadow:0 30px 60px -20px rgba(74,24,8,0.40);
+    position:relative;
+  }
+  .lock-iphone .screen{
+    width:100%;height:100%;border-radius:42px;overflow:hidden;
+    background:url('app-materials/splash-1080x1920.png') center/cover;
+    position:relative;
+  }
+  .lock-iphone .notch{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:108px;height:32px;border-radius:99px;background:#000;z-index:5;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <div class="meta">Materials · v1</div>
+    <h1>Dosy — <span class="accent">app launch kit</span></h1>
+    <p class="sub">Ícones, splash, favicon e capa de loja gerados a partir do brand mark. Todos PNG, prontos para usar nos canais oficiais (Play Store, App Store, web).</p>
+  </div>
+  <div class="meta">17 ativos · PNG</div>
+</header>
+
+<!-- ── App icon master ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>App icon — master</h2>
+      <p class="desc">Brand mark do Dosy: cápsula bicolor sobre o gradiente sunset. Use a versão 1024 como master e gere as derivações a partir dela.</p>
+    </div>
+  </div>
+  <div class="grid cols-2">
+    <div class="card">
+      <div class="preview pv-1024" style="aspect-ratio:1/1;">
+        <img src="app-materials/app-icon-1024.png" alt="App icon 1024" style="width:80%;height:80%;"/>
+      </div>
+      <div class="label"><span class="name">app-icon (master)</span><span class="size">1024 × 1024</span></div>
+      <div class="file">app-materials/app-icon-1024.png</div>
+    </div>
+    <div class="card">
+      <div class="preview pv-1024" style="aspect-ratio:1/1;">
+        <img src="app-materials/ios-app-icon-1024.png" alt="iOS App icon" style="width:80%;height:80%;"/>
+      </div>
+      <div class="label"><span class="name">iOS app icon (squircle)</span><span class="size">1024 × 1024</span></div>
+      <div class="file">app-materials/ios-app-icon-1024.png</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Android launcher densities ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Android · launcher densities</h2>
+      <p class="desc">Mipmap por densidade (mdpi → xxxhdpi). O launcher real renderiza com bordas adaptativas; a cápsula fica centralizada na safe area.</p>
+    </div>
+  </div>
+  <div class="grid cols-5">
+    <div class="card"><div class="preview pv-192" style="aspect-ratio:1/1;"><img src="app-materials/launcher-xxxhdpi-192.png" alt=""/></div><div class="label"><span class="name">xxxhdpi</span><span class="size">192</span></div></div>
+    <div class="card"><div class="preview pv-144" style="aspect-ratio:1/1;"><img src="app-materials/launcher-xxhdpi-144.png" alt=""/></div><div class="label"><span class="name">xxhdpi</span><span class="size">144</span></div></div>
+    <div class="card"><div class="preview pv-96"  style="aspect-ratio:1/1;"><img src="app-materials/launcher-xhdpi-96.png" alt=""/></div><div class="label"><span class="name">xhdpi</span><span class="size">96</span></div></div>
+    <div class="card"><div class="preview pv-72"  style="aspect-ratio:1/1;"><img src="app-materials/launcher-hdpi-72.png" alt=""/></div><div class="label"><span class="name">hdpi</span><span class="size">72</span></div></div>
+    <div class="card"><div class="preview pv-48"  style="aspect-ratio:1/1;"><img src="app-materials/launcher-mdpi-48.png" alt=""/></div><div class="label"><span class="name">mdpi</span><span class="size">48</span></div></div>
+  </div>
+</section>
+
+<!-- ── Adaptive icon ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Android · adaptive icon</h2>
+      <p class="desc">Camadas separadas (foreground transparent + background sólido) para o sistema renderizar com qualquer máscara — círculo, squircle, teardrop.</p>
+    </div>
+  </div>
+  <div class="grid cols-3">
+    <div class="card">
+      <div class="preview" style="aspect-ratio:1/1;">
+        <div class="stacked">
+          <img class="bg" src="app-materials/adaptive-background-512.png" alt=""/>
+          <img class="fg" src="app-materials/adaptive-foreground-512.png" alt=""/>
+        </div>
+      </div>
+      <div class="label"><span class="name">composto (círculo)</span><span class="size">512 × 512</span></div>
+      <div class="file">render: bg + fg</div>
+    </div>
+    <div class="card">
+      <div class="preview" style="aspect-ratio:1/1;">
+        <img src="app-materials/adaptive-foreground-512.png" alt="" style="width:80%;height:80%;"/>
+      </div>
+      <div class="label"><span class="name">foreground</span><span class="size">512 × 512</span></div>
+      <div class="file">app-materials/adaptive-foreground-512.png</div>
+    </div>
+    <div class="card">
+      <div class="preview" style="aspect-ratio:1/1;">
+        <img src="app-materials/adaptive-background-512.png" alt="" style="width:80%;height:80%;"/>
+      </div>
+      <div class="label"><span class="name">background</span><span class="size">512 × 512</span></div>
+      <div class="file">app-materials/adaptive-background-512.png</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Notification ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Notification icon</h2>
+      <p class="desc">Silhueta branca chapada — exigência do Android para a status bar. Usado pra notificar "Hora do remédio".</p>
+    </div>
+  </div>
+  <div class="grid cols-3">
+    <div class="card">
+      <div class="preview pv-notif dark" style="aspect-ratio:1/1;">
+        <img src="app-materials/notification-icon-96.png" alt=""/>
+      </div>
+      <div class="label"><span class="name">notification</span><span class="size">96 × 96</span></div>
+      <div class="file">app-materials/notification-icon-96.png</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── iOS sizes ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>iOS · home screen</h2>
+      <p class="desc">Squircle aplicado direto no PNG (raio ≈22.5%) — o sistema da Apple respeita o asset entregue.</p>
+    </div>
+  </div>
+  <div class="grid cols-4">
+    <div class="card"><div class="preview pv-1024" style="aspect-ratio:1/1;"><img src="app-materials/ios-app-icon-1024.png" alt="" style="width:80%;height:80%;"/></div><div class="label"><span class="name">App Store</span><span class="size">1024</span></div></div>
+    <div class="card"><div class="preview pv-180"  style="aspect-ratio:1/1;"><img src="app-materials/ios-app-icon-180.png" alt="" style="width:80%;height:80%;"/></div><div class="label"><span class="name">iPhone @3x</span><span class="size">180</span></div></div>
+    <div class="card"><div class="preview pv-180"  style="aspect-ratio:1/1;"><img src="app-materials/apple-touch-icon-180.png" alt="" style="width:80%;height:80%;"/></div><div class="label"><span class="name">apple-touch-icon</span><span class="size">180</span></div></div>
+    <div class="card"><div class="preview pv-512"  style="aspect-ratio:1/1;"><img src="app-materials/play-store-icon-512.png" alt="" style="width:80%;height:80%;"/></div><div class="label"><span class="name">Play Store</span><span class="size">512</span></div></div>
+  </div>
+</section>
+
+<!-- ── Web favicon ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Web · favicon</h2>
+      <p class="desc">Versões pixel-perfect para a aba do navegador. Em 16px o split do meio é omitido pra não virar borrão.</p>
+    </div>
+  </div>
+  <div class="grid cols-2">
+    <div class="card">
+      <div class="preview" style="padding:32px;background:#F4ECE3;">
+        <div class="tab-row" style="background:transparent;padding:0;">
+          <div class="tab"><img src="app-materials/favicon-16.png" alt=""/>Dosy — meu povo, na hora certa</div>
+          <div class="tab" style="margin-left:6px;opacity:0.65;background:#EBDFD3;border-color:transparent;">Outra aba</div>
+        </div>
+      </div>
+      <div class="label"><span class="name">favicon (browser tab)</span><span class="size">16 / 32</span></div>
+      <div class="file">app-materials/favicon-{16,32}.png</div>
+    </div>
+    <div class="card">
+      <div class="preview" style="padding:32px;gap:24px;">
+        <div style="display:flex;align-items:center;gap:18px;">
+          <div style="text-align:center;"><div class="pv-fav16"><img src="app-materials/favicon-16.png" alt=""/></div><div class="size" style="margin-top:6px;">16</div></div>
+          <div style="text-align:center;"><div class="pv-fav32"><img src="app-materials/favicon-32.png" alt=""/></div><div class="size" style="margin-top:6px;">32</div></div>
+          <div style="text-align:center;"><img src="app-materials/favicon-32.png" alt="" style="width:64px;height:64px;image-rendering:pixelated;"/><div class="size" style="margin-top:6px;">64 (escalado)</div></div>
+        </div>
+      </div>
+      <div class="label"><span class="name">tamanhos reais</span><span class="size">PNG</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── In context: home screen ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Em contexto · home screen</h2>
+      <p class="desc">Como o ícone aparece no meio das outras apps. A cápsula sunset salta entre os ícones quadrados de costume.</p>
+    </div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;">
+    <div class="card" style="align-items:center;">
+      <div class="preview" style="aspect-ratio:auto;padding:32px 0;background:transparent;border:none;">
+        <div class="phone-home">
+          <div class="app"><div class="ic" style="background:#4FC3F7;"></div><div class="nm">Mensagens</div></div>
+          <div class="app"><div class="ic" style="background:#26A69A;"></div><div class="nm">WhatsApp</div></div>
+          <div class="app"><div class="ic" style="background:#FFCA28;"></div><div class="nm">Fotos</div></div>
+          <div class="app"><div class="ic real"><img src="app-materials/launcher-xxxhdpi-192.png" alt=""/></div><div class="nm">Dosy</div></div>
+          <div class="app"><div class="ic" style="background:#7E57C2;"></div><div class="nm">Calend.</div></div>
+          <div class="app"><div class="ic" style="background:#EF5350;"></div><div class="nm">YouTube</div></div>
+          <div class="app"><div class="ic" style="background:#42A5F5;"></div><div class="nm">Drive</div></div>
+          <div class="app"><div class="ic" style="background:#66BB6A;"></div><div class="nm">Spotify</div></div>
+        </div>
+      </div>
+      <div class="label" style="justify-content:center;"><span class="name">Android home</span></div>
+    </div>
+
+    <div class="card" style="align-items:center;">
+      <div class="preview" style="aspect-ratio:auto;padding:32px 0;background:transparent;border:none;">
+        <div class="lock-iphone">
+          <div class="notch"></div>
+          <div class="screen"></div>
+        </div>
+      </div>
+      <div class="label" style="justify-content:center;"><span class="name">iPhone splash</span><span class="size">1080 × 1920</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Splash & feature graphic ── -->
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Splash & loja</h2>
+      <p class="desc">Tela de abertura (1080×1920) e capa para Play Store (1024×500).</p>
+    </div>
+  </div>
+  <div class="grid cols-2">
+    <div class="card wide">
+      <div class="preview" style="background:#1A0F08;padding:0;">
+        <img src="app-materials/splash-1080x1920.png" alt="" style="max-height:680px;"/>
+      </div>
+      <div class="label"><span class="name">splash screen</span><span class="size">1080 × 1920</span></div>
+      <div class="file">app-materials/splash-1080x1920.png</div>
+    </div>
+    <div class="card wide">
+      <div class="preview" style="background:#1A0F08;padding:0;align-items:center;">
+        <img src="app-materials/play-store-feature-1024x500.png" alt="" style="max-height:480px;"/>
+      </div>
+      <div class="label"><span class="name">Play Store · feature graphic</span><span class="size">1024 × 500</span></div>
+      <div class="file">app-materials/play-store-feature-1024x500.png</div>
+    </div>
+  </div>
+</section>
+
+<div class="download-bar">
+  <div class="info">
+    <div class="ttl">Pronto pra usar</div>
+    <div class="sub">Todos os 17 PNGs estão na pasta <code>app-materials/</code> do projeto. Baixe individualmente ou peça pra empacotar tudo num ZIP.</div>
+  </div>
+  <a href="app-materials/" target="_blank" rel="noopener">Abrir pasta →</a>
+</div>
+
+</div>
+</body>
+</html>
