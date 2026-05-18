@@ -138,11 +138,15 @@ if (Capacitor.isNativePlatform()) {
 // Agora: IDB async + suporta GB-scale + write off-main-thread.
 // Fallback localStorage se IDB indisponível (Safari private mode raro).
 //
-// v0.2.3.7 #275 (F5 perf audit 2026-05-15) — throttleTime 1000→5000ms.
-// Reduz frequência de serialize JSON (cache cresce ~3-5MB no IDB com 90d doses pré-F1,
-// agora ~600KB-1MB pós-F1) no main thread. Crash-safety preservado pela fila offline
-// de mutations (#204 v0.2.1.7) com shouldDehydrateMutation: () => true — marcações
-// críticas persistem separadamente, não se perdem em crash mesmo com throttle maior.
+// v0.2.3.12 NB-4 — REVERT #275 throttle 5000→1000ms.
+// Assumption #275 ("crash-safety preservado pela fila offline") PROVADA ERRADA
+// pelo QA Appium v0.2.3.12: mutations críticas (confirmDose) também são throttled
+// junto com cache. Force-kill <1s após mark "tomada" perde a dose silenciosamente
+// (mutation queue não chegou no IDB antes do kill). Healthcare = data loss inaceitável.
+//
+// Trade-off: ~5× mais writes IDB (~600KB-1MB cache) vs zero data loss em force-kill.
+// IDB writes off-main-thread, custo perf desprezível. Otimização #275 era assumption
+// errada — outras melhorias #272-#274 (cache size + memo + signature) já cobrem perf.
 const idbAvailable = typeof window !== 'undefined' && 'indexedDB' in window
 const persister = idbAvailable
   ? createAsyncStoragePersister({
@@ -152,12 +156,12 @@ const persister = idbAvailable
         removeItem: (key) => idbDel(key),
       },
       key: 'dosy-query-cache',
-      throttleTime: 5000
+      throttleTime: 1000
     })
   : createSyncStoragePersister({
       storage: typeof window !== 'undefined' ? window.localStorage : null,
       key: 'dosy-query-cache',
-      throttleTime: 5000
+      throttleTime: 1000
     })
 
 // Native StatusBar overlay config one-time. Style + background color são

@@ -107,10 +107,24 @@ export function useUpdateUserPrefs() {
         console.error('[useUserPrefs]', e.message)
         throw e
       }
-      const { error } = await supabase
-        .schema('medcontrol')
-        .from('user_prefs')
-        .upsert({ user_id: user.id, prefs: merged, updatedAt: new Date().toISOString() })
+      // v0.2.3.12 Bug #4 — Promise.race timeout 15s. Sem isso, network lento (cellular)
+      // pode hangar mutation indefinidamente. UI já flipou optimistic (writeLocal +
+      // setQueryData) mas syncUserPrefs nativo só roda APÓS upsert resolver — drift
+      // entre cache web e native config (DnD/criticalAlarm) silencioso.
+      let upsertTimeoutId = null
+      const upsertResult = await Promise.race([
+        supabase
+          .schema('medcontrol')
+          .from('user_prefs')
+          .upsert({ user_id: user.id, prefs: merged, updatedAt: new Date().toISOString() }),
+        new Promise((_, reject) => {
+          upsertTimeoutId = setTimeout(
+            () => reject(new Error('Sync prefs timeout (15s) — verifique conexão')),
+            15000
+          )
+        })
+      ]).finally(() => { if (upsertTimeoutId) clearTimeout(upsertTimeoutId) })
+      const { error } = upsertResult
       if (error) {
         console.error('[useUserPrefs] upsert error:', error.message, error.details, error.hint)
         throw new Error(`Sync prefs falhou: ${error.message}`)

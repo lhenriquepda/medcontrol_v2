@@ -50,10 +50,20 @@ export async function sharePatientByEmail(patientId, email) {
 
 export async function unsharePatient(patientId, targetUserId) {
   if (!hasSupabase) return
-  const { error } = await supabase.rpc('unshare_patient', {
+  // v0.2.3.12 Bug #5 — timeout 15s (assimetria corrigida — sharePatientByEmail
+  // já tem em v0.2.3.7 Bug C). Sem isso, network lento trava botão X no
+  // SharePatientSheet sem feedback de erro.
+  const rpcPromise = supabase.rpc('unshare_patient', {
     p_patient: patientId,
     p_target: targetUserId
   })
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(
+      () => reject(new ShareError('Tempo esgotado. Verifique conexão e tente novamente.', 'UNSHARE_TIMEOUT')),
+      15000
+    )
+  })
+  const { error } = await Promise.race([rpcPromise, timeoutPromise])
   if (error) throw mapErr(error)
 }
 
