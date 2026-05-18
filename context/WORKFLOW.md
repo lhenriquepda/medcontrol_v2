@@ -105,7 +105,7 @@ chore: abre release/vX.Y.Z.W — bump vc N→N+1
 | 10.5 STOP AAB | ✅ obrigatório | ❌ | ❌ |
 | 11 validação | ✅ web + emulator + device | ⚠️ web smoke se relevante | ❌ |
 | 12 build AAB + Play Console | ✅ SÓ após §11 + OK 10.5 | ❌ | ❌ |
-| 13 pós-release | ✅ tag + merge + Vercel | ⚠️ merge sem tag | ❌ não merge |
+| 13 pós-release | ✅ tag + STOP → merge + Vercel | ⚠️ STOP → merge sem tag | ❌ não merge |
 | 14 STOP final | ✅ | ✅ | ✅ |
 
 > **`server/<slug>`:** substituir Passo 11 por `mcp__supabase__deploy_edge_function` ou `apply_migration` conforme escopo. Passo 13 sem tag versão app.
