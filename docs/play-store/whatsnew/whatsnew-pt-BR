@@ -1,9 +1,5 @@
-v0.2.3.12 — Correções de estabilidade
+v0.2.3.13 — Aviso de segurança para pacientes compartilhados
 
-• Atualizar (puxar pra baixo) não trava mais — timeout de 20s evita carregamento eterno
-• Cadastrar S.O.S não fica travado em "Salvando" — timeout 15s + retentar disponível
-• Marcação de dose tomada/pulada persiste mesmo se app for fechado logo após o toque
-• Configurações: ativar Não Perturbe não trava — timeout 15s pra avisar erro
-• Compartilhar/Remover paciente não trava — timeout 15s consistente
-• Push notifications: só marca "ativadas" se Google Play Services responder OK
-• Tratamentos criados em outro device aparecem imediatamente ao abrir paciente
+• Alarme confere antes de tocar se outro cuidador já registrou a dose, evitando dose duplicada
+• Sem internet ou servidor lento: o alarme mostra um aviso destacado pedindo pra confirmar antes de medicar
+• Pacientes não compartilhados continuam exatamente como antes

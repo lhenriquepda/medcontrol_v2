@@ -6,6 +6,38 @@
 
 ---
 
+### #release-v0.2.3.13 — Plano A primeira etapa: disclaimer paciente compartilhado ✅ READY for Internal Testing
+
+- **Status:** branch `release/v0.2.3.13` aberta (commits `13f0e70` bump + `9c560e6` feat + `eee7003` QA report + `40fa052` expanded QA + reorganização qa-reports). Esforço ~4h.
+- **Bug case raiz:** cuidador offline no fire time → alarme local pré-agendado disparava mesmo após outro cuidador marcar a dose. Risco de dose duplicada.
+- **Escopo:**
+  - **#300** Plano A primeira etapa anti-dose-duplicada:
+    - **AlarmReceiver pre-check** (`onReceive` reescrito): identifica doses com `isShared=true`, usa `BroadcastReceiver.goAsync()` + worker thread para HTTP GET Supabase REST `/rest/v1/doses?id=in.(...)&select=id,status` com timeout 1.5s. Branches: server confirma todas resolvidas → cancela alarme; server confirma alguma pending → fire sem disclaimer; HTTP falha → cache SharedPrefs `dosy_dose_status` fallback (cancela se cache confirmou todas) ou fire COM disclaimer.
+    - **DosyMessagingService.handleCancelAlarms** grava cache `status:<doseId>=cancelled` + ts em SharedPrefs `dosy_dose_status` + cleanup oportunista 24h.
+    - **AlarmService** propaga flag `unverifiedShared` pra AlarmActivity. FG notif title vira `⚠️ ALARME Dosy ... (verificar)` + subtitle `Sem internet — confirme com outro cuidador` + body com aviso quando offline.
+    - **AlarmActivity** novo `buildUnverifiedSharedBanner` card âmbar (#F2FFD54F + borda #FFB300) com ⚠️ + título "CONFIRME ANTES DE MEDICAR" + corpo explicativo pt-BR, posicionado entre header e lista de doses.
+    - **Edge `dose-trigger-handler` v26** envia `isShared = recipients.length > 1` por dose. **Edge `dose-fire-time-notifier` v8** envia `isShared='true'` (caregivers-only).
+    - Worker fallback 6h grava `isShared=false` hardcoded (TODO: enrich via patient_shares fetch — próxima iteração).
+    - JS `unifiedScheduler.buildSchedulePayload` aceita `d.isShared === true` (future-proof para caller foreground).
+  - Zero regressão: paciente NÃO compartilhado → `collectSharedDoseIds` retorna vazio → pre-check pulado → fluxo original.
+  - Validação: 5/6 cenários E2E em emulator + Appium + Supabase MCP (D disclaimer offline, C-indireto online pending, A regressão unshared, C-real cancel FCM + cache, HTTP server=done). Cenário E cache hit offline code-reviewed (bloqueado por Android force-stop broadcast restriction).
+- **Auditoria egress:**
+
+  | Risco | Severidade | Mitigação | Decisão |
+  |---|---|---|---|
+  | HTTP pre-check 1.5s por alarm fire isShared=true | Baixo | Single request por alarm + apenas pra paciente compartilhado (minoria) + timeout 1.5s evita stall | Aceitar |
+  | Cache writes SharedPrefs em cancel_alarms FCM | Baixíssimo | Mesmo path FCM já existente, só adiciona 2 keys ao SharedPrefs | Aceitar |
+  | Edge novo campo `isShared` no FCM data payload | Zero | Aditivo, 1 boolean por dose (~12 bytes serialized) | Aceitar |
+
+- **Gaps documentados pra próxima iteração:**
+  - Worker `DoseSyncWorker` ainda agenda com `isShared=false` (defesa em profundidade 6h). Próximo passo: batch fetch patient_shares no Worker.
+  - JS `unifiedScheduler` JS-foreground path: nenhum caller seta `isShared=true` ainda. Pode enriquecer via `usePatientShares` cache.
+  - Disclaimer é **mitigação que avisa**, não previne. Solução completa via cron retroativo cancel (Plano A++) ou critical sync channel WebSocket (Plano B) parqueada.
+- **Commit hash:** `40fa052` (head da branch `release/v0.2.3.13`).
+- **QA report:** [`qa-reports/2026-05-18-v0.2.3.13-appium.md`](qa-reports/2026-05-18-v0.2.3.13-appium.md)
+
+---
+
 ### #release-v0.2.3.5 — UI/UX redesign 5 telas + crit bug Reports + sistema gradiente unificado ✅ SHIPPED
 
 - **Status:** 🚧 branch `release/v0.2.3.5` aberta (commit `8d1eb8f` bump vc 67→68). Validação web localhost iterativa user-driven. Esforço aplicado ~6h.
