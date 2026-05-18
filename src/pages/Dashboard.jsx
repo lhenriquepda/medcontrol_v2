@@ -241,15 +241,21 @@ export default function Dashboard() {
   // tratamento/dose fantasma após share revoke ou edição em outro device.
   // dashboard-payload é fonte primária pós-P4 v0.2.3.9 mas listas isoladas
   // (Pacientes, Tratamentos, DoseHistory) usam queryKeys separados.
+  // v0.2.3.12 — defesa em profundidade: cada refetch wrapped em catch
+  // pra não travar Promise.all se uma query falhar/timeout. Hook
+  // usePullToRefresh tem timeout 20s como fallback final (Regra 16).
   const handleRefresh = async () => {
+    const safeRefetch = (queryKey) =>
+      qc.refetchQueries({ queryKey })
+        .catch(err => console.warn(`[refresh] ${queryKey[0]} err:`, err?.message))
     await Promise.all([
-      qc.refetchQueries({ queryKey: ['dashboard-payload'] }),
-      qc.refetchQueries({ queryKey: ['doses'] }),
-      qc.refetchQueries({ queryKey: ['patients'] }),
-      qc.refetchQueries({ queryKey: ['treatments'] }),
-      qc.refetchQueries({ queryKey: ['received-shares'] }),
-      qc.refetchQueries({ queryKey: ['user_prefs'] }),
-      qc.refetchQueries({ queryKey: ['my_tier'] }),
+      safeRefetch(['dashboard-payload']),
+      safeRefetch(['doses']),
+      safeRefetch(['patients']),
+      safeRefetch(['treatments']),
+      safeRefetch(['received-shares']),
+      safeRefetch(['user_prefs']),
+      safeRefetch(['my_tier']),
       hasSupabase
         ? supabase.schema('medcontrol').rpc('extend_continuous_treatments', { p_days_ahead: 5 })
             .then(undefined, err => console.warn('[refresh] extend_continuous err:', err?.message))

@@ -92,14 +92,89 @@ adb -s emulator-5554 shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.Mai
 
 ---
 
-## 5. UI interaction via uiautomator dump
+## 5. UI interaction — Appium W3C Actions OBRIGATÓRIO (Regra 17 RULES.md)
+
+> 🛑 **NUNCA usar CDP eval (`document.querySelector().click()`) como substituto.**
+> CDP só dispara eventos DOM JS — NÃO simula touch OS-level.
+> React-Aria pickers, Headless dropdowns, Capacitor plugin handlers exigem touch real.
+
+### Setup Appium (1× por máquina)
+
+```bash
+npm i -g appium
+appium driver install uiautomator2
+
+# Start server background:
+appium --port 4723 --base-path / &
+```
+
+### Script-driver via WebdriverIO
+
+`scripts/qa_appium.mjs`:
+```js
+import { remote } from 'webdriverio'
+
+const driver = await remote({
+  hostname: '127.0.0.1', port: 4723, path: '/',
+  capabilities: {
+    platformName: 'Android',
+    'appium:automationName': 'UiAutomator2',
+    'appium:deviceName': 'emulator-5554',
+    'appium:appPackage': 'com.dosyapp.dosy.dev',
+    'appium:appActivity': 'com.dosyapp.dosy.MainActivity',
+    'appium:noReset': true,
+  }
+})
+
+// Find by accessibility-id (preferido), text, ou xpath:
+const button = await driver.$('~register-sos-button')   // accessibility id
+const tomada = await driver.$('android=new UiSelector().textContains("Tomada")')
+
+// Touch real (NÃO usar .click() pra dropdowns/pickers):
+await tomada.click()                                    // simple tap (most cases OK)
+// OU W3C Actions para gestures complexas:
+await driver.performActions([{
+  type: 'pointer',
+  id: 'finger1',
+  parameters: { pointerType: 'touch' },
+  actions: [
+    { type: 'pointerMove', duration: 0, x: 540, y: 800 },
+    { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 100 },
+    { type: 'pointerUp', button: 0 },
+  ]
+}])
+
+// Text input (funciona inclusive em password fields):
+const emailInput = await driver.$('~email-input')
+await emailInput.setValue('teste-plus@teste.com')
+
+await driver.deleteSession()
+```
+
+### Fallback simples (uiautomator dump) — APENAS pra leitura/screenshot
 
 ```bash
 MSYS_NO_PATHCONV=1 adb shell uiautomator dump /data/local/tmp/ui.xml
 MSYS_NO_PATHCONV=1 adb pull '//data/local/tmp/ui.xml' 'C:\temp\ui.xml'
-# Parsear bounds=[x1,y1][x2,y2] → center = (x1+x2)/2, (y1+y2)/2
-adb shell input tap CENTER_X CENTER_Y
-adb shell input text "valor"   # text fields OK; password fields falham (ver limites)
+# OK pra inspecionar bounds + text + accessibility-ids
+# NÃO usar `adb shell input tap` pra pickers/dropdowns/modals → use Appium acima
+```
+
+### Simulação de idle/token expiry (sem esperar 30min real)
+
+```sql
+-- Via Supabase MCP — força refresh token revogado
+UPDATE auth.refresh_tokens SET revoked=true
+WHERE user_id=(SELECT id FROM auth.users WHERE email='teste-plus@teste.com');
+```
+
+Depois:
+```bash
+adb shell input keyevent KEYCODE_HOME    # background
+sleep 5
+adb shell am start -n com.dosyapp.dosy.dev/com.dosyapp.dosy.MainActivity  # foreground
+# useAppResume dispara refresh → falha → simula scenario idle 30min
 ```
 
 ---

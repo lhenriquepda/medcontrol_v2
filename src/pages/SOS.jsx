@@ -146,11 +146,35 @@ export default function SOS() {
       register.mutate(finalPayload)
       toast.show({ message: 'Dose S.O.S salva offline — sincroniza ao reconectar.', kind: 'info' })
     } else {
+      // v0.2.3.12 — timeout 15s. Sem isso, mutateAsync pode hangar indefinidamente
+      // (networkMode 'offlineFirst' pausa quando onlineManager flicker; supabase-js
+      // retry chain sem deadline). Botão "Cadastrar SOS" fica disabled sem feedback
+      // — user reporta "trava silencioso". Healthcare exige feedback claro.
+      let timeoutId = null
       try {
-        await register.mutateAsync(finalPayload)
+        await Promise.race([
+          register.mutateAsync(finalPayload),
+          new Promise((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error('Tempo esgotado (15s). Verifique sua conexão e tente novamente.')),
+              15000
+            )
+          })
+        ])
+        if (timeoutId) clearTimeout(timeoutId)
         toast.show({ message: 'Dose S.O.S registrada.', kind: 'success' })
       } catch (e) {
-        toast.show({ message: 'Erro ao registrar: ' + (e?.message || 'desconhecido'), kind: 'error' })
+        if (timeoutId) clearTimeout(timeoutId)
+        // Reset mutation state pra re-habilitar botão mesmo se mutation interna
+        // ainda pending (timeout case com networkMode offlineFirst).
+        // RPC register_sos_dose valida duplicatas server-side (min interval),
+        // safe pra user retentar.
+        if (register.isPending) register.reset()
+        toast.show({
+          message: 'Erro ao registrar: ' + (e?.message || 'desconhecido'),
+          kind: 'error',
+          duration: 6000,
+        })
         return
       }
     }

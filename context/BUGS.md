@@ -26,7 +26,7 @@ Nenhum bug P1 aberto.
 
 ## 🟡 P2 — Média prioridade
 
-Nenhum bug P2 aberto.
+- **#0009** P2 — `usePatientShares` query 401 JWT expiry mostra "Carregando..." pra sempre, sem error toast/inline. Descoberto durante QA Appium v0.2.3.12 (sessão 2026-05-18). Reproduzido quando refresh tokens revogados + reload PatientDetail compartilhado. Sem retry boundary nem fallback UI. Fix: error state explícito + retry button OR ErrorBoundary específico pra queries que falham em 401. Hook em `src/hooks/useShares.js` (provavelmente `useReceivedShares`/`useListPatientShares`). Esforço ~30min.
 
 ---
 

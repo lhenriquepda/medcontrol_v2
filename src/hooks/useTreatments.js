@@ -11,8 +11,13 @@ export function useTreatments(filter = {}) {
     queryKey: ['treatments', filter],
     queryFn: () => listTreatments(filter),
     // v0.2.3.4 #165: 5min → 30min combinado com IDB persist (main.jsx)
+    // v0.2.3.12 NB-1: refetchOnMount false → 'always'. QA confirmou multi-device
+    // drift — treatment criado em outro device só aparece após 30min OU
+    // mutation cache invalidate. Reload do PatientDetail sozinho não buscava.
+    // 'always' força refetch em mount mas mantém initialData → cache frio
+    // não bloqueia render. Trade-off: +1 fetch por mount, mas data freshness OK.
     staleTime: 30 * 60_000,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     initialData: () => {
       const queries = qc.getQueryCache().findAll({ queryKey: ['treatments'] })
       // Coleta todos treatments de cache (de-dup por id), depois aplica filter

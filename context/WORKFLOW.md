@@ -246,9 +246,11 @@ Após validação web: atualizar `context/Validar.md` com seção topo `## 🆕 
 
 > 🛑 **Validar.md entry é OBRIGATÓRIO mesmo em release pequena.** Se TODOS os cenários foram cobertos autonomous, criar entry com nota `**Validação device:** TODOS cenários cobertos autonomous §11a+§11b — nada para user fazer.`
 
-### 11b — Emulator autônomo via CLI
+### 11b — Emulator autônomo via CLI + Appium
 
 > **Obrigatório PRIMEIRO** se Regra 16 disparou (path nativo). Caso contrário, após §11a.
+> 🛑 **Appium SEMPRE** (Regra 17) — `npm i -D appium @appium/uiautomator2-driver` + W3C Actions API.
+> CDP eval NÃO substitui Appium pra UI flows.
 
 → Ver `context/recipes/emulator-setup.md` para receita completa.
 

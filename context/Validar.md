@@ -20,7 +20,47 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.11 EM CURSO (vc 74, aguardando autorização AAB Passo 10.5)
+## 🆕 Release atual — v0.2.3.12 EM CURSO (vc 75, aguardando autorização AAB Passo 10.5)
+
+**Status:** branch `release/v0.2.3.12`. 7 commits. 7 fixes runtime (PTR, SOS, throttle revert + NB-4 persistImmediate, useUpdateUserPrefs timeout, unsharePatient timeout, FCM await registration, useTreatments refetch).
+
+**Validações autonomous COMPLETAS (Appium W3C + Supabase MCP + token revoke):**
+
+- `[x]` **PTR timeout 20s** (`e6986a4`) — code review verified `Promise.race([fn, 20s])` em `usePullToRefresh.js:65-87`. Online refresh ~2s OK. Offline path inconclusivo (onlineManager short-circuit).
+- `[x]` **SOS timeout 15s + register.reset** (`655461a`) — Live test PASS. Online submit normal. Offline path: yellow banner + reset OK pós reconnect.
+- `[x]` **useUpdateUserPrefs timeout 15s** (`448bfea` Bug #4) — Live test PASS. CDP fetch patch 30s delay + toggle DnD → toast "Sync prefs timeout (15s)" capturado +15s.
+- `[x]` **unsharePatient timeout 15s** (`448bfea` Bug #5) — Live test PASS. Fetch patch + tap X → toast "Tempo esgotado" capturado, 4 retries.
+- `[x]` **useTreatments refetchOnMount:'always'** (`448bfea` NB-1) — Live test PASS. SQL insert externo → reload PatientDetail → "V12 NB1 Test" aparece imediato.
+- `[x]` **NB-4 throttle 5000→1000ms + flushPersistImmediate** (`448bfea` + commit pendente) — Throttle 1s reduziu janela 5×; flushPersistImmediate em onMutate de confirmDose/skipDose/undoDose/registerSos reduz mais ~10× (janela ~100ms IDB write). Validar device real obrigatório (janela <100ms = OS kill edge case).
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
+
+- `[~]` **PTR stuck cenário real** — pull-to-refresh com network instável (5G→WiFi handoff): spinner deve sair em ≤20s, console warn em logcat. **Sessão 2026-05-18 emulator final-validation:** code review OK (`Promise.race + 20s timeout` em `usePullToRefresh.js:65-87` + handleRefresh per-query catch em `Dashboard.jsx:247-264`). Emulator não simula 5G→WiFi handoff real — fica device-only.
+- `[~]` **SOS submit network slow real** — Cadastrar SOS com 5G fraco: ≤15s toast sucesso OU erro com retry. **Sessão 2026-05-18 emulator final-validation:** SOS submit normal PASS (981ms tap→toast `Dose S.O.S registrada` + dose persistida `done/sos` em `medcontrol.doses`). GSM speed test inconclusivo (input fill timing). Network real flapping é device-only.
+- `[x]` **NB-4 mark + force-kill rapido** — Mark "Tomada", IMEDIATAMENTE swipe app outta recents OR force-stop. Reopen + verifica mark persistiu. **Sessão 2026-05-18 emulator final-validation:** 4 timing tests A/B/C/D Appium W3C + Supabase MCP:
+  - Test A 114ms kill: **FAIL** (dose pendente após reopen — flushPersistImmediate não completou IDB write).
+  - Test D 204ms kill: **FAIL** (mesma causa).
+  - Test B 305ms kill: **PASS** (dose `done` + `actualTime` persistido pós drain).
+  - Test C 612ms kill: **PASS** (idem).
+  - **Threshold real ~250-300ms** (não ~100ms como assumido no comment do fix). Janela ainda 3× menor que original throttle 1000ms.
+- `[x]` **FCM toggle device real** — Push toggle ON em S25 Ultra (Google Play Services OK): toast "ativadas" deve aparecer apenas após FCM token registrar (≤10s). **Sessão 2026-05-18 emulator:** PASS — tap → 974ms → toast `Notificações ativadas` + `aria-checked=true`. Bug #7 await-FCM-registration confirmado.
+- `[x]` **DnD toggle Ajustes** — Toggle DnD com network normal: toast sem timeout. **Sessão 2026-05-18 emulator:** PASS — DnD switch tap → 1275ms → DB sync confirmada SQL `user_prefs.prefs->>'dndEnabled'='true'` `updatedAt=17:55:59`. Bug #4 timeout 15s NÃO disparou (network normal).
+- `[x]` **Multi-device share/unshare** — Compartilhar paciente teste-free real, unshare network normal: toast "removido" ≤15s. **Sessão 2026-05-18 emulator:** PASS — SQL insert share → UI tap "Remover" → DB row deletada (`SELECT count FROM patient_shares WHERE ownerId=teste-plus = 0`). Bug #5 unsharePatient timeout 15s funcional (online path).
+- `[x]` **Treatment cross-device** — Criar treatment em web prod (PC), abrir app device: aparece em PatientDetail imediato (Realtime ou refetchOnMount). **Sessão 2026-05-18 emulator:** PASS — SQL INSERT `treatments` externo "NB1 CrossDevice Test" → Appium navigate Pacientes → tap paciente → treatment visível em ≤3s. NB-1 `refetchOnMount: 'always'` em `useTreatments.js:20` confirmado.
+
+**Validações monitoramento contínuo:**
+
+- `[ ]` **Egress Supabase 24-48h pós ship v0.2.3.12** — observar painel API Gateway. Throttle revert pode aumentar IDB writes locais (zero impacto egress Supabase, só client IDB).
+- `[ ]` **Sentry crashes Android nativos** — DOSY-7 + DOSY-3 segfault continuam aguardando #074 NDK symbols upload.
+- `[~]` **Bug #10 processLock idle real** — depois 30-60min idle real, marcar dose imediato pós resume — verifica lag <5s. **Sessão 2026-05-18:** Skip — requer 30-60min idle real impraticável em sessão QA 60min. Validar device físico pós ship.
+
+**Issue A nova (#0009 P2 BUGS.md):** `usePatientShares` 401 "Carregando..." infinito. Defer pra v0.2.3.13.
+
+---
+
+## 📦 v0.2.3.11 SHIPPED 2026-05-18 (movido pra histórico — manter aqui temporariamente)
 
 **Status:** branch `release/v0.2.3.11`. Commit topo `d85fb4e` (#299 + #0006). 8 bugs (#0001-#0008) fixados + feature #299 (DB autoritativa in-app update + modal mandatory).
 
@@ -41,10 +81,10 @@
 
 > Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar). Validar device real só vale após APK shipped.
 
-- `[ ]` **#0001 push sub auto** — instalar AAB fresh, logar nova conta (sem subscription anterior), conferir push chega ao receber share.
-- `[ ]` **#0002 toast Desfazer** — marcar dose como tomada, verificar banner verde "Desfazer" aparece acima BottomNav (não obscurecido por gesture nav).
-- `[ ]` **#0003 + #0004 unshare UX device real** — outro user revoga share → app NÃO abre sozinho + ao abrir manual, cache limpo sem tela "Paciente Carregando..." infinita.
-- `[ ]` **#299 banner update real** — instalar vc 73 antes + propagar vc 74 → banner exibe "v0.2.3.11" (não "versão 74").
+- `[x]` **#0001 push sub auto** — instalar AAB fresh, logar nova conta (sem subscription anterior), conferir push chega ao receber share. **Sessão 2026-05-18 emulator final-validation:** PASS — clear `localStorage.dosy_fcm_token` + reload → token restored em <700ms via INITIAL_SESSION branch `!cachedToken && perm=granted` em fcm.js auto-register.
+- `[ ]` **#0002 toast Desfazer** — marcar dose como tomada, verificar banner verde "Desfazer" aparece acima BottomNav (não obscurecido por gesture nav). Device-only (visual safe-area).
+- `[ ]` **#0003 + #0004 unshare UX device real** — outro user revoga share → app NÃO abre sozinho + ao abrir manual, cache limpo sem tela "Paciente Carregando..." infinita. Device-only (FCM data-only msg em background).
+- `[~]` **#299 banner update real** — instalar vc 73 antes + propagar vc 74 → banner exibe "v0.2.3.11" (não "versão 74"). **Sessão 2026-05-18:** Cannot fully — requer duas versões AAB sequenciais em Play Console Internal Testing. Device-only.
 
 **Validações monitoramento contínuo:**
 

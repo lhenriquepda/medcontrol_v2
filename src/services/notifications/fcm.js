@@ -40,7 +40,38 @@ export async function subscribeFcm(advanceMins = 15) {
     throw err
   }
 
-  await PushNotifications.register()
+  // v0.2.3.12 Bug #7 — aguardar registration event (10s timeout) antes de retornar success.
+  // PushNotifications.register() resolve sync ANTES do FCM token chegar. Token (ou erro)
+  // chega async via listener registration/registrationError. Sem aguardar aqui, togglePush
+  // marca push=true mesmo se FCM falhou (sem Google Play Services, conta Google removida,
+  // etc) → state broken silencioso, alarmes nunca chegam.
+  let regListener = null
+  let errListener = null
+  const registrationPromise = new Promise((resolve, reject) => {
+    PushNotifications.addListener('registration', () => resolve()).then(h => { regListener = h })
+    PushNotifications.addListener('registrationError', (err) => {
+      const msg = err?.error || err?.message || JSON.stringify(err)
+      const e = new Error(`Falha ao registrar FCM: ${msg}. Verifique Google Play Services.`)
+      e.code = 'FCM_REGISTRATION_FAILED'
+      reject(e)
+    }).then(h => { errListener = h })
+  })
+
+  try {
+    await PushNotifications.register()
+    await Promise.race([
+      registrationPromise,
+      new Promise((_, reject) => setTimeout(() => {
+        const e = new Error('Tempo esgotado registrando FCM (10s). Verifique Google Play Services.')
+        e.code = 'FCM_REGISTRATION_TIMEOUT'
+        reject(e)
+      }, 10000))
+    ])
+  } finally {
+    try { if (regListener) await regListener.remove() } catch {}
+    try { if (errListener) await errListener.remove() } catch {}
+  }
+
   await ensureFcmChannel()
   savePrefs({ push: true, advanceMins })
   track(EVENTS.NOTIF_PERM_GRANTED, { platform: 'android' })

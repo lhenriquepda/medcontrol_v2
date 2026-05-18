@@ -17,6 +17,12 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 const THRESHOLD = 80
 const MAX_PULL = 120
 const RESISTANCE = 2.5
+// v0.2.3.12 — hard timeout para evitar spinner stuck eterno se onRefresh
+// retornar Promise que nunca resolve (ex: refetchQueries paused por
+// onlineManager.setOnline(false) glitch, RPC sem timeout, retry chain longo).
+// 20s é suficiente pra refetch normal (Dashboard RPC ~1-3s, multiple queries
+// paralelas ~5-10s). Acima disso = algo travou, melhor liberar UI.
+const REFRESH_TIMEOUT_MS = 20000
 
 export function usePullToRefresh(onRefresh) {
   const [pulling, setPulling] = useState(false)
@@ -56,9 +62,26 @@ export function usePullToRefresh(onRefresh) {
     if (passedThreshold && !refreshing) {
       setRefreshing(true)
       setPullDistance(THRESHOLD)
+      // v0.2.3.12 — Promise.race com timeout 20s. Sem isso, Promise.all em
+      // handleRefresh (7 refetchQueries + 1 RPC) pode travar indefinidamente
+      // se uma query estiver paused por onlineManager glitch ou retry chain.
+      let timeoutId = null
       try {
-        await Promise.resolve(onRefresh?.())
+        await Promise.race([
+          Promise.resolve(onRefresh?.()),
+          new Promise((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error('PTR timeout — refresh > 20s')),
+              REFRESH_TIMEOUT_MS
+            )
+          })
+        ])
+      } catch (err) {
+        // Log mas não crasha — user vê spinner sumir, dados podem estar stale.
+        // Próximo refetch automático (refetchInterval, Realtime, focus) recovera.
+        console.warn('[usePullToRefresh] refresh failed:', err?.message)
       } finally {
+        if (timeoutId) clearTimeout(timeoutId)
         setRefreshing(false)
         setPullDistance(0)
       }
