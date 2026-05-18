@@ -20,30 +20,58 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.10 SHIPPED 2026-05-17
+## 🆕 Release atual — v0.2.3.11 EM CURSO (vc 74, aguardando autorização AAB Passo 10.5)
+
+**Status:** branch `release/v0.2.3.11`. Commit topo `d85fb4e` (#299 + #0006). 8 bugs (#0001-#0008) fixados + feature #299 (DB autoritativa in-app update + modal mandatory).
+
+**Validações autonomous COMPLETAS (CDP + Chrome MCP + Supabase MCP):**
+
+- `[x]` **#0001 push sub auto-register** — emulador, clear `dosy_fcm_token` + reload → token restaurado via INITIAL_SESSION branch `!cachedToken && perm=granted`.
+- `[x]` **#0002 toast safe-area** — CDP `position=fixed bottom=96px` confirmado (sessão anterior).
+- `[x]` **#0003 unshare startActivity removido** — 2-devices behavioral (Chrome web teste-plus owner + emulador teste-free caregiver). Focus pós FCM unshare = Launcher (NÃO foreground forçado). DosyMessagingService log `patient_unshared patientId=...` recebido sem `startActivity`.
+- `[x]` **#0004 cold-start sem tela travada** — SharedPrefs `dosy_pending_unshare` simulado + open app → onResume consome + abre `/` Dashboard (não `/pacientes/{id}`). Var separada `__dosyPendingUnsharePatientId` evita conflito com openPatient.
+- `[x]` **#0005 Reports cancelada filter** — pause SHARE 01 → Adesão 67% (2/3) durante pause, não 40% (2/5). Resume → 0 Cancelada visível.
+- `[x]` **#0006 console [object Object]** — root cause via CDP stack trace: Capacitor bridge `cap.toNative` linha 348 console.dir + Sentry capture AppUpdate err -6. Fix: `capacitor.config.ts` `loggingBehavior: 'production'`. Smoke test pós install APK fresh: **0 entries** "object Object" em Capacitor/Console (era ~110).
+- `[x]` **#0007 DoseModal date split** — CDP confirmou `<input type=date>` + `<input type=time>` separados (sessão anterior).
+- `[x]` **#0008 pluralização + Termina hoje** — DOM scan: "1 dia" singular + "Termina hoje" visível pós cruzar meia-noite.
+- `[x]` **#299 banner verde** — Chrome MCP localhost teste-plus `__dosyForceUpdate=true` → banner sticky topo gradient emerald renderizado (`hasBannerSticky: 1, bannerHeight: 64px`).
+- `[x]` **#299 modal mandatory** — Chrome MCP localhost `__dosyForceMandatory=true` → modal vermelho full-screen renderizado (alertdialog, body overflow hidden, sem dismiss). Layout aprovado user 2026-05-18.
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar). Validar device real só vale após APK shipped.
+
+- `[ ]` **#0001 push sub auto** — instalar AAB fresh, logar nova conta (sem subscription anterior), conferir push chega ao receber share.
+- `[ ]` **#0002 toast Desfazer** — marcar dose como tomada, verificar banner verde "Desfazer" aparece acima BottomNav (não obscurecido por gesture nav).
+- `[ ]` **#0003 + #0004 unshare UX device real** — outro user revoga share → app NÃO abre sozinho + ao abrir manual, cache limpo sem tela "Paciente Carregando..." infinita.
+- `[ ]` **#299 banner update real** — instalar vc 73 antes + propagar vc 74 → banner exibe "v0.2.3.11" (não "versão 74").
+
+**Validações monitoramento contínuo:**
+
+- `[ ]` **Egress Supabase 24-48h pós ship v0.2.3.11** — observar painel API Gateway. Esperado: igual ou melhor que v0.2.3.10 (loggingBehavior=production reduz noise interno).
+- `[ ]` **Sentry crashes Android nativos** — DOSY-7 + DOSY-3 segfault `<unknown>` continuam aguardando #074 NDK symbols upload (não escopo desta release).
+
+---
+
+## 📦 v0.2.3.10 SHIPPED 2026-05-17 (movido pra histórico)
 
 **Status:** master @ tag `v0.2.3.10` (vc 73). Play Console Internal Testing publicado 15:28 BRT. Vercel prod dosymed.app v0.2.3.10 confirmado.
 
-**Validações device físico Samsung S25 Ultra (lhenrique.pda):**
-
-- `[x]` **#295 Alarme exibe nome do paciente** — confirmado com paciente "Dona Maria" (alarme mostrou nome correto, não "Sem paciente").
-- `[x]` **#296 Pull-to-refresh remove paciente fantasma** — confirmado "Vovó Teste" sumiu do Dashboard após puxar pra baixo (owner revogou share).
-- `[~]` **#297 Unshare em background** — cache cleanup funcionou (paciente sumiu de Pacientes E Dashboard após clicar Dashboard e voltar), MAS UX falhou: app abriu sozinho + tela "Paciente Carregando..." travada. Bugs originados: [`BUGS.md` #0003 + #0004](BUGS.md).
+- `[x]` **#295 Alarme exibe nome do paciente** — confirmado com paciente "Dona Maria".
+- `[x]` **#296 Pull-to-refresh remove paciente fantasma** — confirmado "Vovó Teste" sumiu do Dashboard.
+- `[~]` **#297 Unshare em background** — cache cleanup OK, UX falhou (gerou #0003 + #0004, fechados em v0.2.3.11).
 
 **Validações device físico v0.2.3.9 (perf):**
-
-- `[x]` **Lag desapareceu device físico** — confirmado uso normal lhenrique.pda S25 Ultra. App fluido.
+- `[x]` **Lag desapareceu device físico** — confirmado.
 
 **Validações device físico v0.2.3.8 (caregiver killed alarm):**
-
-- `[x]` **Cuidador app fechado recebe alarme com som no horário** — confirmado (swipe-kill app + dose +3min → alarme tocou normal com tela grande Ciente/Adiar/Ignorar).
+- `[x]` **Cuidador app fechado recebe alarme com som no horário** — confirmado.
 
 **Validações device físico v0.2.3.7 (perf bundle + server flow):**
-
-- `[x]` **Push share recebido em background** — confirmado (após registrar push_subscription Android via toggle Ajustes).
-- `[x]` **Alarme caregiver killed (fire-time cron)** — coberto pela validação v0.2.3.8 acima (mesma cadeia FCM).
-- `[x]` **Navegação BottomNav sem trava** — coberto pela validação v0.2.3.9 perf acima.
-- `[x]` **Marcação sequencial doses sem lag** — coberto pela validação v0.2.3.9 perf acima.
+- `[x]` Push share recebido em background.
+- `[x]` Alarme caregiver killed (fire-time cron) — coberto pela validação v0.2.3.8.
+- `[x]` Navegação BottomNav sem trava — coberto pela v0.2.3.9.
+- `[x]` Marcação sequencial doses sem lag — coberto pela v0.2.3.9.
 
 ---
 

@@ -49,9 +49,14 @@
 - **Backend:** zero impacto frontend-only release.
 - **Aceitação:** todos visuais validados Chrome MCP localhost user-driven (light + dark). Build verde `npm run build` 18.66s 0 warnings.
 
-### #299 — Banner verde "Nova versão disponível" sempre exibir versionName REAL via tabela DB autoritativa [próxima release]
+### #299 — Banner verde "Nova versão disponível" sempre exibir versionName REAL via tabela DB autoritativa [✅ SHIPPED v0.2.3.11]
 
-- **Status:** ⏳ PENDENTE próxima release. User reportou 2026-05-17: banner mostrou "Atualizar versão 0.2.3.9" mas instalou 0.2.3.10. Versão exibida fica atrasada por dessincronia entre fontes.
+- **Status:** ✅ **SHIPPED v0.2.3.11** (commit `d85fb4e`). Implementação divergiu da proposta original em 3 pontos (decisões tomadas em sessão 2026-05-18):
+  - **RLS direto, sem RPC wrapper.** `app_releases` é tabela read-only pública (`FOR SELECT USING (true)`) — query direta `from('app_releases').select('version_name')` em vez de `rpc('get_release_name_by_code')`. Menos código, mais fácil estender (whatsnew, shipped_at queriable direto).
+  - **Cache localStorage por vcode.** Releases name imutáveis após ship → cache `dosy_vname_{vcode}` evita 1 query por mount. Egress: 1 query por release nova (não recorrente).
+  - **Coluna `is_mandatory BOOLEAN` adicionada já no MVP.** Permite modal vermelho full-screen bloqueante quando IA shipa security fix / breaking schema. Default `false` = banner verde dismissable normal. Lógica: query verifica se EXISTE alguma release mandatory em `(currentVc, availableVc]` — usuários atrasados em múltiplas releases ainda bloqueiam quando passam por uma mandatory.
+  - **Coluna `whatsnew TEXT` adicionada.** Texto curto pt-BR aparece em bloco "Novidades" no modal. NULL = some o bloco. Não confundir com `docs/play-store/whatsnew/whatsnew-pt-BR` (Play Store, ≤500 chars, listagem completa de fixes).
+- **Origem:** [User feedback] sessão 2026-05-17 pós-ship v0.2.3.10.
 - **Origem:** [User feedback] sessão 2026-05-17 pós-ship v0.2.3.10 — "quero plano definitivo simples sem mexer em vários locais na hora de subir AAB".
 - **Prioridade:** P2 (UX/credibilidade — não bloqueia release, mas confunde user e parece bug).
 - **Esforço estimado:** ~30min (1 migration + edit `useAppUpdate.js` + edit README Passo 12).
@@ -112,26 +117,19 @@
         ON CONFLICT (version_code) DO NOTHING;
       ```
     - 1 SQL adicional no fluxo Passo 12 (IA já roda automatizado).
-- **Aceitação:**
-  - ✅ Migration aplicada com seed para vc 70-73.
-  - ✅ RPC `get_release_name_by_code` retorna versionName correto via teste SQL.
-  - ✅ `useAppUpdate.js` consulta RPC + cadeia simplificada 3 fontes.
-  - ✅ Mapa hardcoded `VERSION_CODE_TO_NAME` removido.
-  - ✅ README Passo 12 atualizado com SQL INSERT obrigatório.
-  - ✅ Próxima release (vc 74) ship: IA insere row → banner em devices anteriores mostra "v0.2.3.11" correto.
+- **Aceitação SHIPPED v0.2.3.11:**
+  - ✅ Migration `20260518000000_app_releases_v0_2_3_11.sql` aplicada Supabase prod (seed vc 70-73).
+  - ✅ RLS `app_releases_public_read` (`FOR SELECT USING (true)`) — query direta sem RPC.
+  - ✅ `useAppUpdate.js` consulta tabela + cache localStorage `dosy_vname_{vcode}`.
+  - ✅ Mapa hardcoded `VERSION_CODE_TO_NAME` removido (era linhas 89-116 do hook antigo).
+  - ✅ `UpdateBanner.jsx` ganha variante modal vermelho full-screen quando `is_mandatory=true`.
+  - ✅ README Passo 12 atualizado com 3 decisões IA (is_mandatory, whatsnew, confirm user).
+  - ✅ Próximas releases (vc 74+) ship: IA insere row → banner em devices anteriores mostra version_name correto + whatsnew curto + modal bloqueante se security.
 - **Egress impact:**
-  - 1 RPC `get_release_name_by_code` por device a cada `CHECK_INTERVAL_MS` (4h em useAppUpdate) — só quando há update disponível. ~50 bytes/query. ~6 queries/dia/user × 1000 users = ~300KB/dia. Desprezível.
-- **Storm risk:** zero. RPC read-only, sem trigger, sem cascata.
-- **Dependências:** nenhuma. Greenfield.
-- **Próximo passo concreto:**
-  1. Criar branch `release/v0.2.3.11` (próxima release que tiver outros fixes empacotados — preferencialmente junto de #0003+#0004 unshare UX).
-  2. Apply migration.
-  3. Edit `useAppUpdate.js` substitui cadeia.
-  4. Edit README Passo 12 com SQL INSERT.
-  5. Build verde + ship normal.
-  6. Confirmar via device: vc 74 mostra "v0.2.3.11" no banner.
-- **Bônus opcional (sem custo extra agora):**
-  - Adicionar coluna `whatsnew TEXT` em `app_releases` na mesma migration → permite banner exibir release notes no futuro sem nova infra. Decidir habilitar quando UX quiser.
+  - Cold cache: 1-2 queries por release nova (1× version_name + 1× mandatory check). Cached for life via localStorage por vcode (imutável).
+  - Estimativa: ~10 bytes/query × 1000 users × 1 release/semana = 10KB/semana. Desprezível.
+- **Storm risk:** zero. Read-only, sem trigger, sem cascata. Cache imutável evita re-fetch.
+- **Bônus já entregue:** coluna `whatsnew TEXT` adicionada na migration original. Banner web continua sem whatsnew (Vercel /version.json shape não popula). Modal mandatory usa `whatsnew` no bloco "Novidades" quando preenchido.
 
 ---
 

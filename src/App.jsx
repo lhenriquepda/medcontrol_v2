@@ -426,6 +426,12 @@ export default function App() {
       window.__dosyPendingPatientId = null
       onOpenPatient({ detail: { patientId: id } })
     }
+    // #0004 fix — cold start unshare: usa var separada pra não confundir com openPatient
+    if (window.__dosyPendingUnsharePatientId) {
+      const id = window.__dosyPendingUnsharePatientId
+      window.__dosyPendingUnsharePatientId = null
+      onPatientUnshared({ detail: { patientId: id } })
+    }
     return () => {
       window.removeEventListener('dosy:openDose', onOpenDose)
       window.removeEventListener('dosy:openDoses', onOpenDoses)

@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https'
   },
+  android: {
+    // v0.2.3.11 #0006 — silencia bridge `console.dir(call)` em debug builds.
+    // Release builds já silenciam via BuildConfig.DEBUG=false. Reverter pra 'debug'
+    // se precisar rastrear traffic JS↔Java de plugin específico.
+    loggingBehavior: 'production'
+  },
   plugins: {
     StatusBar: {
       style: 'light',

@@ -128,25 +128,40 @@ export async function pauseTreatment(id) {
   await cancelFutureDoses(id)
 }
 
-/** Retoma tratamento pausado: status=active. Doses futuras regeneradas via RPC update_treatment_schedule. */
+/** Retoma tratamento pausado: status=active. Doses futuras canceladas → pending. */
 export async function resumeTreatment(id) {
   if (hasSupabase) {
-    // Try RPC first — regenera doses futuras se necessário
     try {
       const { error } = await supabase.rpc('update_treatment_schedule', {
         p_treatment_id: id,
         p_patch: { status: 'active' },
       })
       if (error) throw error
-      return
     } catch (e) {
-      // Fallback: simple status update (doses não regeneradas — user pode editar treatment pra forçar)
       console.warn('[resumeTreatment] RPC failed, falling back to status update:', e?.message)
       const { error } = await supabase.from('treatments').update({ status: 'active' }).eq('id', id)
       if (error) throw error
     }
+    // #0005 fix — RPC só muda treatment.status; doses cancelled pela pausa ficam
+    // cancelled (v_schedule_changed=false, sem regenerate). Restaurar futuras → pending.
+    // Doses passadas (período da pausa) permanecem cancelled como histórico correto.
+    const nowIso = new Date().toISOString()
+    const { error: restoreErr } = await supabase
+      .from('doses')
+      .update({ status: 'pending' })
+      .eq('treatmentId', id)
+      .eq('status', 'cancelled')
+      .gt('scheduledAt', nowIso)
+    if (restoreErr) console.warn('[resumeTreatment] restore cancelled doses err:', restoreErr.message)
   } else {
     mock.update('treatments', id, { status: 'active' })
+    const nowMs = Date.now()
+    const all = mock.list('doses', { treatmentId: id })
+    for (const d of all) {
+      if (d.status === 'cancelled' && new Date(d.scheduledAt).getTime() > nowMs) {
+        mock.update('doses', d.id, { status: 'pending' })
+      }
+    }
   }
 }
 

@@ -26,119 +26,19 @@ Nenhum bug P1 aberto.
 
 ## 🟡 P2 — Média prioridade
 
-### #0001 — Push subscription Android não registra automaticamente
-
-**Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra
-**Status:** `OPEN`
-
-**Descrição:** Conta `lhenrique.pda@gmail.com` nunca havia registrado push_subscription Android no DB. Quando teste-plus criou paciente e compartilhou, o Edge `patient-share-handler` dispatchava mas a query de subs `platform='android'` retornava vazia → nenhum push chegava no device. Só funcionou depois de o user ir em Ajustes → Notificações push → toggle OFF/ON manualmente, que disparou o `subscribeFcm` + `upsert_push_subscription`.
-
-**Causa-raiz provável:** flow de registro de push subscription só roda quando o user passa pelo `PermissionsOnboarding` OU toggla manual em Ajustes. Se o user instalou o app antes desse onboarding existir, OU pulou o onboarding, OU permissão foi auto-revoked pelo Samsung, a conta fica sem push_subscription Android e a IA não detecta automaticamente.
-
-**Plano de fix proposto:**
-- No `useAuth` SIGNED_IN, verificar se existe push_subscription para esse `(userId, platform='android', deviceIdUuid)` no DB.
-- Se não existir + permissão Android está granted, chamar `subscribeFcm(0)` automaticamente.
-- Se permissão Android está denied, mostrar banner persistente no Dashboard "Habilitar notificações" com call-to-action que abre Ajustes do app.
-
----
-
-### #0002 — Banner "Desfazer" não aparece no device físico após marcar dose
-
-**Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.7
-**Status:** `OPEN`
-
-**Descrição:** Ao marcar uma dose como tomada/pulada via `DoseModal` no device físico, o toast com botão "Desfazer" (que deveria ficar 5s visível) **não aparece**. No web e no emulador funciona normal.
-
-**Causa-raiz provável:** código intacto (`DoseModal.jsx:72-86`, `Dashboard.jsx:542-555`, `useToast.jsx:33-62`). Hipóteses:
-1. Toast com `position: fixed; bottom: 96px` obscurecido por BottomNav + safe-area do device físico Samsung One UI.
-2. z-index 60 colide com algum outro overlay.
-3. Patch optimistic dispara re-render que esconde o toast antes do botão renderizar.
-
-**Plano de fix proposto:** subir dev server localhost + abrir no S25 Ultra via Chrome DevTools remoto + inspecionar DOM/CSS no momento da marcação. Confirmar hipótese 1 (safe-area) e ajustar `bottom` para `calc(env(safe-area-inset-bottom) + 96px + 8px)` OU subir z-index.
-
----
-
-### #0003 — `handlePatientUnshared` força o app abrir sozinho via `startActivity`
-
-**Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.10
-**Status:** `OPEN`
-
-**Descrição:** Quando o cuidador está com app fechado e o owner revoga o compartilhamento via web, o app do cuidador **abre sozinho** na tela do paciente — comportamento intrusivo e errado. O esperado é cache cleanup silencioso em background.
-
-**Causa-raiz:** `DosyMessagingService.handlePatientUnshared` em `android/app/src/main/java/com/dosyapp/dosy/plugins/criticalalarm/DosyMessagingService.java` chama `ctx.startActivity(intent)` direto para forçar a `MainActivity` processar o `unsharePatientId`. Isso acorda o app sem toque do usuário.
-
-**Plano de fix proposto:**
-- REMOVER `ctx.startActivity(intent)`.
-- Salvar apenas em `SharedPreferences("dosy_pending_unshare")` (já existe fallback parcial).
-- Quando app vivo, usar `LocalBroadcastManager.sendBroadcast(intent)` ou `BridgeWebView.evaluateJavascript` direto.
-- `MainActivity.onCreate`: ler `SharedPreferences("dosy_pending_unshare")` ao iniciar + dispatch JS event.
-
----
-
-### #0004 — Após unshare em background, app abre travado em "Paciente Carregando..."
-
-**Reportado:** 2026-05-17 lhenrique.pda Samsung S25 Ultra v0.2.3.10
-**Status:** `OPEN`
-
-**Descrição:** Consequência do #0003. Quando o app é forçado a abrir pelo `startActivity` e propaga o `unsharePatientId` via `postJsEvent`, o JS App.jsx tenta navegar para `/pacientes/{id}` de um paciente que NÃO EXISTE mais → tela fica em "Paciente Carregando..." infinito. Solução manual atual: clicar Dashboard e voltar para Pacientes.
-
-**Causa-raiz:** `MainActivity.postJsEvent("dosy:patientUnshared", "patientId", id)` em `MainActivity.java:170` usa a key `"patientId"` que mapeia para `__dosyPendingPatientId` no `postJsEvent`. O listener `dosy:openPatient` em `App.jsx` LÊ esse mesmo var no cold start e navega para `PatientDetail` que falha em carregar.
-
-**Plano de fix proposto:**
-- Em `MainActivity.postJsEvent`, criar varName separado para unshare (ex: `__dosyPendingUnsharePatientId`).
-- Em App.jsx `dosy:patientUnshared` listener, ler o var separado.
-
-> **#0003 + #0004 devem ser fixados juntos na mesma release (estão acoplados).**
-
----
-
-### #0005 — Status "Cancelada" em Relatórios após ciclo pause/resume tratamento
-
-**Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #4 do relatório QA)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
-
-**Descrição:** Após ciclo de pausa/resumo de tratamento, Relatórios mostra doses com status "Cancelada" indevidamente.
-
-**Plano de fix proposto:** investigar fluxo de pause/resume + status persistente em doses. Ajustar `update_treatment_schedule` ou `recompute` para refletir status correto.
-
----
-
-### #0006 — Console errors `[object Object]` silenciosos
-
-**Reportado:** 2026-05-15 QA v0.2.3.6 (OBSERVAÇÃO #5)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
-
-**Descrição:** Logs no console exibem `[object Object]` em vez de mensagem útil em alguns lugares (Dashboard/Patients).
-
-**Plano de fix proposto:** caçar os `console.log/warn/error` que passam objetos diretos sem `err?.message || JSON.stringify(err)`.
+Nenhum bug P2 aberto.
 
 ---
 
 ## 🟢 P3 — Baixa prioridade
 
-### #0007 — HORÁRIO no formulário SOS exibe formato en-US
-
-**Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #1)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
-
-**Descrição:** No formulário SOS, o campo HORÁRIO mostra `05/15/2026 3:06PM` em vez de `15/05/2026 15:06`.
-
-**Causa-raiz provável:** `datetime-local` herda locale do Android WebView Samsung.
-
-**Plano de fix proposto:** split em `type="date"` + `type="time"` separados, como feito no `TreatmentForm` em v0.2.3.6.
+Nenhum bug P3 aberto.
 
 ---
 
 ## 🔵 P4 — Cosmético / UX
 
-### #0008 — Tratamentos exibe "1 dias" quando tratamento termina hoje
-
-**Reportado:** 2026-05-15 QA v0.2.3.6 (BUG #3)
-**Status:** `OPEN` — necessita reconfirmação na v0.2.3.10
-
-**Descrição:** Quando um tratamento termina no mesmo dia, a lista de Tratamentos mostra "1 dias" em vez de "Termina hoje".
-
-**Plano de fix proposto:** ajustar lógica de relativização de data + pluralização em `TreatmentList`.
+Nenhum bug P4 aberto.
 
 ---
 
@@ -146,10 +46,24 @@ Nenhum bug P1 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `contexto/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.3.11 (2026-05-18, vc 74)
+
+- **#0001** P2 — Push subscription Android não registra automaticamente. Fix `useAuth` SIGNED_IN + INITIAL_SESSION: se `!cachedToken` e permissão Android `granted` → `subscribeFcm(15)` auto. Sem prompt surpresa. Commit `7e043ab`. ✅ Validado emulador (CDP clear `dosy_fcm_token` + reload → token restaurado via auto-subscribe path).
+- **#0002** P2 — Banner "Desfazer" não aparecia no Samsung One UI device físico após marcar dose. Fix `useToast.jsx`: `bottom-24` → `calc(6rem + env(safe-area-inset-bottom, 0px))`. Garante toast acima BottomNav em gesture nav (safe-area ≈ 28-34px). Commit `7e043ab`. ✅ Validado emulador (CDP captureScreenshot `TOAST_FOUND pos=fixed bottom=96px`).
+- **#0003** P2 — `DosyMessagingService.handlePatientUnshared` chamava `ctx.startActivity(intent)` forçando app abrir sozinho. Fix: REMOVE startActivity. `MainActivity.sWeakRef = WeakReference<MainActivity>` em onCreate. App vivo: `runOnUiThread → postJsEvent` direto. App morto: SharedPreferences `dosy_pending_unshare` consumido em `onResume → checkPendingUnshare`. Commits `7e043ab` + `1062e62`. ✅ Validado behavioral (Chrome web teste-plus unshare → emulador teste-free focus=Launcher pós FCM, cache cleanup silencioso).
+- **#0004** P2 — Após unshare em background, app abria travado em "Paciente Carregando..." infinito. Fix: `postJsEvent` nova key `"unsharePatientId"` → window var separada `__dosyPendingUnsharePatientId` (não confunde com `__dosyPendingPatientId` do openPatient). App.jsx cold-start handler lê var separada → `onPatientUnshared` (cache cleanup), não `onOpenPatient` (navegação). Commits `7e043ab` + `1062e62`. ✅ Validado cold-start (SharedPrefs manualmente populado + open app → onResume consome + abre `/` Dashboard).
+- **#0005** P2 — Status "Cancelada" em Reports persistia indevidamente após ciclo pause/resume. Fix `treatmentsService.resumeTreatment`: após RPC `update_treatment_schedule`, UPDATE doses cancelled→pending WHERE `scheduledAt > now()`. Reports: exclui cancelled do denominador de adherence + topMeds ignora cancelled. Commit `3d73a57`. ✅ Validado live (pausar SHARE 01 → Reports Adesão 67% (2/3) durante pause — não 40% (2/5) que seria sem fix → resume → 3 doses sem Cancelada).
+- **#0006** P2 — Console logs `[object Object]` em logcat (Dashboard/Patients). Root cause identificado via CDP trace: (a) Capacitor bridge interno `cap.toNative` linha 348 chama `console.dir(call)` em TODA chamada nativa (~110 entries por reload); (b) Sentry vendor captura AppUpdate install error -6 (ERROR_INSTALL_NOT_ALLOWED, emulador-only) e re-emite event object → `toString → [object Object]`. **Não é código app** — `useAppUpdate.js` usa `e?.message` correto. Fix: `capacitor.config.ts` adiciona `android: { loggingBehavior: 'production' }` — silencia bridge tracing em debug builds também. Release builds já silenciam via BuildConfig.DEBUG=false. Commit deste fix (#299 sessão).
+- **#0007** P3 — HORÁRIO no DoseModal modo "outro" exibia formato en-US (`05/15/2026 3:06PM`). Fix `DoseModal.jsx`: substitui `datetime-local` por `type="date"` + `type="time"` separados — mesmo fix #261 SOS.jsx v0.2.3.6. Commit `3d73a57`. ✅ Validado emulador (CDP query `<input type=date>` + `<input type=time>` campos distintos pt-BR DD/MM/YYYY + 24h).
+- **#0008** P4 — TreatmentList exibia "1 dias" (plural) quando `durationDays === 1`. Fix `TreatmentList.jsx:446`: `t.durationDays === 1` → `Number(t.durationDays) === 1` (DB retorna string). Branch `Termina hoje` quando `diffDays === 0` já existente — validado visualmente após cruzar meia-noite durante teste. Commit `3d73a57`. ✅ Validado.
+
+#### Recursos novos v0.2.3.11
+- **#299** Tabela autoritativa `medcontrol.app_releases` substitui mapa hardcoded `VERSION_CODE_TO_NAME` + cadeia frágil `/version.json` Vercel. RLS `FOR SELECT USING (true)` (read-only public). IA atualiza no Passo 12 via INSERT idempotente (ON CONFLICT DO NOTHING). Cache localStorage `dosy_vname_<vcode>` evita queries repetidas. Banner verde dismissable default; coluna `is_mandatory BOOLEAN` força modal vermelho full-screen bloqueante (uso de modal só em security fixes / breaking schema). Migration `20260518000000_app_releases_v0_2_3_11.sql` aplicada. Hook `useAppUpdate.js` + componente `UpdateBanner.jsx` refatorados.
+
 ### v0.2.3.10 (2026-05-17, vc 73)
 - **#295** P2 — "Sem paciente" no alarme — `listDoses` JOIN inline `patients(name)` + `useDashboardPayload` enrich client. Commit `efd4aa7`. ✅ Validado device físico (paciente "Dona Maria").
 - **#296** P2 — Pull-to-refresh Dashboard não removia pacientes/doses fantasmas — invalidação ampla de namespaces. Commit `efd4aa7`. ✅ Validado device físico.
-- **#297** P1 LGPD — Unshare patient deixava paciente fantasma no cuidador — Edge `patient-unshare-handler` v1 + DB trigger DELETE + Java handler. Commit `efd4aa7`. ⚠️ Cache cleanup funciona mas UX errada — gerou #0003 + #0004 abertos.
+- **#297** P1 LGPD — Unshare patient deixava paciente fantasma no cuidador — Edge `patient-unshare-handler` v1 + DB trigger DELETE + Java handler. Commit `efd4aa7`. ⚠️ Cache cleanup funciona mas UX errada — gerou #0003 + #0004 abertos (fechados em v0.2.3.11).
 
 ### v0.2.3.8 (2026-05-17, vc 71)
 - **#287** P0 — Killed caregiver alarm gap — Edge `dose-trigger-handler` v25 + `dose-fire-time-notifier` v7 enviam DATA-ONLY HIGH + Java `handleFireNowAlarm` dispara `AlarmService` imediato. Commit `981fab4`. ✅ Validado device físico.
@@ -168,11 +82,11 @@ Nenhum bug P1 aberto.
 - **#256b** P1 — SOS submit trava silencioso (window.confirm Capacitor).
 - **#257b** P1 — `lockAcquireTimeout: 15s` em `supabase.js`.
 - **#258b** P1 — Sharing Dashboard via `get_dashboard_payload` CTE.
-- **#259** P2 — Status "Cancelada" persistia em Reports pós pause/resume (fix parcial — reaberto como #0005 acima).
-- **#260** P2 — Console errors `[object Object]` (fix parcial — reaberto como #0006 acima).
-- **#261** P3 — HORÁRIO SOS en-US format (fix parcial — reaberto como #0007 acima).
+- **#259** P2 — Status "Cancelada" persistia em Reports pós pause/resume (fix parcial — reaberto como #0005, fechado v0.2.3.11).
+- **#260** P2 — Console errors `[object Object]` (fix parcial — reaberto como #0006, fechado v0.2.3.11).
+- **#261** P3 — HORÁRIO SOS en-US format (fix parcial — reaberto como #0007, fechado v0.2.3.11).
 - **#262** P3 — Ad banner posição (resolvido — Ad agora é overlay global no topo, sem conflito de header).
-- **#263** P4 — "1 dia" / "Termina hoje" relativo (fix parcial — reaberto como #0008 acima).
+- **#263** P4 — "1 dia" / "Termina hoje" relativo (fix parcial — reaberto como #0008, fechado v0.2.3.11).
 - **#264** P1 — Dose 1ª passada pulada em `create_treatment_with_doses`.
 - **#265** P2 — Count exato total doses.
 - **#266** P1 — PatientDetail não mostrava tratamento recém-criado.

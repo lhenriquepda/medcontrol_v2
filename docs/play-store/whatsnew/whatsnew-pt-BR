@@ -1,5 +1,9 @@
-v0.2.3.10 — Correções importantes
+v0.2.3.11 — Correções e melhorias
 
-• Alarme agora exibe o nome correto do paciente (em vez de "Sem paciente")
-• Atualizar puxando a tela limpa pacientes/doses removidos por outro dispositivo
-• Quando um cuidador é removido, o app dele remove automaticamente o paciente e as doses (privacidade)
+• Notificações push são ativadas automaticamente ao logar (sem entrar em Ajustes)
+• Banner "Desfazer" aparece corretamente em celulares Samsung
+• Quando um cuidador é removido, o app não abre mais sozinho — atualiza em silêncio
+• Relatórios não inflam adesão após pausar e retomar tratamento
+• "Termina hoje" e "1 dia" corretos (sem mais "1 dias")
+• HORÁRIO usa formato brasileiro (DD/MM/AAAA e 24h)
+• Banner de atualização exibe sempre a versão real disponível

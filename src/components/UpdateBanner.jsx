@@ -5,29 +5,30 @@ import Icon from './Icon'
 import { TIMING, EASE } from '../animations'
 
 /**
- * Sticky banner exibido quando há nova versão disponível.
+ * Banner / modal de atualização.
+ *
+ * - Default (is_mandatory=false): banner verde no topo, dismissable em web.
+ * - Mandatory (is_mandatory=true em app_releases): modal vermelho full-screen
+ *   bloqueando uso do app até atualização. Sem dismiss.
  *
  * Native (Android): Google Play In-App Updates flexible mode.
- *   - Banner aparece sempre que Play reporta update disponível
- *   - Tap "Atualizar" → Play prompt nativo → download em background
- *   - Banner mostra progresso (%) durante download
- *   - Quando baixado → vira "Reiniciar para instalar" → completeFlexibleUpdate()
- *   - Não dispensável (banner persiste até user atualizar)
+ *   Tap "Atualizar" → Play prompt nativo → download em background.
+ *   Quando baixado → "Reiniciar para instalar" → completeFlexibleUpdate().
  *
- * Web: legacy version.json check.
- *   - Tap "Atualizar" → reload bundle
- *   - Dispensável (X) — user escolhe quando atualizar
+ * Web: legacy /version.json. Tap "Atualizar" → reload bundle. Dispensável.
  */
 export default function UpdateBanner() {
-  const { available, latest, downloaded, progress, isNative, startUpdate, completeUpdate, dismiss } = useAppUpdate()
+  const {
+    available, mandatory, latest, downloaded, progress, isNative,
+    startUpdate, completeUpdate, dismiss,
+  } = useAppUpdate()
   const ref = useRef(null)
 
-  // Mede própria altura → CSS var --update-banner-height. AppHeader/FilterBar
-  // usam pra calcular offset sticky correto (empurra tudo pra baixo).
-  // Toggle body.has-update-banner → status bar bleed verde (sangra banner).
+  // Mede própria altura → CSS var --update-banner-height (só pro banner verde).
+  // Modal mandatory é overlay, não empurra layout.
   useEffect(() => {
     const el = ref.current
-    if (!available || !el) {
+    if (!available || mandatory || !el) {
       document.documentElement.style.setProperty('--update-banner-height', '0px')
       document.body.classList.remove('has-update-banner')
       return
@@ -45,13 +46,148 @@ export default function UpdateBanner() {
       document.documentElement.style.setProperty('--update-banner-height', '0px')
       document.body.classList.remove('has-update-banner')
     }
-  }, [available])
+  }, [available, mandatory])
+
+  // Bloqueia scroll do body enquanto modal mandatory aberto
+  useEffect(() => {
+    if (mandatory && available) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [mandatory, available])
 
   if (!available) return null
 
   const handleClick = downloaded ? completeUpdate : startUpdate
   const downloading = isNative && progress > 0 && progress < 1 && !downloaded
 
+  // ───── MODAL MANDATORY (full-screen blocking) ─────────────────────
+  if (mandatory) {
+    let title = 'Atualização obrigatória'
+    let subtitle = 'Esta versão exige atualização para continuar usando o Dosy.'
+    let buttonLabel = 'Atualizar agora'
+
+    if (downloaded) {
+      title = 'Atualização pronta'
+      subtitle = 'Toque para reiniciar e finalizar a instalação.'
+      buttonLabel = 'Reiniciar'
+    } else if (downloading) {
+      title = 'Baixando atualização'
+      subtitle = `${Math.round(progress * 100)}% concluído. Aguarde…`
+      buttonLabel = `${Math.round(progress * 100)}%`
+    }
+
+    return (
+      <AnimatePresence>
+        <motion.div
+          key="update-modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: TIMING.base, ease: EASE.inOut }}
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
+          style={{
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          }}
+          aria-modal="true"
+          role="alertdialog"
+          aria-labelledby="update-modal-title"
+          aria-describedby="update-modal-desc"
+        >
+          <motion.div
+            key="update-modal-card"
+            initial={{ y: 40, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 40, opacity: 0, scale: 0.96 }}
+            transition={{ duration: TIMING.base, ease: EASE.out }}
+            className="w-full sm:max-w-sm mx-4 mb-4 sm:mb-0 rounded-3xl shadow-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8F6 100%)',
+              boxShadow: '0 24px 60px -12px rgba(220, 38, 38, 0.35), 0 0 0 1px rgba(220, 38, 38, 0.08)',
+            }}
+          >
+            {/* Header com ícone */}
+            <div
+              className="px-6 pt-7 pb-2 flex flex-col items-center text-center"
+              style={{ background: 'linear-gradient(180deg, rgba(254,242,242,0.85) 0%, transparent 100%)' }}
+            >
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                style={{
+                  background: 'linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 100%)',
+                  boxShadow: '0 8px 16px -4px rgba(220, 38, 38, 0.25)',
+                }}
+              >
+                <Icon name="warning" size={32} className="text-red-600" />
+              </div>
+              <h2
+                id="update-modal-title"
+                className="text-lg font-bold text-gray-900 leading-tight"
+                style={{ fontFamily: 'var(--dosy-font-display, var(--dosy-font-body))' }}
+              >
+                {title}
+              </h2>
+              {latest?.version && (
+                <p className="text-xs font-semibold text-red-600 mt-1.5 tracking-wide uppercase">
+                  Versão {latest.version} disponível
+                </p>
+              )}
+            </div>
+
+            {/* Body */}
+            <div className="px-6 pb-2">
+              <p
+                id="update-modal-desc"
+                className="text-sm text-gray-700 leading-relaxed text-center"
+              >
+                {subtitle}
+              </p>
+
+              {latest?.whatsnew && !downloaded && !downloading && (
+                <div
+                  className="mt-4 p-3 rounded-xl text-xs text-gray-600 leading-relaxed"
+                  style={{ background: 'rgba(249, 250, 251, 0.8)' }}
+                >
+                  <div className="font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                    <Icon name="sparkles" size={12} className="text-amber-500" />
+                    Novidades
+                  </div>
+                  {latest.whatsnew}
+                </div>
+              )}
+            </div>
+
+            {/* CTA */}
+            <div className="px-6 pt-5 pb-6">
+              <button
+                onClick={handleClick}
+                disabled={downloading}
+                className="w-full py-3.5 rounded-xl font-bold text-sm transition active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                style={{
+                  background: downloading
+                    ? 'linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)'
+                    : 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+                  color: 'white',
+                  boxShadow: downloading
+                    ? 'none'
+                    : '0 10px 20px -6px rgba(220, 38, 38, 0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
+              >
+                {buttonLabel}
+              </button>
+              <p className="text-[10px] text-gray-400 text-center mt-3 leading-snug">
+                Não é possível usar o Dosy sem esta atualização.
+              </p>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
+  // ───── BANNER VERDE (default, dismissable em web) ─────────────────
   let title = 'Nova versão disponível'
   let subtitle
   let buttonLabel = 'Atualizar'
@@ -81,8 +217,6 @@ export default function UpdateBanner() {
         transition={{ duration: TIMING.base, ease: EASE.inOut }}
         className="sticky left-0 right-0 z-[50] bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
         style={{
-          // env-safe sempre incluído. ad-banner-height some quando user é Pro/Admin.
-          // Banner sempre fica logo abaixo do ad (ou status bar quando ad ausente).
           top: 'calc(env(safe-area-inset-top, 0px) + var(--ad-banner-height, 0px))'
         }}
       >
@@ -101,7 +235,6 @@ export default function UpdateBanner() {
           >
             {buttonLabel}
           </button>
-          {/* Web user pode dispensar; native NÃO (forçar update flow) */}
           {!isNative && (
             <button
               onClick={dismiss}

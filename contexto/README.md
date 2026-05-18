@@ -576,8 +576,77 @@ Cenários device-only que IA NÃO consegue autonomous:
   - **Por que TEMP override:** filter driver em `C:\Users\<user>\AppData\Local\Temp` bloqueia AF_UNIX → JDK Pipe.LoopbackConnector falha "Invalid argument". Redirect resolve.
   - **JDK 25 obrigatório:** Adoptium Temurin 25.0.3.9 (`winget install -e --id EclipseAdoptium.Temurin.25.JDK`)
   - Output: `android/app/build/outputs/bundle/release/app-release.aab`
-- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes
+- Atualizar `docs/play-store/whatsnew/whatsnew-pt-BR` com release notes (≤500 chars Play Store)
 - **Chrome MCP** Play Console via [§10 Receita](#10--receita-chrome-mcp-play-console-upload-aab) — upload + release notes + Salvar e publicar
+
+### 🆕 Passo 12.1 — In-app update banner (v0.2.3.11 #299) — OBRIGATÓRIO
+
+Após confirmar publicação Play Console, IA executa via `mcp__supabase__execute_sql` ANTES de fechar o passo. Sem essa linha, banner mostra "versão {VC}" feio até Vercel deploy alcançar (fallback web).
+
+**Template SQL (idempotente):**
+```sql
+INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew)
+VALUES ({VC}, '{X.Y.Z.W}', {true|false}, $$
+{whatsnew_text}
+$$)
+ON CONFLICT (version_code) DO NOTHING;
+```
+
+**3 decisões IA toma + propõe ao user:**
+
+#### 1️⃣ `is_mandatory` — banner verde ou modal vermelho?
+
+| Cenário | `is_mandatory` | UX no device |
+|---|---|---|
+| Bug fixes regulares, features novas, melhorias | `false` (default) | Banner verde dismissable no topo |
+| Security fix crítico (ex: token leak, RLS bypass) | `true` | Modal vermelho full-screen, sem dismiss |
+| Breaking schema/API que clientes antigos quebram | `true` | Modal vermelho — força update antes de usar |
+| Bug P0 que corrompe dados | `true` | Modal vermelho — proteção do user |
+
+**Regra prática:** se app antigo continua funcionando OK, use `false`. Se app antigo causa dano (data loss, segurança, schema break) → `true`. Em dúvida → `false` (não bloquear user é mais conservador que bloquear).
+
+#### 2️⃣ `whatsnew` — texto do modal/banner
+
+Mesma string usada em 3 lugares possíveis:
+- Bloco "Novidades" do **modal mandatory** (3-4 linhas máx)
+- Subtitle do banner verde (não-implementado ainda — fallback é `v{version}`)
+- Eventual histórico em "Sobre" futuro
+
+**Boas práticas:**
+- ≤300 chars (cabem em 3 linhas no modal)
+- pt-BR, frase coloquial
+- 1-2 destaques principais — não lista exaustiva (essa vai no whatsnew-pt-BR da Play)
+- NULL/omitir se não tiver nada relevante (bloco "Novidades" some)
+
+**Exemplos:**
+```sql
+-- Release pequena com 1 fix
+whatsnew = 'Corrigida pluralização "1 dias" → "1 dia" em Tratamentos.'
+
+-- Release média
+whatsnew = 'Notificações push agora ativam automaticamente. Banner Desfazer e relatórios corrigidos.'
+
+-- Security mandatory
+whatsnew = 'Atualização de segurança obrigatória. Versões anteriores expõem tokens — atualize para continuar usando.'
+
+-- Sem novidades visíveis (só refactor/perf)
+whatsnew = NULL
+```
+
+#### 3️⃣ Confirmação user antes de INSERT mandatory
+
+**Se `is_mandatory = true`:** IA pergunta explicitamente ao user antes do INSERT: "Esta release vai forçar modal bloqueante em TODOS os devices nas versões anteriores. Confirma? (sim/não)". Aguarda "sim" literal. Sem aguardo → NÃO faz INSERT mandatory.
+
+**Se `is_mandatory = false`:** IA executa direto, reporta no Passo 12 final.
+
+### Reverter `is_mandatory` (emergência)
+
+Se postar release com `is_mandatory=true` por engano:
+```sql
+UPDATE medcontrol.app_releases SET is_mandatory = false WHERE version_code = {VC};
+```
+Cache localStorage `dosy_vname_{vcode}` no client guarda só `version_name`, não `mandatory` — flag re-avaliada em todo CHECK_INTERVAL (30min) + focus event. Devices voltam pro banner verde em ≤30min sem reinstall.
+
 - Internal Testing track ativa em ~1h
 
 ## Passo 13 — Pós-release (release fechado, mergeado master)

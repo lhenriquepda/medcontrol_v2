@@ -443,7 +443,7 @@ function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
               <span style={{ opacity: 0.5 }}>·</span>
               <span>{t.intervalHours ? `a cada ${t.intervalHours}h` : 'horários fixos'}</span>
               <span style={{ opacity: 0.5 }}>·</span>
-              <span>{t.isContinuous ? '♾ contínuo' : `${t.durationDays} ${t.durationDays === 1 ? 'dia' : 'dias'}`}</span>
+              <span>{t.isContinuous ? '♾ contínuo' : `${t.durationDays} ${Number(t.durationDays) === 1 ? 'dia' : 'dias'}`}</span>
             </div>
 
             {ed && (

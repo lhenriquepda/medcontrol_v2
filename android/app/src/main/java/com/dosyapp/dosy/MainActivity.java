@@ -3,8 +3,11 @@ package com.dosyapp.dosy;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
+
+import java.lang.ref.WeakReference;
 
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
@@ -19,8 +22,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
+    // WeakRef exposto pra DosyMessagingService despachar unshare sem startActivity
+    public static WeakReference<MainActivity> sWeakRef = null;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        sWeakRef = new WeakReference<>(this);
         registerPlugin(CriticalAlarmPlugin.class);
         super.onCreate(savedInstanceState);
         handleAlarmAction(getIntent());
@@ -93,9 +100,29 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        checkPendingUnshare();
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleAlarmAction(intent);
+    }
+
+    // Chamado por DosyMessagingService via sWeakRef quando app está vivo
+    public void dispatchUnshareOnUiThread(String patientId) {
+        runOnUiThread(() -> postJsEvent("dosy:patientUnshared", "unsharePatientId", patientId));
+    }
+
+    private void checkPendingUnshare() {
+        SharedPreferences sp = getSharedPreferences("dosy_pending_unshare", Context.MODE_PRIVATE);
+        String patientId = sp.getString("patientId", null);
+        if (patientId != null) {
+            sp.edit().remove("patientId").remove("ts").apply();
+            postJsEvent("dosy:patientUnshared", "unsharePatientId", patientId);
+        }
     }
 
     /**
@@ -142,15 +169,6 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        // v0.2.3.10 #297 — patient unshared FCM. Java handler dispatch silent
-        // pra JS invalidate caches local. Não navega — só limpa.
-        String unsharePatientId = intent.getStringExtra("unsharePatientId");
-        if (unsharePatientId != null) {
-            intent.removeExtra("unsharePatientId");
-            postJsEvent("dosy:patientUnshared", "patientId", unsharePatientId);
-            return;
-        }
-
         // v0.2.3.7 Bug B fix — FCM share notification tap branch.
         // Edge `patient-share-handler` sends data.kind=patient_share_added +
         // data.patientId. App navigates to /pacientes/:id on tap.
@@ -185,6 +203,7 @@ public class MainActivity extends BridgeActivity {
         String varName;
         if ("doseIds".equals(key)) varName = "__dosyPendingDoseIds";
         else if ("patientId".equals(key)) varName = "__dosyPendingPatientId";
+        else if ("unsharePatientId".equals(key)) varName = "__dosyPendingUnsharePatientId";
         else varName = "__dosyPendingDoseId";
         String setVar = String.format("window.%s = '%s';", varName, safeVal);
         String dispatch = String.format(
