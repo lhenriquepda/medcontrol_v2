@@ -12,11 +12,11 @@
 |---|---|
 | **Versão** | `v0.2.3.13` |
 | **versionCode** | `76` |
-| **Branch ativa** | `release/v0.2.3.13` (a fechar) |
+| **Branch ativa** | `release/v0.2.3.13` (merge pendente) |
 | **Último tag** | `v0.2.3.12` · merge `c9282e6` |
-| **Ship date** | 2026-05-18 (em curso) |
-| **Play Console** | (pendente upload v0.2.3.13) |
-| **Vercel prod** | `dosymed.app` — v0.2.3.12 |
+| **Ship date** | 2026-05-18 |
+| **Play Console** | Internal Testing vc 76 — publicado 2026-05-18 18:04 BRT |
+| **Vercel prod** | `dosymed.app` — v0.2.3.12 (será atualizado pós merge master) |
 
 ---
 
