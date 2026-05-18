@@ -12,11 +12,11 @@
 |---|---|
 | **Versão** | `v0.2.3.12` |
 | **versionCode** | `75` |
-| **Branch ativa** | `release/v0.2.3.12` (AAB build pending) |
-| **Último tag** | `v0.2.3.11` · merge `21b6a0e` (master ainda em v0.2.3.11) |
-| **Ship date** | 2026-05-18 (em curso) |
-| **Play Console** | aguarda upload AAB vc 75 |
-| **Vercel prod** | `dosymed.app` — v0.2.3.11 (aguarda merge master pós AAB) |
+| **Branch ativa** | `master` (sem release em curso) |
+| **Último tag** | `v0.2.3.12` · merge `c9282e6` |
+| **Ship date** | 2026-05-18 |
+| **Play Console** | Internal Testing vc 75 — publicado 2026-05-18 15:19 BRT |
+| **Vercel prod** | `dosymed.app` — v0.2.3.12 (deploy em curso) |
 
 ---
 

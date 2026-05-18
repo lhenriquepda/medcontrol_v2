@@ -118,7 +118,7 @@ grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 
 ### Próximo passo proposto
 
-Validar device físico Samsung S25 Ultra v0.2.3.11 (itens `[ ]` em `Validar.md`) OU iniciar próxima release atacando P0 aberto:
+Validar device físico Samsung S25 Ultra v0.2.3.12 (itens `[ ]` em `Validar.md` — propagação Internal Testing ~1h) OU iniciar próxima release atacando P0 aberto:
 
 - **#006** Device validation 3 devices físicos (FASE 17 manual user)
 - **#131** Recrutar 15-20 testers externos via Reddit/redes (meta 12+ ativos)
