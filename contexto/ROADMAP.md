@@ -162,11 +162,11 @@ grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail 
 
 > 🚨 **IA: SEMPRE varrer [`contexto/BUGS.md`](BUGS.md) ANTES desta seção.** ROADMAP cobre **features, melhorias e roadmap de lançamento**. Bugs ativos ficam em `BUGS.md` com numeração própria (#0001+) e severidade P0/P1/P2/P3/P4. Alertar o user sobre bugs abertos no início de cada sessão (Passo 0 README), igual ao alerta de itens pendentes do Validar.md.
 
-**Branch ativa:** `release/v0.2.3.11` (vc 74). Todos os bugs #0001–#0008 fixados + feature #299 (in-app update DB autoritativo). Aguardando: validação localhost web + autorização Passo 10.5 + AAB upload.
+**Branch ativa:** master @ tag `v0.2.3.11` (vc 74). Play Console Internal Testing publicado 2026-05-17 22:55 BRT. Vercel prod dosymed.app v0.2.3.11 confirmado 2026-05-18T01:58Z. Master merge `21b6a0e`. Todos os bugs #0001–#0008 fixados + feature #299 (in-app update DB autoritativo + modal mandatory). Pendência: validações device físico Samsung S25 Ultra após propagação Internal Testing (~1h).
 
 **Bugs abertos:** ver [`contexto/BUGS.md`](BUGS.md) — nenhum bug aberto.
 
-**🔄 EM CURSO `release/v0.2.3.11`** (vc 74, base master v0.2.3.10 vc 73):
+**✅ SHIPPED master `release/v0.2.3.11`** (vc 74, base master v0.2.3.10 vc 73):
 - ✅ **#0001** P2 — Push subscription não registra auto — `useAuth` SIGNED_IN + INITIAL_SESSION auto-subscribe se perm=granted. Commit `7e043ab`. Validado emulador.
 - ✅ **#0002** P2 — Banner Desfazer invisível device físico — `useToast` bottom `calc(6rem + safe-area-inset-bottom)`. Commit `7e043ab`. Validado CDP.
 - ✅ **#0003+#0004** P2 — unshare background `startActivity` + tela "Paciente Carregando..." — WeakRef + SharedPrefs + var separada `__dosyPendingUnsharePatientId`. Commits `7e043ab` + `1062e62`. Validado behavioral 2-devices (Chrome web teste-plus + emulador teste-free).
