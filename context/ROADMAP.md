@@ -95,72 +95,20 @@ Validação em conta pessoal polui dados reais → risco LGPD + drift + reprimen
 
 **Próximo número livre** (numeração cross-categoria global):
 ```bash
-grep -oE "#[0-9]{3}" contexto/ROADMAP.md contexto/CHECKLIST.md | sort -u | tail -5
+grep -oE "#[0-9]{3}" context/ROADMAP.md context/CHECKLIST.md | sort -u | tail -5
 ```
 
 **Drift histórico observado:** items fechados sem update CHECKLIST → re-implementação acidental → conflito git. Última auditoria 2026-05-05 fechou ~60 discrepâncias acumuladas v0.1.7.4-v0.2.0.11. Rodar auditoria semestral cross-ref ROADMAP × CHECKLIST × `updates/*.md`.
 
-**Detalhe completo das regras:** `contexto/README.md` Regra 1.
+**Detalhe completo das regras:** ver `context/RULES.md` (Regras 1-15).
 
----
-
-## 1. Contexto rápido
-
-**App:** Dosy — Controle de Medicação (PWA + Capacitor → Android final, package `com.dosyapp.dosy`).
-**Versão atual:** `0.2.1.3` · master @ tag `v0.2.1.3` (publicada 2026-05-07 — vc 51 Internal + Closed Alpha promovida). Pre-Reddit hardening: 5 fixes (#018 AdMob real ads · #162 v1+v2 TreatmentForm warning + toggle Dias/Semanas/Meses · #170 In-App Review API · #189 UpdateBanner versionName · #190 BUG-LOGOUT-RESUME). **Android Play Store: vc 51 Internal Testing publicado**, Closed Alpha aguarda Google review (~24-72h).
-**Vercel deploy:** `https://dosymed.app/` (custom domain) rodando v0.2.1.3 (master). Contas teste: `teste-free@teste.com / 123456` (tier free, paywall ativo) + `teste-plus@teste.com / 123456` (tier plus). Conta antiga `teste03` deletada.
-**Supabase plano:** **Pro** (upgrade 2026-05-05 pra destravar grace period egress). Considerar downgrade após validação 24h pós-fixes #134-#136.
-**⚠️ Nota:** existe projeto Vercel separado servindo `dosy-app.vercel.app` (em outra conta/org), travado em v0.2.0.4 — docs antigos referenciam mas NÃO é o canônico atual.
-**Stack:** React 19 + TanStack Query 5 + Supabase 2.45 + Vite 5 + Capacitor 8.3 + Firebase FCM + Sentry + PostHog. Tier promo Plus ativa.
-
-**Estado atual de testing:**
-- ✅ Internal Testing **live** (URL opt-in: `https://play.google.com/apps/internaltest/4700769831647466031` · só user + agente, decisão pular recrutamento conhecidos)
-- 🟡 Closed Testing: pronto pra configurar — bloqueadores formais Console fechados (#004 ✅ vídeo FGS + #025 ✅ screenshots + #003 ✅ pwd + #008 ✅ Sentry + Política Privacidade ✅ + Intent tela cheia ✅). Próximos passos: #129 Google Group + #130 Console track + #131 recrutamento externo + #132 gate 14d/12 ativos.
-- 🔒 Open Testing / Produção pública: bloqueado até #132 gate cumprido (#133 solicita produção via Console)
-
-**Veredito da auditoria:** ⚠️ **PRONTO COM RESSALVAS**.
-- Score médio: 7.0/10 across 25 dimensões.
-- Base sólida (alarme nativo, RLS defense-in-depth, LGPD coberta, bundle 64 KB).
-- 9 bloqueadores P0 antes de Open Testing público.
-
----
-
-## 2. Mapa dos arquivos `/analise/`
-
-| Arquivo | Quando usar | Tamanho |
-|---|---|---|
-| **`README.md`** | Visão sumária 1 página + score por dimensão + estrutura da pasta | 9 KB |
-| **`ROADMAP.md`** (este) | Entrada de qualquer novo chat. Macro + onde paramos + próximo passo | 15 KB |
-| **`auditoria/01-relatorio-completo.md`** | Relatório técnico completo das 25 dimensões com evidências | 33 KB |
-| **`auditoria/02-resumo-executivo.md`** | Brief executivo 2-3 páginas (top 3 forças, top 5 bloqueadores, ações imediatas) | 8 KB |
-| **`CHECKLIST.md`** | Detalhe de cada item: snippet de código, esforço dias-pessoa, dependências, critério de aceitação | 24 KB |
-| **`auditoria/04-supabase.md`** | DB profundo: tabelas, RLS, RPCs, edge functions, custos, SQL audits prontos | 19 KB |
-| **`auditoria/05-codigo.md`** | Frontend: TanStack Query anti-patterns, deps, código morto, performance | 17 KB |
-| **`auditoria/06-bugs.md`** | 15 bugs com classificação [ANDROID]/[AMBOS]/[WEB-ONLY] + severidade | 18 KB |
-| **`auditoria/07-usabilidade.md`** | Diário live nav + friction log + personas + recomendações UX | 15 KB |
-| **`08-limitacoes-web.md`** | Itens [WEB-ONLY] (alarmes nativos, biometria, push real) — fora do checklist | 9 KB |
-| **`archive/plan-original.md`** | Cópia do `Plan.md` original (62 KB, 1055 linhas) — fonte de verdade do roadmap pre-auditoria |
-| **`archive/security-original.md`** | Cópia `SECURITY.md` — vulns pendentes operacionais |
-| **`archive/roadmap-original.md`** | Cópia `RoadMap.md` antigo (snapshot pre-Plan.md) |
-| **`archive/plan-suggestions-original.md`** | Apêndice antigo |
-| **`archive/prompt-auditoria-v2.md`** | Spec original que gerou esta auditoria |
-
-### Como navegar
-
-- **Quero status / próximo passo:** este arquivo §3 e §4
-- **Quero ver TUDO que falta fazer:** este arquivo §6 (checklist macro)
-- **Quero detalhe técnico de um item:** linkar pro `CHECKLIST.md`
-- **Quero entender Supabase profundo:** `auditoria/04-supabase.md`
-- **Quero entender frontend / cache / bundle:** `auditoria/05-codigo.md`
-- **Quero ver bug específico:** `auditoria/06-bugs.md`
-- **Quero entender UX / fluxos navegados:** `auditoria/07-usabilidade.md`
-- **Quero contexto histórico do projeto:** `archive/plan-original.md` (Plan.md fontes de verdade)
+> Estado atual (versão, branch, P0s, contas teste) → [`context/STATE.md`](STATE.md)
 
 ---
 
 ## 3. Onde paramos
 
-> 🚨 **IA: SEMPRE varrer [`contexto/BUGS.md`](BUGS.md) ANTES desta seção.** ROADMAP cobre **features, melhorias e roadmap de lançamento**. Bugs ativos ficam em `BUGS.md` com numeração própria (#0001+) e severidade P0/P1/P2/P3/P4. Alertar o user sobre bugs abertos no início de cada sessão (Passo 0 README), igual ao alerta de itens pendentes do Validar.md.
+> 🚨 **IA: SEMPRE varrer [`context/BUGS.md`](BUGS.md) ANTES desta seção.** ROADMAP cobre **features, melhorias e roadmap de lançamento**. Bugs ativos ficam em `BUGS.md` com numeração própria (#0001+) e severidade P0/P1/P2/P3/P4. Alertar o user sobre bugs abertos no início de cada sessão (Passo 0 README), igual ao alerta de itens pendentes do Validar.md.
 
 **Branch ativa:** master @ tag `v0.2.3.11` (vc 74). Play Console Internal Testing publicado 2026-05-17 22:55 BRT. Vercel prod dosymed.app v0.2.3.11 confirmado 2026-05-18T01:58Z. Master merge `21b6a0e`. Todos os bugs #0001–#0008 fixados + feature #299 (in-app update DB autoritativo + modal mandatory). Pendência: validações device físico Samsung S25 Ultra após propagação Internal Testing (~1h).
 
