@@ -12,11 +12,11 @@
 |---|---|
 | **Versão** | `v0.2.3.14` |
 | **versionCode** | `77` |
-| **Branch ativa** | `master` (release/v0.2.3.14 mergeada) |
-| **Último tag** | `v0.2.3.14` · merge pendente (pós-Vercel) — anterior `v0.2.3.13` `3e27811` |
+| **Branch ativa** | `master` (sem release em curso) |
+| **Último tag** | `v0.2.3.14` · merge `3858126` — anterior `v0.2.3.13` `3e27811` |
 | **Ship date** | 2026-05-19 |
 | **Play Console** | Internal Testing vc 77 — publicado 2026-05-19 10:45 BRT |
-| **Vercel prod** | TBD pós-merge master — anterior `dosymed.app` v0.2.3.13 confirmado 2026-05-18T23:09Z |
+| **Vercel prod** | `dosymed.app` — v0.2.3.14 confirmado 2026-05-19T13:54Z (deploy `dpl_E3fuo27XcgfkNE9fwQo1WV7QoZFb`) |
 
 **Commits release/v0.2.3.14 (8):**
 - `8daa0af` chore: abre release/v0.2.3.14 — bump vc 76→77
