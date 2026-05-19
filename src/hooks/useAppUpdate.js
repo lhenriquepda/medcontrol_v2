@@ -304,6 +304,7 @@ export function useAppUpdate() {
   // ─── Debug toggles (runtime, dev only) ───────────────────────────
   //   window.__dosyForceUpdate = true       → força banner verde
   //   window.__dosyForceMandatory = true    → força modal bloqueante (preview layout)
+  //   window.__dosyForceFallback = true     → simula fallback (sem semver) — testa copy sanitizada
   //   window.__dosyDebugRecheck()           → re-avalia flags em TODAS instâncias
   //
   // Múltiplas instâncias do hook (UpdateBanner + AppHeader + Settings) precisam
@@ -313,13 +314,17 @@ export function useAppUpdate() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handler = () => {
+      const isFallback = window.__dosyForceFallback === true
+      const fakeVersion = isFallback ? 'versão 99' : '0.2.3.99'
       if (window.__dosyForceMandatory === true) {
-        setLatest(prev => prev?.mandatory
+        // isFallback override mesmo se já tem latest (testa copy sanitizada).
+        setLatest(prev => (prev?.mandatory && !isFallback)
           ? prev
-          : { version: prev?.version || '0.2.3.99', mandatory: true, whatsnew: 'Atualização obrigatória — preview de layout.', source: 'debug' })
-      } else if (window.__dosyForceUpdate === true && !latest) {
+          : { version: isFallback ? fakeVersion : (prev?.version || fakeVersion), mandatory: true, whatsnew: 'Atualização obrigatória — preview de layout.', source: 'debug', isVersionFallback: isFallback })
+      } else if (window.__dosyForceUpdate === true && (!latest || isFallback)) {
         // Banner verde precisa de `latest.version` pra renderizar subtitle. Injeta fake.
-        setLatest({ version: '0.2.3.99', mandatory: false, source: 'debug' })
+        // isFallback override mesmo se já tem latest (testa copy sanitizada).
+        setLatest({ version: fakeVersion, mandatory: false, source: 'debug', isVersionFallback: isFallback })
       } else {
         setDebugTick(t => t + 1)  // força re-render pra re-avaliar available
       }
