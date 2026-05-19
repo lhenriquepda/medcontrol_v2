@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
+import * as Sentry from '@sentry/react'
 import { supabase, hasSupabase } from '../services/supabase'
 
 /* eslint-disable no-undef */
@@ -63,18 +64,26 @@ async function fetchReleaseFromDb(currentVc, availableVc) {
       cachedName = availableRow.version_name
     }
 
-    // is_mandatory: existe alguma release mandatory em (currentVc, availableVc]?
+    // v0.2.3.14 #0011 — robusto a Play Core race condition (info.currentVersionCode
+    // pode vir null em primeiro check, antes do useEffect getRealVersion popular).
+    // Antes: `if (currentVc != null && currentVc < availableVc)` PULAVA mandatory check
+    // inteiro → mandatory=false default → modal vermelho nunca renderizava.
+    // Agora: query upper-bound-only sempre roda. Se currentVc disponível, refina com
+    // lower bound. Trade-off: fresh install muito antigo pode ver falso-positivo
+    // mandatory (release antiga marcada mandatory ainda existe na tabela) — aceitável
+    // em healthcare (errar pelo lado seguro).
     let mandatory = false
+    let mandQuery = supabase
+      .from('app_releases')
+      .select('version_code')
+      .lte('version_code', availableVc)
+      .eq('is_mandatory', true)
+      .limit(1)
     if (currentVc != null && currentVc < availableVc) {
-      const { data: mandRows } = await supabase
-        .from('app_releases')
-        .select('version_code')
-        .gt('version_code', currentVc)
-        .lte('version_code', availableVc)
-        .eq('is_mandatory', true)
-        .limit(1)
-      mandatory = !!mandRows?.length
+      mandQuery = mandQuery.gt('version_code', currentVc)
     }
+    const { data: mandRows } = await mandQuery
+    mandatory = !!mandRows?.length
 
     return {
       name: cachedName || availableRow?.version_name || null,
@@ -83,6 +92,18 @@ async function fetchReleaseFromDb(currentVc, availableVc) {
     }
   } catch (e) {
     console.warn('[useAppUpdate #299] DB fetch failed:', e?.message)
+    // v0.2.3.14 — breadcrumb pra debug futuro de race conditions DB ↔ Play Core.
+    Sentry.addBreadcrumb({
+      category: 'app-update',
+      level: 'warning',
+      message: 'fetchReleaseFromDb failed',
+      data: {
+        currentVc,
+        availableVc,
+        hadCachedName: !!cachedName,
+        error: e?.message?.slice(0, 120),
+      },
+    })
     return cachedName ? { name: cachedName, mandatory: false, whatsnew: null } : null
   }
 }
@@ -150,10 +171,32 @@ export function useAppUpdate() {
         // DB autoritativa: version_name + is_mandatory
         const dbInfo = await fetchReleaseFromDb(currentVc, availableVc)
 
-        const version =
-          info.availableVersion         // 1º Play Core (quando vem preenchido)
-          ?? dbInfo?.name               // 2º DB autoritativa (sempre atualizada via Passo 12)
-          ?? `versão ${availableVc}`    // 3º fallback final
+        // v0.2.3.14 #0010 — DB primeiro (autoritativa), Play Core SÓ se shape semver real.
+        // Plugin @capawesome/capacitor-app-update retorna `availableVersion="77"`
+        // (versionCode stringified) quando Play Store backend não populou versionName
+        // imediatamente pós-publish. `??` só pula null/undefined → `"77"` truthy
+        // curtocircuitava DB lookup → banner mostrava "versão 77" em vez de "0.2.3.14".
+        const looksLikeSemver = (v) => typeof v === 'string' && /\d+\.\d+/.test(v)
+        const playCoreSemver = looksLikeSemver(info.availableVersion) ? info.availableVersion : null
+        let versionSource = 'db'
+        let version = dbInfo?.name
+        if (!version && playCoreSemver) { version = playCoreSemver; versionSource = 'play-core' }
+        if (!version) { version = `versão ${availableVc}`; versionSource = 'fallback' }
+
+        // v0.2.3.14 — breadcrumb sempre que detecta update; facilita debug futuro de #0010/#0011-like.
+        Sentry.addBreadcrumb({
+          category: 'app-update',
+          level: versionSource === 'fallback' ? 'warning' : 'info',
+          message: `update available (source=${versionSource})`,
+          data: {
+            currentVc,
+            availableVc,
+            playCoreVersionRaw: info.availableVersion ?? null,
+            dbName: dbInfo?.name ?? null,
+            mandatory: dbInfo?.mandatory ?? false,
+            versionFinal: version,
+          },
+        })
 
         setLatest({
           version,
@@ -161,6 +204,9 @@ export function useAppUpdate() {
           mandatory: dbInfo?.mandatory || false,
           whatsnew: dbInfo?.whatsnew || null,
           source: 'play',
+          // v0.2.3.14 #C — sinaliza fallback pra UpdateBanner sanitizar copy
+          // (sem "v" prefix no banner, sem chip "Versão X disponível" no modal).
+          isVersionFallback: versionSource === 'fallback',
         })
       } else {
         setLatest(null)
@@ -258,6 +304,7 @@ export function useAppUpdate() {
   // ─── Debug toggles (runtime, dev only) ───────────────────────────
   //   window.__dosyForceUpdate = true       → força banner verde
   //   window.__dosyForceMandatory = true    → força modal bloqueante (preview layout)
+  //   window.__dosyForceFallback = true     → simula fallback (sem semver) — testa copy sanitizada
   //   window.__dosyDebugRecheck()           → re-avalia flags em TODAS instâncias
   //
   // Múltiplas instâncias do hook (UpdateBanner + AppHeader + Settings) precisam
@@ -267,13 +314,17 @@ export function useAppUpdate() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handler = () => {
+      const isFallback = window.__dosyForceFallback === true
+      const fakeVersion = isFallback ? 'versão 99' : '0.2.3.99'
       if (window.__dosyForceMandatory === true) {
-        setLatest(prev => prev?.mandatory
+        // isFallback override mesmo se já tem latest (testa copy sanitizada).
+        setLatest(prev => (prev?.mandatory && !isFallback)
           ? prev
-          : { version: prev?.version || '0.2.3.99', mandatory: true, whatsnew: 'Atualização obrigatória — preview de layout.', source: 'debug' })
-      } else if (window.__dosyForceUpdate === true && !latest) {
+          : { version: isFallback ? fakeVersion : (prev?.version || fakeVersion), mandatory: true, whatsnew: 'Atualização obrigatória — preview de layout.', source: 'debug', isVersionFallback: isFallback })
+      } else if (window.__dosyForceUpdate === true && (!latest || isFallback)) {
         // Banner verde precisa de `latest.version` pra renderizar subtitle. Injeta fake.
-        setLatest({ version: '0.2.3.99', mandatory: false, source: 'debug' })
+        // isFallback override mesmo se já tem latest (testa copy sanitizada).
+        setLatest({ version: fakeVersion, mandatory: false, source: 'debug', isVersionFallback: isFallback })
       } else {
         setDebugTick(t => t + 1)  // força re-render pra re-avaliar available
       }

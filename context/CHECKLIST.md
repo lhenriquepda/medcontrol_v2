@@ -6,6 +6,34 @@
 
 ---
 
+### #release-v0.2.3.14 — Bug-fixes P2: update banner + share error UI 🚧 EM CURSO
+
+- **Status:** branch `release/v0.2.3.14` aberta. Commits `8daa0af` bump vc 76→77 + `2bd4139` fix useAppUpdate.js (#0010+#0011) + `8fc5f03` fix useShares.js + SharePatientSheet.jsx (#0009). Esforço ~45min código + validação pendente.
+- **Bug case raiz:**
+  - **#0010** Update banner mostrava `"versão 75. toque pra baixar"` em vez de `"0.2.3.12"` reportado user 2026-05-18 ao atualizar v0.2.3.11→v0.2.3.12 no S25 Ultra. Plugin `@capawesome/capacitor-app-update` retornava `availableVersion="75"` (versionCode stringified) quando Play Store backend não populou versionName imediatamente pós-publish.
+  - **#0011** Banner verde dismissable apareceu em vez de modal vermelho mandatory quando vc 75 estava marcado `is_mandatory=true`. Race: `info.currentVersionCode` veio null em primeiro check antes do `useEffect getRealVersion` popular `currentVersionCode` state → linha 67 `if (currentVc != null && currentVc < availableVc)` PULAVA mandatory check inteiro → default false.
+  - **#0009** `usePatientShares` 401 JWT expiry deixava SharePatientSheet em "Carregando..." infinito quando refresh tokens revogados + reload PatientDetail compartilhado. Sem retry boundary nem fallback UI. Descoberto durante QA Appium v0.2.3.12.
+- **Escopo:**
+  - **#0010** (`src/hooks/useAppUpdate.js`) — `looksLikeSemver = (v) => typeof v === 'string' && /\d+\.\d+/.test(v)`. Ordem nova: 1º `dbInfo?.name` (DB autoritativa via Passo 12.1 INSERT) → 2º `info.availableVersion` SE shape semver → 3º fallback `versão N`. Operador `??` original aceitava `"75"` truthy → fix descarta versionCode stringified.
+  - **#0011** (`src/hooks/useAppUpdate.js`) — query mandatory roda sempre upper-bound-only (`lte('version_code', availableVc)`), refina com lower bound (`gt('version_code', currentVc)`) apenas se `currentVc != null`. Trade-off: fresh install muito antigo pode ver falso-positivo (release antiga marcada mandatory ainda existe na tabela) — aceitável em healthcare (errar pelo lado seguro).
+  - **#0009** (`src/hooks/useShares.js` + `src/components/SharePatientSheet.jsx`) — `isAuthError(err)` helper detecta msg "JWT"/"jwt" ou code "401"/"PGRST301"/"PGRST302". `usePatientShares` + `useReceivedShares` adicionam `retry: (n, err) => !isAuthError(err) && n < 2` (era default 3 sem skip auth). SharePatientSheet extrai `isError`/`error`/`refetch`, renderiza fallback `<div>` com mensagem vermelha + botão "Tentar novamente" entre branches `isLoading` e `shares.length === 0`.
+  - **Empilhamentos C** (commits `077e796` + `c839d5f`) — defensive polish:
+    - **Sentry breadcrumbs em `useAppUpdate.js`**: `fetchReleaseFromDb` catch (warning com `currentVc`/`availableVc`/`hadCachedName`/`error`) + `checkNative` update detect (info ou warning conforme `versionSource=db|play-core|fallback`, com `playCoreVersionRaw` + `dbName` + final). Facilita debug futuro de race conditions Play Core ↔ DB ↔ Vercel.
+    - **Edge case copy fallback** (`UpdateBanner.jsx`): `setLatest({...isVersionFallback})` propagado pra UpdateBanner. Banner subtitle omite prefixo `v` se fallback (evita `"vversão 77 · toque para baixar"`). Modal mandatory omite chip `"Versão X disponível"` se fallback (evita `"Versão versão 77 disponível"`). Default path (com semver) inalterado.
+    - **Debug toggle**: `window.__dosyForceFallback=true` permite simular path fallback via Chrome MCP. Validado §11a — banner mostra `"versão 99 · toque para recarregar"` sem `v` duplicado, modal mostra título sem chip ugly.
+- **Auditoria egress:**
+
+  | Risco | Severidade | Mitigação | Decisão |
+  |---|---|---|---|
+  | #0011 query mandatory roda sempre (era condicional) | Baixo | Tabela `app_releases` ~10 rows, query 1×/sessão, cache localStorage version_name. RLS public read-only. ~200B/query. | Aceitar |
+  | #0009 retry skip 401 | N/A — reduz egress (evita retry inútil) | n/a | Aceitar |
+
+- **Validação:** Passo 11a web Chrome MCP (#0010+#0011+#0009 são JS-only — bridge Capacitor envolve só `availableVersion` shape, simulável via `__dosyForceUpdate`/`__dosyForceMandatory` debug toggles). Passo 11b emulator Appium recomendado pra confirmar plugin response real do Play Core em vc 77 contra app_releases vc 77.
+- **Pendências device físico (validar.md user):** observar banner update real pós-ship em S25 Ultra de vc 76 → vc 77 (esperado: nome "0.2.3.14" exibido, não "77").
+- **is_mandatory v0.2.3.14:** `false` (bug fixes UX regulares — app antigo continua funcionando OK).
+
+---
+
 ### #release-v0.2.3.13 — Plano A primeira etapa: disclaimer paciente compartilhado ✅ READY for Internal Testing
 
 - **Status:** branch `release/v0.2.3.13` aberta (commits `13f0e70` bump + `9c560e6` feat + `eee7003` QA report + `40fa052` expanded QA + reorganização qa-reports). Esforço ~4h.

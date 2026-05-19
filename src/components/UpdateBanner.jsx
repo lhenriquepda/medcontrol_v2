@@ -129,7 +129,10 @@ export default function UpdateBanner() {
               >
                 {title}
               </h2>
-              {latest?.version && (
+              {latest?.version && !latest?.isVersionFallback && (
+                // v0.2.3.14 #C — só mostra chip "Versão X disponível" se temos
+                // version_name real (semver). Em fallback (`versão N`) omite
+                // pra evitar copy duplicado tipo "Versão versão 77 disponível".
                 <p className="text-xs font-semibold text-red-600 mt-1.5 tracking-wide uppercase">
                   Versão {latest.version} disponível
                 </p>
@@ -201,9 +204,12 @@ export default function UpdateBanner() {
     subtitle = `${Math.round(progress * 100)}%`
     buttonLabel = '...'
   } else if (latest?.version) {
+    // v0.2.3.14 #C — em fallback (`versão N`), omitir prefixo `v` pra evitar
+    // copy duplicado tipo "vversão 77 · toque para baixar".
+    const vPrefix = latest?.isVersionFallback ? '' : 'v'
     subtitle = isNative
-      ? `v${latest.version} · toque para baixar`
-      : `v${latest.version} · toque para recarregar`
+      ? `${vPrefix}${latest.version} · toque para baixar`
+      : `${vPrefix}${latest.version} · toque para recarregar`
   }
 
   return (

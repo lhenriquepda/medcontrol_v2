@@ -20,7 +20,37 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.12 EM CURSO (vc 75, aguardando autorização AAB Passo 10.5)
+## 🆕 Release atual — v0.2.3.14 SHIPPED 2026-05-19 (vc 77, Play Console 10:45 BRT)
+
+**Status:** master @ v0.2.3.14. 8 commits release. 3 fixes P2 user-reported bugs banner update + share error UI + empilhamento C debugability (Sentry breadcrumbs + copy fallback + debug toggle).
+
+**Validações autonomous COMPLETAS (§11a web Chrome MCP, localhost:4173 preview prod, teste-plus@teste.com):**
+
+- `[x]` **#0010 banner version_name correto** — `__dosyForceUpdate=true` + `__dosyDebugRecheck()` → banner verde renderiza texto `"v0.2.3.14 · toque para recarregar"` + botão "Atualizar". Caminho `dbInfo?.name` (DB autoritativa) primeiro funcionando. Path bug original (`info.availableVersion="77"` stringified) só dispara em device real pós-publish — validação device-only abaixo.
+- `[x]` **#0011 modal mandatory render** — `__dosyForceMandatory=true` → `<alertdialog>` z-index 9999, body `overflow: hidden`, version "0.2.3.14", texto "Atualização obrigatória" + bloco Novidades + botão "Atualizar agora" + sem dismiss. Layout idêntico ao validado em v0.2.3.11. Path race `currentVersionCode=null` testável só em device.
+- `[x]` **#0009 SharePatientSheet error UI** — PatientDetail → "Paciente Share LH" → Compartilhar paciente → injetar `q.setState({status:'error', error:{message:'JWT expired', code:'PGRST301'}})` na query `['patient_shares', id]` via QueryClient fiber walk → sheet renderiza `"Não foi possível carregar a lista (PGRST301)."` + botão `"Tentar novamente"`. Antes ficaria "Carregando…" infinito porque consumer só lia `isLoading`. Retry skip auth errors também garantido via code review (não retry inútil em 401).
+- `[x]` **Empilhamento C — banner fallback copy** — `__dosyForceFallback=true` + `__dosyForceUpdate=true` → banner renderiza `"versão 99 · toque para recarregar"` SEM `v` prefix (evita `"vversão 99"`). Default semver path inalterado (validação anterior #0010 já confirmou `"v0.2.3.14"` com `v` prefix correto).
+- `[x]` **Empilhamento C — modal mandatory fallback copy** — `__dosyForceMandatory=true` + `__dosyForceFallback=true` → modal renderiza título "Atualização obrigatória" + descrição + bloco Novidades + botão, SEM chip `"VERSÃO X DISPONÍVEL"` (evita `"VERSÃO versão 99 DISPONÍVEL"`). Default semver path mantém chip (validação anterior #0011 já confirmou).
+- `[x]` **Empilhamento C — Sentry breadcrumbs no bundle** — bundle prod `dist/assets/index-ycnjX7xC.js` contém strings `app-update` + `versionSource` + `fetchReleaseFromDb failed`. Breadcrumbs adicionam debug futuro de race Play Core (level info em path feliz, warning em fallback path / DB fail). Sentry SDK loaded em runtime (`window.__SENTRY__`). Em prod com DSN, breadcrumbs sobem em qualquer error capture.
+
+**Validações §11b emulator (SKIP justificado):**
+
+- `[skip]` **Emulator Appium UI** — fixes #0010 + #0011 dependem do plugin `@capawesome/capacitor-app-update` retornar dados reais do Play Core. Emulator sem AAB published no Internal Testing → `getAppUpdateInfo()` retorna erro/empty (não dispara shape buggy `availableVersion="77"`). Web debug toggles já validam UI render path. Fix #0009 é JS puro React Query — web validation suficiente.
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
+
+- `[ ]` **#0010 banner version_name real** — atualizar device de vc 76 (v0.2.3.13) → vc 77 (v0.2.3.14). Banner verde deve mostrar `"v0.2.3.14"` (NÃO `"versão 77"`). Se `info.availableVersion` vier `"77"` stringified do Play Core: regex semver descarta → cai pra `dbInfo?.name = "0.2.3.14"` da tabela `app_releases`. Fallback `versão 77` só se DB query falhar E plugin não retornar semver.
+- `[ ]` **#0011 modal mandatory race real** — fresh install device antes do `useEffect getRealVersion` popular `currentVersionCode`. Se algum release intermediário marcado `is_mandatory=true`, modal deve renderizar. v0.2.3.14 = `false`, então sem cenário ativo agora — confirmar pela primeira release pós-v0.2.3.14 que marcar mandatory.
+- `[ ]` **#0009 share error device** — refresh tokens revogados (esperar ~9-12h cycle ou forçar via Supabase admin) + reload PatientDetail compartilhado em S25 Ultra → SharePatientSheet deve mostrar mensagem vermelha + botão "Tentar novamente" (não "Carregando..." infinito).
+- `[ ]` **Egress Supabase 24-48h pós ship v0.2.3.14** — observar painel API Gateway. Query mandatory roda sempre agora (era condicional). Impacto esperado: +1 query/sessão `app_releases` ~200B. Negligível.
+
+**Status v0.2.3.12 (movido pra histórico):** já transitado por release v0.2.3.13. Items pendentes integrados a #300 STATE.md.
+
+---
+
+## 📦 Release anterior — v0.2.3.12 EM CURSO (vc 75, aguardando autorização AAB Passo 10.5)
 
 **Status:** branch `release/v0.2.3.12`. 7 commits. 7 fixes runtime (PTR, SOS, throttle revert + NB-4 persistImmediate, useUpdateUserPrefs timeout, unsharePatient timeout, FCM await registration, useTreatments refetch).
 

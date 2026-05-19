@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listPatientShares, listReceivedShares, sharePatientByEmail, unsharePatient } from '../services/sharesService'
 
+// v0.2.3.14 #0009 — skip retry em auth errors (JWT expired). Retry default 3×
+// não recupera 401 — token continua expirado. Combinar com UI error state
+// (SharePatientSheet) evita "Carregando..." infinito quando refresh tokens revogados.
+function isAuthError(err) {
+  const msg = String(err?.message || '')
+  const code = String(err?.code || err?.status || '')
+  return msg.includes('JWT') || msg.includes('jwt')
+    || code === '401' || code === 'PGRST301' || code === 'PGRST302'
+}
+
 export function usePatientShares(patientId) {
   return useQuery({
     queryKey: ['patient_shares', patientId],
     queryFn: () => listPatientShares(patientId),
-    enabled: !!patientId
+    enabled: !!patientId,
+    retry: (failureCount, error) => !isAuthError(error) && failureCount < 2,
   })
 }
 
@@ -29,6 +40,7 @@ export function useReceivedShares() {
     queryKey: ['received_shares'],
     queryFn: listReceivedShares,
     staleTime: 5 * 60_000,
+    retry: (failureCount, error) => !isAuthError(error) && failureCount < 2,
   })
 }
 

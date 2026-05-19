@@ -1,5 +1,5 @@
-v0.2.3.13 — Aviso de segurança para pacientes compartilhados
+v0.2.3.14 — Banner de nova versão correto + carregamento confiável da lista de cuidadores
 
-• Alarme confere antes de tocar se outro cuidador já registrou a dose, evitando dose duplicada
-• Sem internet ou servidor lento: o alarme mostra um aviso destacado pedindo pra confirmar antes de medicar
-• Pacientes não compartilhados continuam exatamente como antes
+• Aviso "Nova versão disponível" volta a mostrar o nome correto (ex: "0.2.3.14") em vez do código interno
+• Modal de atualização obrigatória passa a abrir mesmo quando o app demora pra detectar a versão atual
+• Tela "Compartilhar paciente" mostra mensagem de erro com botão "Tentar novamente" quando a sessão expira, no lugar do "Carregando..." infinito
