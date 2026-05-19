@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
+import * as Sentry from '@sentry/react'
 import { supabase, hasSupabase } from '../services/supabase'
 
 /* eslint-disable no-undef */
@@ -91,6 +92,18 @@ async function fetchReleaseFromDb(currentVc, availableVc) {
     }
   } catch (e) {
     console.warn('[useAppUpdate #299] DB fetch failed:', e?.message)
+    // v0.2.3.14 — breadcrumb pra debug futuro de race conditions DB ↔ Play Core.
+    Sentry.addBreadcrumb({
+      category: 'app-update',
+      level: 'warning',
+      message: 'fetchReleaseFromDb failed',
+      data: {
+        currentVc,
+        availableVc,
+        hadCachedName: !!cachedName,
+        error: e?.message?.slice(0, 120),
+      },
+    })
     return cachedName ? { name: cachedName, mandatory: false, whatsnew: null } : null
   }
 }
@@ -164,10 +177,26 @@ export function useAppUpdate() {
         // imediatamente pós-publish. `??` só pula null/undefined → `"77"` truthy
         // curtocircuitava DB lookup → banner mostrava "versão 77" em vez de "0.2.3.14".
         const looksLikeSemver = (v) => typeof v === 'string' && /\d+\.\d+/.test(v)
-        const version =
-          dbInfo?.name                                                                  // 1º DB autoritativa
-          ?? (looksLikeSemver(info.availableVersion) ? info.availableVersion : null)    // 2º Play Core SE semver real
-          ?? `versão ${availableVc}`                                                    // 3º fallback final
+        const playCoreSemver = looksLikeSemver(info.availableVersion) ? info.availableVersion : null
+        let versionSource = 'db'
+        let version = dbInfo?.name
+        if (!version && playCoreSemver) { version = playCoreSemver; versionSource = 'play-core' }
+        if (!version) { version = `versão ${availableVc}`; versionSource = 'fallback' }
+
+        // v0.2.3.14 — breadcrumb sempre que detecta update; facilita debug futuro de #0010/#0011-like.
+        Sentry.addBreadcrumb({
+          category: 'app-update',
+          level: versionSource === 'fallback' ? 'warning' : 'info',
+          message: `update available (source=${versionSource})`,
+          data: {
+            currentVc,
+            availableVc,
+            playCoreVersionRaw: info.availableVersion ?? null,
+            dbName: dbInfo?.name ?? null,
+            mandatory: dbInfo?.mandatory ?? false,
+            versionFinal: version,
+          },
+        })
 
         setLatest({
           version,
@@ -175,6 +204,9 @@ export function useAppUpdate() {
           mandatory: dbInfo?.mandatory || false,
           whatsnew: dbInfo?.whatsnew || null,
           source: 'play',
+          // v0.2.3.14 #C — sinaliza fallback pra UpdateBanner sanitizar copy
+          // (sem "v" prefix no banner, sem chip "Versão X disponível" no modal).
+          isVersionFallback: versionSource === 'fallback',
         })
       } else {
         setLatest(null)
