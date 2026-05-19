@@ -10,18 +10,23 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.3.14` (EM CURSO) |
+| **Versão** | `v0.2.3.14` |
 | **versionCode** | `77` |
-| **Branch ativa** | `release/v0.2.3.14` |
-| **Último tag** | `v0.2.3.13` · merge `3e27811` (anterior) |
-| **Ship date** | TBD (pendente validação + Passo 10.5 STOP) |
-| **Play Console** | TBD (pré-ship) |
-| **Vercel prod** | TBD (pré-ship) — anterior `dosymed.app` v0.2.3.13 confirmado 2026-05-18T23:09Z |
+| **Branch ativa** | `master` (release/v0.2.3.14 mergeada) |
+| **Último tag** | `v0.2.3.14` · merge pendente (pós-Vercel) — anterior `v0.2.3.13` `3e27811` |
+| **Ship date** | 2026-05-19 |
+| **Play Console** | Internal Testing vc 77 — publicado 2026-05-19 10:45 BRT |
+| **Vercel prod** | TBD pós-merge master — anterior `dosymed.app` v0.2.3.13 confirmado 2026-05-18T23:09Z |
 
-**Commits release/v0.2.3.14:**
+**Commits release/v0.2.3.14 (8):**
 - `8daa0af` chore: abre release/v0.2.3.14 — bump vc 76→77
 - `2bd4139` fix(useAppUpdate): #0010 + #0011 banner update version_name + mandatory
 - `8fc5f03` fix(useShares): #0009 401 JWT expiry error UI + skip retry
+- `1437d1f` docs(release v0.2.3.14): sync STATE/ROADMAP/CHECKLIST/PROJETO/whatsnew
+- `347666b` docs(validar): release/v0.2.3.14 §11a web validation 3 fixes OK
+- `077e796` feat(useAppUpdate): Sentry breadcrumbs + sanitização copy fallback
+- `c839d5f` chore(useAppUpdate): debug toggle __dosyForceFallback pra testar copy
+- `16ab6c6` docs(release v0.2.3.14): sync empilhamentos C (Sentry+copy+debug toggle)
 
 ---
 

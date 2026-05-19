@@ -20,9 +20,9 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.14 EM CURSO (vc 77, aguardando autorização AAB Passo 10.5)
+## 🆕 Release atual — v0.2.3.14 SHIPPED 2026-05-19 (vc 77, Play Console 10:45 BRT)
 
-**Status:** branch `release/v0.2.3.14`. 4 commits (`8daa0af` bump + `2bd4139` useAppUpdate.js + `8fc5f03` useShares.js+SharePatientSheet.jsx + `1437d1f` docs). 3 fixes P2 user-reported bugs banner update + share error UI.
+**Status:** master @ v0.2.3.14. 8 commits release. 3 fixes P2 user-reported bugs banner update + share error UI + empilhamento C debugability (Sentry breadcrumbs + copy fallback + debug toggle).
 
 **Validações autonomous COMPLETAS (§11a web Chrome MCP, localhost:4173 preview prod, teste-plus@teste.com):**
 
