@@ -565,9 +565,9 @@ type DoseCacheEntry = {
 - ✅ Economia mensurada: ~500-800 LOC removidos.
 - ✅ Validação visual em device físico — telas afetadas (Dashboard, PatientDetail, DoseHistory, Reports, Analytics, TreatmentList, TreatmentForm, SOS) iguais ou melhores que antes.
 
-### Fase 5 — Performance e instrumentação (2 semanas)
+### Fase 5 — Performance e instrumentação (3 semanas)
 
-**Goal:** app comprovadamente leve. Instrumentação suficiente pra diagnosticar em produção sem repro.
+**Goal:** app comprovadamente leve. Instrumentação suficiente pra diagnosticar em produção sem repro. Eliminar overhead de queries que não escalam com volume real do user.
 
 **Releases alvo:** `v0.2.8.0`. Após esta fase, candidato a Closed Testing público no Dosy v2.
 
@@ -583,12 +583,22 @@ type DoseCacheEntry = {
    - `/perf` — Web Vitals percentis por versão.
 7. **Verificação UI real** (Chrome MCP) — em conta `teste-plus@teste.com`, executar 30 ações de marcação em 60 segundos, monitorar console errors, network requests, INP.
 
+8. **Dashboard query optimization (banner "Sincronizando dados..." em conta de volume real)** — bloco novo descoberto durante validação Fase 1 em device físico do user (2026-05-20). Diagnóstico: a conta pessoal do owner tem 2.421 doses no histórico (2.115 dentro da janela default do Dashboard) + Analytics dispara 2 queries paralelas (current + previous period) cada uma podendo paginar até 5.000 rows. Em rede lenta isso passa de 8s → trigger do `isStaleSync` em [`src/pages/Dashboard.jsx:95`](src/pages/Dashboard.jsx) → banner aparece. Não é bug; é sintoma estrutural. Três sub-tarefas:
+
+   **8.1. Reduzir janela default do Dashboard** — `applyDefaultRange` em [`src/services/dashboardService.js:8-9`](src/services/dashboardService.js) hoje é `DEFAULT_RANGE_PAST_DAYS = 30` + `DEFAULT_RANGE_FUTURE_DAYS = 60` (90 dias, 2.115 rows na conta real). Trocar para `-7d / +14d` (21 dias, estimado ~120 rows). Dashboard renderiza só doses do filtro inline (12h/24h/48h/7d/10d) — manter janela maior que o filtro máximo (10d) é desperdício. Janelas históricas continuam via DoseHistory, Reports, Analytics (que passam range custom explícito). Mesma mudança aplicada em `dosesService.js:52-53` para alinhar.
+
+   **8.2. Esconder banner durante mount inicial** — [`Dashboard.jsx:95`](src/pages/Dashboard.jsx) usa `dataUpdatedAt` do TanStack, que vem hidratado da sessão anterior (PersistQueryClient 24h). Resultado: na primeira reabertura do app após >8s sem usar, banner aparece falsamente porque `dataUpdatedAt` é do dia anterior. Fix: guard `isStaleSync` com `sessionMountedAt` (ref local na primeira render bem-sucedida da sessão) — só ativar banner se já houve pelo menos 1 fetch bem-sucedido nesta sessão (não usar timestamp persistido cross-session). Mantém o uso legítimo (refetch após reabrir tela com dados frescos no cache).
+
+   **8.3. Investigar e unificar `useDoses` paralelos não-Dashboard** — em [`src/pages/Analytics.jsx:62-67`](src/pages/Analytics.jsx) o componente chama `useDoses` 2× (current period + previous period pra comparativo trend). Cada query pode paginar até 5×1000 rows. Em refresh com período 30d, são 60 dias de dados em duas chamadas paralelas — frequente trigger de >8s. Opções (decidir na fase): (a) criar RPC nova `medcontrol.get_analytics_payload(p_from, p_to, p_prev_from, p_prev_to)` que retorna ambos períodos em 1 round-trip; (b) `useDoses` ganha opção `compareToPeriod` que internamente combina; (c) carregar `prevDoses` lazy (só quando user expande comparativo). Auditar também outros callers de `useDoses` com range custom em telas montadas no mesmo session (cache stale fica ativo se TanStack mantém observers).
+
 **DoD:**
 
 - ✅ Bundle inicial < 600 KB gzipped (hoje provavelmente 800-900 KB).
 - ✅ INP p75 < 200 ms em device baixo-end (Moto E ou similar).
 - ✅ Marcar 30 doses em 60 s sem freeze visível.
 - ✅ Sync error rate < 0.5% em PostHog.
+- ✅ **Banner "Sincronizando dados..." não aparece em conta com 2.000+ doses em WiFi normal.** Validar com a conta pessoal do owner (sem mutar dados — apenas pull-to-refresh + observação) e em conta `teste-plus` com batch de 1.500 doses históricas inseridas via SQL para repro.
+- ✅ Bytes/refresh do Dashboard caem >50% (medir via Sentry breadcrumb HTTP).
 
 ---
 
@@ -610,6 +620,8 @@ type DoseCacheEntry = {
 | Bundle size inicial gzipped | ~800-900 KB (estimado) | < 600 KB |
 | INP p75 device baixo-end | desconhecido (sem instrumentação) | < 200 ms |
 | Sync error rate (mutations) | desconhecido | < 0.5% |
+| Bytes transferidos por refresh Dashboard (conta com 2k+ doses) | ~3 MB (3.000 rows paginadas) | < 500 KB (janela −7d/+14d) |
+| Banner "Sincronizando dados..." em uso normal | aparece em conta volumosa após pull-to-refresh | nunca aparece em rede normal |
 
 ---
 
@@ -793,12 +805,17 @@ type DoseCacheEntry = {
 **Criar:**
 
 - `src/perf/webVitals.js` — Web Vitals → PostHog.
+- `supabase/migrations/YYYYMMDD_rpc_get_analytics_payload.sql` — RPC nova consolidando current + previous period (sub-tarefa 8.3, opção a).
 
 **Modificar:**
 
 - `src/App.jsx` — `React.lazy` em rotas pesadas.
 - `vite.config.js` — bundle splitting otimizado.
 - `src/components/DoseCard.jsx` — `React.memo` confirmado.
+- `src/services/dashboardService.js` — `DEFAULT_RANGE_PAST_DAYS` 30→7, `DEFAULT_RANGE_FUTURE_DAYS` 60→14 (sub-tarefa 8.1).
+- `src/services/dosesService.js` — `DEFAULT_RANGE_PAST_DAYS` 30→7, `DEFAULT_RANGE_FUTURE_DAYS` 60→14 (alinha com Dashboard; callers de janelas históricas — DoseHistory, Reports, Analytics — passam range custom explícito).
+- `src/pages/Dashboard.jsx` — guard `isStaleSync` com `sessionMountedAt` (sub-tarefa 8.2). Banner só ativa após primeiro fetch bem-sucedido da sessão atual.
+- `src/pages/Analytics.jsx` — substituir 2 `useDoses` paralelos por chamada única a `get_analytics_payload` RPC, ou lazy-load `prevDoses` (sub-tarefa 8.3).
 - `admin.dosymed.app` (repo separado) — páginas `/sync-health`, `/perf`.
 
 ---
@@ -1022,5 +1039,6 @@ Diagnóstico: surfaces **bem padronizadas**. Única simplificação útil é Dos
 
 ## Histórico
 
+- 2026-05-20: Fase 5 expandida com sub-tarefa 8 ("Dashboard query optimization") em 3 itens após diagnóstico em device físico do user. Sintoma: banner "Sincronizando dados... (mostrando última versão conhecida)" aparecendo no Dashboard em uso real. Investigação via `adb logcat` mostrou que: (a) conta pessoal tem 2.421 doses (2.115 dentro da janela default −30d/+60d) e Dashboard pagina em 3×1000 rows; (b) Analytics dispara 2 `useDoses` paralelos (current + previous period); (c) Lógica de `isStaleSync` em `Dashboard.jsx:95` ativa quando `isFetching=true` e `dataUpdatedAt` está entre 8s e 60s atrás — em rede lenta com volume real isso vira hit frequente. Não é regressão da Fase 1 (RealtimeGate/versioned cache não afetam tempo de fetch); é overhead estrutural. 3 sub-tarefas adicionadas: reduzir janela Dashboard −30/+60 → −7/+14 (8.1), guard `isStaleSync` com `sessionMountedAt` para não usar timestamp persistido cross-session (8.2), unificar/lazy-load `useDoses` paralelos em Analytics via RPC nova ou opt-in (8.3). DoD inclui "banner não aparece em conta com 2.000+ doses em rede normal" e "bytes/refresh Dashboard caem >50%". Fase 5 duração 2 → 3 semanas. Métricas e apêndice de arquivos §8 atualizados.
 - 2026-05-19 (segunda passada): §11 "Inventário de componentes — oportunidades de unificação" adicionada após pergunta do user sobre componentização (card de dose / filtros reutilizáveis). Investigação dedicada por Explore agent cobriu Dashboard, Patients, PatientDetail, PatientForm, TreatmentForm, TreatmentList, DoseHistory, SOS, Analytics, Reports, Settings, More, Admin, FAQ, Login + `src/components/` inteiro. Conclusão: base de componentes já sólida (PatientPicker, MedNameInput, ConfirmDialog, primitivas Card/Button/Sheet/Modal reutilizadas em 4-7 páginas cada). 10 oportunidades concretas de unificação identificadas (EmptyState, DoseList, FilterPanel schema-driven, DateRangeChips, StatGrid, DoseSheet consolidando DoseModal+MultiDoseModal, FormRow, TreatmentCard, TodayDosesStat, MedicationHistoryGrid) — ~1.300 LOC economizados, 3-4 semanas. Fase 4 do plano principal expandida pra incluir tudo. Sumário executivo, métricas e apêndice §8 atualizados.
 - 2026-05-19: Versão inicial. Investigação feita por 4 agents Explore em paralelo cobrindo (a) fluxo de marcação de dose, (b) reschedule + sync resiliente, (c) duplicidades + sources of truth, (d) banco + Edge + Android. Cruzamento com `BUGS.md`, `STATE.md`, `APP.md`, `PROJETO.md`, PRD do Dosy, Personas do Dosy. Base: `master @ v0.2.3.14` (vc 77).
