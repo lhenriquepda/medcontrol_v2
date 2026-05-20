@@ -40,7 +40,26 @@
 
 **Upload AAB Play Console MANUAL:**
 
-- `[ ]` **Upload AAB v0.2.3.17 (recomendado — acumula tudo)** — `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (47MB, vc 80 vN 0.2.3.17). **Pular v0.2.3.15 e v0.2.3.16** — esta release acumula TODAS as fases entregues (Fase 1 sync + Fase 2 ACK/SNOOZE/thread-safety + Fase 4 componentes + Fase 5.8 dashboard opt + Dashboard cancelled hidden). Mesmo fluxo Play Console. Após publicar:
+- `[ ]` **Upload AAB v0.2.3.17 (recomendado — acumula tudo)** — `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (47MB, vc 80 vN 0.2.3.17). **Pular v0.2.3.15 e v0.2.3.16** — esta release acumula TODAS as fases entregues (Fase 1 sync + Fase 2 ACK/SNOOZE/thread-safety + Fase 4 componentes+6 adoções + Fase 5.8 dashboard opt + Dashboard cancelled hidden).
+
+  **CI Workflow `Android Release` resolvido (parcial — 3 attempts hoje):**
+  - 1ª attempt: `signReleaseBundle FAILED — Tag number over 30 is not supported` (keystore corrupto).
+  - 2ª attempt (após `gh secret set KEYSTORE_BASE64`): `signReleaseBundle FAILED — keystore password was incorrect`.
+  - 3ª attempt (após `gh secret set KEYSTORE_PASSWORD/KEY_PASSWORD/KEY_ALIAS`): **BUILD SIGNED OK ✅**, mas `Upload to Play Store: Unknown error occurred`. Causa: secret `PLAY_SERVICE_ACCOUNT_JSON` AUSENTE no GitHub (verificado via `gh secret list`).
+
+  **Pra fechar o upload autônomo via GitHub Actions** (próxima vez):
+  1. Criar service account Google Cloud em https://console.cloud.google.com/iam-admin/serviceaccounts (associado ao projeto que está vinculado ao Play Console — Dosy Med ID 6887515170724268248)
+  2. Conceder permissão "Service Account User" + criar JSON key
+  3. No Play Console: Setup → API access → Vincular service account
+  4. `gh secret set PLAY_SERVICE_ACCOUNT_JSON --repo lhenriquepda/medcontrol_v2 < service-account.json`
+  5. Re-disparar: `gh workflow run "Android Release" --ref release/v0.2.3.17 -f track=internal`
+
+  **Upload manual alternativo** (~5 min) se preferir não criar service account agora:
+  1. https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/internal-testing
+  2. Criar nova versão → Enviar AAB `app-release.aab` do path acima
+  3. Colar release notes de `docs/play-store/whatsnew/whatsnew-pt-BR` (versão v0.2.3.17)
+  4. Próximo → Salvar e publicar
+  5. SQL:
   ```sql
   INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew)
   VALUES (80, '0.2.3.17', false, $$<copiar de docs/play-store/whatsnew/whatsnew-pt-BR>$$);
