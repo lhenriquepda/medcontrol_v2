@@ -7,7 +7,7 @@ import AdBanner from '../components/AdBanner'
 import SharePatientSheet from '../components/SharePatientSheet'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
-import { Avatar, Card, StatusPill, SectionTitle } from '../components/dosy'
+import { Avatar, Card, StatusPill, SectionTitle, EmptyState } from '../components/dosy'
 import { MiniStat } from '../components/dosy/MiniStat'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatient } from '../hooks/usePatients'
@@ -567,13 +567,12 @@ function TreatmentSection({ title, treatments, collapsed, onToggle, actionRight,
 
       {(!isCollapsible || !collapsed) && (
         count === 0 ? (
-          <Card padding={20} style={{
-            textAlign: 'center', color: 'var(--dosy-fg-tertiary)',
-            fontSize: 13.5, fontWeight: 500,
-          }}>
-            <Pill size={28} strokeWidth={1.5} style={{ margin: '0 auto 8px', display: 'block' }}/>
-            {emptyLabel}
-          </Card>
+          // Refactor Fase 4 (v0.2.3.17) — EmptyState compact substitui Card inline.
+          <EmptyState
+            icon={<Pill size={24} strokeWidth={1.5}/>}
+            title={emptyLabel}
+            compact
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {treatments.map((t) => (
