@@ -18,9 +18,19 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
 
   // 'pending' | 'done' | 'skipped' | 'ignored'
   const [states, setStates] = useState({})
+  // Refactor Fase 1 (Refactor_Full.md §4.2) — pendingDoseId é per-dose.
+  // Antes: `disabled={confirmMut.isPending || skipMut.isPending}` em TODAS as
+  // doses → quando user toca "Tomada" numa, os botões das outras 2-3 doses
+  // do modal ficavam disabled junto. Sintoma reportado em prod: "botão fica
+  // preso, preciso fechar/abrir o app". Agora cada dose tem seu próprio busy
+  // state; mutation em curso na dose X não bloqueia botões da dose Y.
+  const [pendingDoseId, setPendingDoseId] = useState(null)
 
   useEffect(() => {
-    if (open) setStates({})
+    if (open) {
+      setStates({})
+      setPendingDoseId(null)
+    }
   }, [open])
 
   useEffect(() => {
@@ -50,7 +60,9 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
   }
 
   async function handleConfirm(dose) {
+    // Otimista imediato — UI já mostra status alterado, fila avança.
     setStates((s) => ({ ...s, [dose.id]: 'done' }))
+    setPendingDoseId(dose.id)
     try {
       await confirmMut.mutateAsync({ id: dose.id, actualTime: new Date().toISOString(), observation: '' })
       toast.show({
@@ -64,11 +76,17 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
     } catch (e) {
       setStates((s) => ({ ...s, [dose.id]: undefined }))
       toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
+    } finally {
+      // Refactor Fase 1 — limpa o flag SÓ depois da mutation resolver,
+      // garantindo que outros toques na mesma dose enquanto in-flight
+      // não disparem dupla. Limpa só se ainda for "minha" mutation.
+      setPendingDoseId((id) => (id === dose.id ? null : id))
     }
   }
 
   async function handleSkip(dose) {
     setStates((s) => ({ ...s, [dose.id]: 'skipped' }))
+    setPendingDoseId(dose.id)
     try {
       await skipMut.mutateAsync({ id: dose.id, observation: '' })
       toast.show({
@@ -82,6 +100,8 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
     } catch (e) {
       setStates((s) => ({ ...s, [dose.id]: undefined }))
       toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
+    } finally {
+      setPendingDoseId((id) => (id === dose.id ? null : id))
     }
   }
 
@@ -186,12 +206,14 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
                   display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
                   gap: 8, marginTop: 12,
                 }}>
+                  {/* Refactor Fase 1 — disabled PER-DOSE. Botões de OUTRAS
+                      doses continuam interativos enquanto uma está em flight. */}
                   <Button
                     kind="ghost"
                     size="sm"
                     icon={XIcon}
                     onClick={() => handleIgnore(dose)}
-                    disabled={confirmMut.isPending || skipMut.isPending}
+                    disabled={pendingDoseId === dose.id}
                   >
                     Ignorar
                   </Button>
@@ -200,7 +222,8 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
                     size="sm"
                     icon={SkipForward}
                     onClick={() => handleSkip(dose)}
-                    disabled={confirmMut.isPending || skipMut.isPending}
+                    disabled={pendingDoseId === dose.id}
+                    aria-busy={pendingDoseId === dose.id}
                     style={{ background: '#FCEACB', color: '#C5841A' }}
                   >
                     Pular
@@ -210,7 +233,8 @@ export default function MultiDoseModal({ open, onClose, doses, patients }) {
                     size="sm"
                     icon={Check}
                     onClick={() => handleConfirm(dose)}
-                    disabled={confirmMut.isPending || skipMut.isPending}
+                    disabled={pendingDoseId === dose.id}
+                    aria-busy={pendingDoseId === dose.id}
                   >
                     Tomada
                   </Button>

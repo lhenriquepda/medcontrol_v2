@@ -245,6 +245,33 @@ export default function Dashboard() {
   // pra não travar Promise.all se uma query falhar/timeout. Hook
   // usePullToRefresh tem timeout 20s como fallback final (Regra 16).
   const handleRefresh = async () => {
+    // Refactor Fase 1 (Refactor_Full.md §5) — barrier de mutation em flight.
+    // Pull-to-refresh durante mutation otimista (confirmDose em curso) podia
+    // disparar refetch que retornava estado pré-commit do server → optimistic
+    // sobrescrito → "status volta do nada". Espera mutations de doses
+    // drenarem (até ~2s = debounce 1500ms + RPC normal) antes do refetch.
+    const pendingDoseMuts = qc.getMutationCache().findAll({
+      predicate: (m) => {
+        const key = m.options?.mutationKey?.[0]
+        return ['confirmDose', 'skipDose', 'undoDose', 'registerSos'].includes(key)
+            && m.state.status === 'pending'
+      }
+    })
+    if (pendingDoseMuts.length > 0) {
+      await Promise.race([
+        Promise.allSettled(pendingDoseMuts.map((m) =>
+          new Promise((resolve) => {
+            const unsub = qc.getMutationCache().subscribe((evt) => {
+              if (evt?.mutation === m && evt.type === 'updated' &&
+                  ['success', 'error'].includes(m.state.status)) {
+                unsub(); resolve()
+              }
+            })
+          })
+        )),
+        new Promise((r) => setTimeout(r, 2000))
+      ])
+    }
     const safeRefetch = (queryKey) =>
       qc.refetchQueries({ queryKey })
         .catch(err => console.warn(`[refresh] ${queryKey[0]} err:`, err?.message))
