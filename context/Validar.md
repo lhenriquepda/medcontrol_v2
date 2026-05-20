@@ -40,7 +40,11 @@
 
 **Upload AAB Play Console MANUAL:**
 
-- `[ ]` **Upload AAB v0.2.3.17** — `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (46MB, vc 80 vN 0.2.3.17). Mesmo fluxo das anteriores. Após publicar: `INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew) VALUES (80, '0.2.3.17', false, $$<whatsnew>$$)`.
+- `[ ]` **Upload AAB v0.2.3.17 (recomendado — acumula tudo)** — `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (47MB, vc 80 vN 0.2.3.17). **Pular v0.2.3.15 e v0.2.3.16** — esta release acumula TODAS as fases entregues (Fase 1 sync + Fase 2 ACK/SNOOZE/thread-safety + Fase 4 componentes + Fase 5.8 dashboard opt + Dashboard cancelled hidden). Mesmo fluxo Play Console. Após publicar:
+  ```sql
+  INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew)
+  VALUES (80, '0.2.3.17', false, $$<copiar de docs/play-store/whatsnew/whatsnew-pt-BR>$$);
+  ```
 
 ---
 
