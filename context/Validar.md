@@ -20,7 +20,37 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.14 SHIPPED 2026-05-19 (vc 77, Play Console 10:45 BRT)
+## 🆕 Release atual — v0.2.3.15 EM CURSO (vc 78, refactor Fase 1)
+
+**Status:** branch `release/v0.2.3.15`. 3 commits: `15220da` refactor Fase 1 + `9337ec5` bump vc 77→78 + `50d88e8` sync 5 docs. Aguarda Passo 10.5 STOP pré-AAB.
+
+**Validações autonomous COMPLETAS (§11b emulator Pixel 8 + Pixel 9 Pro com adb input swipe + Supabase MCP):**
+
+- `[x]` **Marcação otimista via swipe right** — emulator-5554 (teste-plus@teste.com): 5 doses pending inseridas via Supabase MCP em "Paciente Share LH", 3 marcadas como Tomada via swipe right em sequência rápida (~6s entre swipes). Hero card transitou `0/5 → 1/5 → 2/5 → 3/5`; adesão `40% → 60% → 80% → 100%`; atrasadas `3 → 2 → 1 → 0`. Toast verde "Desfazer" apareceu em cada marcação.
+- `[x]` **Status persiste sem rollback (RC-1 morto)** — após as 3 marcações, esperei 25 segundos (≥10 ciclos de potencial Realtime invalidate + window refocus). Status manteve `tomada` nas 3 doses. RealtimeGate (markInFlight em onMutate + isInFlight check no debouncedInvalidate) + versioned cache (`_localActedAt` stamp) impedem race que sobrescrevia optimistic.
+- `[x]` **Cross-device sync via paciente compartilhado** — emulator-5556 (teste-free@teste.com) logado em paralelo no mesmo paciente "Paciente Share LH". Dashboard mostrou as 3 doses marcadas pelo teste-plus (`02:56, 03:11, 03:26 tomada`). DoseModal aberto via tap, botão Tomada na dose `03:41` → 4ª dose marcada. Total 4/5 tomadas. Sync funcionou em ambas direções sem flicker.
+- `[x]` **DB consistency** — Supabase MCP `SELECT status FROM medcontrol.doses` confirmou 3 doses `status=done` pós-marcações + RPCs `confirm_dose` commitaram corretamente (`actualTime` setado).
+- `[x]` **MultiDoseModal disabled per-dose (não coletivo)** — code review: `src/components/MultiDoseModal.jsx:194,203,213` agora usa `disabled={pendingDoseId === dose.id}` em vez de `disabled={confirmMut.isPending || skipMut.isPending}`. Marcar 1 dose não trava as outras na fila.
+- `[x]` **Build + lint** — `npm run build` OK 22.16s. `npm run lint` 0 erros, 83 warnings (baseline master, 0 novos introduzidos pela Fase 1). Gradle `assembleDebug` OK 41s, APK 45.4MB.
+- `[x]` **Auditoria egress** — Gate descarta Realtime payloads enquanto mutation em flight → reduz refetches redundantes. Realtime debounce 1s→2.5s evita storm de invalidates em sequência de mutações rápidas. Estimado -15% a -25% egress em casos de marcação intensa (multi-cuidador no mesmo paciente). Tabela completa em `context/CHECKLIST.md #release-v0.2.3.15`.
+
+**Validações §11a web (PULADO — justificativa Regra 16 RULES.md):**
+
+- `[skip]` **Web Chrome MCP** — Fase 1 toca swipe gestures + RealtimeGate que interage com Capacitor Network bridge + plugin AlarmScheduler (cancelAlarms via mutation onSettled). Regra 16 manda emulator OBRIGATÓRIO PRIMEIRO quando path nativo toca. §11b autônomo cobriu o fluxo principal end-to-end com touch real (adb input swipe) — mais representativo que CDP eval em web.
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda@gmail.com):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
+
+- `[ ]` **Fluxo de marcação rápida sem flicker** — em S25 Ultra com conta pessoal real, marcar 3-5 doses em sequência via swipe right (gesture nativo do device). **Esperar:** status atualiza imediato, NÃO volta pra `pending/overdue` em nenhum momento, mesmo após pull-to-refresh / window focus / Realtime payload de outro device. **Se falhar:** capturar logcat filtrando `Capacitor|Sentry|breadcrumb|fetch` durante o cenário; verificar se gate logou `skip invalidate` em DEV (não loga em PROD).
+- `[ ]` **MultiDoseModal sem fila travada** — disparar push agrupado de 3+ doses no mesmo minuto (cron `dose-fire-time-notifier` 1min cobre, ou criar 3 doses futuras com mesmo `scheduledAt` via Supabase MCP). Tap na notificação → MultiDoseModal abre com 3 doses → marcar a primeira como Tomada. **Esperar:** botões da 1ª dose viram busy (spinner), botões das 2ª e 3ª doses CONTINUAM clicáveis (não disabled). Marcar a 2ª enquanto 1ª está sincronizando → 2ª também processa OK.
+- `[ ]` **Pull-to-refresh durante mutation em flight** — marcar dose como Tomada, IMEDIATAMENTE puxar Dashboard pra baixo. **Esperar:** PTR overlay aparece mas refetch aguarda até 2s pela mutation drenar; após mutation drenar, refetch executa; status final = `done` (não volta pra `overdue`).
+- `[ ]` **Banner update visível** — atualizar device de vc 77 (v0.2.3.14) → vc 78 (v0.2.3.15). Banner verde deve mostrar `"v0.2.3.15 · toque para recarregar"`. Whatsnew dentro do app mostra os 3 bullets pt-BR.
+- `[ ]` **Egress Supabase 24-48h pós ship** — observar painel API Gateway. Mudança esperada: -15% a -25% requests em sessões com marcações intensas (gate descarta invalidates redundantes). Sem aumento em sessões idle.
+
+---
+
+## 📦 Release anterior — v0.2.3.14 SHIPPED 2026-05-19 (vc 77, Play Console 10:45 BRT)
 
 **Status:** master @ v0.2.3.14. 8 commits release. 3 fixes P2 user-reported bugs banner update + share error UI + empilhamento C debugability (Sentry breadcrumbs + copy fallback + debug toggle).
 
