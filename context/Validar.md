@@ -33,6 +33,7 @@
 - `[x]` **MultiDoseModal disabled per-dose (não coletivo)** — code review: `src/components/MultiDoseModal.jsx:194,203,213` agora usa `disabled={pendingDoseId === dose.id}` em vez de `disabled={confirmMut.isPending || skipMut.isPending}`. Marcar 1 dose não trava as outras na fila.
 - `[x]` **Build + lint** — `npm run build` OK 22.16s. `npm run lint` 0 erros, 83 warnings (baseline master, 0 novos introduzidos pela Fase 1). Gradle `assembleDebug` OK 41s, APK 45.4MB.
 - `[x]` **Auditoria egress** — Gate descarta Realtime payloads enquanto mutation em flight → reduz refetches redundantes. Realtime debounce 1s→2.5s evita storm de invalidates em sequência de mutações rápidas. Estimado -15% a -25% egress em casos de marcação intensa (multi-cuidador no mesmo paciente). Tabela completa em `context/CHECKLIST.md #release-v0.2.3.15`.
+- `[x]` **Dashboard exclui doses canceladas** — fix adicionado durante validação. User reportou que tratamento cancelado (ex: Allegra 6mg/ml) ainda aparecia no Dashboard como dose "Cancelada", confundindo. Filtro client-side em `src/pages/Dashboard.jsx:96` exclui `status === 'cancelled'`. Validado no device físico S25 Ultra: comparação antes/depois mostrou que `Allegra 6mg/ml 08:00 cancelada` sumiu do feed principal (continua visível em Histórico). Commit `176a4f0`.
 
 **Validações §11a web (PULADO — justificativa Regra 16 RULES.md):**
 

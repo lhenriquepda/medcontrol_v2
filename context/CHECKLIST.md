@@ -21,6 +21,7 @@
   - **`src/components/MultiDoseModal.jsx`** — estado `pendingDoseId` per-dose substitui disabled coletivo. Botões da dose X em busy state (aria-busy + disabled) apenas se `pendingDoseId === X`. Outras doses ficam interativas mesmo durante mutation em flight da primeira.
   - **`src/pages/Dashboard.jsx`** — `handleRefresh` agora aguarda mutations doses drenarem (até 2s) antes de iniciar pull-to-refresh. Sem isso, refetch durante optimistic em curso podia sobrescrever status.
   - **`Refactor_Full.md`** (NOVO na raiz) — plano completo de 5 fases (16 sem.) cobrindo: Fase 1 sync resiliente (esta release), Fase 2 alarmes + plugin Java, Fase 3 single source of truth, Fase 4 componentização (10 oportunidades), Fase 5 performance + Dashboard query optimization.
+  - **`src/pages/Dashboard.jsx:96`** (fix UX user-reported) — `allDosesRaw = (payload?.doses || []).filter((d) => d.status !== 'cancelled')`. Quando user pausa/encerra/exclui tratamento, RPC `cancelFutureDoses` UPDATE doses pending+futuras pra status='cancelled' (migration 20260514001500). Antes: Dashboard renderizava como card "Cancelada" cinza poluindo feed orientado a ação. Agora: cancelled some do Dashboard, continua visível em Histórico/Reports/Análise (audit + denominador adesão fix #0005). Validado device físico — dose Allegra 6mg/ml cancelada sumiu do feed pós-install. Commit `176a4f0`.
 - **Auditoria egress:**
 
   | Risco | Severidade | Mitigação | Decisão |

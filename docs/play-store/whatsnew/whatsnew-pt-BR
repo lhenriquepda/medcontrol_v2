@@ -1,5 +1,6 @@
-v0.2.3.15 — App muito mais ágil pra marcar doses
+v0.2.3.15 — App ágil pra marcar doses + Início mais limpo
 
-• Marcar dose como tomada ou pulada não trava mais: o status atualiza na hora e fica salvo (acabou o "voltou pra atrasada do nada" que dava em conexão fraca).
-• Lista de várias doses (notificação agrupada) não trava mais a fila: marcar uma dose não bloqueia o botão das outras.
-• Puxar pra atualizar agora espera as marcações em andamento terminarem antes de buscar dados novos.
+• Marcar dose como tomada ou pulada não trava mais: o status atualiza na hora e fica salvo (acabou o "voltou pra atrasada do nada" em conexão fraca).
+• Lista de várias doses (notificação agrupada) não trava a fila: marcar uma dose não bloqueia o botão das outras.
+• Puxar pra atualizar espera as marcações em andamento terminarem antes de buscar dados novos.
+• Doses de tratamentos encerrados/cancelados somem do Início (continuam visíveis no Histórico e Relatórios pra auditoria).
