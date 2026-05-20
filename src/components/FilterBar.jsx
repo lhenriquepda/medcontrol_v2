@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Filter, X as XIcon, Clock, AlertTriangle, Check, SkipForward, Calendar, Siren } from 'lucide-react'
-import { Sheet, Button, Chip } from './dosy'
+import { Sheet, Button, Chip, DateRangeChips } from './dosy'
 import PatientPicker from './PatientPicker'
 
 // #137 (release v0.2.0.9 — egress-audit) — removido 'Tudo' (rangeNow('all')
@@ -84,27 +84,18 @@ export default function FilterBar({ filters, setFilters, patients }) {
           display: 'flex', flexDirection: 'column', gap: 8,
         }}
       >
-        {/* Period chips horizontal scroll + Filtros button */}
+        {/* Refactor Fase 4 (v0.2.3.17) — Period chips agora via componente
+            unificado DateRangeChips (substitui map inline de Chip). Mesmo
+            visual + comportamento; centraliza padrão usado em FilterBar,
+            DoseHistory, Reports, Analytics. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div
-            className="dosy-scroll"
-            style={{
-              flex: 1, minWidth: 0,
-              display: 'flex', gap: 6,
-              overflowX: 'auto',
-              padding: 2,
-            }}
-          >
-            {RANGES.map((r) => (
-              <Chip
-                key={r.key}
-                size="sm"
-                active={filters.range === r.key}
-                onClick={() => setFilters((f) => ({ ...f, range: r.key }))}
-              >
-                {r.label}
-              </Chip>
-            ))}
+          <div style={{ flex: 1, minWidth: 0, padding: 2 }}>
+            <DateRangeChips
+              ranges={RANGES}
+              value={filters.range}
+              onChange={(key) => setFilters((f) => ({ ...f, range: key }))}
+              ariaLabel="Selecionar período do Dashboard"
+            />
           </div>
           <button
             type="button"
