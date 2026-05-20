@@ -17,6 +17,7 @@ import { Card, Avatar, StatusPill, Button } from '../components/dosy'
 import PatientAvatar from '../components/PatientAvatar'
 import { HeroGauge } from '../components/dosy/HeroGauge'
 import { MiniStat } from '../components/dosy/MiniStat'
+import StatGrid from '../components/dosy/StatGrid'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
@@ -379,19 +380,27 @@ export default function Dashboard() {
               </div>
             </div>
           </Card>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <MiniStat
-              label="Adesão 7d"
-              value={adherence == null ? '—' : `${adherence}%`}
-              tone="success"
-            />
-            <MiniStat
-              label="Atrasadas"
-              value={overdueNow}
-              unit={overdueNow > 0 ? 'agora' : undefined}
-              tone={overdueNow > 0 ? 'danger' : 'neutral'}
-            />
-          </div>
+          {/* Refactor Fase 4 (v0.2.3.17) — substitui inline grid 2-col MiniStat
+              pelo componente unificado StatGrid. Mesmo visual; consolida padrão
+              repetido em Dashboard, PatientDetail, Analytics. */}
+          <StatGrid
+            columns={2}
+            stats={[
+              {
+                key: 'adherence',
+                label: 'Adesão 7d',
+                value: adherence == null ? '—' : `${adherence}%`,
+                tone: 'success',
+              },
+              {
+                key: 'overdue',
+                label: 'Atrasadas',
+                value: overdueNow,
+                unit: overdueNow > 0 ? 'agora' : undefined,
+                tone: overdueNow > 0 ? 'danger' : 'neutral',
+              },
+            ]}
+          />
         </div>
 
         <AdBanner />

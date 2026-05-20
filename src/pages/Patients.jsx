@@ -6,7 +6,7 @@ import { TIMING, EASE } from '../animations'
 import PaywallModal from '../components/PaywallModal'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
-import { Card, IconButton, Button } from '../components/dosy'
+import { Card, IconButton, Button, EmptyState } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import PatientAvatar from '../components/PatientAvatar'
 import { usePatients } from '../hooks/usePatients'
@@ -70,33 +70,18 @@ export default function Patients() {
         {isLoading ? (
           <SkeletonList count={3} />
         ) : patients.length === 0 ? (
-          <Card padding={28} style={{
-            textAlign: 'center',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-          }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: 18,
-              background: 'var(--dosy-peach-100)',
-              color: 'var(--dosy-primary)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Users size={32} strokeWidth={1.75}/>
-            </div>
-            <h3 style={{
-              fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
-              fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
-              margin: 0,
-            }}>Nenhum paciente cadastrado</h3>
-            <p style={{
-              fontSize: 14, color: 'var(--dosy-fg-secondary)',
-              lineHeight: 1.5, margin: 0,
-            }}>Cadastre a primeira pessoa que você está acompanhando.</p>
-            <Link to="/pacientes/novo" style={{ textDecoration: 'none', marginTop: 6 }}>
-              <Button kind="primary" size="md" icon={Plus}>
-                Adicionar paciente
-              </Button>
-            </Link>
-          </Card>
+          // Refactor Fase 4 (v0.2.3.17) — substitui bloco inline pelo componente
+          // unificado EmptyState. Mesmo visual; mantém icon Users + message customizada.
+          <EmptyState
+            icon={<Users size={28} strokeWidth={1.5}/>}
+            title="Nenhum paciente cadastrado"
+            message="Cadastre a primeira pessoa que você está acompanhando."
+            action={
+              <Link to="/pacientes/novo" style={{ textDecoration: 'none' }}>
+                <Button kind="primary" size="md" icon={Plus}>Adicionar paciente</Button>
+              </Link>
+            }
+          />
         ) : (
           <motion.div
             style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
