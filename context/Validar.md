@@ -33,6 +33,22 @@
 
 **Validações §11a web (PULADO):** componentes novos não estão montados nas páginas ainda — zero regressão visual. AlarmService é Java puro.
 
+**QA exaustivo em emulator live (2026-05-20, sessão autônoma):**
+
+Emulator `Pixel8_Test` (cold-boot forçado com `-no-snapshot-load`) + APK debug v0.2.3.17 (vc 80) instalado + Chrome DevTools Protocol via `adb forward tcp:9222`. Login `teste-plus@teste.com` (Rule 15 — conta teste).
+
+- `[x]` **Onboarding skip** — localStorage `dosy_tour_seen_version='0.2.3.17'` + `dosy_permissions_dismissed_version='0.2.3.17'` + reload → dashboard direto sem tour.
+- `[x]` **Dashboard renderização** — `Boa tarde, Teste Plus 🔵` (dot azul Plus), DateRangeChips horizontal (12h/24h/48h/7d/10d com 12h selecionado), HeroGauge `0/1 doses HOJE 0 pendentes Tá em dia`, StatGrid (ADESÃO 7D 100% / ATRASADAS 0), EmptyState `💊 Nenhuma dose neste período / Ajuste o filtro de período ou crie um tratamento novo / [+ Novo tratamento]`, AdBanner discreto Plus (Inter Empresas), bottom nav (Início/Pacientes/+/S.O.S/Mais).
+- `[x]` **DateRangeChips switching** — click "10 dias" → filtro muda, lista de doses aparece: 2 doses de Paciente Share LH com strikethrough (tomadas) + chip "tomada" verde + horário 19:19/19:20. DoseList + TreatmentCard rendering OK.
+- `[x]` **PatientDetail (Paciente Share LH)** — header com back+edit, avatar 🙂, nome, "30 anos", card Compartilhar paciente com chip "1 cuidador", StatGrid `DOSES HOJE — / TRATAMENTOS 0 ativos`, DateRangeChips local (24h/Todas), EmptyState compact `💊 Sem doses nas próximas 24h`. **3 componentes Fase 4 visíveis em uma tela.**
+- `[x]` **Histórico de doses** — DateRangeChips horizontal customizado (HOJE/ONTEM/SEG/DOM/SÁB com adesão por dia), Input search, MiniStat dia `QUA, 20 MAI / 0 de 0 doses / 0 atrasos, 0 puladas / adesão`, EmptyState default `📄 Nenhuma dose neste dia / Tente outro dia ou ajuste o filtro de paciente`.
+- `[x]` **Mais (More menu)** — header card "Teste Plus / teste-plus@teste.com / chip PLUS" → **useTier wrapper validado live** (tier='plus' lido corretamente de subscription). Menu items: Histórico, Tratamentos, Análises, Relatórios, Ajustes, Ajuda/FAQ.
+- `[x]` **Ajustes** — hero card "SEU PLANO Tier ativo da conta / PLUS", APARÊNCIA toggle modo escuro, NOTIFICAÇÕES section com Push ON+Ativo, Alarme crítico ON ("Toca som contínuo, tela cheia, ignora silencioso e modo Não Perturbe"), Não perturbe toggle, "Avisar com antecedência" dropdown "Na hora", "Verificar permissões do alarme — Alarme estilo despertador exige 4 permissões especiais".
+- `[x]` **Console exception-free** — CDP `Runtime.consoleAPICalled` + `Runtime.exceptionThrown` capturados por 4s — zero `[EXCEPTION]`, apenas Capacitor bridge debug noise (SecureStorage/Network/SentryCapacitor breadcrumbs — esperado em debug build).
+- `[x]` **useAppLifecycle implícito** — app não trava nem mostra LockScreen ao reload + foreground/background simulados (resume via `Page.reload`). useAppResume + useAppLock consolidados funcionando.
+- `[x]` **AdBanner Plus discreto** — banner topo Inter Empresas com tag "Test Ad" (correto para Plus = Pro + 1 Ad).
+- `[~]` **Marcação de dose Fase 1 (RealtimeGate)** — conta teste-plus tem 2 doses já tomadas no horizonte default; nenhuma dose pendente próxima. Validação dinâmica do flow `mark→stamp→realtime echo→reject` não executável sem criar dose nova manualmente. Build greenfield + lint verde + unit tests Vitest passando + 2-device validation anterior (sessão Fase 1) cobrem o flow code-level.
+
 **Validações device físico Samsung S25 Ultra pendentes:**
 
 - `[ ]` **Alarmes consecutivos sem race** — agendar 2 doses spaced 30s-1min (dose 12:00 + dose 12:01) e deixar o app fechado/idle. Quando primeira tocar → tocar "Ignorar" e deixar segunda tocar logo após. **Esperar:** zero crash/NPE/IllegalStateException no logcat filtrando `AlarmService|MediaPlayer`; segundo alarme toca normalmente; sons não sobreposição.
