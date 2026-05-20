@@ -92,7 +92,16 @@ export default function Dashboard() {
   // Quando current queryKey está fetching há >8s + temos placeholderData de OUTRA key,
   // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
   // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
-  const isStaleSync = isFetching && dataUpdatedAt && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
+  //
+  // Refactor Fase 5 sub-tarefa 8.2 (v0.2.3.16) — guard sessionMountedAt.
+  // `dataUpdatedAt` vem do TanStack hidratado da sessão anterior (PersistQueryClient 24h).
+  // Resultado pre-fix: na primeira reabertura do app após >8s sem usar, banner aparecia
+  // falsamente porque `dataUpdatedAt` era do dia anterior. Agora state local marca o
+  // mount da sessão atual; banner só ativa se houve sucesso DEPOIS desse mount.
+  // useState lazy initializer (chamado 1× no mount) — evita acesso a ref durante render.
+  const [sessionMountedAt] = useState(() => Date.now())
+  const hasFreshSuccess = dataUpdatedAt && dataUpdatedAt > sessionMountedAt
+  const isStaleSync = isFetching && hasFreshSuccess && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
   // v0.2.3.15 — exclui doses canceladas do Dashboard.
   // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
   // pending+futuras pra status='cancelled' (preserva histórico mas marca como

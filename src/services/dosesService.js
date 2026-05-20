@@ -49,8 +49,11 @@ function flattenPatientEmbed(rows) {
 // (5+ anos × 4 doses/dia = 7000+ rows × 250 bytes = 1.75 MB / refetch).
 // Caller deve sempre passar from/to explícito quando precisar histórico
 // completo (e.g. Reports com range custom).
-const DEFAULT_RANGE_PAST_DAYS = 30
-const DEFAULT_RANGE_FUTURE_DAYS = 60
+// Refactor Fase 5 sub-tarefa 8.1 — aligna com dashboardService.js. Callers que
+// precisam janela maior (DoseHistory, Reports, Analytics) sempre passam from/to
+// explícito, então mudar default não afeta eles.
+const DEFAULT_RANGE_PAST_DAYS = 7
+const DEFAULT_RANGE_FUTURE_DAYS = 14
 
 function applyDefaultRange(from, to) {
   if (from && to) return { from, to }
