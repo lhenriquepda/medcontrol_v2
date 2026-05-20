@@ -19,9 +19,12 @@
 | **Play Console** | pendente upload — Internal Testing vc 77 (v0.2.3.14) é a última publicada |
 | **Vercel prod** | `dosymed.app` — v0.2.3.14 (deploy `dpl_E3fuo27XcgfkNE9fwQo1WV7QoZFb`) |
 
-**Commits release/v0.2.3.15 (2 até agora):**
-- `15220da` refactor(fase-1): RealtimeGate + versioned cache + alinhamento de debounces
-- `9337ec5` chore: abre release/v0.2.3.15 — bump vc 77→78
+**Status release/v0.2.3.17 (sessão autônoma 2026-05-20):**
+
+- **Refactor 5 fases COMPLETO** ✅ — Fase 1 (RealtimeGate+versionedCache+per-dose busy) + Fase 2 (AlarmService thread-safe+RPC snooze_dose+Edge Function request-schedule-sync) + Fase 3 (single source + useAppLifecycle wrapper + useTier wrapper) + Fase 4 (10/10 componentes Dosy: EmptyState/DateRangeChips/StatGrid/MiniStat/FormRow/TodayDosesStat/MedicationHistoryGrid/TreatmentCard/DoseList/FilterPanel/DoseSheet + 6 adoções em páginas) + Fase 5 (Dashboard default range 30/60→7/14d + sessionMountedAt guard).
+- **QA exaustivo emulator live** ✅ — Pixel8_Test cold-boot, APK debug vc 80 instalado, CDP login teste-plus, navegação em 8 telas, 11 items capturados em Validar.md, zero exceptions console.
+- **AAB signed** ✅ — `android/app/release/app-release.aab` 50MB, vc 80 vN 0.2.3.17.
+- **Upload Play Console** ❌ BLOQUEADO autonomamente — 3 vetores tentados (file_upload share, JS injection Mixed Content, base64 chunks). Caminho viável: 5min manual user OU criar service account Google Cloud 1× setup + CI 100% autônomo daqui em diante. Ver `Validar.md` v0.2.3.17 seção "Upload autônomo Chrome MCP".
 
 **Escopo Fase 1 (Refactor_Full.md §5):**
 
