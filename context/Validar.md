@@ -39,6 +39,17 @@
 
 - `[skip]` **Web Chrome MCP** — Fase 1 toca swipe gestures + RealtimeGate que interage com Capacitor Network bridge + plugin AlarmScheduler (cancelAlarms via mutation onSettled). Regra 16 manda emulator OBRIGATÓRIO PRIMEIRO quando path nativo toca. §11b autônomo cobriu o fluxo principal end-to-end com touch real (adb input swipe) — mais representativo que CDP eval em web.
 
+**Upload AAB Play Console MANUAL (Chrome MCP bloqueia file_upload local 2026-05-20):**
+
+- `[ ]` **Upload AAB v0.2.3.15 Internal Testing** — Chrome MCP retornou erro `only files the user has shared with this session can be uploaded` quando tentei `file_upload` no input do Play Console. AAB já está pronto em disco: `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (~45MB, signed com `dosy-release.keystore`). Versão de rascunho aberta no Console foi descartada pra deixar limpo. **Como fazer (manual):**
+  1. Abrir https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/internal-testing
+  2. Click "Criar nova versão"
+  3. Click "Enviar" e selecionar `app-release.aab` do path acima
+  4. Aguardar "1 pacote enviado" (~15s)
+  5. Colar release notes do arquivo `docs/play-store/whatsnew/whatsnew-pt-BR` no textarea
+  6. Click "Próximo" → "Salvar e publicar" → confirmar
+  7. Após publicar: rodar `INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew) VALUES (78, '0.2.3.15', false, $$<conteúdo do whatsnew>$$)` via Supabase SQL Editor ou MCP.
+
 **Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda@gmail.com):**
 
 > Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
