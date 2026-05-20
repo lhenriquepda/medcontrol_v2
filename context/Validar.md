@@ -20,7 +20,38 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.15 EM CURSO (vc 78, refactor Fase 1)
+## 🆕 Release atual — v0.2.3.16 EM CURSO (vc 79, refactor Fase 2 partial + Fase 5.8)
+
+**Status:** branch `release/v0.2.3.16`. 1 commit `1f72515`. Aguarda Passo 10.5 STOP + AAB build + upload Play Console manual.
+
+**Validações autonomous COMPLETAS:**
+
+- `[x]` **Migration `snooze_dose` aplicada em prod** — `mcp__supabase__apply_migration` retornou `{"success":true}`. ALTER doses ADD snoozed_until + INDEX parcial + CREATE FUNCTION SECURITY DEFINER + GRANT authenticated. Pronto pra ACTION_SNOOZE chamar.
+- `[x]` **Build APK debug verde** — gradle 14s, APK 45MB, `versionCode='79' versionName='0.2.3.16-dev'` confirmado via aapt2.
+- `[x]` **Build web verde** — vite 17.56s.
+- `[x]` **AlarmActionReceiver.java compila** — Java sem erro de compilação; HTTP POST + JSON correto; padrão goAsync + Thread reusado de AlarmReceiver pre-check v0.2.3.13.
+
+**Validações §11a web (PULADO — Regra 16):**
+
+- `[skip]` **Web Chrome MCP** — release toca path nativo Java (AlarmActionReceiver) + RPC server-side. Bridge JS-only não cobre o flow real.
+
+**Validações device físico Samsung S25 Ultra pendentes (lhenrique.pda@gmail.com):**
+
+> Necessárias APÓS upload AAB + propagação Internal Testing (~1h pós Play Console Salvar).
+
+- `[ ]` **ACTION_ACK confirma dose server-side** — agendar dose pra ~2min no futuro, esperar alarme tocar. Tocar "Ciente" na notif persistente (não no AlarmActivity fullscreen). **Esperar:** dose vira `status='done'` no DB SEM precisar abrir o app + fazer marcação. Verificar via `SELECT status, actualTime FROM medcontrol.doses WHERE id='<id>'`. **Se falhar:** capturar logcat `AlarmActionReceiver` filtrando `confirm_dose|ACK rpc`; verificar SharedPrefs `dosy_pending_actions` (fallback queue).
+- `[ ]` **ACTION_SNOOZE persiste snoozed_until no DB** — alarme tocar, tocar "Adiar 10 min". **Esperar:** RPC `snooze_dose` UPDATE `doses.snoozed_until ≈ NOW() + 10min`. Verificar via SQL. **Mais:** próximo `rescheduleAll` (após swipe Dashboard PTR ou app resume) NÃO deve reagendar a dose original — `snoozed_until` futuro deve filtrar. **Se falhar:** logcat `snooze_dose|SNOOZE rpc`.
+- `[ ]` **Snooze persiste pós-reboot** — após snooze, force-stop + reboot device + abrir app. **Esperar:** alarme NÃO toca antes do snooze_until expirar (BootReceiver lê SharedPrefs E DB snoozed_until pra reagendar correto).
+- `[ ]` **Dashboard refresh tempo < 1s em conta volumosa** — em conta com 2k+ doses, fazer pull-to-refresh. **Esperar:** dados atualizam em <1s (era 5-8s pre-fix); banner "Sincronizando dados..." NÃO aparece.
+- `[ ]` **Banner não dispara em primeira reabertura** — fechar app via Recents → reabrir após 30s+ → Dashboard. **Esperar:** banner "Sincronizando dados..." NÃO aparece mesmo que `dataUpdatedAt` hidratado seja >8s. Vai aparecer só após o próximo refetch que demore.
+
+**Upload AAB Play Console MANUAL (já documentado v0.2.3.15):**
+
+- `[ ]` **Upload AAB v0.2.3.16 Internal Testing** — Chrome MCP bloqueia `file_upload` local. AAB será gerado em `android/app/release/app-release.aab` via `gradlew bundleRelease`. Upload manual via https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/internal-testing → Criar nova versão → Enviar AAB → release notes do `docs/play-store/whatsnew/whatsnew-pt-BR` → Salvar e publicar. Após publicar: `INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew) VALUES (79, '0.2.3.16', false, $$<whatsnew>$$)`.
+
+---
+
+## 📦 Release anterior — v0.2.3.15 EM CURSO (vc 78, refactor Fase 1)
 
 **Status:** branch `release/v0.2.3.15`. 3 commits: `15220da` refactor Fase 1 + `9337ec5` bump vc 77→78 + `50d88e8` sync 5 docs. Aguarda Passo 10.5 STOP pré-AAB.
 

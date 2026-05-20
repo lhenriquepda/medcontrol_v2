@@ -1,6 +1,6 @@
-v0.2.3.15 — App ágil pra marcar doses + Início mais limpo
+v0.2.3.16 — Alarme mais inteligente + Início mais rápido
 
-• Marcar dose como tomada ou pulada não trava mais: o status atualiza na hora e fica salvo (acabou o "voltou pra atrasada do nada" em conexão fraca).
-• Lista de várias doses (notificação agrupada) não trava a fila: marcar uma dose não bloqueia o botão das outras.
-• Puxar pra atualizar espera as marcações em andamento terminarem antes de buscar dados novos.
-• Doses de tratamentos encerrados/cancelados somem do Início (continuam visíveis no Histórico e Relatórios pra auditoria).
+• "Ciente" no alarme agora confirma a dose direto no servidor — não precisa mais abrir o app pra marcar. Acabou o alarme tocar de novo porque o app não sabia que você já tinha resolvido.
+• "Adiar 10 min" no alarme agora salva no servidor. Antes o adiamento era só local e somia quando outro device sincronizava; agora persiste em qualquer cenário.
+• Início (Dashboard) carrega muito mais rápido em contas com muitos tratamentos: janela reduzida pra 7 dias passados + 14 futuros (filtros inline continuam iguais).
+• Banner "Sincronizando dados..." só aparece quando faz sentido: não dispara mais falso-positivo logo após abrir o app.

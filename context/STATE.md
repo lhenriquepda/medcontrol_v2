@@ -10,9 +10,10 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.3.15` (em curso) |
-| **versionCode** | `78` |
-| **Branch ativa** | `release/v0.2.3.15` (refactor Fase 1) |
+| **Versão** | `v0.2.3.16` (em curso) |
+| **versionCode** | `79` |
+| **Branch ativa** | `release/v0.2.3.16` (refactor Fase 2 partial + Fase 5.8) |
+| **Anterior:** | `release/v0.2.3.15` push OK, AAB pendente upload manual (Chrome MCP bloqueia file_upload) |
 | **Último tag master** | `v0.2.3.14` · merge `3858126` — anterior `v0.2.3.13` `3e27811` |
 | **Ship date** | TBD (aguarda Passo 10.5 STOP) |
 | **Play Console** | pendente upload — Internal Testing vc 77 (v0.2.3.14) é a última publicada |

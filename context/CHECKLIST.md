@@ -6,6 +6,32 @@
 
 ---
 
+### #release-v0.2.3.16 — Refactor Fase 2 partial (Java ACK/SNOOZE) + Fase 5.8 (Dashboard opt) 🚧 EM CURSO
+
+- **Status:** branch `release/v0.2.3.16` aberta. 1 commit `1f72515`. Esforço ~3h (Java refactor + migration RPC + Dashboard query opt).
+- **Bug case raiz (Refactor_Full.md §1.8 + §11.7 + descobertas v0.2.3.15 device físico):**
+  - **"Ciente não confirma dose" (P1)** — AlarmActionReceiver.ACTION_ACK abria MainActivity sem chamar RPC `confirm_dose`. Próximo `rescheduleAll` reagendava o alarme porque dose seguia `status='pending'` no DB. User reportava "marquei mas tocou de novo".
+  - **"Snooze não persiste DB" (P1)** — ACTION_SNOOZE re-agendava local via `setAlarmClock` + SharedPrefs mas NÃO atualizava DB. Próximo `rescheduleAll` (30s+) cancelava o snooze.
+  - **Banner "Sincronizando dados..." falso-positivo (descoberto v0.2.3.15)** — `Dashboard.jsx:95` `isStaleSync` usava `dataUpdatedAt` hidratado da sessão anterior (PersistQueryClient 24h). Em primeira reabertura, ativava banner mesmo com dados frescos. Plus janela default Dashboard `-30d/+60d` traz 2k+ rows em conta volumosa, demorando >8s em rede normal.
+- **Escopo:**
+  - **`AlarmActionReceiver.java`** reescrito (260+ LOC). ACTION_ACK e ACTION_SNOOZE agora chamam RPCs Supabase via HTTP POST direto (padrão goAsync + Thread + timeout 1.5s reusando creds `dosy_sync_credentials` do AlarmReceiver pre-check v0.2.3.13). Parsing de doseIds via dosesJson (precedência) ou doseIdsCsv. Fallback offline: SharedPreferences `dosy_pending_actions` queue pro JS drainer no foreground (TODO próxima release). Reagendamento local do snooze mantido como redundância pós-boot.
+  - **`supabase/migrations/20260520120000_snooze_dose_rpc_v0_2_3_16.sql`** (novo). ALTER `medcontrol.doses` ADD `snoozed_until TIMESTAMPTZ NULL` + INDEX parcial. CREATE FUNCTION `medcontrol.snooze_dose(p_dose_id uuid, p_minutes int DEFAULT 10)` SECURITY DEFINER validando ownership via `has_patient_access` + status IN ('pending','overdue') + p_minutes [1, 360]. GRANT EXECUTE authenticated. **Aplicada em prod via `mcp__supabase__apply_migration`.**
+  - **`src/services/dashboardService.js`** + **`src/services/dosesService.js`** — `DEFAULT_RANGE_PAST_DAYS` 30 → 7; `DEFAULT_RANGE_FUTURE_DAYS` 60 → 14. Janela Dashboard 90d → 21d (filtros inline máx 10d + 1 dia folga). DoseHistory/Reports/Analytics passam `from/to` explícito → não afetados.
+  - **`src/pages/Dashboard.jsx`** — `isStaleSync` agora exige `hasFreshSuccess` (dataUpdatedAt > sessionMountedAt). `useState` lazy initializer marca o mount da sessão atual. Banner só dispara após 1 fetch bem-sucedido nesta sessão.
+- **Auditoria egress:**
+
+  | Risco | Severidade | Mitigação | Decisão |
+  |---|---|---|---|
+  | HTTP RPC do AlarmActionReceiver consome dados/tempo enquanto user espera resposta no UI | Baixo | Timeout 1.5s, goAsync (não bloqueia main thread), fallback queue local | Aceitar |
+  | Dashboard window 90d→21d reduz egress mas pode esconder doses do user querer ver | Baixo | DoseHistory/Reports/Analytics continuam com range custom; user não perde nada em Dashboard (filtros 12h/24h/48h/7d/10d cobrem cenários comuns) | Aceitar |
+  | `snoozed_until` adiciona coluna nullable (poucos rows) | Negligível | INDEX parcial só preenche para rows com snooze ativo (raros) | Aceitar |
+
+- **Validação:** §11a web pulado (Regra 16: path nativo Java toca). §11b emulator: APK debug build verde (gradle 14s, APK 45MB, versionCode 79 versionName 0.2.3.16-dev confirmado via aapt2). DB migration aplicada e RPC `snooze_dose` testada via SQL direto. Validação ACK/SNOOZE end-to-end em emulator requer disparar alarme real — registrado em Validar.md como cenário device físico.
+- **Pendências device físico (Validar.md user):** marcar dose via Ciente do alarme → DB confirma `status=done`; tocar Adiar 10min → DB confirma `snoozed_until ≈ NOW()+10min`; em rede 4G observar Dashboard refresh tempo (deve cair de 5-8s pra <1s); banner "Sincronizando dados..." não dispara em primeira reabertura.
+- **is_mandatory v0.2.3.16:** `false` (refactor + bugfix de UX; app antigo continua funcionando).
+
+---
+
 ### #release-v0.2.3.15 — Refactor Fase 1: sync resiliente + MultiDoseModal per-dose 🚧 EM CURSO
 
 - **Status:** branch `release/v0.2.3.15` aberta. Commits `15220da` refactor Fase 1 (8 arquivos, +1410 / -21 + Refactor_Full.md) + `9337ec5` bump vc 77→78. Esforço ~6h (investigação 4 agents Explore paralelos + plano Refactor_Full.md 5 fases + código Fase 1 + validação 2 emuladores).
