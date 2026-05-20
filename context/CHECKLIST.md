@@ -6,6 +6,25 @@
 
 ---
 
+### #release-v0.2.3.17 — Refactor Fase 2 thread-safety + Fase 4 componentes core 🚧 EM CURSO
+
+- **Status:** branch `release/v0.2.3.17`. Esforço ~2h (AlarmService refactor cuidadoso + 3 componentes novos + cleanup legacy).
+- **Bug case raiz (Refactor_Full.md §1.8):**
+  - **AlarmService static race em multi-alarme** — `static MediaPlayer activePlayer` + `static Vibrator activeVibrator` SEM sincronização. Dose 8:00 fire → AlarmService.startMediaPlayerLoop → activePlayer = new MediaPlayer; dose 8:01 fire OU AlarmActionReceiver.ACTION_ACK concorrente → race entre release() do antigo e isPlaying()/start() do novo. Histórico em PROJETO.md ("⚠️ static race em multi-alarm").
+- **Escopo:**
+  - **`AlarmService.java`** reescrito com `private static final Object LOCK = new Object()` + synchronized blocks em todas operações com activePlayer/activeVibrator (stopActiveAlarm, ACTION_MUTE/UNMUTE, startMediaPlayerLoop, startVibrationLoop, stopAlarmInternal). `startMediaPlayerLoop` agora prepara MediaPlayer FORA do lock (prepare() é I/O lento) + atomic swap dentro do lock + release do velho fora do lock. Reduz contention sem deadlock.
+  - **`src/components/dosy/EmptyState.jsx`** (NOVO) — 4 variantes built-in (no-patients/no-doses/no-treatments/no-results-filter) + customização total via props (icon, title, message, action). Substitui blocos inline em Dashboard, Patients, PatientDetail, DoseHistory, TreatmentList **quando páginas adotarem** (release futura).
+  - **`src/components/dosy/DateRangeChips.jsx`** (NOVO) — radiogroup scrollable horizontal com Chip per range. Substitui FilterBar/DoseHistory/Reports/Analytics chips de período.
+  - **`src/components/dosy/StatGrid.jsx`** (NOVO) — 2-col MiniStat grid. Substitui inline em Dashboard, PatientDetail, Analytics.
+  - **Index `src/components/dosy/index.js`** — exports adicionados.
+  - **`src/components/BottomSheet.jsx`** (REMOVIDO) — legacy v0.2.0.x, 0 imports confirmados via grep.
+- **Auditoria egress:** N/A — release puramente front-end + Java thread-safety; sem mudança em fetch/persist/cron.
+- **Validação:** §11a web pulado (path Java toca + componentes novos não montados nas páginas ainda — zero regressão visual em telas existentes). Build verde (vite 19s + gradle 1m15s release). APK debug pendente install (sem device conectado autônomo).
+- **Pendências device físico (Validar.md user):** validar disparo de alarmes consecutivos (dose 8:00 + 8:01) — esperar zero NPE/IllegalStateException no logcat AlarmService. Componentes novos não tem validação visual — release futura adota nas páginas.
+- **is_mandatory v0.2.3.17:** `false` (refactor + cleanup; sem mudança de comportamento user-facing).
+
+---
+
 ### #release-v0.2.3.16 — Refactor Fase 2 partial (Java ACK/SNOOZE) + Fase 5.8 (Dashboard opt) 🚧 EM CURSO
 
 - **Status:** branch `release/v0.2.3.16` aberta. 1 commit `1f72515`. Esforço ~3h (Java refactor + migration RPC + Dashboard query opt).

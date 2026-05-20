@@ -37,6 +37,21 @@ import org.json.JSONObject;
  * Android 14+ BAL: fullScreenIntent only launches activity on locked screen.
  * On unlocked: heads-up notif only. Sound + vibration handled here keeps alarm
  * "active" until user interaction. Tap notif → MainActivity → app stops service.
+ *
+ * Refactor Fase 2 (Refactor_Full.md §4.4) — v0.2.3.17 thread-safety:
+ *   Antes: `static MediaPlayer activePlayer` + `static Vibrator activeVibrator` SEM
+ *   sincronização. Race condition em multi-alarme consecutivo: dose 8:00 fire →
+ *   AlarmService start → activePlayer = new MediaPlayer; dose 8:01 fire → outro
+ *   startCommand → startMediaPlayerLoop() chama release() do antigo ENQUANTO
+ *   stopActiveAlarm() poderia estar acessando isPlaying() → NPE / IllegalStateException.
+ *   Histórico: PROJETO.md "⚠️ static race em multi-alarm".
+ *
+ *   Agora: lock object LOCK + synchronized blocks em TODAS as operações que tocam
+ *   activePlayer/activeVibrator. Mantém singleton (FG service só roda 1× por vez
+ *   anyway — Android garante), mas elimina race entre threads que chamam
+ *   stopActiveAlarm() do BroadcastReceiver vs onStartCommand() de outro fire vs
+ *   onDestroy() do Service. Null check + isPlaying() check antes de stop() pra
+ *   tolerar estado parcial (MediaPlayer prepared mas não started, etc).
  */
 public class AlarmService extends Service {
 
@@ -48,24 +63,36 @@ public class AlarmService extends Service {
     private static final int FG_NOTIF_ID = 300_000_000;
     private static final int TAP_NOTIF_OFFSET = 200_000_000;
 
+    // v0.2.3.17 — lock object explícito (não usar `AlarmService.class` pra evitar
+    // contention com outras synchronized methods estáticas hipotéticas).
+    private static final Object LOCK = new Object();
+
     private static MediaPlayer activePlayer;
     private static Vibrator activeVibrator;
 
+    /**
+     * Para qualquer alarme ativo. Chamado por AlarmActionReceiver (ACK/SNOOZE/IGNORE)
+     * + AlarmActivity (close). Thread-safe via LOCK; tolera estado parcial do
+     * MediaPlayer (não prepared, released, isPlaying false, etc).
+     */
     public static void stopActiveAlarm(Context ctx) {
-        try {
-            if (activePlayer != null) {
-                if (activePlayer.isPlaying()) activePlayer.stop();
-                activePlayer.release();
-                activePlayer = null;
+        synchronized (LOCK) {
+            MediaPlayer p = activePlayer;
+            activePlayer = null;
+            if (p != null) {
+                try {
+                    // isPlaying() throws IllegalStateException se released — try/catch protege.
+                    if (p.isPlaying()) p.stop();
+                } catch (Exception ignored) {}
+                try { p.release(); } catch (Exception ignored) {}
             }
-        } catch (Exception ignored) {}
-        try {
-            if (activeVibrator != null) {
-                activeVibrator.cancel();
-                activeVibrator = null;
+            Vibrator v = activeVibrator;
+            activeVibrator = null;
+            if (v != null) {
+                try { v.cancel(); } catch (Exception ignored) {}
             }
-        } catch (Exception ignored) {}
-        ctx.stopService(new Intent(ctx, AlarmService.class));
+        }
+        try { ctx.stopService(new Intent(ctx, AlarmService.class)); } catch (Exception ignored) {}
     }
 
     @Nullable
@@ -80,16 +107,22 @@ public class AlarmService extends Service {
             return START_NOT_STICKY;
         }
         if (intent != null && ACTION_MUTE.equals(intent.getAction())) {
-            try {
-                if (activePlayer != null && activePlayer.isPlaying()) activePlayer.pause();
-            } catch (Exception ignored) {}
-            try { if (activeVibrator != null) activeVibrator.cancel(); } catch (Exception ignored) {}
+            synchronized (LOCK) {
+                if (activePlayer != null) {
+                    try { if (activePlayer.isPlaying()) activePlayer.pause(); } catch (Exception ignored) {}
+                }
+                if (activeVibrator != null) {
+                    try { activeVibrator.cancel(); } catch (Exception ignored) {}
+                }
+            }
             return START_STICKY;
         }
         if (intent != null && ACTION_UNMUTE.equals(intent.getAction())) {
-            try {
-                if (activePlayer != null && !activePlayer.isPlaying()) activePlayer.start();
-            } catch (Exception ignored) {}
+            synchronized (LOCK) {
+                if (activePlayer != null) {
+                    try { if (!activePlayer.isPlaying()) activePlayer.start(); } catch (Exception ignored) {}
+                }
+            }
             startVibrationLoop();
             return START_STICKY;
         }
@@ -256,63 +289,88 @@ public class AlarmService extends Service {
     }
 
     private void startMediaPlayerLoop() {
+        // Constrói o MediaPlayer fora do lock (operações I/O lentas — prepare()
+        // faz disk read). Só dentro do lock atribuímos a referência singleton.
+        MediaPlayer newPlayer = null;
         try {
-            if (activePlayer != null) {
-                try { activePlayer.release(); } catch (Exception ignored) {}
-                activePlayer = null;
-            }
-            activePlayer = new MediaPlayer();
+            newPlayer = new MediaPlayer();
             AudioAttributes attrs = new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
-            activePlayer.setAudioAttributes(attrs);
+            newPlayer.setAudioAttributes(attrs);
 
             int rawId = getResources().getIdentifier("dosy_alarm", "raw", getPackageName());
             if (rawId != 0) {
                 Uri uri = Uri.parse("android.resource://" + getPackageName() + "/" + rawId);
-                activePlayer.setDataSource(this, uri);
+                newPlayer.setDataSource(this, uri);
             } else {
                 Uri ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
                 if (ringtone == null) ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                activePlayer.setDataSource(this, ringtone);
+                newPlayer.setDataSource(this, ringtone);
             }
 
-            activePlayer.setLooping(true);
-            activePlayer.prepare();
-            activePlayer.start();
+            newPlayer.setLooping(true);
+            newPlayer.prepare();
+        } catch (Exception e) {
+            e.printStackTrace();
+            if (newPlayer != null) {
+                try { newPlayer.release(); } catch (Exception ignored) {}
+            }
+            return;
+        }
+
+        // Substitui singleton atomicamente. Velho player (se existir) é liberado.
+        MediaPlayer old;
+        synchronized (LOCK) {
+            old = activePlayer;
+            activePlayer = newPlayer;
+        }
+        if (old != null) {
+            try { if (old.isPlaying()) old.stop(); } catch (Exception ignored) {}
+            try { old.release(); } catch (Exception ignored) {}
+        }
+        try {
+            newPlayer.start();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void startVibrationLoop() {
+        Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+        synchronized (LOCK) {
+            // Cancel previous before replacing.
+            if (activeVibrator != null) {
+                try { activeVibrator.cancel(); } catch (Exception ignored) {}
+            }
+            activeVibrator = vibrator;
+        }
         try {
-            activeVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            if (activeVibrator == null || !activeVibrator.hasVibrator()) return;
             long[] pattern = { 0, 800, 600, 800, 600 };
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                activeVibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
             } else {
-                activeVibrator.vibrate(pattern, 0);
+                vibrator.vibrate(pattern, 0);
             }
         } catch (Exception ignored) {}
     }
 
     private void stopAlarmInternal() {
-        try {
-            if (activePlayer != null) {
-                if (activePlayer.isPlaying()) activePlayer.stop();
-                activePlayer.release();
-                activePlayer = null;
+        synchronized (LOCK) {
+            MediaPlayer p = activePlayer;
+            activePlayer = null;
+            if (p != null) {
+                try { if (p.isPlaying()) p.stop(); } catch (Exception ignored) {}
+                try { p.release(); } catch (Exception ignored) {}
             }
-        } catch (Exception ignored) {}
-        try {
-            if (activeVibrator != null) {
-                activeVibrator.cancel();
-                activeVibrator = null;
+            Vibrator v = activeVibrator;
+            activeVibrator = null;
+            if (v != null) {
+                try { v.cancel(); } catch (Exception ignored) {}
             }
-        } catch (Exception ignored) {}
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE);

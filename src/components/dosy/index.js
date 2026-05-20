@@ -21,3 +21,7 @@ export { MiniStat } from './MiniStat.jsx'
 export { BellButton, BellAlerts } from './BellAlerts.jsx'
 export { default as HeaderAlertIcon } from './HeaderAlertIcon.jsx'
 export { default as PageHeader } from './PageHeader.jsx'
+// Refactor Fase 4 (Refactor_Full.md §11.3) — componentes prontos pra adoption.
+export { default as EmptyState } from './EmptyState.jsx'
+export { default as DateRangeChips } from './DateRangeChips.jsx'
+export { default as StatGrid } from './StatGrid.jsx'

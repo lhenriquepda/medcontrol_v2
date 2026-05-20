@@ -1,6 +1,5 @@
-v0.2.3.16 — Alarme mais inteligente + Início mais rápido
+v0.2.3.17 — Alarme mais robusto + base para próximas melhorias
 
-• "Ciente" no alarme agora confirma a dose direto no servidor — não precisa mais abrir o app pra marcar. Acabou o alarme tocar de novo porque o app não sabia que você já tinha resolvido.
-• "Adiar 10 min" no alarme agora salva no servidor. Antes o adiamento era só local e somia quando outro device sincronizava; agora persiste em qualquer cenário.
-• Início (Dashboard) carrega muito mais rápido em contas com muitos tratamentos: janela reduzida pra 7 dias passados + 14 futuros (filtros inline continuam iguais).
-• Banner "Sincronizando dados..." só aparece quando faz sentido: não dispara mais falso-positivo logo após abrir o app.
+• Alarme com dois horários muito próximos não trava mais: corrigida condição de corrida no serviço de som/vibração que podia gerar travamento quando alarmes consecutivos disparavam.
+• Limpeza interna: removido código legado do BottomSheet (sem impacto visível).
+• Base de componentes nova pronta pra próximas telas — sem mudança visível ainda nesta versão.

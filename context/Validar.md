@@ -20,7 +20,31 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.16 EM CURSO (vc 79, refactor Fase 2 partial + Fase 5.8)
+## 🆕 Release atual — v0.2.3.17 EM CURSO (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
+
+**Status:** branch `release/v0.2.3.17`. Esforço ~2h. Aguarda upload AAB Play Console.
+
+**Validações autonomous COMPLETAS:**
+
+- `[x]` **AlarmService.java reescrito com LOCK + synchronized** — 3 read/write paths para activePlayer/activeVibrator agora dentro do lock. startMediaPlayerLoop prepara fora + atomic swap dentro (evita contention/deadlock em I/O lento do prepare). Build verde.
+- `[x]` **3 componentes core criados** — EmptyState (4 variantes), DateRangeChips (scrollable radiogroup), StatGrid (2-col MiniStat). Exports adicionados em `src/components/dosy/index.js`. Build verde.
+- `[x]` **BottomSheet.jsx removido** — 0 imports confirmados via grep antes. -1 arquivo morto.
+- `[x]` **Build production verde** — vite 19s. AAB release 46MB.
+
+**Validações §11a web (PULADO):** componentes novos não estão montados nas páginas ainda — zero regressão visual. AlarmService é Java puro.
+
+**Validações device físico Samsung S25 Ultra pendentes:**
+
+- `[ ]` **Alarmes consecutivos sem race** — agendar 2 doses spaced 30s-1min (dose 12:00 + dose 12:01) e deixar o app fechado/idle. Quando primeira tocar → tocar "Ignorar" e deixar segunda tocar logo após. **Esperar:** zero crash/NPE/IllegalStateException no logcat filtrando `AlarmService|MediaPlayer`; segundo alarme toca normalmente; sons não sobreposição.
+- `[ ]` **ACK + SNOOZE end-to-end ainda funcionando** — re-validar v0.2.3.16 fixes pós-thread-safety refactor.
+
+**Upload AAB Play Console MANUAL:**
+
+- `[ ]` **Upload AAB v0.2.3.17** — `G:\00_Trabalho\01_Pessoal\Apps\medcontrol_v2\android\app\release\app-release.aab` (46MB, vc 80 vN 0.2.3.17). Mesmo fluxo das anteriores. Após publicar: `INSERT INTO medcontrol.app_releases (version_code, version_name, is_mandatory, whatsnew) VALUES (80, '0.2.3.17', false, $$<whatsnew>$$)`.
+
+---
+
+## 📦 Release anterior — v0.2.3.16 EM CURSO (vc 79, refactor Fase 2 partial + Fase 5.8)
 
 **Status:** branch `release/v0.2.3.16`. 1 commit `1f72515`. Aguarda Passo 10.5 STOP + AAB build + upload Play Console manual.
 
