@@ -13,7 +13,7 @@ import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 // Dosy v0.2.0.0 redesign — primitives + hero/stats
-import { Card, Avatar, StatusPill, Button } from '../components/dosy'
+import { Card, Avatar, StatusPill, Button, EmptyState } from '../components/dosy'
 import PatientAvatar from '../components/PatientAvatar'
 import { HeroGauge } from '../components/dosy/HeroGauge'
 import { MiniStat } from '../components/dosy/MiniStat'
@@ -491,33 +491,15 @@ export default function Dashboard() {
               </Link>
             </Card>
           ) : mergedDoses.length === 0 ? (
-            <Card padding={28} style={{
-              textAlign: 'center',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 18,
-                background: 'var(--dosy-peach-100)',
-                color: 'var(--dosy-primary)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name="pill" size={32} />
-              </div>
-              <h3 style={{
-                fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
-                fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
-                margin: 0,
-              }}>Nenhuma dose neste período</h3>
-              <p style={{
-                fontSize: 14, color: 'var(--dosy-fg-secondary)',
-                lineHeight: 1.5, margin: 0,
-              }}>Ajuste os filtros ou crie um novo tratamento.</p>
-              <Link to="/tratamento/novo" style={{ textDecoration: 'none', marginTop: 6 }}>
-                <Button kind="primary" size="md" icon={PlusIcon}>
-                  Novo tratamento
-                </Button>
-              </Link>
-            </Card>
+            // Refactor Fase 4 (v0.2.3.17) — substitui inline pelo EmptyState.
+            <EmptyState
+              kind="no-doses"
+              action={
+                <Link to="/tratamento/novo" style={{ textDecoration: 'none' }}>
+                  <Button kind="primary" size="md" icon={PlusIcon}>Novo tratamento</Button>
+                </Link>
+              }
+            />
           ) : (
             <motion.div
               style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
