@@ -5,7 +5,7 @@ import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
-import { Card, Input, StatusPill } from '../components/dosy'
+import { Card, Input, StatusPill, EmptyState } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
@@ -248,22 +248,13 @@ export default function DoseHistory() {
         {isLoading ? (
           <SkeletonList count={5} />
         ) : selectedDayDoses.length === 0 ? (
-          <Card padding={28} style={{
-            textAlign: 'center',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-          }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: 18,
-              background: 'var(--dosy-peach-100)',
-              color: 'var(--dosy-primary)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <FileText size={28} strokeWidth={1.75}/>
-            </div>
-            <p style={{ fontSize: 14, color: 'var(--dosy-fg-secondary)', margin: 0 }}>
-              Nenhuma dose neste dia.
-            </p>
-          </Card>
+          // Refactor Fase 4 (v0.2.3.17) — adoção EmptyState.
+          <EmptyState
+            icon={<FileText size={28} strokeWidth={1.5}/>}
+            title="Nenhuma dose neste dia"
+            message="Tente outro dia ou ajuste o filtro de paciente."
+            compact
+          />
         ) : (
           <VirtualTimeline
             doses={selectedDayDoses}
