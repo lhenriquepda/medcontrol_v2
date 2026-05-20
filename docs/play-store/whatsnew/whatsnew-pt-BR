@@ -1,5 +1,5 @@
-v0.2.3.14 — Banner de nova versão correto + carregamento confiável da lista de cuidadores
+v0.2.3.15 — App muito mais ágil pra marcar doses
 
-• Aviso "Nova versão disponível" volta a mostrar o nome correto (ex: "0.2.3.14") em vez do código interno
-• Modal de atualização obrigatória passa a abrir mesmo quando o app demora pra detectar a versão atual
-• Tela "Compartilhar paciente" mostra mensagem de erro com botão "Tentar novamente" quando a sessão expira, no lugar do "Carregando..." infinito
+• Marcar dose como tomada ou pulada não trava mais: o status atualiza na hora e fica salvo (acabou o "voltou pra atrasada do nada" que dava em conexão fraca).
+• Lista de várias doses (notificação agrupada) não trava mais a fila: marcar uma dose não bloqueia o botão das outras.
+• Puxar pra atualizar agora espera as marcações em andamento terminarem antes de buscar dados novos.

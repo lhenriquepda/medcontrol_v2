@@ -6,7 +6,36 @@
 
 ---
 
-### #release-v0.2.3.14 — Bug-fixes P2: update banner + share error UI 🚧 EM CURSO
+### #release-v0.2.3.15 — Refactor Fase 1: sync resiliente + MultiDoseModal per-dose 🚧 EM CURSO
+
+- **Status:** branch `release/v0.2.3.15` aberta. Commits `15220da` refactor Fase 1 (8 arquivos, +1410 / -21 + Refactor_Full.md) + `9337ec5` bump vc 77→78. Esforço ~6h (investigação 4 agents Explore paralelos + plano Refactor_Full.md 5 fases + código Fase 1 + validação 2 emuladores).
+- **Bug case raiz (reportado em produção v0.2.3.14 Internal Testing):**
+  - **"Status volta do nada"** — RC-1 race: `useRealtime.js:79-86` debounce invalidate 1s + `mutationRegistry.js:164-172` debounce refetch 2s. Realtime payload (postgres_changes em `doses` table) chega ANTES do refetch da mutation, invalida cache, refetch traz estado pré-commit do server (replica lag, statement-level trigger fora da transação) → status optimistic sobrescrito → UI volta `pending/overdue` por 2-5s.
+  - **"Botão preso, preciso fechar/abrir app"** — `MultiDoseModal.jsx:194,203,213` fazia `disabled={confirmMut.isPending || skipMut.isPending}` para os 3 botões de **TODAS** as doses do modal. Marcar 1 dose travava as 2-3 outras na fila durante a mutation (200-800ms+).
+- **Escopo:**
+  - **`src/state/realtimeGate.js`** (NOVO) — Gate per-queryKey TTL 2.5s. Mutations marcam keys em `onMutate` (`markInFlight`), Realtime descarta payloads em `debouncedInvalidate` se key está in-flight (`isInFlight`). TTL auto-clear via housekeeping setInterval 5s (defesa contra leak se `onSettled` falha em limpar).
+  - **`src/state/versionedCache.js`** (NOVO) — `stampLocalActedAt(dose, now)` + `shouldAccept(current, incoming)` + `reconcileDoses(currentList, incomingList)`. `patchDoseInCache` stampa `_localActedAt: Date.now()` em cada dose patchada. Defesa em profundidade: mesmo se gate falhar, reconciler dentro da janela 2.5s descarta incoming sem `_serverConfirmedAt > _localActedAt`.
+  - **`src/hooks/useDosyMutation.js` + `useDosyQuery.js`** (NOVOS) — wrappers finos pra padronizar uso futuro nas Fases 2-5.
+  - **`src/hooks/useRealtime.js`** — debounce `debouncedInvalidate` 1000ms → 2500ms (alinha com `LATENCY_BUDGET_MS` do gate). Check `isInFlight(queryKey)` antes de invalidar — skip se mutation drenando.
+  - **`src/services/mutationRegistry.js`** — debounce `refetchDoses` 2000ms → 1500ms (mutation refetch sempre vence Realtime invalidate 2500ms). `markDosesInFlight()` em `onMutate` + `clearDosesInFlight()` em `onSettled` nas 4 mutations healthcare (`confirmDose`, `skipDose`, `undoDose`, `registerSos`). `patchDoseInCache` stampa `_localActedAt`.
+  - **`src/components/MultiDoseModal.jsx`** — estado `pendingDoseId` per-dose substitui disabled coletivo. Botões da dose X em busy state (aria-busy + disabled) apenas se `pendingDoseId === X`. Outras doses ficam interativas mesmo durante mutation em flight da primeira.
+  - **`src/pages/Dashboard.jsx`** — `handleRefresh` agora aguarda mutations doses drenarem (até 2s) antes de iniciar pull-to-refresh. Sem isso, refetch durante optimistic em curso podia sobrescrever status.
+  - **`Refactor_Full.md`** (NOVO na raiz) — plano completo de 5 fases (16 sem.) cobrindo: Fase 1 sync resiliente (esta release), Fase 2 alarmes + plugin Java, Fase 3 single source of truth, Fase 4 componentização (10 oportunidades), Fase 5 performance + Dashboard query optimization.
+- **Auditoria egress:**
+
+  | Risco | Severidade | Mitigação | Decisão |
+  |---|---|---|---|
+  | Gate descarta Realtime invalidate em até 2.5s | N/A — reduz egress (evita refetch redundante) | TTL housekeeping 5s previne leak | Aceitar |
+  | Refetch refetchDoses 1.5s + Realtime debounce 2.5s | N/A — reduz egress (descarte Realtime evita refetch duplo) | n/a | Aceitar |
+  | `_localActedAt` stamp adiciona ~50 bytes/dose no cache (não no DB) | Negligível | Cache local IDB, não trafega | Aceitar |
+
+- **Validação:** §11a web pulado (Fase 1 é JS pure mas afeta touch swipe gestures + plugin Capacitor — Regra 16 manda emulator primeiro). §11b emulator OK em Pixel 8 (teste-plus) + Pixel 9 Pro (teste-free) — 3 doses marcadas em sequência via swipe right, status persiste 25s sem rollback, cross-device sync via paciente compartilhado funcionando, marcação via DoseModal e Dashboard ambos OK. DB confirmado via Supabase MCP. Build production OK (vite 22s), lint 0 erros 83 warnings (baseline master, sem regressão), gradle assembleDebug OK (41s, APK 45MB).
+- **Pendências device físico (Validar.md user):** observar fluxo de marcação rápida em S25 Ultra real — confirmar que botão não trava + status não volta + multi-cuidador sync via paciente compartilhado real.
+- **is_mandatory v0.2.3.15:** `false` (refactor estrutural — app antigo continua funcionando, apenas com o bug original do status fantasma).
+
+---
+
+### #release-v0.2.3.14 — Bug-fixes P2: update banner + share error UI ✅ SHIPPED 2026-05-19
 
 - **Status:** branch `release/v0.2.3.14` aberta. Commits `8daa0af` bump vc 76→77 + `2bd4139` fix useAppUpdate.js (#0010+#0011) + `8fc5f03` fix useShares.js + SharePatientSheet.jsx (#0009). Esforço ~45min código + validação pendente.
 - **Bug case raiz:**
