@@ -93,7 +93,15 @@ export default function Dashboard() {
   // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
   // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
   const isStaleSync = isFetching && dataUpdatedAt && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
-  const allDosesRaw = payload?.doses || []
+  // v0.2.3.15 — exclui doses canceladas do Dashboard.
+  // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
+  // pending+futuras pra status='cancelled' (preserva histórico mas marca como
+  // cancelada). Dashboard é orientado a ação ("o que preciso fazer hoje"); cancelada
+  // não tem ação possível → polui o feed visualmente. Permanecem visíveis em
+  // Histórico/Reports/Análise (audit trail + exclusão correta do denominador de
+  // adesão, já fix #0005 v0.2.3.11). Doses já done/skipped ANTES do cancel mantêm
+  // status original (não viram cancelled) — continuam no Dashboard como histórico do dia.
+  const allDosesRaw = (payload?.doses || []).filter((d) => d.status !== 'cancelled')
   const patients = payload?.patients || []
   // Filter client-side por patientId (era passado pra useDoses query antes)
   const allDoses = useMemo(() => {
