@@ -56,3 +56,21 @@ android/.idea/jarRepositories.xml
 screenshots/
 .mcp.json
 appium-capabilities.json
+
+# Local QA scripts gerados ad-hoc (CDP / Appium experiments — não fazem parte do app)
+scripts/qa_*.mjs
+scripts/cdp_*.mjs
+scripts/flow_*.mjs
+scripts/caregiver_*.mjs
+scripts/aab_chunk_*.txt
+scripts/aab_chunks.json
+scripts/aab_serve.cjs
+qa.png
+qa_state.png
+qa_*.png
+
+# Android Studio user-specific (deployment target selector)
+android/.idea/deploymentTargetSelector.xml
+
+# Claude scheduled tasks lock
+.claude/scheduled_tasks.lock
