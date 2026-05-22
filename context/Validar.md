@@ -20,7 +20,47 @@
 
 ---
 
-## 🆕 Release atual — v0.2.4.0 EM CURSO (vc 81, Categorias de Medicamentos)
+## 🆕 Release atual — v0.2.4.1 SHIPPED (vc 82, hotfix Supabase config)
+
+**Status:** ✅ Publicado Internal Testing 2026-05-22 19:02 BRT via Vetor 4. `is_mandatory=true` força modal update nos users vc 81 broken.
+
+**ROOT CAUSE descoberto:**
+
+- v0.2.4.0 (vc 81) buildou no GitHub Actions com vars Supabase vazias.
+- Causa: GitHub secrets `VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` AUSENTES (workflow tentou usar `${{ secrets.VITE_SUPABASE_URL }}` mas secret não existia → string vazia).
+- Bundle gerado tinha `hasSupabase = Boolean('' && '')` = false → tela login mostra "Supabase não configurado".
+- Vercel prod NÃO afetado (env vars no dashboard Vercel direto, não secrets GitHub).
+
+**Fixes aplicados:**
+
+- `[x]` `gh secret set VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` a partir do `.env` (gitignored)
+- `[x]` versionCode 81 → 82, versionName 0.2.4.0 → 0.2.4.1
+- `[x]` Build CI greenfield (Java 21 Temurin Linux, sem bug Java 25 Windows)
+- `[x]` Bundle vc 82 verificado: contém `sb_publishable` + `guefraaqbkcehofchnrc.supabase.co`
+- `[x]` Upload Vetor 4 (Supabase Storage HTTPS proxy): 1.7s upload + JS injection + Play Console processou
+- `[x]` SQL `app_releases` vc 82 inserida com `is_mandatory=true`
+- `[x]` Bucket transient deletado pós-upload
+- `[x]` Tag `v0.2.4.1` criada + pushada
+
+**Backfill expandido (resposta ao pedido "migrar dados existentes"):**
+
+- `[x]` Treatments outro 25 → 6 (76% redução) via brand_map nomes comerciais BR (Aerolin/Clenil/Decadron/Mounjaro/Sinot Clav/etc)
+- `[x]` Doses outro 2061 → 319 (84% redução)
+- `[x]` Distribuição final: vitamina 986, broncodilatador 474, corticoide 337, antidepressivo 218, antibiotico 70, antialergico 39, antitermico_analgesico 13
+- `[x]` Status/timestamps/observações originais preservados (apenas group_id + cmed_class adicionados)
+- `[x]` Cascata treatment → doses aplicada (doses herdam categoria do parent treatment)
+
+**Validação Web prod:** dosymed.app login renderiza OK no Chrome MCP, sem aviso "Supabase não configurado" (confirma Vercel não afetado pelo bug).
+
+---
+
+## 📦 Release anterior — v0.2.4.0 ❌ BROKEN (vc 81)
+
+**Status:** APK não funciona — superseded por v0.2.4.1. Sequência de fechamento (merge master + tag + Vercel) foi executada mas o APK distribuído tinha bug crítico.
+
+---
+
+## 📦 Release v0.2.3.17 SHIPPED (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
 
 **Status:** branch `release/v0.2.4.0-categorias-medicamentos`. Plano em `Plano_Categorias_Medicamentos.md` raiz.
 
@@ -79,7 +119,7 @@
 
 ---
 
-## 📦 Release anterior — v0.2.3.17 SHIPPED (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
+## 📦 Release v0.2.3.17 SHIPPED legacy (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
 
 **Status:** ✅ **PUBLICADO Internal Testing 2026-05-20 15:00 BRT** via Vetor 4 (Supabase Storage HTTPS proxy). Merge `master` + tag aplicada. Esforço total ~2h sessão autônoma.
 

@@ -10,15 +10,15 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.4.1` (hotfix em curso — fix Supabase config) |
+| **Versão** | `v0.2.4.1` (shipped — hotfix Supabase config) |
 | **versionCode** | `82` (v0.2.4.1) — anterior `81` (v0.2.4.0, broken) |
-| **Branch ativa** | `master` (release/v0.2.4.0 mergeada + branch deletada) |
-| **Último tag master** | `v0.2.4.0` · commit `f6724f6` |
-| **Ship date v0.2.4.0** | 2026-05-22 18:06 BRT Vercel (Web OK) / 18:32 BRT Play Internal (APK broken) |
-| **Vercel prod** | ✅ `dosymed.app` — atualizando para v0.2.4.1 via push master `6527a77` (Vercel não afetado pelo bug — usa env próprio) |
-| **Play Console v0.2.4.1** | ⏳ Build CI em curso (run `26313786232`) — vai substituir vc 81 broken |
-| **Play Console v0.2.4.0** | ❌ vc 81 **BROKEN** — APK saiu sem `VITE_SUPABASE_*` (GitHub secrets ausentes). Login falha. |
-| **Play Console v0.2.3.17** | ✅ vc 80 (legacy) — última versão funcional Internal Testing |
+| **Branch ativa** | `master` |
+| **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
+| **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.4.1 via push master |
+| **Play Console v0.2.4.1** | ✅ **vc 82 PUBLICADO 2026-05-22 19:02 BRT** — `is_mandatory=true` força update modal nos users vc 81 |
+| **Play Console v0.2.4.0** | ❌ vc 81 BROKEN superseded por vc 82 |
+| **Play Console v0.2.3.17** | ✅ vc 80 legacy |
 
 **Hotfix v0.2.4.1 (em curso 2026-05-22 18:50 BRT):**
 - ROOT CAUSE: GitHub secrets `VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` AUSENTES. Workflow CI buildou vc 81 com env vazia → `hasSupabase=false` → login mostra "Supabase não configurado".
