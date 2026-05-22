@@ -1,8 +1,5 @@
-v0.2.5.0 — Categoria automática para qualquer remédio + Histórico cross-period
+v0.2.6.0 — Última dose por categoria + Acesso Temporário (foundation)
 
-• Categoria automática agora funciona pra TODO medicamento brasileiro — digitando Aerolin, Buscopan, Cataflam, Clavulin, Rivotril, Tylenol, Selozok, Mounjaro, Levotiroxina ou qualquer outro nome comercial popular, o app já marca a categoria certa. Quando demora, aparece "Identificando categoria automaticamente..." em vez de exigir escolha manual.
-• Nova categoria "Hormonal" pra Levotiroxina, Triiodotironina, Estradiol, Testosterona e similares.
-• Histórico de doses reformulado: chips de 7d/30d/90d/6m/1a no topo, multi-seleção de categoria, agrupamento esperto (por dia em períodos curtos, por semana em médios, por medicamento quando filtrado). "Quando foi a última vez que tomei antibiótico?" — agora responde em 2 toques.
-• Exportar CSV direto do histórico filtrado, sem precisar abrir tela de relatórios separada.
-• Autocomplete de medicamento reformulado pra Android: sem mais sumir no scroll, sem mais conflitar com teclado virtual, sem mais preencher errado.
-• Quando o app não detecta a categoria automaticamente, aparece um modal sugerindo top-3 opções baseadas no nome (não mais bloqueio com erro).
+• Card "Última dose" no Histórico — quando você filtra por categoria, aparece direto a última dose de cada grupo (resolve "quando foi a última vez que tomei antibiótico?" sem precisar PDF).
+• Acesso Temporário pra compartilhamento de paciente (em fase final) — base de banco pronta pra compartilhar paciente com cuidador eventual com prazo de expiração.
+• Documentação de implementação atualizada entre spec e código (auditoria pós v0.2.5.0).

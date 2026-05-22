@@ -29,13 +29,14 @@ export async function listPatientShares(patientId) {
   return data || []
 }
 
-export async function sharePatientByEmail(patientId, email) {
+export async function sharePatientByEmail(patientId, email, expiresAt = null) {
   if (!hasSupabase) throw new ShareError('Supabase indisponível')
-  // v0.2.3.7 Bug C fix — timeout 15s evita "Enviando…" hang infinito quando
-  // PostgREST connection fica stale pós idle/reload (similar gap #255/#268).
+  // v0.2.3.7 Bug C fix — timeout 15s evita "Enviando…" hang infinito.
+  // v0.2.6.0 — param `expiresAt` opcional (ISO string) pra Acesso Temporário (TTL).
   const rpcPromise = supabase.rpc('share_patient_by_email', {
     p_patient: patientId,
-    p_email: email
+    p_email: email,
+    p_expires_at: expiresAt,
   })
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(

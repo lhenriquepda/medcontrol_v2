@@ -168,6 +168,26 @@ export default function DoseHistory() {
     return { total, done, skipped, overdue, pct, uniqueMeds }
   }, [filteredDoses])
 
+  // v0.2.6.0 audit A→B #5 — última dose por categoria (JTBD "quando foi última vez antibiótico?")
+  // Só aparece quando há filtro de categoria ativo OU groupingMode='med' (resultado focado)
+  const lastDosesByGroup = useMemo(() => {
+    if (selectedGroups.length === 0 && !search.trim()) return []
+    const done = filteredDoses.filter(d => d.status === 'done')
+    const byGroup = new Map()
+    for (const d of done) {
+      const g = d.group_id || 'outro'
+      const existing = byGroup.get(g)
+      if (!existing || new Date(d.actualTime || d.scheduledAt) > new Date(existing.date)) {
+        byGroup.set(g, {
+          group_id: g,
+          medName: d.medName,
+          date: d.actualTime || d.scheduledAt,
+        })
+      }
+    }
+    return [...byGroup.values()].sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [filteredDoses, selectedGroups, search])
+
   // === AGRUPAMENTO DINÂMICO ===
   // ≤7d → por dia (mostra day-strip + lista do dia)
   // >7d sem filtro categoria → por semana
@@ -429,6 +449,59 @@ export default function DoseHistory() {
             </div>
           </div>
         </Card>
+
+        {/* v0.2.6.0 — Card "Última dose por categoria" — só quando há filtro ativo
+            Resolve JTBD: "Quando foi a última vez que tomei antibiótico?" */}
+        {lastDosesByGroup.length > 0 && (
+          <Card padding={14}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: 'var(--dosy-fg-secondary)',
+              fontFamily: 'var(--dosy-font-display)',
+              marginBottom: 10,
+            }}>
+              Última dose
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {lastDosesByGroup.slice(0, 5).map((row) => {
+                const g = getGroup(row.group_id)
+                const d = new Date(row.date)
+                const daysAgo = Math.floor((Date.now() - d.getTime()) / 86400000)
+                const ago = daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `há ${daysAgo} dias`
+                return (
+                  <div key={row.group_id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 0',
+                    borderBottom: '1px solid var(--dosy-border)',
+                  }}>
+                    <span style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: g.color,
+                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                      flexShrink: 0,
+                    }} aria-hidden="true" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 14, fontWeight: 600, color: 'var(--dosy-fg)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>{row.medName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', marginTop: 1 }}>
+                        {g.label} · {ago}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: 11, color: 'var(--dosy-fg-muted)',
+                      fontVariantNumeric: 'tabular-nums',
+                      flexShrink: 0,
+                    }}>
+                      {pad(d.getDate())} {MESES[d.getMonth()]}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
 
         {/* DAY STRIP — só quando period=7d */}
         {period.id === '7d' && (
