@@ -16,6 +16,7 @@ import MedNameInput from '../components/MedNameInput'
 import PatientPicker from '../components/PatientPicker'
 import { CONTINUOUS_DAYS, deleteTreatment } from '../services/treatmentsService'
 import { useUndoableDelete } from '../hooks/useUndoableDelete'
+import { useClassifyMedication } from '../hooks/useClassifyMedication'
 import { useQueryClient, onlineManager } from '@tanstack/react-query'
 
 // [horas, rótulo]
@@ -58,6 +59,24 @@ export default function TreatmentForm() {
   const [hintModalOpen, setHintModalOpen] = useState(false)
   const [pendingSubmit, setPendingSubmit] = useState(null)
   const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
+  // v0.2.5.0 — background classification: roda quando medName digitado >3 chars + sem group_id setado
+  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(
+    form?.medName && !form?.group_id ? form.medName : null
+  )
+
+  // Aplica auto-categorização quando classify retorna group válido (debounced via useQuery cache)
+  useEffect(() => {
+    if (!classifyResult?.group_id) return
+    if (form.group_id) return // user já tem categoria — não sobrescrever
+    setForm((f) => ({
+      ...f,
+      group_id: classifyResult.group_id,
+      cmed_class: classifyResult.cmed_class || f.cmed_class,
+    }))
+    setAutoFilledGroup(true)
+    if (errors.group_id) setErrors((e) => ({ ...e, group_id: undefined }))
+  }, [classifyResult])
+
   // Top group_ids mais usados pelo user histórico (pra ranking modal)
   const userTopGroups = useMemo(() => {
     const counts = new Map()
@@ -527,6 +546,11 @@ export default function TreatmentForm() {
             }}
             autoFilled={autoFilledGroup}
             required={!autoFilledGroup}
+            helperText={
+              classifyFetching && !form.group_id
+                ? 'Identificando categoria automaticamente…'
+                : null
+            }
           />
           {errors.group_id && <FieldError>{errors.group_id}</FieldError>}
 

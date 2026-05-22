@@ -26,6 +26,7 @@ export const MED_GROUPS = [
   { id: 'gastrointestinal',         label: 'Gastrointestinal',           color: 'var(--dosy-amber-500)' },
   { id: 'broncodilatador',          label: 'Broncodilatador',            color: 'var(--dosy-teal-500)' },
   { id: 'vitamina',                 label: 'Vitamina/Suplemento',        color: 'var(--dosy-green-500)' },
+  { id: 'hormonal',                 label: 'Hormonal',                   color: 'var(--dosy-pink-400)' },
   { id: 'outro',                    label: 'Outro',                      color: 'var(--dosy-gray-500)' },
 ]
 
@@ -52,6 +53,27 @@ export function getGroupColor(groupId) {
 }
 
 export const VALID_GROUP_IDS = new Set(MED_GROUPS.map((g) => g.id))
+
+// v0.2.5.0 — keywords pra heurística client-side de classificação
+// (mesma usada server-side em classify_medication_robust)
+export function inferGroupFromName(name) {
+  if (!name) return null
+  const n = name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim()
+  if (/pram|xetina|faxina|alina/.test(n)) return 'antidepressivo'
+  if (/sartana|pril\b|dipino|olol\b|tiazida/.test(n)) return 'anti_hipertensivo'
+  if (/cilina|micin|floxa|ciclina|cefa/.test(n)) return 'antibiotico'
+  if (/profeno|fenaco|coxib|meloxic|nimesul/.test(n)) return 'anti_inflamatorio'
+  if (/prazol\b|ranitidi|domperid/.test(n)) return 'gastrointestinal'
+  if (/prednis|metasona|hidrocort/.test(n)) return 'corticoide'
+  if (/conazol|terbin/.test(n)) return 'antifungico'
+  if (/clovir|tegravir|navir/.test(n)) return 'antiviral'
+  if (/gliptin|gliflozin|glutida/.test(n)) return 'antidiabetico'
+  if (/zolam|azepam|zolpid/.test(n)) return 'ansiolitico'
+  if (/terol|tropio|budeson/.test(n)) return 'broncodilatador'
+  if (/vitamin|complexo b|acido folico|colecalcife/.test(n)) return 'vitamina'
+  if (/tiroxina|tironina|estradiol|progesterona|testosterona/.test(n)) return 'hormonal'
+  return null
+}
 
 /**
  * De-para Classe CMED (Nível 2) → group_id (Nível 1).

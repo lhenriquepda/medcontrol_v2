@@ -8,6 +8,8 @@ import MedNameInput from '../components/MedNameInput'
 import OfflineNotice from '../components/OfflineNotice'
 import { Card, Button, Input, Avatar, CategoryPicker, CategoryHintModal } from '../components/dosy'
 import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
+import { useClassifyMedication } from '../hooks/useClassifyMedication'
+import { useEffect } from 'react'
 import PageHeader from '../components/dosy/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PatientAvatar from '../components/PatientAvatar'
@@ -36,6 +38,18 @@ export default function SOS() {
   const [hintModalOpen, setHintModalOpen] = useState(false)
   const [pendingSosSubmit, setPendingSosSubmit] = useState(null)
   const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
+  // v0.2.5.0 — background classify
+  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(
+    medName && !groupId ? medName : null
+  )
+  useEffect(() => {
+    if (!classifyResult?.group_id || groupId) return
+    setGroupId(classifyResult.group_id)
+    setCmedClass(classifyResult.cmed_class || null)
+    setAutoFilledGroup(true)
+    setGroupError(null)
+  }, [classifyResult])
+
   const userTopGroups = useMemo(() => {
     const counts = new Map()
     for (const m of userMedHistory) {
@@ -448,7 +462,11 @@ export default function SOS() {
             }}
             autoFilled={autoFilledGroup}
             required={!autoFilledGroup}
-            helperText={groupError}
+            helperText={
+              classifyFetching && !groupId
+                ? 'Identificando categoria automaticamente…'
+                : groupError
+            }
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
