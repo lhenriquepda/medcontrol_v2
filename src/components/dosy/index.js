@@ -32,3 +32,5 @@ export { default as TreatmentCard } from './TreatmentCard.jsx'
 export { default as DoseList } from './DoseList.jsx'
 export { default as FilterPanel } from './FilterPanel.jsx'
 export { default as DoseSheet } from './DoseSheet.jsx'
+// v0.2.4.0 Categorias de Medicamentos
+export { default as CategoryPicker } from './CategoryPicker.jsx'

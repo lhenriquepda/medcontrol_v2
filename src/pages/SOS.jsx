@@ -6,7 +6,8 @@ import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import MedNameInput from '../components/MedNameInput'
 import OfflineNotice from '../components/OfflineNotice'
-import { Card, Button, Input, Avatar } from '../components/dosy'
+import { Card, Button, Input, Avatar, CategoryPicker } from '../components/dosy'
+import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PatientAvatar from '../components/PatientAvatar'
@@ -26,6 +27,12 @@ export default function SOS() {
   const [patientId, setPatientId] = useState('')
   const [medName, setMedName] = useState('')
   const [unit, setUnit] = useState('')
+  // v0.2.4.0 — Categorias de Medicamentos
+  const [groupId, setGroupId] = useState(null)
+  const [cmedClass, setCmedClass] = useState(null)
+  const [autoFilledGroup, setAutoFilledGroup] = useState(false)
+  const [groupError, setGroupError] = useState(null)
+  const { upsertAsync: upsertUserMedication, hintFor: userMedHint } = useUserMedicationCategories()
   // v0.2.3.6 #261 fix: split datetime-local em date + time separados.
   // WebView Android usa locale OS (en-US emulator) ignorando lang="pt-BR".
   // Date type="date" + time type="time" renderizam consistentes pt-BR.
@@ -121,9 +128,19 @@ export default function SOS() {
     if (!patientId || !medName || !unit) {
       toast.show({ message: 'Preencha paciente, medicamento e dose.', kind: 'error' }); return
     }
+    // v0.2.4.0 — categoria obrigatória quando não veio de autofill
+    if (!groupId && !autoFilledGroup) {
+      setGroupError('Escolha uma categoria — não conseguimos detectar pelo nome.')
+      toast.show({ message: 'Escolha a categoria do medicamento.', kind: 'error' })
+      return
+    }
+    setGroupError(null)
     const scheduledAt = fromDatetimeLocalInput(when)
     const v = validateSos({ rules, history, medName, scheduledAt })
-    const payload = { patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation }
+    const payload = {
+      patientId, medName: medName.trim(), unit: unit.trim(), scheduledAt, observation,
+      group_id: groupId, cmed_class: cmedClass,
+    }
     // v0.2.3.5 #238 — app NÃO bloqueia, apenas ALERTA. User decide se prossegue.
     // v0.2.3.6 fix — usa ConfirmDialog (não window.confirm que bug em Capacitor webview).
     if (!v.ok) {
@@ -178,7 +195,18 @@ export default function SOS() {
         return
       }
     }
+    // v0.2.4.0 — registra/bumpa user_medication (fire-and-forget)
+    try {
+      await upsertUserMedication({
+        name: payload.medName,
+        group_id: payload.group_id,
+        cmed_class: payload.cmed_class,
+      })
+    } catch (e) {
+      console.warn('[SOS] upsert user_medication skipped:', e?.message)
+    }
     setMedName(''); setUnit(''); setObservation('')
+    setGroupId(null); setCmedClass(null); setAutoFilledGroup(false); setGroupError(null)
     const _now = new Date()
     setDateVal(toDateInput(_now.toISOString()))
     setTimeVal(`${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`)
@@ -374,8 +402,44 @@ export default function SOS() {
             }}>
               Medicamento <span style={{ color: 'var(--dosy-danger)' }}>*</span>
             </label>
-            <MedNameInput value={medName} onChange={setMedName} required/>
+            <MedNameInput
+              value={medName}
+              onChange={(v) => {
+                setMedName(v)
+                if (!groupId && v && v.length >= 3) {
+                  const hint = userMedHint(v)
+                  if (hint?.group_id) {
+                    setGroupId(hint.group_id)
+                    setCmedClass(hint.cmed_class || null)
+                    setAutoFilledGroup(true)
+                    setGroupError(null)
+                  }
+                }
+              }}
+              onSelectFull={(item) => {
+                setMedName(item.name)
+                if (item.group_id) {
+                  setGroupId(item.group_id)
+                  setCmedClass(item.cmed_class || null)
+                  setAutoFilledGroup(true)
+                  setGroupError(null)
+                }
+              }}
+              required
+            />
           </div>
+
+          <CategoryPicker
+            value={groupId}
+            onChange={(g) => {
+              setGroupId(g)
+              setAutoFilledGroup(false)
+              if (g) setGroupError(null)
+            }}
+            autoFilled={autoFilledGroup}
+            required={!autoFilledGroup}
+            helperText={groupError}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <Input

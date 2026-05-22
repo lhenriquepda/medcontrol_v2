@@ -46,9 +46,12 @@ export async function createTreatmentWithDoses(payload) {
       p_mode:            payload.mode || 'interval',
       p_is_template:     !!payload.isTemplate,
       p_timezone:        tz,
+      // v0.2.4.0 — Categorias de Medicamentos. RPC tem DEFAULT NULL, retrocompat.
+      p_group_id:        payload.group_id ?? null,
+      p_cmed_class:      payload.cmed_class ?? null,
     })
     if (error) throw error
-    return data  // jsonb returned from RPC, parsed by Supabase JS client
+    return data
   }
   const t = mock.insert('treatments', {
     patientId: payload.patientId, medName: payload.medName, unit: payload.unit,
@@ -56,7 +59,9 @@ export async function createTreatmentWithDoses(payload) {
     durationDays: payload.isContinuous ? CONTINUOUS_DAYS : payload.durationDays,
     isContinuous: !!payload.isContinuous,
     startDate: payload.startDate, firstDoseTime: payload.firstDoseTime ?? null,
-    status: 'active', isTemplate: !!payload.isTemplate
+    status: 'active', isTemplate: !!payload.isTemplate,
+    group_id: payload.group_id || null,
+    cmed_class: payload.cmed_class || null,
   })
   const doses = generateDoses({ ...payload, id: t.id })
   mock.insertMany('doses', doses)
