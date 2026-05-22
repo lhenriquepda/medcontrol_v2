@@ -16,8 +16,8 @@
 | **Último tag master** | `v0.2.4.0` · commit `f6724f6` — anterior `v0.2.3.17` `8cf809d` |
 | **Ship date v0.2.4.0 Web** | **2026-05-22 18:06 BRT** Vercel prod |
 | **Vercel prod** | ✅ `dosymed.app` v0.2.4.0 — deploy `dpl_68Kg8LfRqMKawY2jiDVwLKZasK` (2026-05-22T21:06:29Z) |
-| **Play Console v0.2.4.0** | ⏳ AAB pronto + SQL inserido — **upload pendente** (Chrome MCP offline) — receita em `Validar.md` |
-| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — Disponível para testadores internos desde 2026-05-20 |
+| **Play Console v0.2.4.0** | ✅ **Internal Testing vc 81 (v0.2.4.0) PUBLICADO 2026-05-22 18:32 BRT** — Disponível para testadores internos. Via Vetor 4 (Supabase Storage HTTPS proxy + JS injection). Bucket transient deletado pós-upload. |
+| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — superseded por vc 81 |
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 

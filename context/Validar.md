@@ -54,7 +54,8 @@
 
 **Validações pendentes (autônomas em andamento):**
 
-- `[~]` **Upload Vetor 4 — pendente ação user** (Chrome MCP offline há 35+ min, ScheduleWakeup esgotou). Estado: AAB já em `https://guefraaqbkcehofchnrc.supabase.co/storage/v1/object/public/aab-transient/app-release.aab` (HTTPS público CORS-OK). SQL `medcontrol.app_releases` row vc 81 já INSERT'da. Track Play Console: `https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/4700769831647466031/releases/new`.
+- `[x]` **Upload Vetor 4 PUBLICADO 2026-05-22 18:32 BRT** — Chrome MCP reconectou após ~50min offline. Sequência completa: navegação Internal Testing → Criar versão → JS injection fetch HTTPS Supabase Storage (32.8MB blob) → DataTransfer + setInputFiles + dispatch change → Play Console processou "1 pacote de apps enviado" → Próximo → review (12.169 telefones compatíveis) → Salvar e publicar → modal confirm → click final → publicação confirmada na URL `tracks/4700769831647466031?tab=releases`. Bucket transient deletado pós-upload (object + bucket DELETE 200 OK).
+- `[~]` **Upload Vetor 4 — pendente ação user** (Chrome MCP offline há 35+ min, ScheduleWakeup esgotou) — RESOLVIDO acima. Estado: AAB já em `https://guefraaqbkcehofchnrc.supabase.co/storage/v1/object/public/aab-transient/app-release.aab` (HTTPS público CORS-OK). SQL `medcontrol.app_releases` row vc 81 já INSERT'da. Track Play Console: `https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/4700769831647466031/releases/new`.
 
   **Receita ready-to-use** (~3 min quando Chrome MCP reconectar OU manual via UI):
 
