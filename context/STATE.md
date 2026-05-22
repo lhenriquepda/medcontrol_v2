@@ -10,14 +10,22 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.4.0` (shipped Web — Play Console pendente) |
-| **versionCode** | `81` (v0.2.4.0) — anterior `80` (v0.2.3.17) |
+| **Versão** | `v0.2.4.1` (hotfix em curso — fix Supabase config) |
+| **versionCode** | `82` (v0.2.4.1) — anterior `81` (v0.2.4.0, broken) |
 | **Branch ativa** | `master` (release/v0.2.4.0 mergeada + branch deletada) |
-| **Último tag master** | `v0.2.4.0` · commit `f6724f6` — anterior `v0.2.3.17` `8cf809d` |
-| **Ship date v0.2.4.0 Web** | **2026-05-22 18:06 BRT** Vercel prod |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.4.0 — deploy `dpl_68Kg8LfRqMKawY2jiDVwLKZasK` (2026-05-22T21:06:29Z) |
-| **Play Console v0.2.4.0** | ✅ **Internal Testing vc 81 (v0.2.4.0) PUBLICADO 2026-05-22 18:32 BRT** — Disponível para testadores internos. Via Vetor 4 (Supabase Storage HTTPS proxy + JS injection). Bucket transient deletado pós-upload. |
-| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — superseded por vc 81 |
+| **Último tag master** | `v0.2.4.0` · commit `f6724f6` |
+| **Ship date v0.2.4.0** | 2026-05-22 18:06 BRT Vercel (Web OK) / 18:32 BRT Play Internal (APK broken) |
+| **Vercel prod** | ✅ `dosymed.app` — atualizando para v0.2.4.1 via push master `6527a77` (Vercel não afetado pelo bug — usa env próprio) |
+| **Play Console v0.2.4.1** | ⏳ Build CI em curso (run `26313786232`) — vai substituir vc 81 broken |
+| **Play Console v0.2.4.0** | ❌ vc 81 **BROKEN** — APK saiu sem `VITE_SUPABASE_*` (GitHub secrets ausentes). Login falha. |
+| **Play Console v0.2.3.17** | ✅ vc 80 (legacy) — última versão funcional Internal Testing |
+
+**Hotfix v0.2.4.1 (em curso 2026-05-22 18:50 BRT):**
+- ROOT CAUSE: GitHub secrets `VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` AUSENTES. Workflow CI buildou vc 81 com env vazia → `hasSupabase=false` → login mostra "Supabase não configurado".
+- FIX 1: Secrets adicionadas via `gh secret set` a partir do `.env` (gitignored). Listadas via `gh secret list` ✅.
+- FIX 2: versionCode 81→82, versionName 0.2.4.0→0.2.4.1.
+- FIX 3: Backfill expandido com brand_map BR (Aerolin, Clenil, Decadron, Mounjaro, etc.): treatments outro 25→6, doses outro 2061→319 (84% redução). Distribuição rica: vitamina 986, broncodilatador 474, corticoide 337, antidepressivo 218.
+- TODO: Aguardar CI completar → Vetor 4 upload vc 82 → SQL app_releases → cleanup.
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 
