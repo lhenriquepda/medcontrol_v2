@@ -1,6 +1,4 @@
-v0.2.4.0 — Categorias de medicamentos
+v0.2.4.1 — Hotfix Supabase config + backfill histórico
 
-• Cada tratamento e SOS agora tem uma categoria (Antibiótico, Antitérmico, Vitamina, etc.). Quando o nome aparece no nosso catálogo, a categoria é detectada automaticamente.
-• Quando você digita um medicamento novo, o app aprende a categoria — na próxima vez ele já preenche sozinho.
-• Análises ganharam um card novo "Doses por categoria" — agora dá pra ver rapidinho quantas vezes usou cada grupo no período.
-• Histórico de doses pode ser filtrado por categoria — descubra em segundos quantos antibióticos foram tomados nos últimos 3 meses.
+• Hotfix crítico: APK v0.2.4.0 saiu sem configuração Supabase no build. Login não funcionava nesta versão. Resolvido nesta versão.
+• Backfill histórico: doses e tratamentos antigos agora têm categoria automática preenchida (vitaminas, broncodilatadores, corticoides, antidepressivos, antibióticos, etc.). Relatórios "Doses por categoria" ficam ricos desde a primeira abertura.
