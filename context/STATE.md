@@ -10,14 +10,14 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.4.0` (em curso — Categorias de Medicamentos) |
-| **versionCode** | `81` (v0.2.4.0) — anterior `80` (v0.2.3.17 shipped) |
-| **Branch ativa** | `release/v0.2.4.0-categorias-medicamentos` (16a0a37→d0e576d) — Fase 1+2+3 completas + AAB CI |
-| **Último tag master** | `v0.2.3.17` · commit `8cf809d` — anterior `v0.2.3.14` `3858126` |
-| **Ship date v0.2.3.17** | 2026-05-20 15:00 BRT Internal Testing |
-| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — Disponível para testadores internos |
-| **Play Console v0.2.4.0** | ⏳ AAB no Supabase Storage `aab-transient/app-release.aab` aguardando upload Vetor 4 (Chrome MCP reconectar) |
-| **Vercel prod** | `dosymed.app` — v0.2.3.17 (sync após merge master desta release fechada) |
+| **Versão** | `v0.2.4.0` (shipped Web — Play Console pendente) |
+| **versionCode** | `81` (v0.2.4.0) — anterior `80` (v0.2.3.17) |
+| **Branch ativa** | `master` (release/v0.2.4.0 mergeada + branch deletada) |
+| **Último tag master** | `v0.2.4.0` · commit `f6724f6` — anterior `v0.2.3.17` `8cf809d` |
+| **Ship date v0.2.4.0 Web** | **2026-05-22 18:06 BRT** Vercel prod |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.4.0 — deploy `dpl_68Kg8LfRqMKawY2jiDVwLKZasK` (2026-05-22T21:06:29Z) |
+| **Play Console v0.2.4.0** | ⏳ AAB pronto + SQL inserido — **upload pendente** (Chrome MCP offline) — receita em `Validar.md` |
+| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — Disponível para testadores internos desde 2026-05-20 |
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 
