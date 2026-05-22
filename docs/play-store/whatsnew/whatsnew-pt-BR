@@ -1,4 +1,8 @@
-v0.2.4.1 — Hotfix Supabase config + backfill histórico
+v0.2.5.0 — Categoria automática para qualquer remédio + Histórico cross-period
 
-• Hotfix crítico: APK v0.2.4.0 saiu sem configuração Supabase no build. Login não funcionava nesta versão. Resolvido nesta versão.
-• Backfill histórico: doses e tratamentos antigos agora têm categoria automática preenchida (vitaminas, broncodilatadores, corticoides, antidepressivos, antibióticos, etc.). Relatórios "Doses por categoria" ficam ricos desde a primeira abertura.
+• Categoria automática agora funciona pra TODO medicamento brasileiro — digitando Aerolin, Buscopan, Cataflam, Clavulin, Rivotril, Tylenol, Selozok, Mounjaro, Levotiroxina ou qualquer outro nome comercial popular, o app já marca a categoria certa. Quando demora, aparece "Identificando categoria automaticamente..." em vez de exigir escolha manual.
+• Nova categoria "Hormonal" pra Levotiroxina, Triiodotironina, Estradiol, Testosterona e similares.
+• Histórico de doses reformulado: chips de 7d/30d/90d/6m/1a no topo, multi-seleção de categoria, agrupamento esperto (por dia em períodos curtos, por semana em médios, por medicamento quando filtrado). "Quando foi a última vez que tomei antibiótico?" — agora responde em 2 toques.
+• Exportar CSV direto do histórico filtrado, sem precisar abrir tela de relatórios separada.
+• Autocomplete de medicamento reformulado pra Android: sem mais sumir no scroll, sem mais conflitar com teclado virtual, sem mais preencher errado.
+• Quando o app não detecta a categoria automaticamente, aparece um modal sugerindo top-3 opções baseadas no nome (não mais bloqueio com erro).

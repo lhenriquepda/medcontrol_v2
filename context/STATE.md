@@ -10,8 +10,8 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.4.1` (shipped — hotfix Supabase config) |
-| **versionCode** | `82` (v0.2.4.1) — anterior `81` (v0.2.4.0, broken) |
+| **Versão** | `v0.2.5.0` (em curso — refactor UX) |
+| **versionCode** | `83` (v0.2.5.0) — anterior `82` (v0.2.4.1) |
 | **Branch ativa** | `master` |
 | **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
 | **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |
