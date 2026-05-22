@@ -33,7 +33,48 @@
 - Analytics: card Doses por Categoria (donut + top 5), filtro chip em Histórico, grupo em Reports PDF/CSV
 - Backfill heurístico (fallback) para itens fora CMED (~3-5%)
 
-**Validações pendentes:** seguir mesmo padrão da v0.2.3.17 — 2-emulator QA + upload Vetor 4.
+**Validações autônomas COMPLETAS (sessão 2026-05-22):**
+
+- `[x]` **Decisões §10 do plano consolidadas** — 9/9 aprovadas (hierarquia 2 níveis, CMED source-of-truth, fallback agressivo, doses futuras herdam categoria, v0.2.4.0, after Refactor_Full, PRD update, etc).
+- `[x]` **Migrations 1-4 aplicadas em prod** — `medications_catalog` + `user_medications` + `treatments/doses/sos_rules` colunas group_id+cmed_class + RPCs (`search_medications` estendida, `upsert_user_medication`, `get_user_medications`, `doses_by_group`, `top_meds_per_group`).
+- `[x]` **CHECK constraint Nível 1 nas 4 tabelas** — força lista fechada 16 grupos.
+- `[x]` **Backfill catálogo (764 rows)** — 274 via dicionário direto + 30 via heurística keyword + 460 'outro' (fallback agressivo). Distribuição: anti_hipertensivo 41, antibiotico 32, gastrointestinal 27, antidiabetico 26, antitermico_analgesico 24, etc.
+- `[x]` **Validação manual SQL — Clavulin/Novalgina/Tylenol/Voltaren/Jardiance/Anlodipino/Omeprazol** — todos classificados corretamente (Antibiótico/Antitérmico/AINE/Antidiabético/Anti-hipertensivo/Gastrointestinal). Confirma tokenização de princípio composto OK.
+- `[x]` **Backfill treatments/doses/sos_rules** — match catalog via medName + heurística keyword medName-direct. Treatments 43 → 18 classificados pelo nome real, 25 'outro'. Doses 2464 → 403 classificadas, 2061 'outro' (esperado: muito teste data sintético).
+- `[x]` **RPC create_treatment_with_doses estendido** — params `p_group_id` + `p_cmed_class` (DEFAULT NULL backward-compat). Doses herdam categoria do tratamento.
+- `[x]` **RPC register_sos_dose estendido** — mesma extensão. Doses SOS recebem group_id+cmed_class.
+- `[x]` **Componente CategoryPicker.jsx** — Sheet com 16 opções, chip colorido, modo autoFilled (🔒) e required validation.
+- `[x]` **MedNameInput.jsx** — nova prop `onSelectFull` retorna metadata completa do item selecionado. Chip categoria visível em cada sugestão.
+- `[x]` **TreatmentForm.jsx + SOS.jsx** — CategoryPicker integrado com autofill via dropdown E hint via histórico pessoal do user. Required-when-not-autofilled. upsertUserMedication ao salvar.
+- `[x]` **Analytics.jsx** — novo card "Doses por categoria" antes do "Top meds": barra empilhada visual + lista top 6 com pct + medsCount + count. Cada item Link pra /historico?group=<id>.
+- `[x]` **DoseHistory.jsx** — filtro categoria via querystring + chip ativo com botão X pra limpar.
+- `[x]` **Build vite verde** — 22.57s primeira execução, 16.71s incrementais. 0 erros, warnings pré-existentes.
+- `[x]` **ESLint zero erros** — 14 warnings pré-existentes (setState in effect em código antigo, " unescaped).
+- `[x]` **AAB v0.2.4.0 buildado via GitHub Actions** — vc 81 vN 0.2.4.0, 32.8MB signed, baixado em `android/app/release/app-release.aab`.
+
+**Validações pendentes (autônomas em andamento):**
+
+- `[~]` **Upload Vetor 4 — pendente ação user** (Chrome MCP offline há 35+ min, ScheduleWakeup esgotou). Estado: AAB já em `https://guefraaqbkcehofchnrc.supabase.co/storage/v1/object/public/aab-transient/app-release.aab` (HTTPS público CORS-OK). SQL `medcontrol.app_releases` row vc 81 já INSERT'da. Track Play Console: `https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/4700769831647466031/releases/new`.
+
+  **Receita ready-to-use** (~3 min quando Chrome MCP reconectar OU manual via UI):
+
+  **Opção A — Manual (5min):**
+  1. Abrir https://play.google.com/console com conta dosy.med@gmail.com
+  2. Criar nova versão no track 4700769831647466031
+  3. Baixar AAB de `android/app/release/app-release.aab` (33MB local) OU usar URL pública acima
+  4. Upload AAB → aguardar processamento (~30s) → "Próximo" → "Salvar e publicar"
+  5. Limpar bucket Supabase:
+     ```bash
+     source <(grep -E '^SUPABASE_SERVICE_ROLE_KEY=' .env.local)
+     SUPABASE_URL="https://guefraaqbkcehofchnrc.supabase.co"
+     curl -X DELETE "${SUPABASE_URL}/storage/v1/object/aab-transient/app-release.aab" -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+     curl -X DELETE "${SUPABASE_URL}/storage/v1/bucket/aab-transient" -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+     ```
+
+  **Opção B — Autônomo via Chrome MCP** (quando IA reconectar):
+  Seguir `context/recipes/play-console-upload.md` seção "Vetor 4 — Supabase Storage proxy" (passos 3-10 do JS injection, AAB já uploaded no passo 1-2).
+
+**Validações §11b emulator (PULADO):** build local Android quebrado por bug Java 25 + Unix Domain Sockets no Windows (`Unable to establish loopback connection`). CI Linux usa Java 21 Temurin e builda sem problema. QA visual via emulator será refeito após Vetor 4 propagar Internal Testing (~1h pós upload publicado).
 
 ---
 

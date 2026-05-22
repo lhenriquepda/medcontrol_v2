@@ -5,7 +5,8 @@ import { ClipboardList, Plus, X as XIcon, Pill, User, CalendarClock, CalendarRan
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { Sheet, Card, Button, Input, Chip, Toggle } from './../components/dosy'
+import { Sheet, Card, Button, Input, Chip, Toggle, CategoryPicker } from './../components/dosy'
+import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useCreateTreatment, useDeleteTreatment, useTreatment, useTemplates, useCreateTemplate, useUpdateTreatment } from '../hooks/useTreatments'
@@ -50,9 +51,16 @@ export default function TreatmentForm() {
   // Item #037 (release v0.2.0.4): erros inline por campo.
   const [errors, setErrors] = useState({})
 
+  // v0.2.4.0 — autofill flag separa "veio do catálogo" de "user editou".
+  // Quando true, CategoryPicker mostra ícone 🔒 (mas continua editável).
+  const [autoFilledGroup, setAutoFilledGroup] = useState(false)
+  const { upsertAsync: upsertUserMedication, hintFor: userMedHint } = useUserMedicationCategories()
+
   const [form, setForm] = useState({
     patientId: preselectPatient || '',
     medName: '', unit: '',
+    group_id: null,
+    cmed_class: null,
     mode: 'interval', // 'interval' | 'times'
     intervalHours: 8,
     dailyTimes: ['08:00'],
@@ -94,6 +102,8 @@ export default function TreatmentForm() {
         patientId: existing.patientId,
         medName: existing.medName,
         unit: existing.unit,
+        group_id: existing.group_id || null,
+        cmed_class: existing.cmed_class || null,
         mode,
         intervalHours: existing.intervalHours || 8,
         dailyTimes,
@@ -104,6 +114,8 @@ export default function TreatmentForm() {
         startAt: toDateInput(existing.startDate),
         firstDoseTime: mode === 'interval' ? (existing.firstDoseTime || '08:00') : '08:00',
       }))
+      // Edição: marcar como autoFilled se já tinha categoria (vinda do banco — não foi user que escolheu agora)
+      setAutoFilledGroup(!!existing.group_id)
     }
   }, [existing])
 
@@ -158,6 +170,10 @@ export default function TreatmentForm() {
     if (!form.isContinuous && (!form.durationDays || Number(form.durationDays) < 1)) {
       errs.durationDays = 'Duração obrigatória (≥ 1 dia).'
     }
+    // v0.2.4.0 — categoria obrigatória quando não veio de autofill
+    if (!form.group_id && !autoFilledGroup) {
+      errs.group_id = 'Escolha uma categoria — não conseguimos detectar pelo nome.'
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setErrors({})
     if (!form.patientId) { toast.show({ message: 'Selecione um paciente.', kind: 'error' }); return }
@@ -165,6 +181,8 @@ export default function TreatmentForm() {
       patientId: form.patientId,
       medName: form.medName.trim(),
       unit: form.unit.trim(),
+      group_id: form.group_id || null,
+      cmed_class: form.cmed_class || null,
       durationDays: form.isContinuous ? CONTINUOUS_DAYS : Number(form.durationDays),
       isContinuous: form.isContinuous,
       startDate: fromDateInput(form.startAt),
@@ -209,6 +227,7 @@ export default function TreatmentForm() {
           intervalHours: payload.intervalHours, durationDays: payload.durationDays,
           isContinuous: payload.isContinuous,
           startDate: payload.startDate, firstDoseTime: payload.firstDoseTime,
+          group_id: payload.group_id, cmed_class: payload.cmed_class,
         } })
         toast.show({ message: 'Tratamento atualizado.', kind: 'success' })
       } else {
@@ -220,6 +239,17 @@ export default function TreatmentForm() {
           })
         }
         toast.show({ message: 'Tratamento criado.', kind: 'success' })
+      }
+      // v0.2.4.0 — registra/bumpa no catálogo pessoal do user (fire-and-forget)
+      try {
+        await upsertUserMedication({
+          name: payload.medName,
+          group_id: payload.group_id,
+          cmed_class: payload.cmed_class,
+        })
+      } catch (e) {
+        // não bloqueia o fluxo se RPC falhar
+        console.warn('[TreatmentForm] upsert user_medication skipped:', e?.message)
       }
       nav('/')
     } catch (err) {
@@ -382,9 +412,51 @@ export default function TreatmentForm() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <FieldLabel required>Medicamento</FieldLabel>
-            <MedNameInput value={form.medName} onChange={(v) => { set('medName', v); if (errors.medName) setErrors({ ...errors, medName: undefined }) }} />
+            <MedNameInput
+              value={form.medName}
+              onChange={(v) => {
+                set('medName', v)
+                if (errors.medName) setErrors({ ...errors, medName: undefined })
+                // Quando o user digita livre (sem selecionar do dropdown), tenta hint do catálogo pessoal
+                if (!form.group_id && v && v.length >= 3) {
+                  const hint = userMedHint(v)
+                  if (hint?.group_id) {
+                    setForm((f) => ({
+                      ...f,
+                      group_id: hint.group_id,
+                      cmed_class: hint.cmed_class || null,
+                    }))
+                    setAutoFilledGroup(true)
+                    if (errors.group_id) setErrors({ ...errors, group_id: undefined })
+                  }
+                }
+              }}
+              onSelectFull={(item) => {
+                // Seleção do dropdown — autofill da categoria
+                setForm((f) => ({
+                  ...f,
+                  medName: item.name,
+                  group_id: item.group_id || f.group_id,
+                  cmed_class: item.cmed_class || f.cmed_class,
+                }))
+                setAutoFilledGroup(!!item.group_id)
+                if (errors.group_id && item.group_id) setErrors({ ...errors, group_id: undefined })
+              }}
+            />
             {errors.medName && <FieldError>{errors.medName}</FieldError>}
           </div>
+
+          <CategoryPicker
+            value={form.group_id}
+            onChange={(g) => {
+              set('group_id', g)
+              setAutoFilledGroup(false)
+              if (errors.group_id) setErrors({ ...errors, group_id: undefined })
+            }}
+            autoFilled={autoFilledGroup}
+            required={!autoFilledGroup}
+          />
+          {errors.group_id && <FieldError>{errors.group_id}</FieldError>}
 
           <Input
             label="Dose / unidade"

@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, X as XIcon, FileText, Check, AlertTriangle, X as XCloseIcon } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
-import { Card, Input, StatusPill, EmptyState } from '../components/dosy'
+import { Card, Input, StatusPill, EmptyState, CategoryPicker } from '../components/dosy'
+import { getGroup } from '../constants/medCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
@@ -46,6 +48,10 @@ export default function DoseHistory() {
   const [selectedDayOffset, setSelectedDayOffset] = useState(0) // 0 = hoje, 1 = ontem, ...
   const [selected, setSelected] = useState(null)
 
+  // v0.2.4.0 — filtro categoria via querystring deep-link (?group=antibiotico)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const groupFilter = searchParams.get('group') || null
+
   // Day strip: últimos 7 dias (offset 0..6, 0=hoje)
   const today = useMemo(() => startOfDay(new Date()), [])
   const dayChips = useMemo(() => {
@@ -67,16 +73,29 @@ export default function DoseHistory() {
     withObservation: !!search.trim(),
   })
 
-  // Filtra busca search (med/unit/observation)
+  // Filtra busca search + groupFilter (v0.2.4.0 Categorias)
   const filteredDoses = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return rangeDoses
-    return rangeDoses.filter((d) =>
-      (d.medName || '').toLowerCase().includes(term) ||
-      (d.unit || '').toLowerCase().includes(term) ||
-      (d.observation || '').toLowerCase().includes(term),
-    )
-  }, [rangeDoses, search])
+    let list = rangeDoses
+    if (groupFilter) {
+      list = list.filter((d) => (d.group_id || 'outro') === groupFilter)
+    }
+    if (term) {
+      list = list.filter((d) =>
+        (d.medName || '').toLowerCase().includes(term) ||
+        (d.unit || '').toLowerCase().includes(term) ||
+        (d.observation || '').toLowerCase().includes(term),
+      )
+    }
+    return list
+  }, [rangeDoses, search, groupFilter])
+
+  function setGroupParam(g) {
+    const next = new URLSearchParams(searchParams)
+    if (g) next.set('group', g)
+    else next.delete('group')
+    setSearchParams(next, { replace: true })
+  }
 
   // Adesão % por dia (pra day strip)
   const adherenceByDay = useMemo(() => {
@@ -177,6 +196,45 @@ export default function DoseHistory() {
             onChange={setPatientId}
             allowAll
             placeholder="Todos pacientes"
+          />
+        )}
+
+        {/* v0.2.4.0 — filtro por categoria (chip clicável quando ativo, picker quando vazio) */}
+        {groupFilter ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 14px',
+            background: 'var(--dosy-peach-100)',
+            border: '1.5px solid var(--dosy-primary)',
+            borderRadius: 14,
+          }}>
+            <span style={{
+              width: 12, height: 12, borderRadius: '50%',
+              background: getGroup(groupFilter).color,
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+            }} aria-hidden="true" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dosy-fg)', flex: 1 }}>
+              Filtrando por: {getGroup(groupFilter).label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setGroupParam(null)}
+              aria-label="Limpar filtro de categoria"
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--dosy-fg-muted)',
+                padding: 4, display: 'inline-flex', alignItems: 'center',
+              }}
+            >
+              <XIcon size={16} strokeWidth={2}/>
+            </button>
+          </div>
+        ) : (
+          <CategoryPicker
+            value={null}
+            onChange={setGroupParam}
+            label="Filtrar por categoria"
+            helperText="Opcional · toque para escolher uma categoria"
           />
         )}
 

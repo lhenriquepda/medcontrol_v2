@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { suggestMedications } from '../data/medications'
 import { useUserMedications } from '../hooks/useUserMedications'
+import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import { useMedCatalogSearch } from '../hooks/useMedCatalogSearch'
+import { getGroup } from '../constants/medCategories'
 
 /**
  * MedNameInput — text field with dropdown autocomplete.
@@ -11,11 +13,13 @@ import { useMedCatalogSearch } from '../hooks/useMedCatalogSearch'
  *   2. ANVISA catalog via search_medications RPC (debounced 300ms)
  *   3. Local curated list (fallback)
  *
- * Each suggestion: { text: string, principio?: string }
- * principio shown as subtitle for catalog results only.
- * onChange always receives the plain medName string.
+ * Cada suggestion enviada para `onSelectFull` traz metadata para autofill
+ * da categoria (v0.2.4.0 — Plano §6.4):
+ *   { text, principio_ativo, group_id, cmed_class, source: 'catalog'|'user'|'free' }
+ *
+ * `onChange(string)` continua retro-compatível para integrações antigas.
  */
-export default function MedNameInput({ value, onChange, required = true }) {
+export default function MedNameInput({ value, onChange, onSelectFull, required = true }) {
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState([])
   const [highlight, setHighlight] = useState(-1)
@@ -28,6 +32,7 @@ export default function MedNameInput({ value, onChange, required = true }) {
 
   const { data: userMeds = [] } = useUserMedications()
   const { data: catalogItems = [], isFetching: catalogFetching } = useMedCatalogSearch(debouncedValue)
+  const { hintFor: userHintFor } = useUserMedicationCategories()
 
   // Debounce value for ANVISA catalog search (300ms)
   useEffect(() => {
@@ -42,11 +47,20 @@ export default function MedNameInput({ value, onChange, required = true }) {
   useEffect(() => {
     const local = suggestMedications(value, 4, userMeds)
 
-    // Convert local to suggestion objects (no subtitle)
-    const localSuggestions = local.map((text) => ({ text }))
-
     // Normalize for accent-insensitive comparison
     const normKey = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
+
+    // Local suggestions ganham category-hint do user_medications quando bate
+    const localSuggestions = local.map((text) => {
+      const hint = userHintFor ? userHintFor(text) : null
+      return {
+        text,
+        source: hint ? 'user' : 'free',
+        group_id: hint?.group_id || null,
+        cmed_class: hint?.cmed_class || null,
+        principio_ativo: hint?.principio_ativo || null,
+      }
+    })
 
     // ANVISA results not already in local (dedup accent + case insensitive)
     const localKeys = new Set(local.map(normKey))
@@ -56,6 +70,10 @@ export default function MedNameInput({ value, onChange, required = true }) {
       .map((item) => ({
         text: item.nome_comercial,
         principio: normKey(item.principio_ativo) !== normKey(item.nome_comercial) ? item.principio_ativo : undefined,
+        source: 'catalog',
+        group_id: item.group_id || null,
+        cmed_class: item.cmed_class || null,
+        principio_ativo: item.principio_ativo || null,
       }))
 
     const merged = [...localSuggestions, ...catalogSuggestions]
@@ -91,6 +109,16 @@ export default function MedNameInput({ value, onChange, required = true }) {
   function pick(item) {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
     onChange(item.text)
+    // v0.2.4.0 — propaga metadata pra autofill do CategoryPicker
+    if (onSelectFull) {
+      onSelectFull({
+        name: item.text,
+        principio_ativo: item.principio_ativo || item.principio || null,
+        group_id: item.group_id || null,
+        cmed_class: item.cmed_class || null,
+        source: item.source || 'free',
+      })
+    }
     setOpen(false)
     setHighlight(-1)
     inputRef.current?.focus()
@@ -214,13 +242,42 @@ export default function MedNameInput({ value, onChange, required = true }) {
                   color: 'var(--dosy-fg)',
                   fontWeight: isHl ? 600 : 500,
                   transition: 'background 150ms var(--dosy-ease-out)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
                 }}
               >
-                <div>{highlightMatch(item.text, value)}</div>
-                {item.principio && (
-                  <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', fontWeight: 400, marginTop: 1 }}>
-                    {item.principio}
-                  </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>{highlightMatch(item.text, value)}</div>
+                  {item.principio && (
+                    <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', fontWeight: 400, marginTop: 1 }}>
+                      {item.principio}
+                    </div>
+                  )}
+                </div>
+                {item.group_id && (
+                  <span aria-label={`categoria ${getGroup(item.group_id).label}`} style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: 'var(--dosy-bg)',
+                    border: '1px solid var(--dosy-border)',
+                    fontSize: 10,
+                    fontWeight: 500,
+                    color: 'var(--dosy-fg-muted)',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    <span style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: getGroup(item.group_id).color,
+                    }} aria-hidden="true" />
+                    {getGroup(item.group_id).label}
+                  </span>
                 )}
               </li>
             )

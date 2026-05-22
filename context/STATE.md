@@ -10,13 +10,24 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.3.17` (shipped) — próxima `v0.2.4.0` (Categorias de Medicamentos) |
-| **versionCode** | `80` (v0.2.3.17) → próximo `81` (v0.2.4.0) |
-| **Branch ativa** | `master` (v0.2.3.17 mergeada) — próxima release `release/v0.2.4.0-categorias-medicamentos` em curso |
-| **Último tag master** | `v0.2.3.17` · merge `{hash-pos-merge}` — anterior `v0.2.3.14` `3858126` |
-| **Ship date v0.2.3.17** | **2026-05-20 15:00 BRT** Internal Testing |
-| **Play Console** | ✅ Internal Testing vc 80 (v0.2.3.17) — Disponível para testadores internos desde 2026-05-20 |
+| **Versão** | `v0.2.4.0` (em curso — Categorias de Medicamentos) |
+| **versionCode** | `81` (v0.2.4.0) — anterior `80` (v0.2.3.17 shipped) |
+| **Branch ativa** | `release/v0.2.4.0-categorias-medicamentos` (16a0a37→d0e576d) — Fase 1+2+3 completas + AAB CI |
+| **Último tag master** | `v0.2.3.17` · commit `8cf809d` — anterior `v0.2.3.14` `3858126` |
+| **Ship date v0.2.3.17** | 2026-05-20 15:00 BRT Internal Testing |
+| **Play Console v0.2.3.17** | ✅ Internal Testing vc 80 — Disponível para testadores internos |
+| **Play Console v0.2.4.0** | ⏳ AAB no Supabase Storage `aab-transient/app-release.aab` aguardando upload Vetor 4 (Chrome MCP reconectar) |
 | **Vercel prod** | `dosymed.app` — v0.2.3.17 (sync após merge master desta release fechada) |
+
+**Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
+
+- **Plano Categorias de Medicamentos** ✅ — `Plano_Categorias_Medicamentos.md` raiz v3, 9/9 decisões §10 aprovadas autônomamente (hierarquia 2 níveis, CMED source-of-truth, fallback agressivo, doses futuras herdam, etc).
+- **Fase 1 — Foundation** ✅ — 4 migrations em prod (catálogo + user_medications RLS + treatments/doses/sos_rules + RPCs). Backfill catalog 764 rows: 274 dicionário + 30 heurística + 460 'outro'. Clavulin/Novalgina/Tylenol/Voltaren classificados certo via tokenização de princípio composto.
+- **Fase 2 — UI Cadastro** ✅ — CategoryPicker.jsx + useUserMedicationCategories + MedNameInput onSelectFull + TreatmentForm/SOS integração autofill + required-when-not-autofilled + upsert_user_medication ao salvar.
+- **Fase 3 — Analytics/Histórico** ✅ — Card "Doses por categoria" donut + lista top 6 + deep-link `/historico?group=<id>` + filtro categoria com chip ativo no DoseHistory.
+- **AAB v0.2.4.0** ✅ — Build via GitHub Actions Linux (local Windows quebrado por Java 25 + Unix Domain Sockets bug). Vc 81 vN 0.2.4.0, 32.8MB signed, em `android/app/release/app-release.aab`.
+- **Upload Vetor 4** ⏳ — AAB já em Supabase Storage HTTPS público. Chrome MCP desconectou no início do upload; ScheduleWakeup retry agendado. SQL `app_releases` row vc 81 inserida (ON CONFLICT UPDATE).
+- **Build vite verde + ESLint zero erros** ✅
 
 **Status release/v0.2.3.17 (sessão autônoma 2026-05-20):**
 

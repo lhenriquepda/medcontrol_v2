@@ -1,0 +1,29 @@
+{
+  "_comment": "v0.2.4.0 — Heurística por sufixo/keyword. Aplicada APÓS dicionário de principio_ativo_to_group.json. Cada bucket é array de substrings que aparecem em principio_ativo (normalizado: lowercase sem acento) e indicam o grupo.",
+
+  "antibiotico": ["cilina", "cefaclor", "cefadroxi", "cefalex", "cefepi", "cefotaxi", "cefoxitin", "ceftaz", "ceftria", "cefuroxi", "azitromici", "claritro", "eritromici", "norfloxa", "ofloxa", "moxiflox", "doxiciclina", "minoclina", "sulfameto", "trimeto"],
+
+  "anti_inflamatorio": ["profeno", "fenaco", "coxib", "nimesulida", "meloxic", "piroxic", "tenoxic", "lornoxic", "indometac", "naproxe"],
+
+  "corticoide": ["sona", "metasona", "predniso", "predniso", "hidrocort", "fluticas", "mometas", "budeson", "triancin"],
+
+  "antialergico": ["dina", "fenadina", "atadina", "tirizin", "ebastin", "rupatadin", "bilastin"],
+
+  "antidepressivo": ["alina", "oxetin", "pram", "xetina", "venlafa", "duloxe", "mirtaza", "bupropi", "trazod", "vortio"],
+
+  "ansiolitico": ["zolam", "azepam", "zolpid", "zopiclon", "buspiro"],
+
+  "anti_hipertensivo": ["sartana", "pril", "dipina", "dipino", "olol", "iazida", "talidona"],
+
+  "antidiabetico": ["gliptina", "gliflozina", "glutida", "insulina"],
+
+  "antiviral": ["clovir", "tegravir", "navir", "buvir"],
+
+  "antifungico": ["conazol", "fungin", "terbin", "anfoteric"],
+
+  "gastrointestinal": ["prazol", "ranitidi", "famotidi", "domperido", "metoclopra", "bromopri", "ondansetro"],
+
+  "broncodilatador": ["terol", "tropio", "lucaste", "ambrox", "bromexin"],
+
+  "vitamina": ["vitamina", "vitam", "polivitamin", "multivitamin", "complexo b", "acido folico", "acido ascorbic", "colecalcife", "ergocalcife", "calcitriol", "tocoferol", "tiamina", "riboflavina", "piridoxina", "cianocobalam", "carbonato de calcio", "sulfato ferroso", "sulfato de zinco", "omega"]
+}

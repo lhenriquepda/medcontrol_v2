@@ -7,6 +7,7 @@ import {
 import { TIMING, EASE } from '../animations'
 import LockedOverlay from '../components/LockedOverlay'
 import AdBanner from '../components/AdBanner'
+import { Link } from 'react-router-dom'
 import { Card, Chip, StatusPill } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import PatientAvatar from '../components/PatientAvatar'
@@ -15,6 +16,7 @@ import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
 import { formatDate } from '../utils/dateUtils'
+import { getGroup } from '../constants/medCategories'
 
 // v0.2.3.5 #241 — Analytics redesign healthcare-focused.
 // Layout inspired premium dark mobile dashboards (gauge ring + insight cards + trends).
@@ -131,6 +133,31 @@ export default function Analytics() {
       }))
       .sort((a, b) => b.percent - a.percent)
   }, [doses, patients])
+
+  // v0.2.4.0 — Doses por categoria (group_id), só status='done' no período
+  const dosesByGroup = useMemo(() => {
+    const map = new Map()
+    let total = 0
+    for (const d of doses) {
+      if (d.status !== 'done') continue
+      const g = d.group_id || 'outro'
+      const m = map.get(g) || { count: 0, meds: new Set() }
+      m.count += 1
+      m.meds.add(d.medName)
+      map.set(g, m)
+      total += 1
+    }
+    const list = [...map.entries()]
+      .map(([groupId, m]) => ({
+        groupId,
+        count: m.count,
+        medsCount: m.meds.size,
+        info: getGroup(groupId),
+        pct: total ? Math.round((m.count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+    return { list, total }
+  }, [doses])
 
   // Top medicamentos por uso (count doses scheduled, não importa status)
   const topMeds = useMemo(() => {
@@ -453,6 +480,91 @@ export default function Analytics() {
                           </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* v0.2.4.0 — DOSES POR CATEGORIA (bar chart compacto + chip top 5 + click filtra Histórico) */}
+            {dosesByGroup.total > 0 && (
+              <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: TIMING.base, ease: EASE.inOut }}>
+                <Card padding={16}>
+                  <h3 style={{
+                    fontFamily: 'var(--dosy-font-display)',
+                    fontWeight: 700, fontSize: 14, margin: '0 0 4px 0',
+                    color: 'var(--dosy-fg)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <Activity size={14} strokeWidth={2.25} style={{ color: 'var(--dosy-primary)' }}/>
+                    Doses por categoria
+                  </h3>
+                  <p style={{
+                    fontSize: 11.5, color: 'var(--dosy-fg-secondary)',
+                    margin: '0 0 12px 0', lineHeight: 1.4,
+                  }}>
+                    {dosesByGroup.total} doses tomadas · toque numa categoria para filtrar o histórico
+                  </p>
+
+                  {/* Barra empilhada — proporção visual entre grupos */}
+                  <div style={{
+                    display: 'flex', width: '100%', height: 10,
+                    borderRadius: 9999, overflow: 'hidden', marginBottom: 14,
+                    background: 'var(--dosy-bg-sunken)',
+                  }}>
+                    {dosesByGroup.list.map((g) => (
+                      <div
+                        key={g.groupId}
+                        title={`${g.info.label} — ${g.count} doses (${g.pct}%)`}
+                        style={{
+                          width: `${g.pct}%`,
+                          background: g.info.color,
+                          transition: 'width 600ms var(--dosy-ease-out)',
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {dosesByGroup.list.slice(0, 6).map((g) => (
+                      <Link
+                        key={g.groupId}
+                        to={`/historico?group=${encodeURIComponent(g.groupId)}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 4px',
+                          textDecoration: 'none',
+                          color: 'inherit',
+                          borderRadius: 8,
+                          transition: 'background 150ms var(--dosy-ease-out)',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--dosy-bg)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <span style={{
+                          width: 12, height: 12, borderRadius: '50%',
+                          background: g.info.color,
+                          flexShrink: 0,
+                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                        }} aria-hidden="true" />
+                        <span style={{
+                          fontSize: 13, fontWeight: 600, flex: 1,
+                          color: 'var(--dosy-fg)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {g.info.label}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--dosy-fg-tertiary)' }}>
+                          {g.medsCount} med{g.medsCount === 1 ? '' : 's'}
+                        </span>
+                        <span style={{
+                          fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)',
+                          fontVariantNumeric: 'tabular-nums',
+                          minWidth: 32, textAlign: 'right',
+                        }}>
+                          {g.count}
+                        </span>
+                      </Link>
                     ))}
                   </div>
                 </Card>
