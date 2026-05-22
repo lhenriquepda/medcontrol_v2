@@ -5,7 +5,7 @@ import { ClipboardList, Plus, X as XIcon, Pill, User, CalendarClock, CalendarRan
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { Sheet, Card, Button, Input, Chip, Toggle, CategoryPicker } from './../components/dosy'
+import { Sheet, Card, Button, Input, Chip, Toggle, CategoryPicker, CategoryHintModal } from './../components/dosy'
 import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
@@ -54,7 +54,18 @@ export default function TreatmentForm() {
   // v0.2.4.0 — autofill flag separa "veio do catálogo" de "user editou".
   // Quando true, CategoryPicker mostra ícone 🔒 (mas continua editável).
   const [autoFilledGroup, setAutoFilledGroup] = useState(false)
-  const { upsertAsync: upsertUserMedication, hintFor: userMedHint } = useUserMedicationCategories()
+  // v0.2.5.0 — modal contextual aparece quando user tenta salvar sem categoria
+  const [hintModalOpen, setHintModalOpen] = useState(false)
+  const [pendingSubmit, setPendingSubmit] = useState(null)
+  const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
+  // Top group_ids mais usados pelo user histórico (pra ranking modal)
+  const userTopGroups = useMemo(() => {
+    const counts = new Map()
+    for (const m of userMedHistory) {
+      if (m.group_id) counts.set(m.group_id, (counts.get(m.group_id) || 0) + (m.usage_count || 1))
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
+  }, [userMedHistory])
 
   const [form, setForm] = useState({
     patientId: preselectPatient || '',
@@ -170,13 +181,16 @@ export default function TreatmentForm() {
     if (!form.isContinuous && (!form.durationDays || Number(form.durationDays) < 1)) {
       errs.durationDays = 'Duração obrigatória (≥ 1 dia).'
     }
-    // v0.2.4.0 — categoria obrigatória quando não veio de autofill
-    if (!form.group_id && !autoFilledGroup) {
-      errs.group_id = 'Escolha uma categoria — não conseguimos detectar pelo nome.'
-    }
+    // v0.2.5.0 — sem categoria → abre modal contextual (não bloqueia mais)
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setErrors({})
     if (!form.patientId) { toast.show({ message: 'Selecione um paciente.', kind: 'error' }); return }
+    if (!form.group_id && !autoFilledGroup) {
+      // Abre modal contextual com top-3 categorias sugeridas
+      setPendingSubmit({ form: { ...form } })
+      setHintModalOpen(true)
+      return
+    }
     const payload = {
       patientId: form.patientId,
       medName: form.medName.trim(),
@@ -249,6 +263,64 @@ export default function TreatmentForm() {
         })
       } catch (e) {
         // não bloqueia o fluxo se RPC falhar
+        console.warn('[TreatmentForm] upsert user_medication skipped:', e?.message)
+      }
+      nav('/')
+    } catch (err) {
+      toast.show({ message: err.message || 'Erro ao salvar', kind: 'error' })
+    }
+  }
+
+  // v0.2.5.0 — handler quando user escolhe categoria no modal contextual
+  async function handleHintModalSelect(groupId) {
+    if (!pendingSubmit) return
+    setForm((f) => ({ ...f, group_id: groupId }))
+    setHintModalOpen(false)
+    // Re-disparar submit com a categoria preenchida
+    const pendingForm = { ...pendingSubmit.form, group_id: groupId }
+    setPendingSubmit(null)
+    // Build payload completo (mesma lógica do submit)
+    if (!pendingForm.patientId) {
+      toast.show({ message: 'Selecione um paciente.', kind: 'error' })
+      return
+    }
+    const payload = {
+      patientId: pendingForm.patientId,
+      medName: pendingForm.medName.trim(),
+      unit: pendingForm.unit.trim(),
+      group_id: groupId,
+      cmed_class: pendingForm.cmed_class || null,
+      durationDays: pendingForm.isContinuous ? CONTINUOUS_DAYS : Number(pendingForm.durationDays),
+      isContinuous: pendingForm.isContinuous,
+      startDate: fromDateInput(pendingForm.startAt),
+      mode: pendingForm.mode,
+      intervalHours: pendingForm.mode === 'interval' ? Number(pendingForm.intervalHours) : null,
+      firstDoseTime: pendingForm.mode === 'interval'
+        ? pendingForm.firstDoseTime
+        : JSON.stringify(pendingForm.dailyTimes),
+      dailyTimes: pendingForm.mode === 'times' ? pendingForm.dailyTimes : null,
+    }
+    try {
+      if (editing) {
+        await update.mutateAsync({ id, patch: {
+          medName: payload.medName, unit: payload.unit,
+          intervalHours: payload.intervalHours, durationDays: payload.durationDays,
+          isContinuous: payload.isContinuous,
+          startDate: payload.startDate, firstDoseTime: payload.firstDoseTime,
+          group_id: payload.group_id, cmed_class: payload.cmed_class,
+        } })
+        toast.show({ message: 'Tratamento atualizado.', kind: 'success' })
+      } else {
+        await create.mutateAsync(payload)
+        toast.show({ message: 'Tratamento criado.', kind: 'success' })
+      }
+      try {
+        await upsertUserMedication({
+          name: payload.medName,
+          group_id: payload.group_id,
+          cmed_class: payload.cmed_class,
+        })
+      } catch (e) {
         console.warn('[TreatmentForm] upsert user_medication skipped:', e?.message)
       }
       nav('/')
@@ -825,6 +897,24 @@ export default function TreatmentForm() {
         confirmLabel="Excluir"
         danger
         onConfirm={handleDelete}
+      />
+
+      {/* v0.2.5.0 — modal contextual quando user não preencheu categoria */}
+      <CategoryHintModal
+        open={hintModalOpen}
+        medName={form.medName}
+        userHistoryGroups={userTopGroups}
+        onClose={() => {
+          setHintModalOpen(false)
+          setPendingSubmit(null)
+        }}
+        onSelect={handleHintModalSelect}
+        onOpenFullPicker={() => {
+          setHintModalOpen(false)
+          // user vai escolher via CategoryPicker — limpa pendingSubmit pra próximo submit
+          setPendingSubmit(null)
+          toast.show({ message: 'Escolha a categoria no card acima.', kind: 'info' })
+        }}
       />
 
       <Sheet open={showTemplates} onClose={() => setShowTemplates(false)} title="Carregar modelo">

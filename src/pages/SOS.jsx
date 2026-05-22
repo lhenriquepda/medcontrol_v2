@@ -6,7 +6,7 @@ import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
 import MedNameInput from '../components/MedNameInput'
 import OfflineNotice from '../components/OfflineNotice'
-import { Card, Button, Input, Avatar, CategoryPicker } from '../components/dosy'
+import { Card, Button, Input, Avatar, CategoryPicker, CategoryHintModal } from '../components/dosy'
 import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -32,7 +32,17 @@ export default function SOS() {
   const [cmedClass, setCmedClass] = useState(null)
   const [autoFilledGroup, setAutoFilledGroup] = useState(false)
   const [groupError, setGroupError] = useState(null)
-  const { upsertAsync: upsertUserMedication, hintFor: userMedHint } = useUserMedicationCategories()
+  // v0.2.5.0 — modal contextual quando submit sem categoria
+  const [hintModalOpen, setHintModalOpen] = useState(false)
+  const [pendingSosSubmit, setPendingSosSubmit] = useState(null)
+  const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
+  const userTopGroups = useMemo(() => {
+    const counts = new Map()
+    for (const m of userMedHistory) {
+      if (m.group_id) counts.set(m.group_id, (counts.get(m.group_id) || 0) + (m.usage_count || 1))
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
+  }, [userMedHistory])
   // v0.2.3.6 #261 fix: split datetime-local em date + time separados.
   // WebView Android usa locale OS (en-US emulator) ignorando lang="pt-BR".
   // Date type="date" + time type="time" renderizam consistentes pt-BR.
@@ -128,10 +138,10 @@ export default function SOS() {
     if (!patientId || !medName || !unit) {
       toast.show({ message: 'Preencha paciente, medicamento e dose.', kind: 'error' }); return
     }
-    // v0.2.4.0 — categoria obrigatória quando não veio de autofill
+    // v0.2.5.0 — categoria vazia abre modal contextual em vez de bloquear
     if (!groupId && !autoFilledGroup) {
-      setGroupError('Escolha uma categoria — não conseguimos detectar pelo nome.')
-      toast.show({ message: 'Escolha a categoria do medicamento.', kind: 'error' })
+      setPendingSosSubmit({ medName, unit, patientId, dateVal, timeVal, observation })
+      setHintModalOpen(true)
       return
     }
     setGroupError(null)
@@ -677,6 +687,42 @@ export default function SOS() {
           // ConfirmDialog dispara onConfirm() + onClose() no confirm path.
           // Sem toast aqui: user que clicou Cancelar sabe que cancelou.
           setOverLimitConfirm(null)
+        }}
+      />
+
+      {/* v0.2.5.0 — modal contextual SOS sem categoria */}
+      <CategoryHintModal
+        open={hintModalOpen}
+        medName={medName}
+        userHistoryGroups={userTopGroups}
+        onClose={() => {
+          setHintModalOpen(false)
+          setPendingSosSubmit(null)
+        }}
+        onSelect={async (chosenGroupId) => {
+          setHintModalOpen(false)
+          setGroupId(chosenGroupId)
+          setAutoFilledGroup(true)
+          setGroupError(null)
+          const p = pendingSosSubmit
+          setPendingSosSubmit(null)
+          if (!p) return
+          const scheduledAt = fromDatetimeLocalInput(`${p.dateVal}T${p.timeVal}`)
+          const payload = {
+            patientId: p.patientId,
+            medName: p.medName.trim(),
+            unit: p.unit.trim(),
+            scheduledAt,
+            observation: p.observation,
+            group_id: chosenGroupId,
+            cmed_class: cmedClass,
+          }
+          await doSubmit(payload, false)
+        }}
+        onOpenFullPicker={() => {
+          setHintModalOpen(false)
+          setPendingSosSubmit(null)
+          toast.show({ message: 'Escolha a categoria no card acima.', kind: 'info' })
         }}
       />
     </motion.div>

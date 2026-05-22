@@ -34,3 +34,5 @@ export { default as FilterPanel } from './FilterPanel.jsx'
 export { default as DoseSheet } from './DoseSheet.jsx'
 // v0.2.4.0 Categorias de Medicamentos
 export { default as CategoryPicker } from './CategoryPicker.jsx'
+// v0.2.5.0 UX refactor — modal contextual quando autofill falha
+export { default as CategoryHintModal } from './CategoryHintModal.jsx'

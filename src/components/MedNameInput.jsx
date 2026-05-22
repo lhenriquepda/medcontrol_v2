@@ -6,51 +6,70 @@ import { useMedCatalogSearch } from '../hooks/useMedCatalogSearch'
 import { getGroup } from '../constants/medCategories'
 
 /**
- * MedNameInput — text field with dropdown autocomplete.
+ * MedNameInput — autocomplete v0.2.5.0 mobile-aware
  *
- * Sources (merged, deduplicated):
- *   1. User's own medication history (priority, synchronous)
- *   2. ANVISA catalog via search_medications RPC (debounced 300ms)
- *   3. Local curated list (fallback)
+ * Fixes UX (mobile Android):
+ *  - Removido handler Tab (não auto-selecionava errado quando user só queria sair)
+ *  - Removido onMouseEnter setHighlight (gerava hovers fantasmas em touch)
+ *  - Removido blur 150ms automático — só fecha via Escape, X explícito, ou pick()
+ *  - Touch target <li> min-height 56px
+ *  - Não auto-abre em exact match (evita re-abertura indesejada após pick)
+ *  - visualViewport listener — maxHeight ajusta quando teclado abre
+ *  - Sem e.preventDefault no pointerdown do <li> — scroll touch funciona
  *
- * Cada suggestion enviada para `onSelectFull` traz metadata para autofill
- * da categoria (v0.2.4.0 — Plano §6.4):
- *   { text, principio_ativo, group_id, cmed_class, source: 'catalog'|'user'|'free' }
- *
- * `onChange(string)` continua retro-compatível para integrações antigas.
+ * onSelectFull (v0.2.4.0): { name, principio_ativo, group_id, cmed_class, source }
  */
 export default function MedNameInput({ value, onChange, onSelectFull, required = true }) {
   const [open, setOpen] = useState(false)
   const [suggestions, setSuggestions] = useState([])
   const [highlight, setHighlight] = useState(-1)
   const [debouncedValue, setDebouncedValue] = useState(value)
+  const [dropdownMaxHeight, setDropdownMaxHeight] = useState(280)
   const wrapperRef = useRef(null)
   const inputRef = useRef(null)
-  const blurTimerRef = useRef(null)
   const debounceRef = useRef(null)
+  const pickingRef = useRef(false) // protege contra fechamento espúrio durante pick
   const listId = useId()
 
   const { data: userMeds = [] } = useUserMedications()
   const { data: catalogItems = [], isFetching: catalogFetching } = useMedCatalogSearch(debouncedValue)
   const { hintFor: userHintFor } = useUserMedicationCategories()
 
-  // Debounce value for ANVISA catalog search (300ms)
+  // Debounce value pro RPC ANVISA (300ms)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => setDebouncedValue(value), 300)
     return () => clearTimeout(debounceRef.current)
   }, [value])
 
-  // Merge sources whenever any input changes
+  // visualViewport — ajusta maxHeight quando teclado abre/fecha em Android
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return
+    function recomputeHeight() {
+      if (!wrapperRef.current) return
+      const inputRect = wrapperRef.current.getBoundingClientRect()
+      const vv = window.visualViewport
+      // Espaço disponível abaixo do input dentro do viewport visível (com teclado aberto, vv.height é menor)
+      const available = (vv.offsetTop + vv.height) - inputRect.bottom - 24
+      const clamped = Math.max(140, Math.min(380, available))
+      setDropdownMaxHeight(clamped)
+    }
+    recomputeHeight()
+    window.visualViewport.addEventListener('resize', recomputeHeight)
+    window.visualViewport.addEventListener('scroll', recomputeHeight)
+    return () => {
+      window.visualViewport.removeEventListener('resize', recomputeHeight)
+      window.visualViewport.removeEventListener('scroll', recomputeHeight)
+    }
+  }, [open])
+
+  // Merge fontes (histórico user + ANVISA + fallback local)
   const userMedsKey = useMemo(() => userMeds.join('|'), [userMeds])
 
   useEffect(() => {
     const local = suggestMedications(value, 4, userMeds)
-
-    // Normalize for accent-insensitive comparison
     const normKey = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
-    // Local suggestions ganham category-hint do user_medications quando bate
     const localSuggestions = local.map((text) => {
       const hint = userHintFor ? userHintFor(text) : null
       return {
@@ -62,15 +81,15 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
       }
     })
 
-    // ANVISA results not already in local (dedup accent + case insensitive)
     const localKeys = new Set(local.map(normKey))
     const catalogSuggestions = (catalogItems || [])
       .filter((item) => !localKeys.has(normKey(item.nome_comercial)))
-      .slice(0, 6)
+      .slice(0, 8)
       .map((item) => ({
         text: item.nome_comercial,
         principio: normKey(item.principio_ativo) !== normKey(item.nome_comercial) ? item.principio_ativo : undefined,
         source: 'catalog',
+        is_dcb: !!item.is_dcb,
         group_id: item.group_id || null,
         cmed_class: item.cmed_class || null,
         principio_ativo: item.principio_ativo || null,
@@ -82,16 +101,18 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     if (merged.length === 0) setHighlight(-1)
     else if (highlight >= merged.length) setHighlight(merged.length - 1)
 
-    if (document.activeElement === inputRef.current) {
-      const exact = merged.length > 0 && merged[0].text.toLowerCase() === value.toLowerCase()
+    // Abre APENAS se está focado E tem sugestões E não tem exact-match (evita re-abertura pós-pick)
+    if (document.activeElement === inputRef.current && !pickingRef.current) {
+      const exact = merged.length > 0 && normKey(merged[0].text) === normKey(value)
       setOpen(merged.length > 0 && !exact)
     }
   }, [value, userMedsKey, catalogItems])
 
-  // Close on outside tap
+  // Fechamento por tap fora — só quando NÃO está picking
   useEffect(() => {
     if (!open) return
     function handleDocClick(e) {
+      if (pickingRef.current) return
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false)
     }
     document.addEventListener('pointerdown', handleDocClick)
@@ -100,16 +121,18 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
 
   function handleChange(e) { onChange(e.target.value) }
 
-  function handleFocus() { if (suggestions.length > 0) setOpen(true) }
-
-  function handleBlur() {
-    blurTimerRef.current = setTimeout(() => setOpen(false), 150)
+  function handleFocus() {
+    if (suggestions.length > 0 && value && value.length >= 2) {
+      const exact = suggestions.length > 0 && (suggestions[0].text || '').toLowerCase() === value.toLowerCase()
+      if (!exact) setOpen(true)
+    }
   }
 
+  // Removido handleBlur automático — fechamento só via Escape, outside-click, ou pick()
+
   function pick(item) {
-    if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+    pickingRef.current = true
     onChange(item.text)
-    // v0.2.4.0 — propaga metadata pra autofill do CategoryPicker
     if (onSelectFull) {
       onSelectFull({
         name: item.text,
@@ -121,7 +144,8 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     }
     setOpen(false)
     setHighlight(-1)
-    inputRef.current?.focus()
+    // Reset flag após próximo tick pra outside-click voltar a funcionar
+    setTimeout(() => { pickingRef.current = false }, 300)
   }
 
   function handleKeyDown(e) {
@@ -147,12 +171,8 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     } else if (e.key === 'Escape') {
       e.preventDefault()
       setOpen(false)
-    } else if (e.key === 'Tab') {
-      if (highlight >= 0 && highlight < suggestions.length) {
-        e.preventDefault()
-        pick(suggestions[highlight])
-      }
     }
+    // Tab não auto-seleciona (v0.2.5.0 fix) — só Enter explícito
   }
 
   function highlightMatch(text, query) {
@@ -185,8 +205,7 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
-        onBlur={handleBlur}
-        placeholder="Ex: Paracetamol"
+        placeholder="Ex: Paracetamol, Dipirona, Amoxicilina…"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
@@ -199,7 +218,8 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
           background: 'var(--dosy-bg-elevated)',
           boxShadow: 'var(--dosy-shadow-xs)',
           border: '1.5px solid transparent',
-          fontSize: 15, color: 'var(--dosy-fg)',
+          fontSize: 15,
+          color: 'var(--dosy-fg)',
           outline: 'none',
           fontFamily: 'var(--dosy-font-body)',
         }}
@@ -210,10 +230,17 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
           id={listId}
           role="listbox"
           style={{
-            position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)',
-            zIndex: 30,
-            maxHeight: 280, overflowY: 'auto',
-            margin: 0, padding: '4px 0',
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 'calc(100% + 6px)',
+            zIndex: 1000,
+            maxHeight: dropdownMaxHeight,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',  // evita scroll do body
+            WebkitOverflowScrolling: 'touch',
+            margin: 0,
+            padding: '4px 0',
             listStyle: 'none',
             borderRadius: 16,
             background: 'var(--dosy-bg-elevated)',
@@ -231,26 +258,47 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
                 id={`${listId}-opt-${i}`}
                 role="option"
                 aria-selected={isHl}
-                onPointerDown={(e) => { e.preventDefault(); pick(item) }}
-                onMouseEnter={() => setHighlight(i)}
+                onClick={() => pick(item)}
                 style={{
-                  padding: item.principio ? '8px 14px 6px' : '10px 14px',
+                  padding: '14px 16px',
+                  minHeight: 56,
                   fontSize: 14,
                   cursor: 'pointer',
                   userSelect: 'none',
                   background: isHl ? 'var(--dosy-peach-100)' : 'transparent',
                   color: 'var(--dosy-fg)',
                   fontWeight: isHl ? 600 : 500,
-                  transition: 'background 150ms var(--dosy-ease-out)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
+                  borderBottom: '1px solid var(--dosy-border)',
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div>{highlightMatch(item.text, value)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {highlightMatch(item.text, value)}
+                    {item.is_dcb && (
+                      <span aria-label="Denominação genérica" style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        background: 'var(--dosy-blue-100, #e0f2fe)',
+                        color: 'var(--dosy-blue-600, #0369a1)',
+                        letterSpacing: '0.5px',
+                      }}>DCB</span>
+                    )}
+                  </div>
                   {item.principio && (
-                    <div style={{ fontSize: 11, color: 'var(--dosy-fg-muted)', fontWeight: 400, marginTop: 1 }}>
+                    <div style={{
+                      fontSize: 11,
+                      color: 'var(--dosy-fg-muted)',
+                      fontWeight: 400,
+                      marginTop: 2,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
                       {item.principio}
                     </div>
                   )}
@@ -260,7 +308,7 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
-                    padding: '2px 8px',
+                    padding: '3px 9px',
                     borderRadius: 999,
                     background: 'var(--dosy-bg)',
                     border: '1px solid var(--dosy-border)',
@@ -271,9 +319,7 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
                     whiteSpace: 'nowrap',
                   }}>
                     <span style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
+                      width: 6, height: 6, borderRadius: '50%',
                       background: getGroup(item.group_id).color,
                     }} aria-hidden="true" />
                     {getGroup(item.group_id).label}
@@ -284,8 +330,10 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
           })}
           {catalogFetching && (
             <li style={{
-              padding: '6px 14px', fontSize: 11,
-              color: 'var(--dosy-fg-muted)', fontStyle: 'italic',
+              padding: '10px 16px',
+              fontSize: 11,
+              color: 'var(--dosy-fg-muted)',
+              fontStyle: 'italic',
               listStyle: 'none',
             }}>
               buscando no catálogo ANVISA…
