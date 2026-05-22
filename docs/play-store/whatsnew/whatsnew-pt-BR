@@ -1,5 +1,6 @@
-v0.2.3.17 — Alarme mais robusto + base para próximas melhorias
+v0.2.4.0 — Categorias de medicamentos
 
-• Alarme com dois horários muito próximos não trava mais: corrigida condição de corrida no serviço de som/vibração que podia gerar travamento quando alarmes consecutivos disparavam.
-• Limpeza interna: removido código legado do BottomSheet (sem impacto visível).
-• Base de componentes nova pronta pra próximas telas — sem mudança visível ainda nesta versão.
+• Cada tratamento e SOS agora tem uma categoria (Antibiótico, Antitérmico, Vitamina, etc.). Quando o nome aparece no nosso catálogo, a categoria é detectada automaticamente.
+• Quando você digita um medicamento novo, o app aprende a categoria — na próxima vez ele já preenche sozinho.
+• Análises ganharam um card novo "Doses por categoria" — agora dá pra ver rapidinho quantas vezes usou cada grupo no período.
+• Histórico de doses pode ser filtrado por categoria — descubra em segundos quantos antibióticos foram tomados nos últimos 3 meses.
