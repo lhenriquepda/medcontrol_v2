@@ -20,9 +20,26 @@
 
 ---
 
-## 🆕 Release atual — v0.2.3.17 EM CURSO (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
+## 🆕 Release atual — v0.2.4.0 EM CURSO (vc 81, Categorias de Medicamentos)
 
-**Status:** branch `release/v0.2.3.17`. Esforço ~2h. Aguarda upload AAB Play Console.
+**Status:** branch `release/v0.2.4.0-categorias-medicamentos`. Plano em `Plano_Categorias_Medicamentos.md` raiz.
+
+**Escopo principal:**
+
+- Hierarquia 2 níveis: 16 grupos amigáveis (Antibiótico, Antitérmico, Vitamina, etc.) + ~90 classes CMED oficiais
+- Ingest mensal CMED (Câmara de Regulação de Preços ANVISA) via Edge Function cron
+- CategoryPicker.jsx com autofill quando MedNameInput sugere do catálogo, required-when-not-autofilled
+- Tabela `user_medications` per-user com aprendizado de categoria via Realtime
+- Analytics: card Doses por Categoria (donut + top 5), filtro chip em Histórico, grupo em Reports PDF/CSV
+- Backfill heurístico (fallback) para itens fora CMED (~3-5%)
+
+**Validações pendentes:** seguir mesmo padrão da v0.2.3.17 — 2-emulator QA + upload Vetor 4.
+
+---
+
+## 📦 Release anterior — v0.2.3.17 SHIPPED (vc 80, refactor Fase 2 thread-safety + Fase 4 componentes core)
+
+**Status:** ✅ **PUBLICADO Internal Testing 2026-05-20 15:00 BRT** via Vetor 4 (Supabase Storage HTTPS proxy). Merge `master` + tag aplicada. Esforço total ~2h sessão autônoma.
 
 **Validações autonomous COMPLETAS:**
 
