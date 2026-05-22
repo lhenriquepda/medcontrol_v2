@@ -13,10 +13,11 @@ import Icon from '../components/Icon'
 import AdBanner from '../components/AdBanner'
 import { SkeletonList } from '../components/Skeleton'
 // Dosy v0.2.0.0 redesign — primitives + hero/stats
-import { Card, Avatar, StatusPill, Button } from '../components/dosy'
+import { Card, Avatar, StatusPill, Button, EmptyState } from '../components/dosy'
 import PatientAvatar from '../components/PatientAvatar'
 import { HeroGauge } from '../components/dosy/HeroGauge'
 import { MiniStat } from '../components/dosy/MiniStat'
+import StatGrid from '../components/dosy/StatGrid'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
 import { useToast } from '../hooks/useToast'
@@ -92,8 +93,25 @@ export default function Dashboard() {
   // Quando current queryKey está fetching há >8s + temos placeholderData de OUTRA key,
   // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
   // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
-  const isStaleSync = isFetching && dataUpdatedAt && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
-  const allDosesRaw = payload?.doses || []
+  //
+  // Refactor Fase 5 sub-tarefa 8.2 (v0.2.3.16) — guard sessionMountedAt.
+  // `dataUpdatedAt` vem do TanStack hidratado da sessão anterior (PersistQueryClient 24h).
+  // Resultado pre-fix: na primeira reabertura do app após >8s sem usar, banner aparecia
+  // falsamente porque `dataUpdatedAt` era do dia anterior. Agora state local marca o
+  // mount da sessão atual; banner só ativa se houve sucesso DEPOIS desse mount.
+  // useState lazy initializer (chamado 1× no mount) — evita acesso a ref durante render.
+  const [sessionMountedAt] = useState(() => Date.now())
+  const hasFreshSuccess = dataUpdatedAt && dataUpdatedAt > sessionMountedAt
+  const isStaleSync = isFetching && hasFreshSuccess && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
+  // v0.2.3.15 — exclui doses canceladas do Dashboard.
+  // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
+  // pending+futuras pra status='cancelled' (preserva histórico mas marca como
+  // cancelada). Dashboard é orientado a ação ("o que preciso fazer hoje"); cancelada
+  // não tem ação possível → polui o feed visualmente. Permanecem visíveis em
+  // Histórico/Reports/Análise (audit trail + exclusão correta do denominador de
+  // adesão, já fix #0005 v0.2.3.11). Doses já done/skipped ANTES do cancel mantêm
+  // status original (não viram cancelled) — continuam no Dashboard como histórico do dia.
+  const allDosesRaw = (payload?.doses || []).filter((d) => d.status !== 'cancelled')
   const patients = payload?.patients || []
   // Filter client-side por patientId (era passado pra useDoses query antes)
   const allDoses = useMemo(() => {
@@ -245,6 +263,33 @@ export default function Dashboard() {
   // pra não travar Promise.all se uma query falhar/timeout. Hook
   // usePullToRefresh tem timeout 20s como fallback final (Regra 16).
   const handleRefresh = async () => {
+    // Refactor Fase 1 (Refactor_Full.md §5) — barrier de mutation em flight.
+    // Pull-to-refresh durante mutation otimista (confirmDose em curso) podia
+    // disparar refetch que retornava estado pré-commit do server → optimistic
+    // sobrescrito → "status volta do nada". Espera mutations de doses
+    // drenarem (até ~2s = debounce 1500ms + RPC normal) antes do refetch.
+    const pendingDoseMuts = qc.getMutationCache().findAll({
+      predicate: (m) => {
+        const key = m.options?.mutationKey?.[0]
+        return ['confirmDose', 'skipDose', 'undoDose', 'registerSos'].includes(key)
+            && m.state.status === 'pending'
+      }
+    })
+    if (pendingDoseMuts.length > 0) {
+      await Promise.race([
+        Promise.allSettled(pendingDoseMuts.map((m) =>
+          new Promise((resolve) => {
+            const unsub = qc.getMutationCache().subscribe((evt) => {
+              if (evt?.mutation === m && evt.type === 'updated' &&
+                  ['success', 'error'].includes(m.state.status)) {
+                unsub(); resolve()
+              }
+            })
+          })
+        )),
+        new Promise((r) => setTimeout(r, 2000))
+      ])
+    }
     const safeRefetch = (queryKey) =>
       qc.refetchQueries({ queryKey })
         .catch(err => console.warn(`[refresh] ${queryKey[0]} err:`, err?.message))
@@ -335,19 +380,27 @@ export default function Dashboard() {
               </div>
             </div>
           </Card>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <MiniStat
-              label="Adesão 7d"
-              value={adherence == null ? '—' : `${adherence}%`}
-              tone="success"
-            />
-            <MiniStat
-              label="Atrasadas"
-              value={overdueNow}
-              unit={overdueNow > 0 ? 'agora' : undefined}
-              tone={overdueNow > 0 ? 'danger' : 'neutral'}
-            />
-          </div>
+          {/* Refactor Fase 4 (v0.2.3.17) — substitui inline grid 2-col MiniStat
+              pelo componente unificado StatGrid. Mesmo visual; consolida padrão
+              repetido em Dashboard, PatientDetail, Analytics. */}
+          <StatGrid
+            columns={2}
+            stats={[
+              {
+                key: 'adherence',
+                label: 'Adesão 7d',
+                value: adherence == null ? '—' : `${adherence}%`,
+                tone: 'success',
+              },
+              {
+                key: 'overdue',
+                label: 'Atrasadas',
+                value: overdueNow,
+                unit: overdueNow > 0 ? 'agora' : undefined,
+                tone: overdueNow > 0 ? 'danger' : 'neutral',
+              },
+            ]}
+          />
         </div>
 
         <AdBanner />
@@ -438,33 +491,15 @@ export default function Dashboard() {
               </Link>
             </Card>
           ) : mergedDoses.length === 0 ? (
-            <Card padding={28} style={{
-              textAlign: 'center',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 18,
-                background: 'var(--dosy-peach-100)',
-                color: 'var(--dosy-primary)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name="pill" size={32} />
-              </div>
-              <h3 style={{
-                fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
-                fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
-                margin: 0,
-              }}>Nenhuma dose neste período</h3>
-              <p style={{
-                fontSize: 14, color: 'var(--dosy-fg-secondary)',
-                lineHeight: 1.5, margin: 0,
-              }}>Ajuste os filtros ou crie um novo tratamento.</p>
-              <Link to="/tratamento/novo" style={{ textDecoration: 'none', marginTop: 6 }}>
-                <Button kind="primary" size="md" icon={PlusIcon}>
-                  Novo tratamento
-                </Button>
-              </Link>
-            </Card>
+            // Refactor Fase 4 (v0.2.3.17) — substitui inline pelo EmptyState.
+            <EmptyState
+              kind="no-doses"
+              action={
+                <Link to="/tratamento/novo" style={{ textDecoration: 'none' }}>
+                  <Button kind="primary" size="md" icon={PlusIcon}>Novo tratamento</Button>
+                </Link>
+              }
+            />
           ) : (
             <motion.div
               style={{ display: 'flex', flexDirection: 'column', gap: 12 }}

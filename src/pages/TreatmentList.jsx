@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Plus, Pill, Search, Pause, Play, StopCircle, ChevronDown, ChevronUp, Filter, X } from 'lucide-react'
 import { TIMING, EASE } from '../animations'
 import AdBanner from '../components/AdBanner'
-import { Card, IconButton, Button, Input, StatusPill } from '../components/dosy'
+import { Card, IconButton, Button, Input, StatusPill, EmptyState } from '../components/dosy'
 import PageHeader from '../components/dosy/PageHeader'
 import PatientAvatar from '../components/PatientAvatar'
 import { SkeletonList } from '../components/Skeleton'
@@ -201,37 +201,25 @@ export default function TreatmentList() {
         {loadingTreatments ? (
           <SkeletonList count={3} />
         ) : total === 0 ? (
-          <Card padding={28} style={{
-            textAlign: 'center',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-          }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: 18,
-              background: 'var(--dosy-peach-100)',
-              color: 'var(--dosy-primary)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Pill size={32} strokeWidth={2}/>
-            </div>
-            <h3 style={{
-              fontFamily: 'var(--dosy-font-display)', fontWeight: 800,
-              fontSize: 20, letterSpacing: '-0.02em', color: 'var(--dosy-fg)',
-              margin: 0,
-            }}>{hasFilter ? 'Nenhum resultado' : 'Nenhum tratamento'}</h3>
-            <p style={{
-              fontSize: 14, color: 'var(--dosy-fg-secondary)',
-              lineHeight: 1.5, margin: 0,
-            }}>
-              {hasFilter
-                ? 'Tente ajustar busca ou filtro de paciente'
-                : 'Crie um novo tratamento pelo botão +'}
-            </p>
-            {hasFilter && (
-              <Button kind="secondary" size="sm" onClick={() => { setQ(''); setPatientFilter(null) }} icon={X}>
-                Limpar filtros
-              </Button>
-            )}
-          </Card>
+          // Refactor Fase 4 (v0.2.3.17) — substitui bloco inline pelo EmptyState
+          // unificado. Variantes built-in: no-treatments + no-results-filter.
+          hasFilter ? (
+            <EmptyState
+              kind="no-results-filter"
+              icon={<Pill size={28} strokeWidth={1.5}/>}
+              action={
+                <Button kind="secondary" size="sm" onClick={() => { setQ(''); setPatientFilter(null) }} icon={X}>
+                  Limpar filtros
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              kind="no-treatments"
+              icon={<Pill size={28} strokeWidth={1.5}/>}
+              message="Crie um novo tratamento pelo botão +"
+            />
+          )
         ) : (
           <>
             {groups.active.length > 0 && (

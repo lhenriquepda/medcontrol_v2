@@ -37,6 +37,25 @@ import { track, EVENTS } from './analytics'
 import { incrementReviewSignal } from '../hooks/useInAppReview'
 import { uuid } from '../utils/uuid'
 import { generateDoses } from '../utils/generateDoses'
+// Refactor Fase 1 — gate Realtime, versioned cache.
+// Mutations healthcare-críticas marcam queryKey como in-flight no onMutate
+// e limpam no onSettled; Realtime checa o gate antes de invalidar (impede
+// "status volta do nada" causado por race entre debounce Realtime e refetch).
+// versionedCache helpers são usados in-line (stamp _localActedAt em patchDoseInCache).
+import { markInFlight, clearInFlight } from '../state/realtimeGate'
+
+// Refactor Fase 1: queryKeys que mutations healthcare protegem do Realtime.
+// Marcadas in-flight em onMutate, limpas em onSettled.
+const DOSE_PROTECTED_KEYS = [
+  ['dashboard-payload'],
+  ['doses'],
+]
+function markDosesInFlight() {
+  for (const key of DOSE_PROTECTED_KEYS) markInFlight(key)
+}
+function clearDosesInFlight() {
+  for (const key of DOSE_PROTECTED_KEYS) clearInFlight(key)
+}
 
 // Item #204 v0.2.1.8 fix-A — temp ID prefix pra entidades criadas optimistic offline.
 // Quando mutation drena após reconnect, onSuccess substitui temp por real do server.
@@ -81,6 +100,10 @@ async function flushPersistImmediate() {
 // logo só `['dashboard-payload']` precisa ser patchado aqui. Outras telas
 // (DoseHistory, Reports) que usam useDoses(filter) refetcham on-mount.
 function patchDoseInCache(qc, id, patch) {
+  // Refactor Fase 1 — stampa _localActedAt em cada dose patchada. Realtime/refetch
+  // dentro de LATENCY_BUDGET_MS (2500ms) que tentem sobrescrever esse status são
+  // ignorados (versionedCache.shouldAccept), mesmo se gate falhar.
+  const stampedPatch = { ...patch, _localActedAt: Date.now() }
   const dpQueries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
   const snapshots = []
   for (const q of dpQueries) {
@@ -89,7 +112,7 @@ function patchDoseInCache(qc, id, patch) {
     snapshots.push([q.queryKey, data])
     qc.setQueryData(q.queryKey, {
       ...data,
-      doses: data.doses.map((d) => (d.id === id ? { ...d, ...patch } : d))
+      doses: data.doses.map((d) => (d.id === id ? { ...d, ...stampedPatch } : d))
     })
   }
   // Também patcha `['doses', *]` se houver (DoseHistory aberto, etc) —
@@ -101,7 +124,7 @@ function patchDoseInCache(qc, id, patch) {
     snapshots.push([q.queryKey, data])
     qc.setQueryData(
       q.queryKey,
-      data.map((d) => (d.id === id ? { ...d, ...patch } : d))
+      data.map((d) => (d.id === id ? { ...d, ...stampedPatch } : d))
     )
   }
   return snapshots
@@ -158,18 +181,25 @@ function rollback(qc, snapshots) {
   for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
 }
 
-// Debounce 2s pra consolidar invalidate de mutações em sequência rápida
+// Debounce pra consolidar invalidate de mutações em sequência rápida
 // (confirm → undo → skip → undo geraria 9-12 fetches sem debounce).
+//
+// Refactor Fase 1: 2000ms → 1500ms. Garante que mutation refetch SEMPRE
+// vence Realtime invalidate (debounce 2500ms no useRealtime + gate).
+// Sequência de uma marcação otimista:
+//   t=0     onMutate patch + markInFlight (TTL 2500ms)
+//   t=200   RPC retorna, onSettled chama refetchDoses + clearInFlight
+//   t=1700  refetchDoses dispara (1500ms debounce) — server tem commit
+//   t=2500+ se Realtime payload chegou em t=300, debounce extra 2500 → t=2800
+//           gate já limpou em t=200; mas se houve race extra, _localActedAt
+//           ainda protege (stamp em t=0, janela 2500ms = até t=2500).
 let _refetchDosesTimer = null
 function refetchDoses(qc) {
   if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
   _refetchDosesTimer = setTimeout(() => {
-    // v0.2.3.9 P4 — invalida só dashboard-payload (single source of truth).
-    // ['doses', *] consumers que estiverem ativos (DoseHistory/Reports) decidem
-    // refetch via staleTime próprio. Reduz RPCs por mutação 2× → 1×.
     qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
     _refetchDosesTimer = null
-  }, 2000)
+  }, 1500)
 }
 
 /**
@@ -184,6 +214,9 @@ export function registerMutationDefaults(qc, persister = null) {
   qc.setMutationDefaults(['confirmDose'], {
     mutationFn: ({ id, ...rest }) => confirmDose(id, rest),
     onMutate: async ({ id, actualTime }) => {
+      // Refactor Fase 1: gate fecha Realtime invalidate em ['dashboard-payload']
+      // e ['doses'] enquanto mutation está em curso. Limpa em onSettled.
+      markDosesInFlight()
       await qc.cancelQueries({ queryKey: ['doses'] })
       const snapshots = patchDoseInCache(qc, id, {
         status: 'done',
@@ -198,12 +231,16 @@ export function registerMutationDefaults(qc, persister = null) {
       track(EVENTS.DOSE_CONFIRMED)
       incrementReviewSignal('dose_confirmed')
     },
-    onSettled: () => refetchDoses(qc),
+    onSettled: () => {
+      clearDosesInFlight()
+      refetchDoses(qc)
+    },
   })
 
   qc.setMutationDefaults(['skipDose'], {
     mutationFn: ({ id, ...rest }) => skipDose(id, rest),
     onMutate: async ({ id }) => {
+      markDosesInFlight()
       await qc.cancelQueries({ queryKey: ['doses'] })
       const snapshots = patchDoseInCache(qc, id, { status: 'skipped' })
       await flushPersistImmediate()
@@ -211,12 +248,16 @@ export function registerMutationDefaults(qc, persister = null) {
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
     onSuccess: () => track(EVENTS.DOSE_SKIPPED),
-    onSettled: () => refetchDoses(qc),
+    onSettled: () => {
+      clearDosesInFlight()
+      refetchDoses(qc)
+    },
   })
 
   qc.setMutationDefaults(['undoDose'], {
     mutationFn: (id) => undoDose(id),
     onMutate: async (id) => {
+      markDosesInFlight()
       await qc.cancelQueries({ queryKey: ['doses'] })
       const snapshots = patchDoseInCache(qc, id, { status: 'pending', actualTime: null })
       await flushPersistImmediate()
@@ -224,7 +265,10 @@ export function registerMutationDefaults(qc, persister = null) {
     },
     onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
     onSuccess: () => track(EVENTS.DOSE_UNDONE),
-    onSettled: () => refetchDoses(qc),
+    onSettled: () => {
+      clearDosesInFlight()
+      refetchDoses(qc)
+    },
   })
 
   // Item #204 v0.2.1.8 fix-A — optimistic registerSos.
@@ -234,11 +278,13 @@ export function registerMutationDefaults(qc, persister = null) {
   qc.setMutationDefaults(['registerSos'], {
     mutationFn: registerSos,
     onMutate: async (vars) => {
+      markDosesInFlight()
       await qc.cancelQueries({ queryKey: ['doses'] })
       const tempId = makeTempId()
       const tempDose = {
         id: tempId,
         _optimistic: true,
+        _localActedAt: Date.now(), // Refactor Fase 1 — versioned cache stamp
         treatmentId: null,
         patientId: vars.patientId,
         medName: vars.medName,
@@ -276,6 +322,9 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       qc.invalidateQueries({ queryKey: ['doses'] })
       qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
+    },
+    onSettled: () => {
+      clearDosesInFlight()
     },
   })
 

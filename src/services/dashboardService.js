@@ -5,8 +5,14 @@
 // payload duplicado eliminado).
 import { hasSupabase, supabase } from './supabase'
 
-const DEFAULT_RANGE_PAST_DAYS = 30
-const DEFAULT_RANGE_FUTURE_DAYS = 60
+// Refactor Fase 5 sub-tarefa 8.1 (Refactor_Full.md §5 Fase 5) — janela reduzida.
+// Antes: -30d/+60d = 90 dias. Em conta com volume real (2.000+ doses), RPC paginava
+// e refetch passava de 8s em rede normal, disparando banner "Sincronizando dados...".
+// Agora: -7d/+14d = 21 dias. Dashboard filtra inline por 12h/24h/48h/7d/10d (máx
+// 10d), então 14 dias futuro cobre todos os filtros + 1 dia de folga. Janelas
+// históricas continuam via DoseHistory/Reports/Analytics que passam range custom.
+const DEFAULT_RANGE_PAST_DAYS = 7
+const DEFAULT_RANGE_FUTURE_DAYS = 14
 
 function applyDefaultRange(from, to) {
   if (from && to) return { from, to }

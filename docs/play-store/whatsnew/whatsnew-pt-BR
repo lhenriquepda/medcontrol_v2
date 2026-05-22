@@ -1,5 +1,5 @@
-v0.2.3.14 — Banner de nova versão correto + carregamento confiável da lista de cuidadores
+v0.2.3.17 — Alarme mais robusto + base para próximas melhorias
 
-• Aviso "Nova versão disponível" volta a mostrar o nome correto (ex: "0.2.3.14") em vez do código interno
-• Modal de atualização obrigatória passa a abrir mesmo quando o app demora pra detectar a versão atual
-• Tela "Compartilhar paciente" mostra mensagem de erro com botão "Tentar novamente" quando a sessão expira, no lugar do "Carregando..." infinito
+• Alarme com dois horários muito próximos não trava mais: corrigida condição de corrida no serviço de som/vibração que podia gerar travamento quando alarmes consecutivos disparavam.
+• Limpeza interna: removido código legado do BottomSheet (sem impacto visível).
+• Base de componentes nova pronta pra próximas telas — sem mudança visível ainda nesta versão.

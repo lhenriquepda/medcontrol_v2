@@ -4,6 +4,10 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { hasSupabase, supabase } from '../services/supabase'
 import { useAuth } from './useAuth'
+// Refactor Fase 1 (Refactor_Full.md §4.1) — gate previne Realtime sobrescrever
+// optimistic em curso. Mutation marca queryKey como in-flight no onMutate;
+// Realtime descarta invalidate enquanto in-flight.
+import { isInFlight } from '../state/realtimeGate'
 
 const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
 
@@ -70,19 +74,34 @@ export function useRealtime() {
     // "cannot add postgres_changes callbacks for realtime:..." (Sentry DOSY-9).
     let subscribing = false
 
-    // Item #136 (egress-audit-2026-05-05 F2): debounce invalidateQueries 1s
-    // por queryKey. Cron extend_continuous_treatments insere 100s doses
-    // futuras em batch — sem debounce, 100 invalidates → 100 × 4 useDoses
-    // Dashboard refetches em rajada. Com debounce: 1 invalidate = 4 refetches.
-    // Estimado -15% a -25% egress (especialmente dias de cron).
+    // Item #136 (egress-audit-2026-05-05 F2): debounce invalidateQueries por
+    // queryKey. Cron extend_continuous_treatments insere 100s doses futuras em
+    // batch — sem debounce, 100 invalidates → 100 × 4 useDoses Dashboard
+    // refetches em rajada. Com debounce: 1 invalidate = 4 refetches.
+    //
+    // Refactor Fase 1: debounce subiu de 1000ms pra 2500ms.
+    //   1) Alinha com LATENCY_BUDGET_MS do realtimeGate — Realtime espera a
+    //      mutation drenar antes de pensar em invalidar.
+    //   2) Mutation refetch (mutationRegistry.js refetchDoses) usa 1500ms.
+    //      Garantia: mutation onSettled sempre vence Realtime invalidate.
+    //   3) Skip explícito se queryKey está no gate (defesa em profundidade).
     const invalidateTimers = new Map()
     const debouncedInvalidate = (queryKey) => {
       const k = JSON.stringify(queryKey)
       if (invalidateTimers.has(k)) clearTimeout(invalidateTimers.get(k))
       invalidateTimers.set(k, setTimeout(() => {
-        qc.invalidateQueries({ queryKey })
         invalidateTimers.delete(k)
-      }, 1000))
+        // Gate: descarta payload se mutation em flight pra essa key.
+        // Mutation onSettled vai disparar o refetch correto na sequência.
+        if (isInFlight(queryKey)) {
+          // Não logar em produção — log spam em paciente compartilhado ativo.
+          if (import.meta.env.DEV) {
+            console.log(`[useRealtime] skip invalidate ${k} (in-flight mutation)`)
+          }
+          return
+        }
+        qc.invalidateQueries({ queryKey })
+      }, 2500))
     }
 
     const onStatusChange = (myGen) => (status) => {
