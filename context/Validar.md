@@ -54,7 +54,25 @@
 
 **Validações pendentes (autônomas em andamento):**
 
-- `[~]` **Upload Vetor 4 Supabase Storage HTTPS proxy** — AAB já em `https://guefraaqbkcehofchnrc.supabase.co/storage/v1/object/public/aab-transient/app-release.aab`. Chrome MCP desconectado mid-flight; ScheduleWakeup 10min pra retry. SQL `app_releases` row vc 81 já INSERT'da. Track Play Console: `tracks/4700769831647466031`.
+- `[~]` **Upload Vetor 4 — pendente ação user** (Chrome MCP offline há 35+ min, ScheduleWakeup esgotou). Estado: AAB já em `https://guefraaqbkcehofchnrc.supabase.co/storage/v1/object/public/aab-transient/app-release.aab` (HTTPS público CORS-OK). SQL `medcontrol.app_releases` row vc 81 já INSERT'da. Track Play Console: `https://play.google.com/console/u/1/developers/6887515170724268248/app/4972201184307332877/tracks/4700769831647466031/releases/new`.
+
+  **Receita ready-to-use** (~3 min quando Chrome MCP reconectar OU manual via UI):
+
+  **Opção A — Manual (5min):**
+  1. Abrir https://play.google.com/console com conta dosy.med@gmail.com
+  2. Criar nova versão no track 4700769831647466031
+  3. Baixar AAB de `android/app/release/app-release.aab` (33MB local) OU usar URL pública acima
+  4. Upload AAB → aguardar processamento (~30s) → "Próximo" → "Salvar e publicar"
+  5. Limpar bucket Supabase:
+     ```bash
+     source <(grep -E '^SUPABASE_SERVICE_ROLE_KEY=' .env.local)
+     SUPABASE_URL="https://guefraaqbkcehofchnrc.supabase.co"
+     curl -X DELETE "${SUPABASE_URL}/storage/v1/object/aab-transient/app-release.aab" -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+     curl -X DELETE "${SUPABASE_URL}/storage/v1/bucket/aab-transient" -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+     ```
+
+  **Opção B — Autônomo via Chrome MCP** (quando IA reconectar):
+  Seguir `context/recipes/play-console-upload.md` seção "Vetor 4 — Supabase Storage proxy" (passos 3-10 do JS injection, AAB já uploaded no passo 1-2).
 
 **Validações §11b emulator (PULADO):** build local Android quebrado por bug Java 25 + Unix Domain Sockets no Windows (`Unable to establish loopback connection`). CI Linux usa Java 21 Temurin e builda sem problema. QA visual via emulator será refeito após Vetor 4 propagar Internal Testing (~1h pós upload publicado).
 
