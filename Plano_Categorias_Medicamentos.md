@@ -626,6 +626,32 @@ Documento fica em `Plano_Categorias_Medicamentos.md` na raiz até estar 100% exe
 
 ---
 
+## 13.1 Delta v0.2.4.0 (MVP entregue) vs PRD oficial
+
+PRD em `dosy-app/docs/01-PRD.md` §4.1 (Tratamentos) descreve versão **mais ambiciosa** da feature:
+
+| Aspecto | PRD oficial | v0.2.4.0 entregue (MVP) | Evolução prevista |
+|---|---|---|---|
+| **Quantidade de categorias** | 33 + "Outro" com texto livre | 16 grupos + "Outro" sem texto livre | v0.2.4.1: expandir pra 33 |
+| **Multi-categoria** | Sim — chips multi-select (Tylenol = `{Analgésico, Antitérmico}`) | Single — uma categoria por med | v0.2.4.1: array `text[]` em vez de `text` |
+| **6 grupos clínicos** | UI organiza por: Sintomas agudos / Infecção / Cardiovascular-metabólico / Saúde mental / Hormonal-suplementação / Outros sistemas | Lista plana sem agrupamento UI | v0.2.4.1: section headers no Sheet |
+| **Fonte da classificação** | ATC code da OMS via `Plano_Categorias_Medicamentos` recomenda | CMED (mesma camada terapêutica, melhor cobertura BR) | OK — CMED é melhor pra BR; ATC era heurística do PRD |
+| **Multi-categoria em SOS** | Sim — mesma mecânica de Tratamento | Single | v0.2.4.1 |
+
+**Decisão MVP:** entregar com 16/single porque:
+1. Hierarquia 2 níveis (grupos amigáveis + classe CMED técnica) já cobre os casos críticos de Analytics.
+2. Schema com `text` é mais simples; migração `text → text[]` é não-destrutiva (`ARRAY[group_id]` pra todos os existentes).
+3. Multi-categoria adiciona complexidade no CategoryPicker (chips + dropdown vs single chip + sheet) — testar UX em 16 antes de subir pra 33 multi.
+
+**Evolução planejada (v0.2.4.1 ou v0.2.5.0):**
+- Migration: `ALTER ... ALTER COLUMN group_id TYPE text[]` + backfill ARRAY[antigo] + CHECK constraint por elemento
+- Expandir constante MED_GROUPS de 16 → 33
+- Reorganizar CategoryPicker em 6 grupos clínicos colapsáveis
+- ATC mapping suplementar pra casos onde CMED não atribui múltiplas classes corretamente
+- Multi-categoria propaga em RPCs + analytics agregação por elemento de array
+
+---
+
 ## 14. Changelog do plano
 
 ### v2 — 2026-05-22 (revisão pós perguntas do user)
