@@ -1,6 +1,6 @@
-v0.2.6.3 — Categorização inteligente em tempo real + origem da sugestão
+v0.2.6.4 — Categorias mais precisas + foundation invisível pra rollback rápido
 
-• Sugestões agora cruzam o que você digita com o catálogo CMED ANVISA na hora — categoria detectada automaticamente em milésimos.
-• Cada sugestão mostra a origem: DCB ANVISA (azul), CMED (verde — nome comercial), SEU (laranja — histórico pessoal).
-• Trocar de medicamento (ex: Escitalopram → Amoxil) agora atualiza a categoria automaticamente em vez de manter a anterior.
-• Cache local atualizado para garantir que doses passadas (antibióticos, anti-hipertensivos, etc.) apareçam corretamente no Histórico e Análises.
+• Mais antibióticos, anti-hipertensivos, anticoagulantes e hormonais agora aparecem com a categoria certa no Histórico e Análises (limpeza de 96 medicamentos no catálogo ANVISA).
+• Anlodipino e Sertralina deixam de embaralhar — regex de categorização agora distingue gender BR (a/o) com fronteiras corretas.
+• Toque na fatia "Não classificado" do gráfico de pizza em Análises pra ver lista de medicamentos pendentes + categorizar todos de uma vez (cascata histórico + futuras doses).
+• Bastidores: feature flags master switch (rollback de função em <5min sem update novo) + trilha de auditoria LGPD pra ações críticas.

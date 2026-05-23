@@ -46,6 +46,11 @@ Nenhum bug P4 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.6.4 (2026-05-23, vc 89 mandatory)
+
+- **#0018** P0 — Regex `inferGroupFromName` muito ampla em medCategories.js — sufixo "alina" do antidepressivo capturava "anlodipina" (deveria ser anti_hipertensivo). Plus: `dipino` só matchava gender masculino, falhando em "anlodipina" gender feminino. Fix: reordenar precedência (anti_hipertensivo PRIMEIRO) + gender `(a|o)?` + `\b` boundary em pril/olol/prazol/zolam/azepam/terol/tropio. Heurísticas expandidas (antialergico, antitermico, anticoagulante). Roteiro P0.2.
+- **#0019** P0 — 458 rows medications_catalog WHERE group_id='outro' AND cmed_class IS NULL = antibióticos invisíveis. Drogas como Tigeciclina, Linezolida, Cefazolina, Amoxicilina, Olmesartana, Anlodipino, Tiroxina ficavam em 'outro' em vez do grupo correto. Fix: migration `v0_2_6_4_p0_5_catalog_cleanup` com 17 UPDATE statements pattern-based em principio_ativo (96 rows movidas). Remanescentes 362 são legitimamente 'outro' (oncológicos/biológicos/anti-arrítmicos sem grupo na taxonomy 17). Roteiro P0.5.
+
 ### v0.2.6.3 (2026-05-23, vc 88 mandatory)
 
 - **#0015** P0 — Histórico/Analytics ainda mostra "Outro" mesmo após fix DOSE_COLS+RPC em v0.2.6.2. Root cause: PersistQueryClientProvider IDB key `dosy-query-cache` com buster `v1` contém payloads serializados pré-fix (vc 84/85). TanStack hydrate carrega cache stale na 1ª abertura do novo APK. Fix: bump buster v1→v2 em main.jsx + mutationRegistry.js (commit `d38f356`). Pico egress global aceito 1×.
