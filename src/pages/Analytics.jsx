@@ -140,7 +140,9 @@ export default function Analytics() {
     let total = 0
     for (const d of doses) {
       if (d.status !== 'done') continue
-      const g = d.group_id || 'outro'
+      // v0.2.6.2 P9.3: distingue 'nao_classificado' (sistema não detectou — cinza claro)
+      // de 'outro' (user escolheu manualmente — cinza forte). getGroup() converte NULL → GROUP_UNCLASSIFIED.
+      const g = d.group_id || 'nao_classificado'
       const m = map.get(g) || { count: 0, meds: new Set() }
       m.count += 1
       m.meds.add(d.medName)

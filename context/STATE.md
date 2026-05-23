@@ -10,22 +10,46 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.1` (em curso) — anterior `v0.2.6.0` shipped |
-| **versionCode** | `85` (v0.2.6.1) — anterior `84` (v0.2.6.0 shipped) |
-| **Branch ativa** | `master` |
-| **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
-| **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.4.1 via push master |
-| **Play Console v0.2.4.1** | ✅ **vc 82 PUBLICADO 2026-05-22 19:02 BRT** — `is_mandatory=true` força update modal nos users vc 81 |
-| **Play Console v0.2.4.0** | ❌ vc 81 BROKEN superseded por vc 82 |
-| **Play Console v0.2.3.17** | ✅ vc 80 legacy |
+| **Versão** | `v0.2.6.2` (HOTFIX SHIPPED 2026-05-23 09:23 BRT) |
+| **versionCode** | `87` (v0.2.6.2 mandatory) — anterior `85` (v0.2.6.1 broken — Histórico/Analytics em "Outro" + UX mobile picker quebrado) |
+| **Branch ativa** | `master` (sem release em curso) |
+| **Último tag master** | `v0.2.6.2` (pendente — fechamento em curso) — anterior `v0.2.4.1` `cc5ff8f` |
+| **Ship date v0.2.6.2** | **2026-05-23 09:23 BRT** Internal Testing via Vetor 4 |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.6.2 (buildDate 2026-05-23 11:04 UTC) |
+| **Play Console v0.2.6.2** | ✅ **vc 87 PUBLICADO 2026-05-23 09:23 BRT** — `is_mandatory=true` força update nos users vc 85/86 |
+| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 (DOSE_COLS/RPC sem group_id + mobile picker UX) — superseded por vc 87 |
+| **Play Console v0.2.6.0** | ✅ vc 84 (TTL share foundation + Card Última dose) — superseded |
+| **Play Console v0.2.4.1** | ✅ vc 82 (hotfix Supabase config) — superseded |
 
-**Hotfix v0.2.4.1 (em curso 2026-05-22 18:50 BRT):**
-- ROOT CAUSE: GitHub secrets `VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` AUSENTES. Workflow CI buildou vc 81 com env vazia → `hasSupabase=false` → login mostra "Supabase não configurado".
-- FIX 1: Secrets adicionadas via `gh secret set` a partir do `.env` (gitignored). Listadas via `gh secret list` ✅.
-- FIX 2: versionCode 81→82, versionName 0.2.4.0→0.2.4.1.
-- FIX 3: Backfill expandido com brand_map BR (Aerolin, Clenil, Decadron, Mounjaro, etc.): treatments outro 25→6, doses outro 2061→319 (84% redução). Distribuição rica: vitamina 986, broncodilatador 474, corticoide 337, antidepressivo 218.
-- TODO: Aguardar CI completar → Vetor 4 upload vc 82 → SQL app_releases → cleanup.
+**v0.2.6.2 SHIPPED 2026-05-23 09:23 BRT — HOTFIX P9 + Roteiro Alinhamento Sprint 1-2:**
+
+**HOTFIX (Roteiro adendo P9 categorização):**
+- 🚨 **BUG #0012 FIXED**: Histórico/Analytics tudo em "Outro" — DOSE_COLS_LIST omitia group_id+cmed_class no SELECT PostgREST. Migration v0_2_6_2_dashboard_payload_includes_group_id (RPC jsonb_build_object incluído).
+- 🚨 **BUG #0013 FIXED**: TDZ TreatmentForm `Cannot access 'Se' before initialization` — useState form declarado ANTES de useClassifyMedication. Pré-existente v0.2.5.0, só explodia em build minificado prod.
+- 🚨 **BUG #0014 FIXED**: Mobile picker UX terrível — campo sumia, teclado por cima, sugestões somem ao scroll. MedNameInput.jsx reescrito como FULL-SCREEN sheet position:fixed inset:0 z-index:1500 em mobile (matchMedia ≤768 OR coarse pointer). Desktop dropdown inline mantido.
+- ✅ **P9.1 (parcial)**: catálogo expandido 896 → 984 (+88 brand-names BR cobrindo 6 personas Roteiro P9.4): Amoxil/Cefaclor/Bactrim, Captopril/Losartana/Metformina, Puran T4/Selene/Yaz, Sertralina/Lexapro/Clonazepam, Decadron/Prednisona, etc.
+- ✅ **P9.3**: GROUP_UNCLASSIFIED distinto de 'outro' (cinza claro vs cinza forte). Analytics/Histórico fallback `|| 'nao_classificado'`.
+- ✅ **P9.5**: RPC `re_categorize_null_rows` + pg_cron mensal dia 6 (1 dia após CMED sync futuro).
+
+**Roteiro Alinhamento Sprint 1-2 (já tinha sido shipped em v0.2.6.1 vc 85):**
+- P0.3 Sentry strip exhaustivo (23 campos + JWT/email/UUID regex breadcrumbs) ✅
+- P0.4 PostHog consent gate LGPD + ConsentBanner + Settings toggle ✅
+- P1.5 reconcileDoses ATIVO em useDashboardPayload ✅
+- P1.6 Conflict 409 — confirm/skip/undo_dose_v2 + conflictBus + ConflictListener ✅
+- P1.10 Sentry.captureException wrapper + adopt em mutationRegistry ✅
+- P1.11 tracesSampleRate ATUALIZADO 0.1 → 0.005 + critical ops 5% (P8.2) ✅
+- P3.4 treatment_user_alert_settings + AlertLevelToggle adopt TreatmentList ✅
+- P3.15 TTL share granular (access_level + is_temporary) + SharePatientSheet UI radio + 4 TTL chips + RPCs extend/update_access/cleanup ✅
+- P3.18 Edge expire-temporary-shares + pg_cron 0 * * * * ✅
+- PostHog 12 eventos categoria + 3 share TTL + 3 conflict + 2 consent ✅
+- P8.2 Sentry sample dinâmico + rate limit 10/dia + fingerprint dedup ✅
+- P8.7 last-dose cache 1h + index composto doses (group+actualTime) ✅
+- P8.9 Sentry skip known noise + fingerprint sample ✅
+- Migration versionada (P0.1 partial): `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` ✅
+- BD universal backfill: alert_level heurístico em TODOS users (teste-plus + lhenrique.pda) ✅
+- **QA web exaustivo Chrome MCP (Round 1)**: ConsentBanner, TreatmentForm autofill, AlertLevelToggle persist DB, Histórico cross-period, marcar dose RPC v2, SharePatientSheet TTL UI — **TODOS funcionando** ✅
+- **Bug crítico capturado e fixado**: TDZ TreatmentForm `Cannot access 'Se' before initialization` (pré-existente v0.2.5.0, só explode em build minificado) — commit `23213f9` ✅
+- TODO: CI #26331199159 termina → AAB download → Vetor 4 upload vc 85 → SQL app_releases → STOP merge.
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 
@@ -57,15 +81,18 @@
 
 ---
 
-## P0 abertos (próxima release v0.2.4.0)
+## P0 abertos (próxima release)
 
-1. **#NEW** — Categorias de Medicamentos (Plano_Categorias_Medicamentos.md raiz) — ingest CMED + hierarquia 2 níveis + Analytics por categoria
-2. **#006** — device validation 3 devices físicos (manual user)
-3. **#131** — recrutamento Reddit testers (desbloqueado pós #130)
-4. **#132** — gate 14d ≥12 testers (depende #131)
-5. **#133** — Production access Console (depende #132)
-6. **#191/#192** — RevenueCat + Play Billing (Fase 3)
-7. **#300** — Validação device físico v0.2.3.13 disclaimer paciente compartilhado + cenário E cache offline + snooze 10min + Samsung One UI battery optimizer impact
+1. **P9.2** — Edge `cmed-monthly-sync` cron mensal (ANVISA XLSX scrape bloqueado 403 — precisa rota manual via admin upload). Catálogo atual 984, meta ≥25k.
+2. **P9.6** — BulkCategorizeModal via Analytics drill-down "Não classificado" — RPC `list_null_meds_with_suggestions` + UI bulk
+3. **P9.7** — Dashboard métrica `% doses não-categorizadas` + alarme P0 webhook DPO
+4. **P9.8** — Documentar anti-pattern "patches superficiais MedNameInput não resolvem" em `context/auditoria/`
+5. **P9.10** — Validações device físico priorizadas (3 devices: Pixel 6, Samsung A54, Xiaomi Redmi 12) — 10 checks
+6. **#006** — device validation 3 devices físicos (manual user)
+7. **#131** — recrutamento Reddit testers (desbloqueado pós #130)
+8. **#132** — gate 14d ≥12 testers (depende #131)
+9. **#133** — Production access Console (depende #132)
+10. **#191/#192** — RevenueCat + Play Billing (Fase 3)
 
 ---
 

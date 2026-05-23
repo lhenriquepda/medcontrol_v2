@@ -1,11 +1,37 @@
 import { useState } from 'react'
-import { Lock, Mail, X as XIcon } from 'lucide-react'
+import { Lock, Mail, X as XIcon, Clock, Infinity as InfinityIcon } from 'lucide-react'
 import { Sheet, Button, Input, Avatar } from './dosy'
 import { usePatientShares, useSharePatient, useUnsharePatient } from '../hooks/useShares'
 import { useMyTier, useIsPro } from '../hooks/useSubscription'
 import PaywallModal from './PaywallModal'
 import OfflineNotice from './OfflineNotice'
 import { useOfflineGuard } from '../hooks/useOfflineGuard'
+import { track, EVENTS } from '../services/analytics'
+
+// v0.2.6.1 P3.15 (Roteiro_Alinhamento_Dosy_v2) — opções TTL pra share temporário.
+const TTL_OPTIONS = [
+  { id: '1h',   label: '1 hora',        hours: 1 },
+  { id: '24h',  label: '24 horas',      hours: 24 },
+  { id: '7d',   label: '7 dias',        hours: 24 * 7 },
+  { id: '30d',  label: '30 dias',       hours: 24 * 30 },
+]
+
+function ttlIdToExpiresAt(id) {
+  const opt = TTL_OPTIONS.find((o) => o.id === id)
+  if (!opt) return null
+  return new Date(Date.now() + opt.hours * 3600 * 1000).toISOString()
+}
+
+function formatRemaining(expiresAtIso) {
+  if (!expiresAtIso) return ''
+  const ms = new Date(expiresAtIso) - new Date()
+  if (ms <= 0) return 'expirado'
+  const h = Math.floor(ms / 3600000)
+  if (h < 1) return `${Math.max(1, Math.floor(ms / 60000))}min`
+  if (h < 24) return `${h}h`
+  const d = Math.floor(h / 24)
+  return `${d}d`
+}
 
 export default function SharePatientSheet({ open, onClose, patient }) {
   // v0.2.3.5 #251 — Plus tem todas features Pro (só difere por mostrar 1 Ad).
@@ -22,6 +48,9 @@ export default function SharePatientSheet({ open, onClose, patient }) {
   const [err, setErr] = useState(null)
   const [okMsg, setOkMsg] = useState(null)
   const [paywall, setPaywall] = useState(false)
+  // v0.2.6.1 P3.15 — radio Permanente/Temporário + TTL select
+  const [shareType, setShareType] = useState('permanent') // 'permanent' | 'temporary'
+  const [ttlId, setTtlId] = useState('24h')
 
   async function submit(e) {
     e?.preventDefault?.()
@@ -32,10 +61,15 @@ export default function SharePatientSheet({ open, onClose, patient }) {
     // Item #204 v0.2.1.8 — share NÃO entra queue offline (depende envio email
     // server-side). Bloqueio claro + toast em vez de iludir.
     if (!guard.ensure('Compartilhar paciente')) return
+    const expiresAt = shareType === 'temporary' ? ttlIdToExpiresAt(ttlId) : null
     try {
-      await shareMut.mutateAsync({ patientId, email: v })
-      setOkMsg(`Paciente compartilhado com ${v}.`)
+      await shareMut.mutateAsync({ patientId, email: v, expiresAt })
+      const ttlLabel = expiresAt ? ` (expira em ${formatRemaining(expiresAt)})` : ''
+      setOkMsg(`Paciente compartilhado com ${v}${ttlLabel}.`)
       setEmail('')
+      try {
+        track(EVENTS.SHARE_TYPE_SELECTED, { type: shareType, ttl_id: shareType === 'temporary' ? ttlId : null })
+      } catch {}
     } catch (e2) {
       setErr(e2?.message || 'Erro ao compartilhar.')
     }
@@ -78,13 +112,101 @@ export default function SharePatientSheet({ open, onClose, patient }) {
               autoCapitalize="none"
               autoCorrect="off"
             />
+
+            {/* v0.2.6.1 P3.15 — radio Permanente / Temporário */}
+            <div role="radiogroup" aria-label="Tipo de compartilhamento" style={{
+              display: 'flex', gap: 8, marginTop: 4,
+            }}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={shareType === 'permanent'}
+                onClick={() => setShareType('permanent')}
+                style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 12,
+                  border: shareType === 'permanent'
+                    ? '2px solid var(--dosy-primary)'
+                    : '1px solid var(--dosy-border)',
+                  background: shareType === 'permanent'
+                    ? 'color-mix(in srgb, var(--dosy-primary) 8%, transparent)'
+                    : 'transparent',
+                  color: 'var(--dosy-fg)',
+                  cursor: 'pointer', minHeight: 56,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontFamily: 'var(--dosy-font-body)',
+                }}
+              >
+                <InfinityIcon size={18} color={shareType === 'permanent' ? 'var(--dosy-primary)' : 'var(--dosy-fg-tertiary)'} />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Permanente</div>
+                  <div style={{ fontSize: 11, color: 'var(--dosy-fg-secondary)' }}>Acesso até remover</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={shareType === 'temporary'}
+                onClick={() => setShareType('temporary')}
+                style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 12,
+                  border: shareType === 'temporary'
+                    ? '2px solid var(--dosy-primary)'
+                    : '1px solid var(--dosy-border)',
+                  background: shareType === 'temporary'
+                    ? 'color-mix(in srgb, var(--dosy-primary) 8%, transparent)'
+                    : 'transparent',
+                  color: 'var(--dosy-fg)',
+                  cursor: 'pointer', minHeight: 56,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontFamily: 'var(--dosy-font-body)',
+                }}
+              >
+                <Clock size={18} color={shareType === 'temporary' ? 'var(--dosy-primary)' : 'var(--dosy-fg-tertiary)'} />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Temporário</div>
+                  <div style={{ fontSize: 11, color: 'var(--dosy-fg-secondary)' }}>Expira automaticamente</div>
+                </div>
+              </button>
+            </div>
+
+            {shareType === 'temporary' && (
+              <div style={{
+                display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap',
+              }} role="radiogroup" aria-label="Duração">
+                {TTL_OPTIONS.map((opt) => {
+                  const active = opt.id === ttlId
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setTtlId(opt.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 999,
+                        border: active ? '1px solid var(--dosy-primary)' : '1px solid var(--dosy-border-faint)',
+                        background: active ? 'var(--dosy-primary)' : 'transparent',
+                        color: active ? 'white' : 'var(--dosy-fg-secondary)',
+                        fontSize: 12, fontWeight: 600,
+                        cursor: 'pointer', minHeight: 32,
+                        fontFamily: 'var(--dosy-font-body)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
             <Button
               type="submit"
               kind="primary"
               disabled={shareMut.isPending || !guard.online}
               full
             >
-              {shareMut.isPending ? 'Enviando…' : 'Compartilhar'}
+              {shareMut.isPending ? 'Enviando…' : (shareType === 'temporary' ? 'Compartilhar temporariamente' : 'Compartilhar')}
             </Button>
             {err && (
               <p style={{ fontSize: 12, color: 'var(--dosy-danger)', margin: 0, paddingLeft: 4 }}>{err}</p>
@@ -160,6 +282,17 @@ export default function SharePatientSheet({ open, onClose, patient }) {
                         margin: 0,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>{s.email}</p>
+                      {/* v0.2.6.1 P4.7c — TemporaryShareBadge (owner-side: mostra cronômetro) */}
+                      {(s.is_temporary || s.isTemporary || s.expiresAt) && (
+                        <p style={{
+                          fontSize: 10.5, color: 'var(--dosy-accent, #6366f1)',
+                          margin: '2px 0 0 0', fontWeight: 600,
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                          <Clock size={10} strokeWidth={2.5}/>
+                          Temporário · expira em {formatRemaining(s.expiresAt)}
+                        </p>
+                      )}
                     </div>
                     <button
                       type="button"

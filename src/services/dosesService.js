@@ -29,7 +29,14 @@ function recomputeOverdue(rows) {
 // que ficava stale quando paciente recém-criado por outro device → AlarmActivity
 // agrupava "Sem paciente". Fix server-side: patient.name vem direto via PostgREST
 // embed, sem dependência de cache cliente. Custo: 1 LEFT JOIN, ~10 bytes/row.
-const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, patients(name)'
+// v0.2.6.2 BUGFIX QA: group_id + cmed_class ESTAVAM AUSENTES em DOSE_COLS_LIST.
+// Consequência: Analytics/Histórico recebiam d.group_id = undefined →
+// fallback `d.group_id || 'outro'` agrupava TUDO em "outro" (mostrou só 1 categoria).
+// Reportado pelo user 2026-05-23: "vários antibióticos pros filhos não aparecem
+// como antibiótico no Histórico... Analytics só mostra Outros".
+// BD estava correto (47 doses antibiotico Clavulin/Amoxi/Azitro/Sinot Clav) —
+// query select que omitia a coluna era o bug. Bug pre-existente desde v0.2.4.0.
+const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, group_id, cmed_class, patients(name)'
 const DOSE_COLS_FULL = DOSE_COLS_LIST + ', observation'
 
 // Flatten patients(name) embed pra dose.patientName direto.
@@ -121,15 +128,60 @@ export async function listDoses({ from, to, patientId, status, type, withObserva
   return rows
 }
 
+// v0.2.6.1 P1.6 (Roteiro_Alinhamento_Dosy_v2) — RPCs healthcare v2 retornam JSONB
+// com {ok, dose, error, code, current_state}. Cliente detecta 409 + current_state e
+// repassa via Error.code/currentState pra mutationRegistry.onError tratar (prompt
+// "Aceitar mudança em outro dispositivo?" em vez de rollback silencioso).
+class DoseConflictError extends Error {
+  constructor({ code, error, currentState, from, to }) {
+    super(error || 'INVALID_TRANSITION')
+    this.name = 'DoseConflictError'
+    this.code = code
+    this.dosyError = error
+    this.currentState = currentState
+    this.from = from
+    this.to = to
+  }
+}
+
+function parseDoseV2Response(data) {
+  // data esperado: JSONB. Casos:
+  //   { ok: true, dose: {...} }              sucesso
+  //   { ok: false, error, code, current_state, from, to }  conflito 409 / 404 / 403
+  if (!data || typeof data !== 'object') {
+    throw new Error('invalid_rpc_response')
+  }
+  if (data.ok === true && data.dose) {
+    // Aplica _serverConfirmedAt pra versionedCache (Refactor Fase 1).
+    return { ...data.dose, _serverConfirmedAt: Date.now() }
+  }
+  if (data.ok === false) {
+    if (data.code === 409 && data.current_state) {
+      throw new DoseConflictError({
+        code: 409,
+        error: data.error,
+        currentState: data.current_state,
+        from: data.from,
+        to: data.to,
+      })
+    }
+    const err = new Error(data.error || 'unknown_error')
+    err.code = data.code
+    throw err
+  }
+  // Fallback (resposta inesperada): assume dose v1
+  return data
+}
+
 export async function confirmDose(id, { actualTime, observation } = {}) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('confirm_dose', {
+    const { data, error } = await supabase.rpc('confirm_dose_v2', {
       p_dose_id:     id,
       p_actual_time: actualTime || new Date().toISOString(),
       p_observation: observation || ''
     })
     if (error) throw error
-    return data
+    return parseDoseV2Response(data)
   }
   return mock.update('doses', id, {
     status: 'done',
@@ -140,12 +192,12 @@ export async function confirmDose(id, { actualTime, observation } = {}) {
 
 export async function skipDose(id, { observation } = {}) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('skip_dose', {
+    const { data, error } = await supabase.rpc('skip_dose_v2', {
       p_dose_id:    id,
       p_observation: observation || ''
     })
     if (error) throw error
-    return data
+    return parseDoseV2Response(data)
   }
   return mock.update('doses', id, {
     status: 'skipped',
@@ -156,12 +208,14 @@ export async function skipDose(id, { observation } = {}) {
 
 export async function undoDose(id) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('undo_dose', { p_dose_id: id })
+    const { data, error } = await supabase.rpc('undo_dose_v2', { p_dose_id: id })
     if (error) throw error
-    return data
+    return parseDoseV2Response(data)
   }
   return mock.update('doses', id, { status: 'pending', actualTime: null })
 }
+
+export { DoseConflictError }
 
 export async function registerSos({ patientId, medName, unit, scheduledAt, observation, force = false, group_id = null, cmed_class = null }) {
   if (hasSupabase) {

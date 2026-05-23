@@ -1,5 +1,6 @@
-v0.2.6.0 — Última dose por categoria + Acesso Temporário (foundation)
+v0.2.6.2 — Hotfix categorização + novo seletor de medicamento
 
-• Card "Última dose" no Histórico — quando você filtra por categoria, aparece direto a última dose de cada grupo (resolve "quando foi a última vez que tomei antibiótico?" sem precisar PDF).
-• Acesso Temporário pra compartilhamento de paciente (em fase final) — base de banco pronta pra compartilhar paciente com cuidador eventual com prazo de expiração.
-• Documentação de implementação atualizada entre spec e código (auditoria pós v0.2.5.0).
+• Antibióticos, anti-hipertensivos e outras categorias agora aparecem corretas no Histórico e Análises (corrigida falha que jogava tudo em "Outro").
+• Novo seletor de medicamento em tela cheia: sugestões grandes, busca rápida, sem teclado por cima nem campos sumindo.
+• Catálogo expandido com +88 medicamentos comuns (Amoxil, Cefaclor, Bactrim, Lexapro, Metformina, Losartana, etc).
+• Categoria "Não classificado" agora aparece separada de "Outro" (cinza claro vs cinza forte) — toque pra atribuir.

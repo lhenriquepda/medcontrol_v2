@@ -30,17 +30,20 @@ export const MED_GROUPS = [
   { id: 'outro',                    label: 'Outro',                      color: 'var(--dosy-gray-500)' },
 ]
 
-// Estado especial visualmente — não é group_id válido no DB
+// Estado especial visualmente — não é group_id válido no DB.
+// v0.2.6.2 P9.3: tratado como group "virtual" id='nao_classificado' pra distinguir
+// de 'outro' (que existe no CHECK constraint do DB) em Analytics/Histórico.
 export const GROUP_UNCLASSIFIED = {
-  id: null,
+  id: 'nao_classificado',
   label: 'Não classificado',
   color: 'var(--dosy-gray-300)',
+  hint: 'Sem categoria — toque pra atribuir',
 }
 
 const _byId = Object.fromEntries(MED_GROUPS.map((g) => [g.id, g]))
 
 export function getGroup(groupId) {
-  if (!groupId) return GROUP_UNCLASSIFIED
+  if (!groupId || groupId === 'nao_classificado') return GROUP_UNCLASSIFIED
   return _byId[groupId] || GROUP_UNCLASSIFIED
 }
 

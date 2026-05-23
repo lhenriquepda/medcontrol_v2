@@ -46,6 +46,12 @@ Nenhum bug P4 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.6.2 (2026-05-23, vc 87 mandatory)
+
+- **#0012** P0 — Histórico/Analytics tudo em "Outro" mesmo com antibióticos categorizados no DB. Root cause duplo: (a) `DOSE_COLS_LIST` em `dosesService.js` SELECT PostgREST omitia `group_id, cmed_class` → cliente recebia undefined → fallback `d.group_id || 'outro'` agrupava tudo; (b) RPC `get_dashboard_payload` `jsonb_build_object` omitia mesmos campos. Fix duplo (commit `2bf8dad` + migration `v0_2_6_2_dashboard_payload_includes_group_id`). BD estava correto (47 doses antibiotico done Liam Sinot Clav + Rael Clavulin/Amoxi/Azitro). Bug pre-existente desde v0.2.4.0. ✅ Validado QA Android emulator Pixel8.
+- **#0013** P0 — TreatmentForm crasha `Cannot access 'Se' before initialization` em build minificado prod. Root cause: `useClassifyMedication(form?.medName)` referenciava `form` ANTES de `const [form, setForm] = useState()` na linha 89. Vite dev hidden o TDZ; build minificado expõe. Fix: reorder useState antes de useClassifyMedication (commit `23213f9`). Bug pre-existente v0.2.5.0. ✅ Validado QA Android.
+- **#0014** P0 — MedNameInput mobile UX quebrada (campo some, teclado por cima, sugestões somem ao scroll, "uma zona" segundo user). Root cause: dropdown inline em Capacitor WebView Android — teclado virtual reposiciona, scroll body desfocava input, click-outside captura tap em scrollbar interno. Fix estrutural: reescrito mobile-first em FULL-SCREEN sheet `position:fixed inset:0 z-index:1500` (P0.7 Roteiro_Alinhamento_Dosy_v2 anti-pattern P9.8). Detect mobile via `matchMedia('(max-width:768px)')` OR coarse pointer. Trigger é `<button aria-haspopup="dialog">`, tap abre sheet com header fixo (X close + search icon + input fontSize:16 anti-zoom Android) + lista flex-1 `overscroll-behavior:contain`. Lock body scroll, autoFocus delay 80ms. Desktop dropdown inline mantido inalterado. Commit `2bf8dad`.
+
 ### v0.2.3.14 (2026-05-19, vc 77)
 
 - **#0009** P2 — `usePatientShares` query 401 JWT expiry mostrava "Carregando..." pra sempre. Fix `useShares.js`: retry handler skip auth errors (não retry 401/PGRST301). `SharePatientSheet.jsx`: error state explícito + botão "Tentar novamente" quando query em `status: 'error'`. Commit `8fc5f03`. ✅ Validado web Chrome MCP (inject `q.setState({status:'error'})` via fiber walk → sheet renderiza mensagem vermelha + retry).

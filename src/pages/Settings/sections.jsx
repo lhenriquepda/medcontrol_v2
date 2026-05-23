@@ -6,9 +6,10 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Bell, BellOff, Sun, Moon, AlarmClock, Trash2, Download, ChevronRight, HelpCircle, ArrowUpCircle, Lock } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
+import { useState, useEffect } from 'react'
 import { Card, Button, Input, Toggle } from '../../components/dosy'
 import Dropdown from '../../components/Dropdown'
-import { track, EVENTS } from '../../services/analytics'
+import { track, EVENTS, getConsent, setConsent } from '../../services/analytics'
 import { TIER_LABELS } from '../../utils/tierUtils'
 import Row from './Row'
 import { ADVANCE_OPTIONS, SECTION_LABEL_STYLE, sectionVariant } from './constants'
@@ -342,8 +343,34 @@ export function AccountSection({ name, setName, savingName, saveName, user, onLo
   )
 }
 
-// ─── Dados & Privacidade (LGPD export + delete) ───
+// ─── Dados & Privacidade (LGPD export + delete + consent telemetria) ───
 export function DataPrivacySection({ exportingData, exportUserData, onDeleteClick }) {
+  // v0.2.6.1 P0.4 — consent telemetria opt-in/out persistente.
+  // getConsent() retorna 'true' | 'false' | null. Toggle aceita boolean (off=false).
+  const [telemetryOn, setTelemetryOn] = useState(() => getConsent() === 'true')
+
+  // Re-sync se outra UI (ex: ConsentBanner) gravou consent enquanto Settings aberto.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'dosy_consent_telemetry') {
+        setTelemetryOn(getConsent() === 'true')
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  function handleToggleTelemetry(next) {
+    setTelemetryOn(next)
+    setConsent(next)
+    if (next) {
+      // Init pode demorar ~1.5s (async fetch posthog-js). Track pós delay.
+      setTimeout(() => track(EVENTS.TELEMETRY_CONSENT_ACCEPTED), 1500)
+    } else {
+      try { track(EVENTS.TELEMETRY_CONSENT_DECLINED) } catch {}
+    }
+  }
+
   return (
     <motion.section variants={sectionVariant}>
       <Card padding={16}>
@@ -351,6 +378,26 @@ export function DataPrivacySection({ exportingData, exportUserData, onDeleteClic
         <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', lineHeight: 1.5, margin: '0 0 12px 0' }}>
           Conforme a LGPD, você pode exportar ou excluir todos os seus dados a qualquer momento.
         </p>
+        {/* v0.2.6.1 P0.4 — toggle telemetria anônima */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 0', borderTop: '1px solid var(--dosy-border-faint)',
+          borderBottom: '1px solid var(--dosy-border-faint)', marginBottom: 12, gap: 12,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--dosy-fg)', margin: 0 }}>
+              Telemetria anônima
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+              Coletamos cliques e fluxos pra melhorar o app. Nenhum dado pessoal ou de saúde é enviado.
+            </p>
+          </div>
+          <Toggle
+            value={telemetryOn}
+            onChange={handleToggleTelemetry}
+            ariaLabel={telemetryOn ? 'Desativar telemetria' : 'Ativar telemetria'}
+          />
+        </div>
         <Button
           kind="secondary"
           full

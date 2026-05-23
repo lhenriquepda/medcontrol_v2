@@ -43,6 +43,10 @@ import { generateDoses } from '../utils/generateDoses'
 // "status volta do nada" causado por race entre debounce Realtime e refetch).
 // versionedCache helpers são usados in-line (stamp _localActedAt em patchDoseInCache).
 import { markInFlight, clearInFlight } from '../state/realtimeGate'
+// v0.2.6.1 P1.6 — bus de conflict 409 (toast "Aceitar mudança outro dispositivo?")
+import { emitConflict } from '../state/conflictBus'
+// v0.2.6.1 P1.10 — Sentry.captureException nos catches healthcare críticos
+import { captureCaught } from './sentry'
 
 // Refactor Fase 1: queryKeys que mutations healthcare protegem do Realtime.
 // Marcadas in-flight em onMutate, limpas em onSettled.
@@ -90,6 +94,8 @@ async function flushPersistImmediate() {
     // Log mas não bloqueia mutation. Pior caso: persist falha + force-kill rápido =
     // perda. Best-effort. TanStack throttle 1s ainda cobre como backup ~1s depois.
     console.warn('[mutationRegistry] flushPersistImmediate fail:', e?.message)
+    // v0.2.6.1 P1.10 — escalar pra Sentry (era silencioso). Hot path healthcare crítico.
+    captureCaught(e, { source: 'mutationRegistry.flushPersistImmediate', level: 'warning' })
   }
 }
 
@@ -181,6 +187,77 @@ function rollback(qc, snapshots) {
   for (const [key, data] of (snapshots ?? [])) qc.setQueryData(key, data)
 }
 
+// v0.2.6.1 P1.6 — patch cache com current_state retornado pelo RPC 409.
+// Chamado quando user clica "Aceitar" no toast de conflito.
+function patchDoseFromServerState(qc, doseId, currentState) {
+  if (!currentState || !doseId) return
+  const stamped = { ...currentState, _serverConfirmedAt: Date.now() }
+  // dashboard-payload
+  const dpQueries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+  for (const q of dpQueries) {
+    const data = q.state.data
+    if (!data || !Array.isArray(data.doses)) continue
+    qc.setQueryData(q.queryKey, {
+      ...data,
+      doses: data.doses.map((d) => (d.id === doseId ? { ...d, ...stamped } : d)),
+    })
+  }
+  // ['doses', *]
+  const doseQueries = qc.getQueryCache().findAll({ queryKey: ['doses'] })
+  for (const q of doseQueries) {
+    const data = q.state.data
+    if (!Array.isArray(data)) continue
+    qc.setQueryData(
+      q.queryKey,
+      data.map((d) => (d.id === doseId ? { ...d, ...stamped } : d))
+    )
+  }
+}
+
+// v0.2.6.1 P1.6 — handler centralizado de erro pra mutations doses.
+// Se error.code === 409 → mantém cache no estado otimista + dispara conflict bus
+//   pro toast oferecer "Aceitar" (patcha com current_state).
+// Caso contrário → rollback normal pra snapshot pré-mutate.
+function handleDoseMutationError(qc, mutation, error, variables, ctx) {
+  // v0.2.6.1 P1.10 — capturar TODOS os erros de mutation healthcare em Sentry
+  // (antes ficava só em onError snapshots rollback). 409 é tagged como warning,
+  // resto como error pra ranking severidade no dashboard.
+  const level = error?.code === 409 ? 'warning' : 'error'
+  captureCaught(error, {
+    source: `mutationRegistry.${mutation}`,
+    level,
+    tags: { mutation, error_code: String(error?.code || 'unknown') },
+    extra: { dose_id: variables?.id ?? (typeof variables === 'string' ? variables : null) },
+  })
+  if (error?.code === 409 && error?.currentState) {
+    const doseId = variables?.id ?? (typeof variables === 'string' ? variables : null)
+    // Rollback PRIMEIRO (deixa cache no estado pré-otimista), depois conflict bus
+    // dispara toast. Se user clicar "Aceitar", aplicamos current_state via
+    // patchDoseFromServerState — UI converge com servidor.
+    rollback(qc, ctx?.snapshots)
+    try { track(EVENTS.SYNC_CONFLICT_DETECTED, { mutation, from: error.from, to: error.to }) } catch {}
+    emitConflict({
+      mutation,
+      doseId,
+      currentState: error.currentState,
+      from: error.from,
+      to: error.to,
+      onAccept: () => {
+        patchDoseFromServerState(qc, doseId, error.currentState)
+        try { track(EVENTS.SYNC_CONFLICT_ACCEPTED_SERVER, { mutation }) } catch {}
+      },
+      onReject: () => {
+        // User descartou — refetch pra forçar sync com server (fonte de verdade)
+        try { track(EVENTS.SYNC_CONFLICT_REJECTED_SERVER, { mutation }) } catch {}
+        qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
+      },
+    })
+    return
+  }
+  // Erro genérico (network, 500, etc) — rollback simples
+  rollback(qc, ctx?.snapshots)
+}
+
 // Debounce pra consolidar invalidate de mutações em sequência rápida
 // (confirm → undo → skip → undo geraria 9-12 fetches sem debounce).
 //
@@ -226,7 +303,8 @@ export function registerMutationDefaults(qc, persister = null) {
       await flushPersistImmediate()
       return { snapshots }
     },
-    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    // v0.2.6.1 P1.6 — detect 409 + dispara conflict bus
+    onError: (error, variables, ctx) => handleDoseMutationError(qc, 'confirmDose', error, variables, ctx),
     onSuccess: () => {
       track(EVENTS.DOSE_CONFIRMED)
       incrementReviewSignal('dose_confirmed')
@@ -246,7 +324,8 @@ export function registerMutationDefaults(qc, persister = null) {
       await flushPersistImmediate()
       return { snapshots }
     },
-    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    // v0.2.6.1 P1.6 — detect 409 + dispara conflict bus
+    onError: (error, variables, ctx) => handleDoseMutationError(qc, 'skipDose', error, variables, ctx),
     onSuccess: () => track(EVENTS.DOSE_SKIPPED),
     onSettled: () => {
       clearDosesInFlight()
@@ -263,7 +342,8 @@ export function registerMutationDefaults(qc, persister = null) {
       await flushPersistImmediate()
       return { snapshots }
     },
-    onError: (_e, _v, ctx) => rollback(qc, ctx?.snapshots),
+    // v0.2.6.1 P1.6 — detect 409 + dispara conflict bus
+    onError: (error, variables, ctx) => handleDoseMutationError(qc, 'undoDose', error, variables, ctx),
     onSuccess: () => track(EVENTS.DOSE_UNDONE),
     onSettled: () => {
       clearDosesInFlight()

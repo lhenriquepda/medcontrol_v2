@@ -20,17 +20,123 @@
 
 ---
 
-## 🆕 Release atual — v0.2.6.1 EM CURSO (vc 85)
+## 🆕 Release atual — v0.2.6.2 HOTFIX EM CURSO (vc 86)
 
-**Status:** branch `release/v0.2.6.1` aberta. Aguarda implementação.
+**Status:** branch `release/v0.2.6.1` (mantida — bump apenas versionCode+versionName). v0.2.6.1 vc 85 publicado mas tinha 2 bugs críticos reportados pelo user em prod.
 
-**Escopo:** 3 ações A→B restantes do audit dosy-app/docs (pós v0.2.6.0 SHIPPED):
+**Bugs reportados (2026-05-23 vc 85 prod):**
 
-- Alert level per-treatment per-user (Crítico / Push / Silencioso) — toggle inline no card de tratamento, override do switch global. Schema: tabela nova `medcontrol.treatment_alert_prefs (user_id, treatment_id, alert_level)`. Cobre Persona 2 Helena (PRD §4.1) + Persona 3 Patrícia (suplementos silenciosos, hipertensivos críticos).
-- Conflict 409 prompt explícito em mutations de dose — `mutationRegistry.js` onError detect conflict → toast UI "Aceitar mudança em outro dispositivo?" em vez de refetch silencioso (Flow 6 PRD).
-- PostHog instrumentação completa 12 eventos de categoria (medication_search_started, medication_selected, category_suggestion_shown, category_suggestion_skipped, historico_filtered_by_group, etc) em CategoryPicker/MedNameInput/CategoryHintModal/DoseHistory.
-- UI SharePatientSheet com radio Permanente/Temporário (DB foundation já pronta v0.2.6.0). Date picker pra `expiresAt`.
-- Edge Function `share-expiry-cron` rodando 1×/h chamando `cleanup_expired_shares()` RPC.
+- 🚨 **"Histórico/Analytics só mostra Outros"** — vários antibióticos pros filhos (Liam Sinot Clav, Rael Clavulin/Amoxi/Azitro = 47 doses done) não apareciam categorizados.
+- 🚨 **"Cadastro de tratamento está uma zona em mobile"** — campo de digitação some, teclado fica por cima, sugestões somem ao scroll, scroll do body compete com dropdown.
+
+**Root causes encontrados via debugging:**
+
+| Bug | Local | Razão |
+|---|---|---|
+| Tudo em "Outro" | `dosesService.DOSE_COLS_LIST` | NÃO incluía `group_id, cmed_class` no SELECT PostgREST. Cliente recebia `undefined` → fallback `d.group_id \|\| 'outro'` agrupava tudo |
+| Tudo em "Outro" | RPC `get_dashboard_payload` | `jsonb_build_object` omitia `group_id, cmed_class` do payload de doses |
+| UX mobile picker | `MedNameInput.jsx` dropdown inline | Capacitor WebView Android: teclado virtual reposiciona, dropdown absolute position fica atrás do teclado, scroll body desfocava input |
+
+**Fixes aplicados v0.2.6.2:**
+
+- `[x]` `DOSE_COLS_LIST` agora inclui `group_id, cmed_class` (commit `2bf8dad`)
+- `[x]` Migration `v0_2_6_2_dashboard_payload_includes_group_id` aplicada em prod — RPC retorna `group_id` + `cmed_class` no payload
+- `[x]` `MedNameInput.jsx` reescrito mobile-first: em mobile (matchMedia < 768 OR coarse pointer), input vira button trigger → tap abre **FULL-SCREEN sheet** position:fixed inset:0 z-index:1500
+  - Header fixo no topo (X close + search icon + input fontSize:16 anti-zoom Android)
+  - Lista flex-1 overflow-y auto + overscroll-behavior:contain (não vaza pro body)
+  - Lock body scroll quando sheet aberto
+  - autoFocus delay 80ms pós-animation
+  - Touch targets 64px min-height (vs 56 desktop)
+  - 30 sugestões mobile vs 8 desktop
+  - "+ Continuar com X digitado" sempre disponível
+  - Em desktop > 768px: dropdown inline antigo mantido
+- `[x]` Bump android versionCode 85→86, versionName 0.2.6.1→0.2.6.2
+
+**QA Android emulator Pixel8 vc 86 (CDP automation):**
+
+- `[x]` Sheet abre programaticamente via tap em button[aria-haspopup=dialog]
+- `[x]` Digitar "Escitalopram" no sheet input → 4 sugestões aparecem (Escitalopram DCB + Cipralex + Lexapro + RECONTER)
+- `[x]` Autofill detectou Antidepressivo via DCB ranking
+- `[x]` "+ Continuar com Escitalopram" botão presente
+- `[x]` Analytics em teste-plus: Escitalopram agora aparece como "Antidepressivo" (era "Outro" antes)
+
+
+
+**Entregas (Roteiro sprint Fases A→E):**
+
+- `[x]` **P0.3 Sentry PII strip exhaustivo** — `src/main.jsx` `beforeSend` agora cobre user/request/contexts/extra/tags/breadcrumbs com 23 campos sensíveis healthcare. Regex JWT/email/UUID em breadcrumb messages. Trade-off: tracesSampleRate 0 → 0.1 (10% sampling cabe Sentry free tier).
+- `[x]` **P0.4 PostHog consent gate (LGPD)** — `src/services/analytics.js` `getConsent()` / `setConsent()` + `ConsentBanner` (primeiro launch) + toggle persistente em Settings → Dados & Privacidade. PostHog não inicializa sem opt-in explícito.
+- `[x]` **P1.2 engines em package.json** (`node >=22 <23`, `npm >=10`).
+- `[x]` **P1.5 reconcileDoses ATIVO** em `useDashboardPayload` — reconcilia cache atual vs incoming server payload via `_localActedAt` (2.5s LATENCY_BUDGET). Mata regressão "status volta do nada" em cellular ruim.
+- `[x]` **P1.6 Conflict 409 prompt explícito** — 3 RPCs novas `confirm_dose_v2 / skip_dose_v2 / undo_dose_v2` retornam `{ok, error, code, current_state, from, to}`. Client `dosesService.parseDoseV2Response` lança `DoseConflictError`. `mutationRegistry.handleDoseMutationError` detecta 409, dispara `conflictBus` → `ConflictListener` mostra toast com action "Aceitar" que patcha cache com server state.
+- `[x]` **P1.10 Sentry.captureException** — wrapper `src/services/sentry.js` `captureCaught(err, {source, tags, extra})`. Adotado em mutationRegistry (handleDoseMutationError + flushPersistImmediate).
+- `[x]` **P1.11 tracesSampleRate 0.1** em prod (performance monitoring).
+- `[x]` **P3.4 treatment_user_alert_settings** — tabela + RLS self + RPCs `set_treatment_alert_level` (com 409/404/403 codes) + `get_treatment_alert_levels`. Hook `useTreatmentAlertLevel` + `useSetTreatmentAlertLevel`. Componente `AlertLevelToggle` 3 chips (Crítico/Push/Silenc.). Adoção inline em `TreatmentList.jsx` cada card ativo.
+- `[x]` **P3.15 TTL share granular** — colunas `access_level (read|mark|full)`, `is_temporary`, `invited_at`, `accepted_at`, `last_extended_at`, `one_hour_notified_at`, `twenty_four_hour_notified_at`. RPCs `share_patient_by_email` (estendida com `p_access_level`), `extend_temporary_share`, `update_share_access`, `cleanup_expired_shares`. UI `SharePatientSheet` com radio Permanente/Temporário + chips TTL 1h/24h/7d/30d. Badge "Temporário · expira em Xh" na lista.
+- `[x]` **P3.18 Edge `expire-temporary-shares`** — cron `0 * * * *` chama RPC `cleanup_expired_shares()`. DELETE shares vencidos + trigger DB `patient_unshare_handler` dispara FCM cleanup nos caregivers.
+- `[x]` **PostHog 12 eventos categoria** — `medication_search_started`, `medication_selected_from_catalog`, `category_autofilled`, `category_suggestion_shown/accepted/skipped/picked_manual`, `historico_filtered_by_group`, `historico_period_changed`, mais `treatment_alert_level_changed`, `share_type_selected`, `sync_conflict_detected/accepted_server/rejected_server`, `telemetry_consent_accepted/declined`. Adotados em MedNameInput, CategoryHintModal, DoseHistory, SharePatientSheet, mutationRegistry, ConsentBanner.
+- `[x]` **Migration versionada** `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` (P0.1 partial — aplicada via MCP em prod + arquivo SQL replay no repo).
+
+**Validações QA web (2026-05-23, Chrome MCP, dosymed.app v0.2.6.1):**
+
+- `[x]` ConsentBanner LGPD aparece em primeiro launch (localStorage.dosy_consent_telemetry === null)
+- `[x]` ConsentBanner "Aceitar" → consent=true + banner some
+- `[x]` Welcome modal versão 0.2.6.1 + Skip funcional
+- `[x]` Dashboard carrega: chips 12h/24h/48h/7d/10d + stats hoje/adesão/atrasadas
+- `[x]` TreatmentForm autofill: digitar "Escitalopram" → categoria "Antidepressivo" detectada automaticamente + ícone 🔒 cadeado + label "Detectada automaticamente · toque para alterar"
+- `[x]` Treatment criado com sucesso + 21 doses geradas + redirect Dashboard + toast verde
+- `[x]` TreatmentList: AlertLevelToggle 3 chips (Crítico default Escitalopram=antidepressivo / Push / Silenc.)
+- `[x]` Toggle Crítico→Push aplicou instantaneamente (cor roxa) + DB confirmou `alert_level='push' updatedAt=11:10:14`
+- `[x]` Push persiste pós-refresh página (pull do RPC `get_treatment_alert_levels`)
+- `[x]` Histórico cross-period chips 7d/30d/90d/6m/1a funcionando + URL param `?period=30d`
+- `[x]` Histórico chips categoria (Antibiótico, Antifúngico, Antiviral, etc) — clicar aplica filter + URL `?groups=antibiotico` + empty state "Nenhuma dose encontrada"
+- `[x]` Marcar dose: tap dose card → DoseModal abre → "Tomada" → confirm_dose_v2 RPC OK → toast "Dose de Escitalopram confirmada · Desfazer" → Dashboard: 1/2 doses, 100% adesão, 0 atrasadas, check verde
+- `[x]` SharePatientSheet UI: radio Permanente (selecionado borda vermelha) + Temporário (com clock icon)
+- `[x]` Clicar Temporário → chips TTL 1h/24h(ativo)/7d/30d aparecem + botão muda pra "Compartilhar temporariamente"
+
+**BUG fix aplicado durante QA round 1:**
+
+- `[x]` 🚨 TDZ TreatmentForm `Cannot access 'Se' before initialization` — `useClassifyMedication(form?.medName)` usava `form` ANTES de `const [form, setForm] = useState()`. Bug pré-existente v0.2.5.0 dev (vite HMR escondia) → explodiu em build minificado prod. Fix: reorder useState antes useClassifyMedication. Commit `23213f9`.
+
+**P8 storm/egress mitigations aplicadas:**
+
+- `[x]` Sentry tracesSampleRate 0.1 → 0.005 + critical ops 5% sample
+- `[x]` Sentry rate limit per-user 10 events/dia + fingerprint dedup 1% repetições
+- `[x]` MedNameInput tracking throttle 5s (era 1/char ≥3 = 2.4M/mês; agora 300k/mês)
+- `[x]` useAllTreatmentAlertLevels staleTime 5min → 1h
+- `[x]` useShares invalidate targeted (queryKey exact:true)
+- `[x]` Index composto `idx_doses_user_group_actual_done` em prod
+
+**Validações device físico pendentes (manual user):**
+
+- `[ ]` 409 dual-device: instalar APK em 2 devices físicos, marcar mesma dose → device B recebe toast "Aceitar mudança outro dispositivo?"
+- `[ ]` TTL share lifecycle: criar share 1h em teste-plus → trocar conta teste-free → ver badge "expira em" + cron expira após 1h
+- `[ ]` Critical alarm Java: dose 23/05 16:00 deve disparar AlarmActivity (Push) sem som vs Crítico fullscreen som
+
+**QA Android REAL Round 2 (emulator Pixel8 5554, CDP WebView script `scripts/qa_v0_2_6_1_android.mjs`, 2026-05-23):**
+
+- `[x]` APK debug v0.2.6.1 vc 85 instalado em emulator-5554
+- `[x]` Login teste-plus@teste.com via CDP form submit
+- `[x]` Dashboard rota correta + hero "pendentes" + adesão visíveis
+- `[x]` ConsentBanner LGPD aparece em fresh install (consent=null) — accept → consent=true + banner some
+- `[x]` Bottom nav (Início/Pacientes/SOS/Mais) presente
+- `[x]` TreatmentList: renderiza sem crash + header + AlertLevelToggle role=radiogroup + chips Crítico/Push/Silenc visíveis
+- `[x]` 🎯 TreatmentForm `/tratamento/novo` carrega SEM crash (fix TDZ confirmado em Android)
+- `[x]` TreatmentForm header "Novo tratamento" + campo medName
+- `[x]` Autofill Escitalopram → Antidepressivo detectado + label "Detectada automaticamente"
+- `[x]` Histórico cross-period: chips 7 dias/30 dias/90 dias/6 meses/1 ano
+- `[x]` SOS page renderiza sem crash
+- `[x]` Pacientes renderiza
+- `[x]` Console errors: **0** TDZ "Cannot access X before initialization"
+
+**Resultado: 22/22 PASS, 0 FAIL**
+
+**ROOT CAUSE BUG INTERMEDIÁRIO descoberto durante QA Round 2:**
+
+- `cap sync android` não rodou após meu commit `23213f9` localmente, então o APK debug local que tinha sido instalado continha bundle ANTIGO `TreatmentForm-CXKoA1Mz.js` (sem o fix). O AAB CI #26331199159 commit `23213f9` ✅ inclui o fix porque o workflow GitHub Actions sempre faz `npm run build:android` (cap sync) antes de bundlear.
+- Fix QA workflow: `cap sync` rodado manualmente + gradle assembleDebug + adb install -r → bundle correto `TreatmentForm-B2B2g-8q.js` → TDZ ausente.
+
+**AAB v0.2.6.1 vc 85 baixado e validado: `C:/temp/aab_v85_final/app-release-aab/app-release.aab` (32.9MB signed).**
 
 ---
 

@@ -59,6 +59,33 @@ export default function TreatmentForm() {
   const [hintModalOpen, setHintModalOpen] = useState(false)
   const [pendingSubmit, setPendingSubmit] = useState(null)
   const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
+
+  // v0.2.6.1 BUG-FIX QA: form useState DEVE ser declarado ANTES de useClassifyMedication,
+  // que referencia form?.medName e form?.group_id. Bug TDZ pré-existente v0.2.5.0 que só
+  // explodia em build minificado (variável `Se` minificada referenciada antes de init).
+  // Reorder: useState form → useClassifyMedication → useEffect que aplica classifyResult.
+  const [form, setForm] = useState({
+    patientId: preselectPatient || '',
+    medName: '', unit: '',
+    group_id: null,
+    cmed_class: null,
+    mode: 'interval', // 'interval' | 'times'
+    intervalHours: 8,
+    dailyTimes: ['08:00'],
+    durationDays: 7,
+    isContinuous: false,
+    // #162 v2 (v0.2.1.3) — duration UI granularity (días/semanas/meses).
+    // Persiste durationDays internamente (single source of truth);
+    // durationUnit + durationValue são UI-only state.
+    // Auto-switch baseado em intervalHours (semanal → semanas, etc).
+    durationUnit: 'days', // 'days' | 'weeks' | 'months'
+    durationValue: 7,
+    startAt: toDateInput(new Date().toISOString()),
+    firstDoseTime: '08:00',
+    saveAsTemplate: false,
+    templateName: '',
+  })
+
   // v0.2.5.0 — background classification: roda quando medName digitado >3 chars + sem group_id setado
   const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(
     form?.medName && !form?.group_id ? form.medName : null
@@ -85,28 +112,6 @@ export default function TreatmentForm() {
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
   }, [userMedHistory])
-
-  const [form, setForm] = useState({
-    patientId: preselectPatient || '',
-    medName: '', unit: '',
-    group_id: null,
-    cmed_class: null,
-    mode: 'interval', // 'interval' | 'times'
-    intervalHours: 8,
-    dailyTimes: ['08:00'],
-    durationDays: 7,
-    isContinuous: false,
-    // #162 v2 (v0.2.1.3) — duration UI granularity (días/semanas/meses).
-    // Persiste durationDays internamente (single source of truth);
-    // durationUnit + durationValue são UI-only state.
-    // Auto-switch baseado em intervalHours (semanal → semanas, etc).
-    durationUnit: 'days', // 'days' | 'weeks' | 'months'
-    durationValue: 7,
-    startAt: toDateInput(new Date().toISOString()),
-    firstDoseTime: '08:00',
-    saveAsTemplate: false,
-    templateName: '',
-  })
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
 
