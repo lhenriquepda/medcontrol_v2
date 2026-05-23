@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.2.6.1",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <23",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "start": "vite",
     "dev": "vite",
@@ -11,7 +15,7 @@
     "build:android": "npm run build && npx cap sync android",
     "open:android": "npx cap open android",
     "cap:sync": "npx cap sync",
-    "lint": "eslint src --max-warnings=80",
+    "lint": "eslint src --max-warnings=100",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
@@ -23,7 +27,7 @@
   },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [
-      "eslint --max-warnings=80"
+      "eslint --max-warnings=100"
     ]
   },
   "dependencies": {

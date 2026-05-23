@@ -20,12 +20,19 @@
 | **Play Console v0.2.4.0** | ❌ vc 81 BROKEN superseded por vc 82 |
 | **Play Console v0.2.3.17** | ✅ vc 80 legacy |
 
-**Hotfix v0.2.4.1 (em curso 2026-05-22 18:50 BRT):**
-- ROOT CAUSE: GitHub secrets `VITE_SUPABASE_URL/ANON_KEY/VAPID/ADMOB` AUSENTES. Workflow CI buildou vc 81 com env vazia → `hasSupabase=false` → login mostra "Supabase não configurado".
-- FIX 1: Secrets adicionadas via `gh secret set` a partir do `.env` (gitignored). Listadas via `gh secret list` ✅.
-- FIX 2: versionCode 81→82, versionName 0.2.4.0→0.2.4.1.
-- FIX 3: Backfill expandido com brand_map BR (Aerolin, Clenil, Decadron, Mounjaro, etc.): treatments outro 25→6, doses outro 2061→319 (84% redução). Distribuição rica: vitamina 986, broncodilatador 474, corticoide 337, antidepressivo 218.
-- TODO: Aguardar CI completar → Vetor 4 upload vc 82 → SQL app_releases → cleanup.
+**v0.2.6.1 em curso (2026-05-23) — Roteiro Alinhamento Dosy v2 Sprint 1-2:**
+- P0.3 Sentry strip exhaustivo (23 campos + JWT/email/UUID regex breadcrumbs) ✅
+- P0.4 PostHog consent gate LGPD + ConsentBanner + Settings toggle ✅
+- P1.5 reconcileDoses ATIVO em useDashboardPayload ✅
+- P1.6 Conflict 409 — confirm/skip/undo_dose_v2 + conflictBus + ConflictListener ✅
+- P1.10 Sentry.captureException wrapper + adopt em mutationRegistry ✅
+- P1.11 tracesSampleRate 0.1 ✅
+- P3.4 treatment_user_alert_settings + AlertLevelToggle adopt TreatmentList ✅
+- P3.15 TTL share granular (access_level + is_temporary) + SharePatientSheet UI radio + 4 TTL chips + RPCs extend/update_access/cleanup ✅
+- P3.18 Edge expire-temporary-shares + pg_cron 0 * * * * ✅
+- PostHog 12 eventos categoria + 3 share TTL + 3 conflict + 2 consent ✅
+- Migration versionada (P0.1 partial): `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` ✅
+- TODO: Build AAB CI Linux → Vetor 4 vc 85 → QA emulator dual-device 409 prompt + TTL share → fechar.
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 

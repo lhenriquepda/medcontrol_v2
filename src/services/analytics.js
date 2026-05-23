@@ -16,16 +16,40 @@
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com'
 
+// v0.2.6.1 P0.4 (Roteiro_Alinhamento_Dosy_v2) — consent gate LGPD.
+// Antes: PostHog inicializava sem consent (telemetria começava no primeiro pageload).
+// Agora: só inicializa se localStorage['dosy_consent_telemetry'] === 'true'.
+// ConsentBanner.jsx oferece opt-in explícito no primeiro launch.
+// Settings → Privacidade → toggle persistente.
+const CONSENT_KEY = 'dosy_consent_telemetry'
+
+function readConsent() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    return localStorage.getItem(CONSENT_KEY)
+  } catch {
+    return null
+  }
+}
+
 let posthogInstance = null
 let initialized = false
 
 /**
  * Inicializa PostHog. Chamar uma vez em main.jsx em mode=PROD.
- * No-op se key ausente.
+ * No-op se key ausente, consent não dado, ou já inicializado.
+ *
+ * v0.2.6.1 P0.4 — consent gate: requer localStorage['dosy_consent_telemetry'] === 'true'.
  */
 export async function initAnalytics() {
   if (initialized) return
   if (!POSTHOG_KEY || !import.meta.env.PROD) return
+  if (readConsent() !== 'true') {
+    if (import.meta.env.DEV) {
+      console.info('[analytics] PostHog NÃO inicializado — consent telemetria pendente')
+    }
+    return
+  }
   // Detecta adblockers que bloqueiam PostHog domains. Skip init (não-fatal).
   if (typeof window !== 'undefined') {
     try {
@@ -71,6 +95,40 @@ export async function initAnalytics() {
     initialized = true
   } catch (e) {
     console.warn('[analytics] init failed:', e?.message)
+  }
+}
+
+/**
+ * v0.2.6.1 P0.4 — getter consent telemetria.
+ * Retorna 'true' | 'false' | null (pending — nunca decidiu).
+ */
+export function getConsent() {
+  return readConsent()
+}
+
+/**
+ * v0.2.6.1 P0.4 — setter consent telemetria.
+ * value=true → opt-in + tenta init PostHog se ainda não rodou.
+ * value=false → opt-out + chama opt_out_capturing() + reset() se PostHog ativo.
+ */
+export function setConsent(value) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(CONSENT_KEY, value ? 'true' : 'false')
+  } catch (e) {
+    console.warn('[analytics] setConsent failed:', e?.message)
+  }
+  if (value) {
+    if (!initialized) initAnalytics()
+  } else if (posthogInstance) {
+    try {
+      posthogInstance.opt_out_capturing()
+      posthogInstance.reset()
+    } catch (e) {
+      console.warn('[analytics] opt-out failed:', e?.message)
+    }
+    posthogInstance = null
+    initialized = false
   }
 }
 
@@ -184,4 +242,36 @@ export const EVENTS = {
   REVIEW_PROMPT_SHOWN: 'review_prompt_shown',           // Play Core dialog displayed
   REVIEW_PROMPT_SKIPPED_QUOTA: 'review_prompt_skipped_quota', // Google quota exceeded
   REVIEW_PROMPT_FAILED: 'review_prompt_failed',         // plugin error
+
+  // v0.2.6.1 P0.4 — Consent telemetria
+  TELEMETRY_CONSENT_ACCEPTED: 'telemetry_consent_accepted',
+  TELEMETRY_CONSENT_DECLINED: 'telemetry_consent_declined',
+
+  // v0.2.6.1 PostHog 12 eventos categoria (Roteiro_Alinhamento §10 P3.4 + Validar.md escopo)
+  MEDICATION_SEARCH_STARTED: 'medication_search_started',         // user digitou ≥1 char no autocomplete
+  MEDICATION_SELECTED_FROM_CATALOG: 'medication_selected_from_catalog', // tap em resultado catálogo
+  MEDICATION_TYPED_FREE_TEXT: 'medication_typed_free_text',       // continuou com texto livre (sem catálogo)
+  CATEGORY_AUTOFILLED: 'category_autofilled',                     // classify RPC populou group_id
+  CATEGORY_SUGGESTION_SHOWN: 'category_suggestion_shown',         // CategoryHintModal aberto
+  CATEGORY_SUGGESTION_ACCEPTED: 'category_suggestion_accepted',   // user clicou em top-3 sugestão
+  CATEGORY_SUGGESTION_SKIPPED: 'category_suggestion_skipped',     // user fechou modal sem aceitar
+  CATEGORY_PICKED_MANUAL: 'category_picked_manual',               // user abriu CategoryPicker full (não autofill)
+  HISTORICO_FILTERED_BY_GROUP: 'historico_filtered_by_group',     // chip categoria ativado
+  HISTORICO_PERIOD_CHANGED: 'historico_period_changed',           // chip 7d/30d/90d/6m/1a
+  ULTIMA_DOSE_CARD_TAPPED: 'ultima_dose_card_tapped',             // tap em row "Última dose"
+  ANALYTICS_DONUT_SLICE_TAPPED: 'analytics_donut_slice_tapped',   // drill-down classe CMED
+
+  // v0.2.6.1 Alert level per-treatment (P3.4 / P4.7a)
+  TREATMENT_ALERT_LEVEL_CHANGED: 'treatment_alert_level_changed', // toggle Crítico/Push/Silencioso
+  CRITICAL_INERT_BADGE_VIEWED: 'critical_inert_badge_viewed',     // user viu badge
+
+  // v0.2.6.1 Share TTL (P3.15 / P4.7c)
+  SHARE_TYPE_SELECTED: 'share_type_selected',          // {type: 'permanent'|'temporary'}
+  SHARE_TEMPORARY_EXTENDED: 'share_temporary_extended', // owner clicou estender prazo
+  SHARE_TEMPORARY_EXPIRED: 'share_temporary_expired',  // FCM expired event recebido (cuidador)
+
+  // v0.2.6.1 Conflict resolution (P1.6)
+  SYNC_CONFLICT_DETECTED: 'sync_conflict_detected',     // RPC retornou 409
+  SYNC_CONFLICT_ACCEPTED_SERVER: 'sync_conflict_accepted_server', // user aceitou state outro device
+  SYNC_CONFLICT_REJECTED_SERVER: 'sync_conflict_rejected_server', // user descartou e re-tentou
 }

@@ -8,10 +8,12 @@
  *
  * Bem menos friction que campo required vazio.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Sheet, Button } from './surfaces.jsx'
 import { MED_GROUPS, getGroup } from '../../constants/medCategories.js'
 import { inferGroupsFromName } from '../../constants/groupKeywords.js'
+// v0.2.6.1 — telemetria categoria (Roteiro_Alinhamento)
+import { track, EVENTS } from '../../services/analytics.js'
 
 const FALLBACK_TOP3 = ['antitermico_analgesico', 'antibiotico', 'anti_hipertensivo']
 
@@ -37,10 +39,38 @@ export default function CategoryHintModal({
     return [...combined, ...remaining].slice(0, 3)
   }, [medName, userHistoryGroups])
 
+  // v0.2.6.1 — telemetria: modal aberto (1× por open transition)
+  useEffect(() => {
+    if (!open) return
+    try {
+      track(EVENTS.CATEGORY_SUGGESTION_SHOWN, {
+        suggested_count: suggestedGroups.length,
+        has_user_history: (userHistoryGroups || []).length > 0,
+      })
+    } catch {}
+  }, [open, suggestedGroups.length, userHistoryGroups])
+
+  function handleSelect(groupId) {
+    try {
+      track(EVENTS.CATEGORY_SUGGESTION_ACCEPTED, { group_id: groupId, position: suggestedGroups.indexOf(groupId) })
+    } catch {}
+    onSelect(groupId)
+  }
+
+  function handleClose() {
+    try { track(EVENTS.CATEGORY_SUGGESTION_SKIPPED) } catch {}
+    onClose?.()
+  }
+
+  function handleOpenFullPicker() {
+    try { track(EVENTS.CATEGORY_PICKED_MANUAL, { from: 'hint_modal_full_link' }) } catch {}
+    onOpenFullPicker?.()
+  }
+
   if (!open) return null
 
   return (
-    <Sheet open={open} onClose={onClose} title="Qual a categoria?">
+    <Sheet open={open} onClose={handleClose} title="Qual a categoria?">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <p style={{
           margin: 0,
@@ -60,7 +90,7 @@ export default function CategoryHintModal({
               <button
                 key={groupId}
                 type="button"
-                onClick={() => onSelect(groupId)}
+                onClick={() => handleSelect(groupId)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -99,7 +129,7 @@ export default function CategoryHintModal({
 
         <button
           type="button"
-          onClick={onOpenFullPicker}
+          onClick={handleOpenFullPicker}
           style={{
             padding: '14px 18px',
             borderRadius: 14,

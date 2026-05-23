@@ -4,6 +4,8 @@ import { useUserMedications } from '../hooks/useUserMedications'
 import { useUserMedicationCategories } from '../hooks/useUserMedicationCategories'
 import { useMedCatalogSearch } from '../hooks/useMedCatalogSearch'
 import { getGroup } from '../constants/medCategories'
+// v0.2.6.1 — PostHog instrumentação categoria (Roteiro_Alinhamento P3.4 + Validar.md escopo)
+import { track, EVENTS } from '../services/analytics'
 
 /**
  * MedNameInput — autocomplete v0.2.5.0 mobile-aware
@@ -41,6 +43,15 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     debounceRef.current = setTimeout(() => setDebouncedValue(value), 300)
     return () => clearTimeout(debounceRef.current)
   }, [value])
+
+  // v0.2.6.1 — track inicio de busca (≥3 chars), throttled via ref pra evitar spam
+  const searchTrackedRef = useRef(null)
+  useEffect(() => {
+    if (!debouncedValue || debouncedValue.length < 3) return
+    if (searchTrackedRef.current === debouncedValue) return
+    searchTrackedRef.current = debouncedValue
+    try { track(EVENTS.MEDICATION_SEARCH_STARTED, { length: debouncedValue.length }) } catch {}
+  }, [debouncedValue])
 
   // visualViewport — ajusta maxHeight quando teclado abre/fecha em Android
   useEffect(() => {
@@ -142,6 +153,21 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
         source: item.source || 'free',
       })
     }
+    // v0.2.6.1 — telemetria seleção do catálogo (Roteiro_Alinhamento P3.4)
+    try {
+      track(EVENTS.MEDICATION_SELECTED_FROM_CATALOG, {
+        source: item.source || 'unknown',
+        has_group: Boolean(item.group_id),
+        has_cmed_class: Boolean(item.cmed_class),
+        is_dcb: Boolean(item.is_dcb),
+      })
+      if (item.group_id) {
+        track(EVENTS.CATEGORY_AUTOFILLED, {
+          source: item.source || 'unknown',
+          group_id: item.group_id,
+        })
+      }
+    } catch {}
     setOpen(false)
     setHighlight(-1)
     // Reset flag após próximo tick pra outside-click voltar a funcionar

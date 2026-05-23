@@ -17,6 +17,12 @@ import {
 import { usePatients } from '../hooks/usePatients'
 import { useToast } from '../hooks/useToast'
 import { formatDate } from '../utils/dateUtils'
+// v0.2.6.1 P3.4 / P4.7a — toggle Crítico/Push/Silencioso por tratamento
+import AlertLevelToggle from '../components/AlertLevelToggle'
+import {
+  useTreatmentAlertLevel,
+  useSetTreatmentAlertLevel,
+} from '../hooks/useTreatmentAlertLevel'
 
 // v0.2.3.5 #240 — Treatments redesign: filtro paciente chips + Ativos collapsable +
 // cards visuais com avatar paciente + ícone pill colorido + hero stats compactos.
@@ -379,6 +385,10 @@ function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
   const cfg = STATUS_CONFIG[eff]
   const ed = endDateOf(t)
   const isInactive = eff === 'paused' || eff === 'ended' || eff === 'auto-ended'
+  // v0.2.6.1 P3.4 / P4.7a — alert level per-treatment per-user
+  const alertLevel = useTreatmentAlertLevel(t.id)
+  const setAlertLevel = useSetTreatmentAlertLevel()
+  const isActiveTreatment = eff === 'active' && !readOnly
 
   return (
     <motion.div
@@ -449,6 +459,33 @@ function TreatmentCard({ t, i, patient, patientName, actions = [], readOnly }) {
                   if (diffDays === 1) return 'Termina amanhã'
                   return `Termina em ${formatDate(ed.toISOString())}`
                 })()}
+              </div>
+            )}
+
+            {/* v0.2.6.1 P4.7a — Alert level per-treatment (Roteiro_Alinhamento) */}
+            {isActiveTreatment && (
+              <div style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: '1px dashed var(--dosy-border-faint)',
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+              }}>
+                <span style={{
+                  fontSize: 11, color: 'var(--dosy-fg-tertiary)',
+                  fontWeight: 600, letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}>Alerta</span>
+                <AlertLevelToggle
+                  level={alertLevel}
+                  size="sm"
+                  disabled={setAlertLevel.isPending}
+                  onChange={(next) => {
+                    if (next !== alertLevel) {
+                      setAlertLevel.mutate({ treatmentId: t.id, alertLevel: next })
+                    }
+                  }}
+                />
               </div>
             )}
           </div>

@@ -20,17 +20,33 @@
 
 ---
 
-## 🆕 Release atual — v0.2.6.1 EM CURSO (vc 85)
+## 🆕 Release atual — v0.2.6.1 EM CURSO (vc 85) — Roteiro Alinhamento Dosy v2
 
-**Status:** branch `release/v0.2.6.1` aberta. Aguarda implementação.
+**Status:** branch `release/v0.2.6.1`. Implementação Roteiro_Alinhamento_Dosy_v2.md (sprint 1-2).
 
-**Escopo:** 3 ações A→B restantes do audit dosy-app/docs (pós v0.2.6.0 SHIPPED):
+**Entregas (Roteiro sprint Fases A→E):**
 
-- Alert level per-treatment per-user (Crítico / Push / Silencioso) — toggle inline no card de tratamento, override do switch global. Schema: tabela nova `medcontrol.treatment_alert_prefs (user_id, treatment_id, alert_level)`. Cobre Persona 2 Helena (PRD §4.1) + Persona 3 Patrícia (suplementos silenciosos, hipertensivos críticos).
-- Conflict 409 prompt explícito em mutations de dose — `mutationRegistry.js` onError detect conflict → toast UI "Aceitar mudança em outro dispositivo?" em vez de refetch silencioso (Flow 6 PRD).
-- PostHog instrumentação completa 12 eventos de categoria (medication_search_started, medication_selected, category_suggestion_shown, category_suggestion_skipped, historico_filtered_by_group, etc) em CategoryPicker/MedNameInput/CategoryHintModal/DoseHistory.
-- UI SharePatientSheet com radio Permanente/Temporário (DB foundation já pronta v0.2.6.0). Date picker pra `expiresAt`.
-- Edge Function `share-expiry-cron` rodando 1×/h chamando `cleanup_expired_shares()` RPC.
+- `[x]` **P0.3 Sentry PII strip exhaustivo** — `src/main.jsx` `beforeSend` agora cobre user/request/contexts/extra/tags/breadcrumbs com 23 campos sensíveis healthcare. Regex JWT/email/UUID em breadcrumb messages. Trade-off: tracesSampleRate 0 → 0.1 (10% sampling cabe Sentry free tier).
+- `[x]` **P0.4 PostHog consent gate (LGPD)** — `src/services/analytics.js` `getConsent()` / `setConsent()` + `ConsentBanner` (primeiro launch) + toggle persistente em Settings → Dados & Privacidade. PostHog não inicializa sem opt-in explícito.
+- `[x]` **P1.2 engines em package.json** (`node >=22 <23`, `npm >=10`).
+- `[x]` **P1.5 reconcileDoses ATIVO** em `useDashboardPayload` — reconcilia cache atual vs incoming server payload via `_localActedAt` (2.5s LATENCY_BUDGET). Mata regressão "status volta do nada" em cellular ruim.
+- `[x]` **P1.6 Conflict 409 prompt explícito** — 3 RPCs novas `confirm_dose_v2 / skip_dose_v2 / undo_dose_v2` retornam `{ok, error, code, current_state, from, to}`. Client `dosesService.parseDoseV2Response` lança `DoseConflictError`. `mutationRegistry.handleDoseMutationError` detecta 409, dispara `conflictBus` → `ConflictListener` mostra toast com action "Aceitar" que patcha cache com server state.
+- `[x]` **P1.10 Sentry.captureException** — wrapper `src/services/sentry.js` `captureCaught(err, {source, tags, extra})`. Adotado em mutationRegistry (handleDoseMutationError + flushPersistImmediate).
+- `[x]` **P1.11 tracesSampleRate 0.1** em prod (performance monitoring).
+- `[x]` **P3.4 treatment_user_alert_settings** — tabela + RLS self + RPCs `set_treatment_alert_level` (com 409/404/403 codes) + `get_treatment_alert_levels`. Hook `useTreatmentAlertLevel` + `useSetTreatmentAlertLevel`. Componente `AlertLevelToggle` 3 chips (Crítico/Push/Silenc.). Adoção inline em `TreatmentList.jsx` cada card ativo.
+- `[x]` **P3.15 TTL share granular** — colunas `access_level (read|mark|full)`, `is_temporary`, `invited_at`, `accepted_at`, `last_extended_at`, `one_hour_notified_at`, `twenty_four_hour_notified_at`. RPCs `share_patient_by_email` (estendida com `p_access_level`), `extend_temporary_share`, `update_share_access`, `cleanup_expired_shares`. UI `SharePatientSheet` com radio Permanente/Temporário + chips TTL 1h/24h/7d/30d. Badge "Temporário · expira em Xh" na lista.
+- `[x]` **P3.18 Edge `expire-temporary-shares`** — cron `0 * * * *` chama RPC `cleanup_expired_shares()`. DELETE shares vencidos + trigger DB `patient_unshare_handler` dispara FCM cleanup nos caregivers.
+- `[x]` **PostHog 12 eventos categoria** — `medication_search_started`, `medication_selected_from_catalog`, `category_autofilled`, `category_suggestion_shown/accepted/skipped/picked_manual`, `historico_filtered_by_group`, `historico_period_changed`, mais `treatment_alert_level_changed`, `share_type_selected`, `sync_conflict_detected/accepted_server/rejected_server`, `telemetry_consent_accepted/declined`. Adotados em MedNameInput, CategoryHintModal, DoseHistory, SharePatientSheet, mutationRegistry, ConsentBanner.
+- `[x]` **Migration versionada** `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` (P0.1 partial — aplicada via MCP em prod + arquivo SQL replay no repo).
+
+**Validações pendentes (manual + emulator):**
+
+- `[ ]` Build AAB Linux CI (Java 21 Temurin) — Java 25 Windows quebrado.
+- `[ ]` Upload AAB v0.2.6.1 vc 85 via Vetor 4 (Supabase Storage HTTPS proxy + Chrome MCP).
+- `[ ]` Smoke test emulator: login teste-plus → criar tratamento → toggle AlertLevel Crítico→Silenc → tap "Tomada" → verificar persistência DB.
+- `[ ]` Validar 409 prompt: instalar APK em 2 emuladores, marcar mesma dose simultaneamente → device B recebe toast "Aceitar mudança outro dispositivo?".
+- `[ ]` Validar TTL share: criar share temporário 1h em teste-plus → trocar conta pra teste-free → ver paciente compartilhado com badge "expira em 1h" → executar cron manualmente após expirar → verificar paciente sumiu da lista do cuidador.
+- `[ ]` Validar consent banner: clean install → banner aparece → tap Recusar → PostHog não inicializa → toggle em Settings → reabrir app → PostHog inicializa.
 
 ---
 

@@ -13,6 +13,8 @@ import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { formatTime, pad } from '../utils/dateUtils'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
+// v0.2.6.1 — PostHog instrumentação categoria (Roteiro_Alinhamento §10 P3.4)
+import { track, EVENTS } from '../services/analytics'
 
 // v0.2.5.0 — refactor cross-period + multi-categoria + agrupamento dinâmico.
 // Resolve caso "quando foi última vez que tomei antibiótico" sem precisar PDF.
@@ -118,16 +120,27 @@ export default function DoseHistory() {
     const next = new URLSearchParams(searchParams)
     next.set('period', id)
     setSearchParams(next, { replace: true })
+    // v0.2.6.1 — telemetria período histórico
+    try { track(EVENTS.HISTORICO_PERIOD_CHANGED, { period_id: id }) } catch {}
   }
   function toggleGroup(g) {
     const cur = new Set(selectedGroups)
-    if (cur.has(g)) cur.delete(g)
+    const wasActive = cur.has(g)
+    if (wasActive) cur.delete(g)
     else cur.add(g)
     const next = new URLSearchParams(searchParams)
     if (cur.size > 0) next.set('groups', [...cur].join(','))
     else next.delete('groups')
     next.delete('group') // legacy single
     setSearchParams(next, { replace: true })
+    // v0.2.6.1 — telemetria filtro categoria
+    try {
+      track(EVENTS.HISTORICO_FILTERED_BY_GROUP, {
+        group_id: g,
+        action: wasActive ? 'remove' : 'add',
+        active_count: cur.size,
+      })
+    } catch {}
   }
   function clearAllGroups() {
     const next = new URLSearchParams(searchParams)

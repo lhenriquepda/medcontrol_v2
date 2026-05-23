@@ -24,25 +24,90 @@ initAnalytics()
 
 // Sentry — production-only crash + error monitoring.
 // LGPD: beforeSend strips PII (emails, names, dose observations).
+//
+// v0.2.6.1 P0.3 (Roteiro_Alinhamento_Dosy_v2): strip exhaustivo — antes só 4 campos
+// (event.user.email/username/ip + event.request.data), agora cobre user/request/
+// contexts/extra/tags/breadcrumbs (data + message regex). 23 campos sensíveis
+// healthcare BR (name/email/medName/patientName/observation/condition/allergies/
+// doctor/insurance/phone/emergency/weight/height/blood_type/access_token/
+// refresh_token/jwt/apiKey/password/service_role/anon_key).
+//
+// v0.2.6.1 P1.11: tracesSampleRate 0 → 0.1 em prod habilita performance monitoring
+// (10% sampling cabe Sentry Free tier 10k transactions/mês).
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN
+
+const SENTRY_SENSITIVE_FIELDS = [
+  // PII básica
+  'name', 'email', 'username', 'ip_address', 'phone',
+  // Healthcare PII (LGPD categoria especial)
+  'condition', 'allergies', 'doctor', 'insurance', 'insurance_card',
+  'emergency_contact', 'emergency_phone',
+  'weight', 'height', 'blood_type',
+  // Dados clínicos / cadastro
+  'medname', 'patientname', 'observation',
+  // Tokens / secrets
+  'access_token', 'refresh_token', 'jwt', 'apikey', 'api_key',
+  'password', 'service_role', 'anon_key',
+]
+
+function stripPII(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 5) return obj
+  // Arrays — itera elementos
+  if (Array.isArray(obj)) {
+    obj.forEach((v) => {
+      if (v && typeof v === 'object') stripPII(v, depth + 1)
+    })
+    return obj
+  }
+  for (const key of Object.keys(obj)) {
+    const lower = key.toLowerCase()
+    if (SENTRY_SENSITIVE_FIELDS.some((f) => lower.includes(f))) {
+      obj[key] = '[REDACTED]'
+    } else if (obj[key] && typeof obj[key] === 'object') {
+      stripPII(obj[key], depth + 1)
+    }
+  }
+  return obj
+}
+
+function redactBreadcrumbMessage(msg) {
+  if (!msg || typeof msg !== 'string') return msg
+  let out = msg
+  // Redact JWT-like patterns
+  out = out.replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[JWT_REDACTED]')
+  // Redact email-like patterns
+  out = out.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL_REDACTED]')
+  // Redact UUID v4-like (potencial user_id leak em URLs/logs)
+  out = out.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '[UUID]')
+  return out
+}
+
 if (SENTRY_DSN && import.meta.env.PROD) {
   const sentryConfig = {
     dsn: SENTRY_DSN,
     environment: import.meta.env.MODE,
     // Auditoria 4.5.7 G3 — release tag pra correlacionar crashes com versão
     release: `dosy@${__APP_VERSION__}`,
-    tracesSampleRate: 0,
+    // v0.2.6.1 P1.11 — 10% sampling habilita performance monitoring sem estourar free tier
+    tracesSampleRate: 0.1,
     // Auto-session tracking gera 1 envelope/pageload → quando ingest devolve 503
     // (rate-limit transitório), CORS error spam no console. Ficamos só com
     // captureException pra erros reais (sem session tracking).
     autoSessionTracking: false,
     sendClientReports: false,
     beforeSend(event) {
-      // Strip PII (LGPD: medication data is "categoria especial")
-      if (event.user) {
-        delete event.user.email
-        delete event.user.username
-        delete event.user.ip_address
+      // v0.2.6.1 P0.3 — strip exhaustivo PII (healthcare LGPD)
+      if (event.user) stripPII(event.user)
+      if (event.request) stripPII(event.request)
+      if (event.contexts) stripPII(event.contexts)
+      if (event.extra) stripPII(event.extra)
+      if (event.tags) stripPII(event.tags)
+      if (Array.isArray(event.breadcrumbs)) {
+        event.breadcrumbs = event.breadcrumbs.map((b) => {
+          if (b?.data) stripPII(b.data)
+          if (b?.message) b.message = redactBreadcrumbMessage(b.message)
+          return b
+        })
       }
       // Avoid logging request body (may contain medName, patientName, observation)
       if (event.request?.data) delete event.request.data

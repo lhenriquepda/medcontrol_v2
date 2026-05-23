@@ -41,6 +41,10 @@ import PermissionsOnboarding from './components/PermissionsOnboarding'
 import OnboardingTour from './components/OnboardingTour'
 import UpdateBanner from './components/UpdateBanner'
 import OfflineBanner from './components/OfflineBanner'
+// v0.2.6.1 P0.4 — consent gate LGPD pra PostHog
+import ConsentBanner from './components/ConsentBanner'
+// v0.2.6.1 P1.6 — listener pra conflict bus 409 (mostra toast "Aceitar")
+import ConflictListener from './components/ConflictListener'
 import LockScreen from './components/LockScreen'
 import ForceNewPasswordModal from './components/ForceNewPasswordModal'
 import { useAppLock } from './hooks/useAppLock'
@@ -574,6 +578,10 @@ export default function App() {
     />
     {/* #204 (v0.2.1.7) — feedback visual fila offline + drain pós-reconexão */}
     <OfflineBanner />
+    {/* v0.2.6.1 P0.4 — consent banner LGPD telemetria (Roteiro_Alinhamento) */}
+    <ConsentBanner />
+    {/* v0.2.6.1 P1.6 — escuta conflict bus 409 + mostra toast "Aceitar mudança outro dispositivo?" */}
+    <ConflictListener />
     </>
   )
 }

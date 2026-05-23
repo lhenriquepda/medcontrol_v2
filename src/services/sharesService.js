@@ -29,14 +29,16 @@ export async function listPatientShares(patientId) {
   return data || []
 }
 
-export async function sharePatientByEmail(patientId, email, expiresAt = null) {
+export async function sharePatientByEmail(patientId, email, expiresAt = null, accessLevel = 'full') {
   if (!hasSupabase) throw new ShareError('Supabase indisponível')
   // v0.2.3.7 Bug C fix — timeout 15s evita "Enviando…" hang infinito.
   // v0.2.6.0 — param `expiresAt` opcional (ISO string) pra Acesso Temporário (TTL).
+  // v0.2.6.1 P3.15 — param `accessLevel` opcional ('read'|'mark'|'full'). Default 'full' backward-compat.
   const rpcPromise = supabase.rpc('share_patient_by_email', {
-    p_patient: patientId,
+    p_patient_id: patientId,
     p_email: email,
     p_expires_at: expiresAt,
+    p_access_level: accessLevel,
   })
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(
@@ -45,6 +47,28 @@ export async function sharePatientByEmail(patientId, email, expiresAt = null) {
     )
   })
   const { data, error } = await Promise.race([rpcPromise, timeoutPromise])
+  if (error) throw mapErr(error)
+  return data
+}
+
+// v0.2.6.1 P3.15 — estender prazo de share temporário (owner only).
+export async function extendTemporaryShare(shareId, newExpiresAt) {
+  if (!hasSupabase) throw new ShareError('Supabase indisponível')
+  const { data, error } = await supabase.rpc('extend_temporary_share', {
+    p_share_id: shareId,
+    p_new_expires_at: newExpiresAt,
+  })
+  if (error) throw mapErr(error)
+  return data
+}
+
+// v0.2.6.1 P3.15 — mudar access_level de share existente.
+export async function updateShareAccess(shareId, accessLevel) {
+  if (!hasSupabase) throw new ShareError('Supabase indisponível')
+  const { data, error } = await supabase.rpc('update_share_access', {
+    p_share_id: shareId,
+    p_access_level: accessLevel,
+  })
   if (error) throw mapErr(error)
   return data
 }

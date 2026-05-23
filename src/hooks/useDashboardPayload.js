@@ -1,6 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getDashboardPayload, recomputeOverdueDoses } from '../services/dashboardService'
+// v0.2.6.1 P1.5 (Roteiro_Alinhamento_Dosy_v2) — ativa reconcileDoses no payload.
+// reconcileDoses respeita doses com `_localActedAt` recente (LATENCY_BUDGET_MS=2500ms)
+// e descarta server payload que tentaria reverter status. Mata o bug "status volta do
+// nada" em cellular ruim. Combina com gate Realtime + versionedCache stamp em mutations.
+import { reconcileDoses } from '../state/versionedCache'
 
 // v0.2.3.4 #163 — Hook consolidado Dashboard.
 // Substitui 3 useQuery individuais (usePatients + useTreatments + useDoses) + 1 RPC
@@ -94,6 +99,10 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
   // v0.2.3.10 #295 — enriquecer doses com patientName via payload.patients
   // ANTES de cachear. Garante consumer (App.jsx scheduler, AlarmService, etc)
   // sempre tem patientName sem depender de patientsMap cache stale.
+  //
+  // v0.2.6.1 P1.5 — reconcileDoses entre cache atual e incoming. Se cache tem doses
+  // patchadas optimistic (com _localActedAt < 2.5s), mantém otimista — server payload
+  // que tentaria reverter status é descartado dentro da janela. Combina com gate Realtime.
   const dosesComputed = useMemo(() => {
     if (!query.data?.doses) return undefined
     const patientsMap = new Map((query.data.patients || []).map(p => [p.id, p]))
@@ -101,8 +110,13 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
       ...d,
       patientName: d.patientName || patientsMap.get(d.patientId)?.name || '',
     }))
-    return recomputeOverdueDoses(enriched)
-  }, [query.data])
+    const overdueRecomputed = recomputeOverdueDoses(enriched)
+    // Lê snapshot atual do cache pra reconciliar.
+    const cachedPayload = qc.getQueryData(['dashboard-payload', keyFilter])
+    const cachedDoses = Array.isArray(cachedPayload?.doses) ? cachedPayload.doses : null
+    if (!cachedDoses) return overdueRecomputed
+    return reconcileDoses(cachedDoses, overdueRecomputed)
+  }, [query.data, qc, keyFilter])
 
   return {
     ...query,
