@@ -20,7 +20,48 @@
 
 ---
 
-## 🆕 Release atual — v0.2.4.1 SHIPPED (vc 82, hotfix Supabase config)
+## 🆕 Release atual — v0.2.6.1 EM CURSO (vc 85)
+
+**Status:** branch `release/v0.2.6.1` aberta. Aguarda implementação.
+
+**Escopo:** 3 ações A→B restantes do audit dosy-app/docs (pós v0.2.6.0 SHIPPED):
+
+- Alert level per-treatment per-user (Crítico / Push / Silencioso) — toggle inline no card de tratamento, override do switch global. Schema: tabela nova `medcontrol.treatment_alert_prefs (user_id, treatment_id, alert_level)`. Cobre Persona 2 Helena (PRD §4.1) + Persona 3 Patrícia (suplementos silenciosos, hipertensivos críticos).
+- Conflict 409 prompt explícito em mutations de dose — `mutationRegistry.js` onError detect conflict → toast UI "Aceitar mudança em outro dispositivo?" em vez de refetch silencioso (Flow 6 PRD).
+- PostHog instrumentação completa 12 eventos de categoria (medication_search_started, medication_selected, category_suggestion_shown, category_suggestion_skipped, historico_filtered_by_group, etc) em CategoryPicker/MedNameInput/CategoryHintModal/DoseHistory.
+- UI SharePatientSheet com radio Permanente/Temporário (DB foundation já pronta v0.2.6.0). Date picker pra `expiresAt`.
+- Edge Function `share-expiry-cron` rodando 1×/h chamando `cleanup_expired_shares()` RPC.
+
+---
+
+## 📦 Release anterior — v0.2.6.0 SHIPPED (vc 84, TTL share foundation + Card Última dose)
+
+**Status:** ✅ Publicado Internal Testing 2026-05-22 20:04 BRT via Vetor 4.
+
+**Entregas:**
+
+- TTL Acesso Temporário (foundation DB): migration `patient_shares + expiresAt + expiryNotifiedAt`, RPC `cleanup_expired_shares()`, RPC `share_patient_by_email()` estendida com `p_expires_at`. UI deferred pra v0.2.6.1.
+- Card "Última dose por categoria" no Histórico — resolve JTBD da médica ("quando foi a última vez X?") em 2 toques. Renderiza quando filtro de categoria ou search ativo.
+- Documentação `11-IMPLEMENTATION_LOG.md` e `12-DEPLOYMENT_PIPELINE.md` criados em `dosy-app/docs/` (decisões B→A da auditoria).
+
+---
+
+## 📦 Release anterior — v0.2.5.0 SHIPPED (vc 83, autofill universal + Histórico cross-period)
+
+**Status:** ✅ Publicado Internal Testing 2026-05-22 19:51 BRT.
+
+**Entregas:**
+
+- Autofill universal: 17/17 medicamentos top BR validados (Aerolin, Avamys, Buscopan, Cataflam, Clavulin, Decadron, Escitalopram, Levotiroxina, Mounjaro, Novalgina, Ozempic, Puran T4, Renitec, Rivotril, Selozok, Seretide, Triiodotironina, Tylenol, Voltaren).
+- Categoria "Hormonal" nova (17ª).
+- Histórico cross-period: chips 7d/30d/90d/6m/1a, multi-categoria, agrupamento dinâmico (dia/semana/medicamento), export CSV inline.
+- UX autocomplete mobile reformulado (Tab handler removido, mouseEnter highlight removido, visualViewport-aware, touch 56px).
+- RPC `classify_medication_robust(p_name)` server-side 5-tier (DCB exact → catalog exact → catalog LIKE → principio LIKE → heurística sufixo).
+- `CategoryHintModal` (top-3) quando autofill falha.
+
+---
+
+## 📦 Release v0.2.4.1 SHIPPED (vc 82, hotfix Supabase config)
 
 **Status:** ✅ Publicado Internal Testing 2026-05-22 19:02 BRT via Vetor 4. `is_mandatory=true` força modal update nos users vc 81 broken.
 

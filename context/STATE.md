@@ -10,8 +10,8 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.0` (em curso — audit findings A→B) |
-| **versionCode** | `84` (v0.2.6.0) — anterior `83` (v0.2.5.0 shipped) |
+| **Versão** | `v0.2.6.1` (em curso) — anterior `v0.2.6.0` shipped |
+| **versionCode** | `85` (v0.2.6.1) — anterior `84` (v0.2.6.0 shipped) |
 | **Branch ativa** | `master` |
 | **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
 | **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |
