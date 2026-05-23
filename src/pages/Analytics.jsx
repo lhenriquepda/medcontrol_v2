@@ -19,6 +19,10 @@ import { formatDate } from '../utils/dateUtils'
 // v0.2.6.4 P9.6 — bulk categorize modal pro slice "Não classificado" do donut
 import BulkCategorizeModal from '../components/BulkCategorizeModal'
 import { getGroup } from '../constants/medCategories'
+// v0.2.6.5 — pull-to-refresh
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import PullToRefreshOverlay from '../components/PullToRefreshOverlay'
+import { useQueryClient } from '@tanstack/react-query'
 
 // v0.2.3.5 #241 — Analytics redesign healthcare-focused.
 // Layout inspired premium dark mobile dashboards (gauge ring + insight cards + trends).
@@ -44,6 +48,15 @@ function classifyMed(medName) {
 }
 
 export default function Analytics() {
+  const qc = useQueryClient()
+  const ptr = usePullToRefresh(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['doses'] }),
+      qc.invalidateQueries({ queryKey: ['patients'] }),
+      qc.invalidateQueries({ queryKey: ['treatments'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard-payload'] }),
+    ])
+  })
   const { data: patients = [] } = usePatients()
   const [period, setPeriod] = useState('30')
   const [patientId, setPatientId] = useState(null)
@@ -268,6 +281,7 @@ export default function Analytics() {
 
   return (
     <div style={{ paddingBottom: 110 }}>
+      <PullToRefreshOverlay ptr={ptr} />
       <PageHeader
         title="Análises"
         back

@@ -48,6 +48,9 @@ import ConflictListener from './components/ConflictListener'
 import LockScreen from './components/LockScreen'
 import ForceNewPasswordModal from './components/ForceNewPasswordModal'
 import { useAppLock } from './hooks/useAppLock'
+// v0.2.6.5 — keyboard-aware scroll global: input focado rola pro topo automaticamente
+// (mata bug Android Capacitor WebView teclado por cima do input).
+import { useKeyboardAwareScroll } from './hooks/useKeyboardAwareScroll'
 
 // Fallback minimalista enquanto chunk carrega
 function PageSkeleton() {
@@ -75,6 +78,8 @@ export default function App() {
   // useRealtime()
   useAppResume()
   useAdMobBanner()
+  // v0.2.6.5 — input/textarea/select foca → scrollIntoView('start') pra cima do teclado.
+  useKeyboardAwareScroll()
   // v0.2.3.10 #297 — QueryClient ref pra cache cleanup on patient_unshared FCM
   const qc = useQueryClient()
   // #170 (v0.2.1.3) — In-App Review smart prompt trigger.

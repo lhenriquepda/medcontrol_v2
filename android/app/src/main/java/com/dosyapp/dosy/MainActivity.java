@@ -6,9 +6,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.webkit.WebView;
 
 import java.lang.ref.WeakReference;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
@@ -38,6 +43,47 @@ public class MainActivity extends BridgeActivity {
             enqueueDoseSyncWorker();
             cleanupLegacyChannels();
         });
+        // v0.2.6.5 — injeta status bar height (DP) como CSS var --system-status-bar-height
+        // pra useAdMobBanner posicionar o banner corretamente em qualquer device (Pixel,
+        // Samsung punch-hole, devices antigos sem notch, etc). Sem isso, hardcoded margin
+        // quebrava em devices não-Pixel.
+        injectStatusBarHeightCssVar();
+    }
+
+    /**
+     * Mede status bar height nativamente via WindowInsetsCompat e injeta como CSS var.
+     * Listener re-roda em rotation / multi-window / display cutout changes — sempre atualiza.
+     */
+    private void injectStatusBarHeightCssVar() {
+        try {
+            View root = findViewById(android.R.id.content);
+            if (root == null) return;
+            ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                try {
+                    Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.statusBars());
+                    Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+                    // Status bar OU display cutout (punch-hole) — qual for maior cobre ambos.
+                    int topPx = Math.max(sysBars.top, cutout.top);
+                    float density = getResources().getDisplayMetrics().density;
+                    int topDp = Math.round(topPx / density);
+                    String js = String.format(
+                        "document.documentElement.style.setProperty('--system-status-bar-height', '%dpx');"
+                        + "window.__dosySystemStatusBarHeight = %d;"
+                        + "window.dispatchEvent(new CustomEvent('dosy:statusBarHeight', { detail: { dp: %d } }));",
+                        topDp, topDp, topDp
+                    );
+                    // Retries cobrem race: webView pode não ter JS pronto na 1ª dispatch.
+                    postJsRaw(js, 0);
+                    postJsRaw(js, 500);
+                    postJsRaw(js, 2000);
+                } catch (Exception e) {
+                    android.util.Log.w("MainActivity", "injectStatusBarHeightCssVar failed: " + e.getMessage());
+                }
+                return insets;
+            });
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "setOnApplyWindowInsetsListener failed: " + e.getMessage());
+        }
     }
 
     /**
