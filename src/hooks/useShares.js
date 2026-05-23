@@ -34,27 +34,32 @@ export function useSharePatient() {
 }
 
 // v0.2.6.1 P3.15 — extend prazo share temporário
+// v0.2.6.1 P8 — invalidate targeted apenas pro patientId afetado (não global ['patient_shares'])
 export function useExtendTemporaryShare() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ shareId, newExpiresAt }) => extendTemporaryShare(shareId, newExpiresAt),
     onSuccess: (data) => {
-      if (data?.patientId) {
-        qc.invalidateQueries({ queryKey: ['patient_shares', data.patientId] })
-      } else {
-        qc.invalidateQueries({ queryKey: ['patient_shares'] })
+      // RPC retorna patient_shares row → ['patient_shares', patientId] queryKey específico
+      const patientId = data?.patientId || data?.['patientId']
+      if (patientId) {
+        qc.invalidateQueries({ queryKey: ['patient_shares', patientId], exact: true })
       }
     }
   })
 }
 
 // v0.2.6.1 P3.15 — atualizar access_level
+// v0.2.6.1 P8 — invalidate targeted apenas pro patientId do share
 export function useUpdateShareAccess() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ shareId, accessLevel }) => updateShareAccess(shareId, accessLevel),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['patient_shares'] })
+    onSuccess: (data) => {
+      const patientId = data?.patientId || data?.['patientId']
+      if (patientId) {
+        qc.invalidateQueries({ queryKey: ['patient_shares', patientId], exact: true })
+      }
     }
   })
 }

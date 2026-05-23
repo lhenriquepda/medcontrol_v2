@@ -29,7 +29,11 @@ export function useAllTreatmentAlertLevels() {
   return useQuery({
     queryKey: ['treatment_alert_levels', user?.id],
     enabled: Boolean(user?.id) && hasSupabase,
-    staleTime: 5 * 60 * 1000,
+    // v0.2.6.1 P8 — staleTime 1h (era 5min). User raramente muda alert level
+    // após cadastro inicial. Cache hit rate >95% esperado. Reduz RPC calls
+    // ~12×/h → ~1×/h por user.
+    staleTime: 60 * 60 * 1000,
+    gcTime: 6 * 60 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_treatment_alert_levels')
       if (error) throw error
@@ -80,13 +84,13 @@ export function useSetTreatmentAlertLevel() {
         qc.setQueryData(['treatment_alert_levels', user?.id], ctx.snapshot)
       }
     },
+    // v0.2.6.1 P8 — sem onSettled invalidate. Cache já foi patched optimistic
+    // em onMutate. RPC retornou ok → cache já reflete server state.
+    // Skip invalidate evita refetch HTTP desnecessário (1× por toggle).
     onSuccess: (_data, vars) => {
       try {
         track(EVENTS.TREATMENT_ALERT_LEVEL_CHANGED, { alert_level: vars.alertLevel })
       } catch {}
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['treatment_alert_levels'] })
     },
   })
 }

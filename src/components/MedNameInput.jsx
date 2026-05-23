@@ -44,12 +44,19 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     return () => clearTimeout(debounceRef.current)
   }, [value])
 
-  // v0.2.6.1 — track inicio de busca (≥3 chars), throttled via ref pra evitar spam
-  const searchTrackedRef = useRef(null)
+  // v0.2.6.1 — track inicio de busca (≥3 chars).
+  // v0.2.6.1 P8 (storm/egress) — throttle 5s per session pra não disparar 1 event por char.
+  // 1000 users × 10 buscas/dia × 1 event = 10k events/dia = 300k/mês, cabe PostHog free tier.
+  // (Antes: 7 events por busca = 2.4M/mês excedia free tier.)
+  const searchTrackedRef = useRef({ lastValue: null, lastTrackedAt: 0 })
   useEffect(() => {
     if (!debouncedValue || debouncedValue.length < 3) return
-    if (searchTrackedRef.current === debouncedValue) return
-    searchTrackedRef.current = debouncedValue
+    const now = Date.now()
+    const ref = searchTrackedRef.current
+    if (ref.lastValue === debouncedValue) return
+    if (now - ref.lastTrackedAt < 5000) return // throttle 5s
+    ref.lastValue = debouncedValue
+    ref.lastTrackedAt = now
     try { track(EVENTS.MEDICATION_SEARCH_STARTED, { length: debouncedValue.length }) } catch {}
   }, [debouncedValue])
 
