@@ -57,24 +57,40 @@ export function getGroupColor(groupId) {
 
 export const VALID_GROUP_IDS = new Set(MED_GROUPS.map((g) => g.id))
 
-// v0.2.5.0 — keywords pra heurística client-side de classificação
-// (mesma usada server-side em classify_medication_robust)
+// v0.2.6.4 P0.2 (Roteiro) — keywords pra heurística client-side de classificação.
+// IMPORTANTE: client-side é FALLBACK. classify_medication_robust RPC (5-tier server)
+// roda PRIMEIRO via useClassifyMedication hook. Esta heurística só dispara
+// se a RPC retornou NULL (sem catalog match + sem heurística servidor).
+//
+// Regras (tighten anti falsos positivos):
+//  • Anti-hipertensivo TESTA ANTES de antidepressivo (anlodipINO/anlodipINA
+//    têm "ina" mas devem ir pra anti_hipertensivo, não antidepressivo).
+//  • Suffixos farmacológicos com (a|o)? — gender BR (anlodipina/anlodipino).
+//  • \b boundary em sufixos curtos (pril, olol, prazol) — evita match no meio.
 export function inferGroupFromName(name) {
   if (!name) return null
   const n = name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim()
-  if (/pram|xetina|faxina|alina/.test(n)) return 'antidepressivo'
-  if (/sartana|pril\b|dipino|olol\b|tiazida/.test(n)) return 'anti_hipertensivo'
-  if (/cilina|micin|floxa|ciclina|cefa/.test(n)) return 'antibiotico'
-  if (/profeno|fenaco|coxib|meloxic|nimesul/.test(n)) return 'anti_inflamatorio'
-  if (/prazol\b|ranitidi|domperid/.test(n)) return 'gastrointestinal'
-  if (/prednis|metasona|hidrocort/.test(n)) return 'corticoide'
-  if (/conazol|terbin/.test(n)) return 'antifungico'
-  if (/clovir|tegravir|navir/.test(n)) return 'antiviral'
-  if (/gliptin|gliflozin|glutida/.test(n)) return 'antidiabetico'
-  if (/zolam|azepam|zolpid/.test(n)) return 'ansiolitico'
-  if (/terol|tropio|budeson/.test(n)) return 'broncodilatador'
-  if (/vitamin|complexo b|acido folico|colecalcife/.test(n)) return 'vitamina'
-  if (/tiroxina|tironina|estradiol|progesterona|testosterona/.test(n)) return 'hormonal'
+  // Anti-hipertensivos PRIMEIRO (precedência sobre antidepressivo p/ evitar
+  // anlodipINA/INO ser classificado como antidepressivo via sufixo "alina").
+  if (/sartan(a|o)\b|\bpril\b|dipin(a|o)?\b|\bolol\b|tiazid|losartan|enalapril|captopril|anlodipin|amlodipin/.test(n)) return 'anti_hipertensivo'
+  // Antibióticos (cefa\b boundary — não confundir com cefaleia)
+  if (/cilin(a|o)?\b|micin(a|o)?\b|floxac?in|ciclin(a|o)?\b|^cefa|metronidazol|sulfame|bactrim/.test(n)) return 'antibiotico'
+  // Antidepressivos (sufixo claro — citalopram, sertralina, fluoxetina)
+  if (/(citalo)?pram\b|sertralin|fluoxetin|paroxetin|duloxetin|venlafaxin|mirtazapin|bupropion|xetin(a|o)?\b/.test(n)) return 'antidepressivo'
+  if (/profeno|fenaco|coxib|meloxic|nimesul|diclofenac/.test(n)) return 'anti_inflamatorio'
+  if (/prazol\b|ranitidi|domperid|metoclopra|buscopan|esomeprazol|omeprazol|pantoprazol/.test(n)) return 'gastrointestinal'
+  if (/prednis|metasona|hidrocort|decadron|betameta/.test(n)) return 'corticoide'
+  if (/conazol|terbinafin|nistatin/.test(n)) return 'antifungico'
+  if (/clovir|tegravir|navir|tamiflu|oseltamivir/.test(n)) return 'antiviral'
+  if (/gliptin|gliflozin|glutid(a|o)?\b|metformin|glifage/.test(n)) return 'antidiabetico'
+  if (/zolam\b|azepam\b|zolpidem|zopiclona/.test(n)) return 'ansiolitico'
+  if (/terol\b|tropio\b|budeson|beclometason|clenil/.test(n)) return 'broncodilatador'
+  if (/vitamin|complexo b|acido folico|colecalcife|cianocobalamin/.test(n)) return 'vitamina'
+  if (/tiroxin|tironin|estradiol|progesteron|testosteron|puran/.test(n)) return 'hormonal'
+  // Antialérgicos
+  if (/(lora|deslora|fexo|cetiri|levocetiri)tadin|allegra|polaramin/.test(n)) return 'antialergico'
+  // Antitérmicos / Analgésicos
+  if (/dipirona|novalgina|paracetamol|tylenol|dorflex/.test(n)) return 'antitermico_analgesico'
   return null
 }
 

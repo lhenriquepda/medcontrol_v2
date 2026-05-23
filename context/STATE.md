@@ -10,18 +10,29 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.3` (HOTFIX em curso) — anterior `v0.2.6.2` SHIPPED |
-| **versionCode** | `88` (v0.2.6.3 mandatory — em CI build) — anterior `87` (v0.2.6.2) |
-| **Branch ativa** | `release/v0.2.6.3` |
-| **Último tag master** | `v0.2.6.2` (mergeado 2026-05-23 09:30 BRT) — próximo: `v0.2.6.3` |
-| **Ship date v0.2.6.2** | 2026-05-23 09:23 BRT |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.6.3 (deploy em curso) |
-| **Play Console v0.2.6.3** | ⏳ CI #26333789161 em build — Vetor 4 upload pendente |
-| **Play Console v0.2.6.2** | ✅ vc 87 mandatory (hotfix DOSE_COLS + RPC group_id + MedNameInput sheet) |
+| **Versão** | `v0.2.6.4` (Play Console SHIPPED — STOP pré-merge) — anterior `v0.2.6.3` SHIPPED |
+| **versionCode** | `89` (v0.2.6.4 mandatory) — anterior `88` (v0.2.6.3) |
+| **Branch ativa** | `release/v0.2.6.4` (aguarda merge autorizado pelo user) |
+| **Último tag master** | `v0.2.6.3` (mergeado 2026-05-23 10:35 BRT) — próximo: `v0.2.6.4` |
+| **Ship date v0.2.6.4** | 2026-05-23 11:27 BRT |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.6.4 (deploy auto post-merge) |
+| **Play Console v0.2.6.4** | ✅ vc 89 mandatory (CI #26335004972 AAB + Vetor 4 upload Chrome MCP) — Internal Testing 11:27 BRT |
+| **Play Console v0.2.6.3** | ✅ vc 88 mandatory (3 bugs P0: cache stale + sticky autofill + falta origem) |
+| **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
 
-**v0.2.6.3 em curso (2026-05-23) — Hotfix #2 (categorização inteligente + origem badge):**
+**v0.2.6.4 em curso (2026-05-23) — Roteiro Sprint P0+P3+P9 (foundation + categorização robusta):**
+
+- ✅ **P3.2 audit_log LGPD append-only** — table 19 actions + RLS owner_or_admin + write_audit_log helper + confirm/skip/undo_dose_v2 atualizados + cleanup_audit_log cron mensal (retention 2y/1y/6M/90d)
+- ✅ **P3.3 feature_flags master switch runtime** — table key→JSONB + 6 seed flags (realtime_enabled/engine_interactions/ocr/cmed_sync/classify_realtime/share_temporary) + admin_set_feature_flag RPC. Rollback <5min sem deploy
+- ✅ **P9.6 BulkCategorizeModal** — Analytics donut tap "Não classificado" → modal lista meds NULL com sugestão IA + checkbox per-item + select override + bulk apply (cascata treatments + doses). Hook useNullMedsSuggestions/useApplyBulkCategorize. RPCs list_null_meds_with_suggestions + apply_bulk_categorize
+- ✅ **P9.7 Dashboard categorization health** — view v_categorization_health + RPC get_categorization_health (admin only). Catalog + treatments active + doses 30d %
+- ✅ **P0.2 regex pina tightened** — anti_hipertensivo PRIMEIRO (precedência sobre antidepressivo, evita anlodipINA mismatch) + (a|o)? gender + \b boundary
+- ✅ **P0.5 cleanup 458 → 362 catalog rows** group_id='outro' NULL cmed_class: 96 rows movidas pra grupos específicos (antibioticos +73, hormonal +14, anticoagulantes +18, etc). Remanescentes legítimos 'outro' (oncológicos/biológicos/anti-arrítmicos/anestésicos sem grupo na taxonomy 17)
+- ✅ **P0.1 SQL versioning replay files v0.2.6.4** — 3 migrations + cleanup criadas em supabase/migrations/. Pré-v0.2.6.4 ainda missing local (escopo broader pending v0.2.7+)
+
+**v0.2.6.3 SHIPPED 2026-05-23 10:29 BRT — Hotfix #2 (categorização inteligente + origem badge):**
 
 - 🚨 **#0015 FIXED**: Cache TanStack IDB stale com payloads pré-fix → bump buster v1→v2 força purge único na 1ª abertura
 - 🚨 **#0016 FIXED**: Autofill sticky "sempre Antidepressivo" → useEffect re-aplica classifyResult em TODA mudança via dep `[classifyResult, medName]`. useClassifyMedication sempre roda (sem condicional `!form.group_id`). Distingue manual pick de autofill

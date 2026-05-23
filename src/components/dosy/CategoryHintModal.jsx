@@ -9,7 +9,8 @@
  * Bem menos friction que campo required vazio.
  */
 import { useEffect, useMemo } from 'react'
-import { Sheet, Button } from './surfaces.jsx'
+import { Sheet } from './surfaces.jsx'
+import { Button } from './buttons.jsx'
 import { MED_GROUPS, getGroup } from '../../constants/medCategories.js'
 import { inferGroupsFromName } from '../../constants/groupKeywords.js'
 // v0.2.6.1 — telemetria categoria (Roteiro_Alinhamento)
