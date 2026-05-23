@@ -1,9 +1,1439 @@
 # Roteiro Alinhamento medcontrol_v2 ↔ Dosy v2 — versão AMBICIOSA
 
 > **Status:** Roteiro executável criado 2026-05-22 por análise comparativa medcontrol_v2 (v0.2.5.0 vc 83) vs Dosy v2 (rewrite documentado em 22 docs + 15 ADRs).
+> **Última atualização:** 2026-05-22 22:30 BRT — **adicionado P9 Categorização funcionando em prod + promoção emergencial P4.1 → P0.7 MedicationPicker BottomSheet**
+> 2026-05-22 18:30 BRT — adicionado P8 Hardening de escala (gate obrigatório pré-launch público)
 > **Audiência:** IA executora trabalhando no medcontrol_v2.
 > **Self-contained:** este documento contém todo contexto necessário pra executar sem depender da sessão de análise.
 > **Meta:** levar medcontrol_v2 o mais próximo possível da perfeição — incorporando TUDO de melhor que existe nos docs Dosy v2 + preservando TUDO de bom que medcontrol já tem em prod. **NADA fica "pra Dosy v2 fazer".**
+
+---
+
+## 🚨 ADENDO 2026-05-22 22:30 BRT — P9 Categorização funcionando em prod + MedicationPicker URGENTE
+
+> **Origem:** user testou v0.2.5.0 SHIPPED em device e reportou 2 problemas críticos:
+> 1. **"Antibióticos dados aos meus filhos não aparecem categorizados — em Analytics só aparece 'Outros'"**
+> 2. **"MedNameInput dropdown CONTINUA quebrado — campo some, teclado cobre, sugestões não visíveis, arrastar fecha"**
+>
+> Análise revelou que **Bloco B v0.2.5.0 NÃO resolveu estruturalmente** o autocomplete (patches superficiais — dropdown inline em mobile é o anti-pattern raiz). E que **catálogo medcontrol cobre só 900 entries** (não os 30k prometidos pela spec Dosy v2), com **17 brand-names validados** todos do caso pessoal Henrique — pediatria, idoso, polifarmácia ficam de fora.
+>
+> **Esta seção:** decisão arquitetural sobre catálogo + 10 fixes priorizados + **promoção emergencial P4.1 → P0.7 (MedicationPicker BottomSheet)**.
+
+---
+
+### 🧭 Decisão arquitetural: API live vs catálogo próprio Supabase
+
+User perguntou: *"cadastrar manualmente todos os 30k medicamentos é a melhor opção? Não tenho API ANVISA pra passar por lá?"*
+
+**Resposta honesta após pesquisa (2026-05-22):**
+
+#### Opções avaliadas
+
+| Opção | Custo | Cobertura BR | Latência | Offline | Manutenção |
+|---|---|---|---|---|---|
+| **A. ANVISA API oficial** `api.anvisa.gov.br` | Grátis (mas requer auth oficial) | Completa | ~200ms rede | ❌ quebra | Zero |
+| **B. PharmaDB API** (third-party BR) | **R$62-280/mês** (5k-300k req/mês) | 28.935 produtos ANVISA + 192k interações | ~150ms | ❌ quebra | Zero |
+| **C. Infosimples / Netrin** | Pay-per-query (~R$0,05-0,15/req) | Boa | ~300ms | ❌ quebra | Zero |
+| **D. CMED XLSX mensal import + Supabase próprio** | **$0** (cabe free tier) | 100% BR (~30k apresentações) | <50ms (GIN trgm) | ✅ funciona | Cron mensal automático |
+| **E. Hybrid: catálogo Supabase + PharmaDB fallback long-tail** | $0-62/mês | 100% + auto-expand | <50ms hit / 150ms miss | ✅ partial | Cron + lazy growth |
+
+#### Tamanho real do catálogo Supabase
+
+> *"Criar BD próprio só pra isso me parece exagero"* — **NÃO É EXAGERO**. Faz a conta:
+
+- 30.000 rows × ~500 bytes/row = **~15 MB no DB**
+- Supabase free tier: **500 MB** (você usa 3% só pra catálogo)
+- GIN trgm index = autocomplete <50ms
+- CMED XLSX mensal (10-15 MB compactado) baixado por Edge cron, processado e inserido em batches
+
+**15 MB num DB Postgres é peanut.** É menos que 1 foto de paciente. Não tem nenhum motivo técnico ou financeiro pra evitar.
+
+#### Por que opção D (catálogo próprio) ganha
+
+1. **Custo zero recorrente** vs R$62-280/mês PharmaDB
+2. **Offline funciona** — você está construindo app healthcare onde alarme dispara mesmo offline. Autocomplete que quebra sem rede = inconsistência UX
+3. **Latência <50ms vs 150-300ms** — UX picker depende disso (3-6× mais rápido)
+4. **Zero dependência de terceiros** — PharmaDB pode aumentar preço, virar serviço pago obrigatório, quebrar API, etc. medcontrol já passou por isso com Supabase upgrade reativo
+5. **Padrão da indústria BR** — CUCO (líder BR healthcare) usa próprio catálogo, não API externa. Medisafe, MyTherapy idem
+6. **Classe terapêutica vem direto da planilha CMED** — coluna `CLASSE TERAPÊUTICA` na XLSX mensal já tem categorização ANVISA oficial. Você não precisa "categorizar manualmente", **só importar a planilha**
+7. **Você terá acesso pra validar** — pode rodar `SELECT * FROM medications_catalog WHERE commercial_name ILIKE '%amox%'` direto no Supabase Studio e ver as 50+ apresentações com classe terapêutica oficial
+
+#### Recomendação final
+
+**Implementar opção D (catálogo Supabase com import CMED XLSX mensal).** Cancela a ideia de "BD próprio é exagero" — não é. É a melhor escolha técnica E financeira E operacional.
+
+**Opcionalmente:** opção E (hybrid) como evolução v1.1+ se long-tail aparecer (medicamentos manipulados, importados, suplementos sem registro CMED) — PharmaDB fallback chamado apenas em RPC `search_medications` quando local retorna 0.
+
+**O que o medcontrol fez de errado em v0.2.4.0+v0.2.5.0:**
+- Parou em 764 entries (não importou os 30k)
+- Validou só 17 brand-names (do caso Henrique)
+- Não criou cron mensal CMED
+- Não tem RPC fallback pra long-tail
+
+**Fix:** P9.1 abaixo.
+
+---
+
+### 🚨 PROMOÇÃO EMERGENCIAL — MedicationPicker BottomSheet de P4.1 → P0.7
+
+**Razão:** user está sofrendo HOJE. Não dá pra esperar 14 semanas (Sprint 7-8 do roteiro original).
+
+Spec Dosy v2 completa em `dosy-app/docs/07-DESIGN_SYSTEM.md §3.13` + 7 estados em `08-ESTADOS_UI.md` + 7 validações device em `workflow/VALIDATIONS.md`. **Implementar AGORA, antes de qualquer outro P0-P8 não-LGPD.**
+
+#### P0.7 — Implementar `<MedicationPicker>` BottomSheet em mobile (substituir MedNameInput dropdown)
+
+**Onde:** criar `src/components/dosy/MedicationPicker.jsx` substituindo uso de `MedNameInput.jsx` em `TreatmentForm.jsx` e `SOSForm.jsx`.
+
+**Comportamento crítico (não-negociável):**
+- Trigger: input text comum no form → tap abre BottomSheet 80vh
+- Sheet header: back arrow + "Buscar medicamento" + X close (NÃO outside-click — anti-bug medcontrol)
+- Search input autofocus + teclado abre automaticamente acima do sheet
+- Debounce 250ms com loading textual "⌛ Buscando..." (não skeleton)
+- Lista scrollable de result rows: `commercial_name (16sp bold)` + `principio_ativo (12sp gray)` + `<CategoryBadge sm>` colorido
+- **`onPointerDown` em result rows** (NÃO `onClick` — race condition blur/click foi a causa do "preenche errado")
+- Footer SEMPRE visível: `+ Continuar com "{query}" digitado` em sunset gradient
+- Cap 20 results + sentinel "Refine busca pra ver mais"
+- Estados explícitos: idle / searching / results / empty / error / offline / loading_too_long (>10s)
+- Tap targets ≥56dp (Persona 6)
+
+**Validações device obrigatórias (gate):**
+1. Pixel 6 — Sheet permanece aberto durante scroll dentro da lista (anti-bug "some quando arrasta")
+2. Samsung A54 — teclado virtual NÃO cobre resultados (Sheet acima do teclado)
+3. Xiaomi Redmi 12 — `onPointerDown` registra ANTES do blur (anti-bug "preenche errado")
+4. Voice input — query preservada após dictation
+5. Font scaling 1.5× (Persona 6 idoso) — targets ≥56dp + labels não cortados
+
+**Componentes auxiliares a criar em `src/components/dosy/`:**
+- `MedicationPicker.jsx` (entry point)
+- `MedicationSearchSheet.jsx` (Sheet body)
+- `MedicationResultRow.jsx` (row com CategoryBadge integrado)
+- `MedicationFreeTextFooter.jsx` (botão "Continuar com nome livre")
+- `MedicationPickerLoading.jsx` (estado loading explícito)
+
+**Aceite:** 0 incidências dos 3 bugs reproduzíveis (some/cobre/preenche errado) em 7 dias prod + métrica PostHog `Taxa de conclusão cadastro tratamento >85%` (era ?% — medir antes/depois).
+
+**Branch:** `feat/medication-picker-bottomsheet-EMERGENCIAL`
+
+**Não esperar P1-P8.** Branch paralela com P0 LGPD/segurança. Ship junto na próxima release.
+
+---
+
+### P9.1 — CMED XLSX import completo (~30k entries) substituindo backfill manual 900
+
+**Origem:** sample validation real mostrou que catálogo medcontrol cobre só 900 entries (17 brand-names validados = 100% caso Henrique, ~0% pediatria/idoso/contraceptivo).
+
+**Onde:** novo arquivo `scripts/automation/fetch-cmed-dataset.mjs` + `scripts/automation/import-cmed.mjs`.
+
+**Implementação:**
+
+```javascript
+// scripts/automation/fetch-cmed-dataset.mjs
+import * as fs from 'fs/promises';
+import * as https from 'https';
+
+const CMED_BASE = 'https://www.gov.br/anvisa/pt-br/assuntos/medicamentos/cmed/precos';
+
+async function findLatestXlsxUrl() {
+  // Scrape /precos page pra encontrar último link XLSX (`xls_conformidade_site_YYYYMMDD_*.xlsx`)
+  // OU hardcode URL atual + cron mensal verifica novo
+}
+
+async function download(url, outPath) {
+  // Stream XLSX pra disco (~10-15 MB)
+}
+
+const url = await findLatestXlsxUrl();
+await download(url, `supabase/seeds/medications-cmed-${new Date().toISOString().slice(0, 7)}.xlsx`);
+```
+
+```javascript
+// scripts/automation/import-cmed.mjs
+import xlsx from 'xlsx';
+import { createClient } from '@supabase/supabase-js';
+
+const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const wb = xlsx.readFile('supabase/seeds/medications-cmed-2026-05.xlsx');
+const rows = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+// Colunas relevantes CMED: EAN 1, SUBSTÂNCIA, PRODUTO, APRESENTAÇÃO, CLASSE TERAPÊUTICA, TIPO DE PRODUTO, TARJA
+// Mapear pra schema medcontrol.medications_catalog
+
+const BATCH_SIZE = 500;
+for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+  const batch = rows.slice(i, i + BATCH_SIZE).map(row => ({
+    nome_comercial: `${row['PRODUTO']} ${row['APRESENTAÇÃO']}`.trim(),
+    principio_ativo: row['SUBSTÂNCIA'],
+    ean: row['EAN 1'],
+    cmed_class: row['CLASSE TERAPÊUTICA'],
+    tipo_produto: row['TIPO DE PRODUTO'],
+    tarja: mapTarja(row['TARJA']),
+    principio_ativo_normalizado: normalize(row['SUBSTÂNCIA']),
+    updated_from_cmed_at: new Date().toISOString(),
+    // group_id preenchido por trigger medications_cmed_group via cmed_class_to_group_mapping
+  }));
+
+  await sb.schema('medcontrol').from('medications_catalog').upsert(batch, { onConflict: 'ean' });
+  console.log(`Imported ${i + batch.length}/${rows.length}`);
+}
+```
+
+**Aceite:**
+- `SELECT COUNT(*) FROM medcontrol.medications_catalog WHERE updated_from_cmed_at IS NOT NULL` ≥ **25.000** (era 900)
+- `SELECT COUNT(*) FROM medications_catalog WHERE group_id IS NULL` < **5%** (era ~60%)
+- Validação manual: 50 brand-names BR (lista expandida P9.4) todos categorizados corretamente
+
+**Branch:** `feat/cmed-xlsx-import-complete`
+
+---
+
+### P9.2 — Edge Function `cmed-monthly-sync` (cron pgcron mensal automático)
+
+**Onde:** `supabase/functions/cmed-monthly-sync/index.ts` (novo).
+
+**Implementação:**
+
+```typescript
+// supabase/functions/cmed-monthly-sync/index.ts
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as xlsx from "https://esm.sh/xlsx@0.18";
+
+Deno.serve(async () => {
+  // 1. Find latest CMED XLSX URL (scrape ou hardcode mensal)
+  const url = await findLatestCmedXlsxUrl();
+
+  // 2. Download XLSX
+  const buf = await fetch(url).then(r => r.arrayBuffer());
+
+  // 3. Parse rows
+  const wb = xlsx.read(buf, { type: 'array' });
+  const rows = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+  // 4. Save snapshot pra Storage (diff next month)
+  await adminSb.storage.from('cmed-snapshots').upload(
+    `${new Date().toISOString().slice(0, 7)}.json`,
+    new Blob([JSON.stringify(rows)], { type: 'application/json' })
+  );
+
+  // 5. Diff vs último snapshot
+  const last = await adminSb.storage.from('cmed-snapshots').download('latest.json');
+  const diff = computeDiff(last, rows);
+
+  // 6. Admin review obrigatório (NÃO auto-apply — pode introduzir regressão classe terapêutica)
+  await adminSb.from('cmed_pending_updates').insert({
+    snapshot_date: new Date().toISOString(),
+    added: diff.added.length,
+    removed: diff.removed.length,
+    class_changed: diff.classChanged.length,
+    diff_url: storageDiffUrl,
+    status: 'pending_review',
+  });
+
+  // 7. Email admin com link pra dashboard
+  await fetch(EDGE_SEND_ADMIN_EMAIL, {
+    method: 'POST',
+    body: JSON.stringify({
+      subject: `CMED sync ${new Date().toISOString().slice(0, 7)}: ${diff.added.length} adds`,
+      body: `Review at /admin/cmed-pending`
+    })
+  });
+
+  return new Response(JSON.stringify({ pending_review: diff.added.length + diff.removed.length }));
+});
+```
+
+**pg_cron schedule:**
+```sql
+SELECT cron.schedule('cmed-monthly-sync', '0 4 5 * *',
+  $$SELECT net.http_post(url := ... || '/functions/v1/cmed-monthly-sync', ...);$$);
+```
+
+**Aceite:** após 30 dias deploy, próximo dia 5 do mês recebe email admin com diff CMED.
+
+**Branch:** `feat/cmed-monthly-sync-edge`
+
+---
+
+### P9.3 — Distinguir `outro` vs `nao_classificado` em UI (Analytics + Histórico + Reports)
+
+**Origem:** user vê só "Outros" em Analytics. Não distingue dose categorizada como `outro` (escolha) vs dose `NULL` (sistema não detectou).
+
+**Onde:**
+- `src/pages/Analytics.jsx` — donut card "Doses por categoria"
+- `src/pages/DoseHistory.jsx` — chip filtro
+- `src/pages/Reports.jsx` — tabela resumo
+
+**Mudanças:**
+
+1. **Constante `medCategories.js`:** adicionar `nao_classificado` como **valor distinto** (não fundir com `outro`):
+
+```javascript
+export const MED_GROUPS = [
+  // ... 16 grupos existentes ...
+  { id: 'outro', label: 'Outro', color: 'var(--dosy-gray-500)' },
+  { id: 'nao_classificado', label: 'Não classificado', color: 'var(--dosy-gray-300)' },
+];
+```
+
+2. **Analytics donut:** 2 fatias separadas:
+```jsx
+<Donut data={groupCounts}>
+  <Slice id="outro" color="--dosy-gray-500" label="Outro (escolhido)" />
+  <Slice id="nao_classificado" color="--dosy-gray-300" label="Não classificado" badge="atribua →" />
+</Donut>
+```
+
+3. **Drill-down "Não classificado":** tap na fatia → modal "X medicamentos não categorizados — categorizar agora?" + lista bulk:
+```
+[ ] Amoxil 500mg (12 doses) → sugestão: Antibiótico [aceitar / mudar]
+[ ] Cefaclor 250mg (8 doses) → Antibiótico [aceitar / mudar]
+[ ] Bactrim F (5 doses) → Antibiótico [aceitar / mudar]
+[Aplicar 3 sugestões + re-categorizar treatments + doses]
+```
+
+4. **Histórico filtro:** chip "Não classificado" separado de "Outro" + microcopy:
+```
+[Não classificado] (15 doses) — atribua categoria pra melhorar suas estatísticas
+```
+
+5. **Reports PDF/CSV:** coluna `Não classificado` separada de `Outro` em "Top categorias do período".
+
+**Aceite:** user vê fatia distinta "Não classificado" em Analytics + pode bulk-categorize via drill-down em 4 taps.
+
+**Branch:** `feat/distinguish-outro-vs-nao-classificado-ui`
+
+---
+
+### P9.4 — Sample validation expandida 17 → 150 brand-names cobrindo 6 personas
+
+**Origem:** lista atual valida só caso Henrique. Pediatria/idoso/contraceptivo ficam fora.
+
+**Onde:** `tests/integration/medication-catalog-coverage.test.js` (novo) + `scripts/data/sample-validation-by-persona.json`.
+
+**Lista expandida por persona:**
+
+```json
+{
+  "persona_1_rafael_familia": [
+    { "name": "Amoxil 500mg", "expected_group": "antibiotico" },
+    { "name": "Amoxil BD 875mg", "expected_group": "antibiotico" },
+    { "name": "Amoxicilina 500mg genérico", "expected_group": "antibiotico" },
+    { "name": "Cefaclor 250mg", "expected_group": "antibiotico" },
+    { "name": "Cefalexina 500mg", "expected_group": "antibiotico" },
+    { "name": "Keflex 500mg", "expected_group": "antibiotico" },
+    { "name": "Azitromicina 500mg genérico", "expected_group": "antibiotico" },
+    { "name": "Zitromax 500mg", "expected_group": "antibiotico" },
+    { "name": "Bactrim F", "expected_group": "antibiotico" },
+    { "name": "Sulfatrim", "expected_group": "antibiotico" },
+    { "name": "Resprim", "expected_group": "antibiotico" },
+    { "name": "Ceftriaxona 1g", "expected_group": "antibiotico" },
+    { "name": "Ciprofloxacino 500mg", "expected_group": "antibiotico" },
+    { "name": "Eritromicina 500mg", "expected_group": "antibiotico" },
+    { "name": "Claritromicina 500mg", "expected_group": "antibiotico" },
+    { "name": "Dipirona 500mg", "expected_group": "antitermico_analgesico" },
+    { "name": "Novalgina 500mg", "expected_group": "antitermico_analgesico" },
+    { "name": "Tylenol 750mg", "expected_group": "antitermico_analgesico" },
+    { "name": "Paracetamol 500mg", "expected_group": "antitermico_analgesico" },
+    { "name": "Ibuprofeno 400mg", "expected_group": "anti_inflamatorio" },
+    { "name": "Advil", "expected_group": "anti_inflamatorio" },
+    { "name": "Aerolin spray", "expected_group": "broncodilatador" },
+    { "name": "Vibral xarope", "expected_group": "antitussigeno_expectorante" },
+    { "name": "Loratadina 10mg", "expected_group": "antialergico" },
+    { "name": "Polaramine", "expected_group": "antialergico" }
+  ],
+  "persona_3_dolores_idoso_polifarmacia": [
+    { "name": "Donepezila 5mg", "expected_group": "outro" },
+    { "name": "Metformina 850mg", "expected_group": "antidiabetico" },
+    { "name": "Glifage 850mg", "expected_group": "antidiabetico" },
+    { "name": "Glibenclamida 5mg", "expected_group": "antidiabetico" },
+    { "name": "Insulina NPH", "expected_group": "antidiabetico" },
+    { "name": "Lantus", "expected_group": "antidiabetico" },
+    { "name": "Captopril 25mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Enalapril 10mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Losartana 50mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Anlodipino 5mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Atenolol 25mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Hidroclorotiazida 25mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Furosemida 40mg", "expected_group": "anti_hipertensivo" },
+    { "name": "AAS 100mg", "expected_group": "anticoagulante" },
+    { "name": "Aspirina prevent", "expected_group": "anticoagulante" },
+    { "name": "Sinvastatina 20mg", "expected_group": "outro" },
+    { "name": "Atorvastatina 10mg", "expected_group": "outro" },
+    { "name": "Omeprazol 20mg", "expected_group": "gastrointestinal" },
+    { "name": "Pantoprazol 40mg", "expected_group": "gastrointestinal" },
+    { "name": "Esomeprazol 40mg", "expected_group": "gastrointestinal" }
+  ],
+  "persona_4_mariana_hormonio_contraceptivo": [
+    { "name": "Puran T4 25mcg", "expected_group": "hormonal" },
+    { "name": "Levotiroxina 50mcg", "expected_group": "hormonal" },
+    { "name": "Tireosin", "expected_group": "hormonal" },
+    { "name": "Synthroid", "expected_group": "hormonal" },
+    { "name": "Selene", "expected_group": "hormonal" },
+    { "name": "Yaz", "expected_group": "hormonal" },
+    { "name": "Diane 35", "expected_group": "hormonal" },
+    { "name": "Cerazette", "expected_group": "hormonal" },
+    { "name": "Microvlar", "expected_group": "hormonal" },
+    { "name": "Sulfato Ferroso 40mg", "expected_group": "vitamina" },
+    { "name": "Noripurum", "expected_group": "vitamina" }
+  ],
+  "persona_6_sebastiao_idoso_autonomo": [
+    { "name": "Levodopa + Carbidopa 250mg", "expected_group": "outro" },
+    { "name": "Prolopa", "expected_group": "outro" },
+    { "name": "Risperidona 1mg", "expected_group": "antidepressivo" },
+    { "name": "Quetiapina 25mg", "expected_group": "antidepressivo" },
+    { "name": "Memantina 10mg", "expected_group": "outro" },
+    { "name": "Donepezila 10mg", "expected_group": "outro" },
+    { "name": "Sertralina 50mg", "expected_group": "antidepressivo" },
+    { "name": "Zoloft 50mg", "expected_group": "antidepressivo" },
+    { "name": "Escitalopram 10mg", "expected_group": "antidepressivo" },
+    { "name": "Lexapro 10mg", "expected_group": "antidepressivo" },
+    { "name": "Fluoxetina 20mg", "expected_group": "antidepressivo" },
+    { "name": "Prozac 20mg", "expected_group": "antidepressivo" },
+    { "name": "Clonazepam 2mg", "expected_group": "ansiolitico" },
+    { "name": "Rivotril 0.5mg", "expected_group": "ansiolitico" },
+    { "name": "Diazepam 10mg", "expected_group": "ansiolitico" },
+    { "name": "Alprazolam 1mg", "expected_group": "ansiolitico" }
+  ],
+  "comuns_brand_names_top": [
+    { "name": "Buscopan 10mg", "expected_group": "outro" },
+    { "name": "Buscopan Composto", "expected_group": "outro" },
+    { "name": "Dorflex", "expected_group": "antitermico_analgesico" },
+    { "name": "Cataflam 50mg", "expected_group": "anti_inflamatorio" },
+    { "name": "Voltaren 100mg", "expected_group": "anti_inflamatorio" },
+    { "name": "Diclofenaco 50mg", "expected_group": "anti_inflamatorio" },
+    { "name": "Nimesulida 100mg", "expected_group": "anti_inflamatorio" },
+    { "name": "Ranitidina 150mg", "expected_group": "gastrointestinal" },
+    { "name": "Mounjaro", "expected_group": "antidiabetico" },
+    { "name": "Ozempic", "expected_group": "antidiabetico" },
+    { "name": "Decadron 4mg", "expected_group": "corticoide" },
+    { "name": "Prednisona 20mg", "expected_group": "corticoide" },
+    { "name": "Berotec spray", "expected_group": "broncodilatador" },
+    { "name": "Symbicort", "expected_group": "broncodilatador" },
+    { "name": "Clenil HFA", "expected_group": "broncodilatador" },
+    { "name": "Seretide diskus", "expected_group": "broncodilatador" },
+    { "name": "Avamys spray", "expected_group": "antialergico" },
+    { "name": "Renitec 10mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Selozok 50mg", "expected_group": "anti_hipertensivo" },
+    { "name": "Triiodotironina 50mcg", "expected_group": "hormonal" }
+  ]
+}
+```
+
+Total: **~80 brand-names** (cobertura mais realista vs 17 atual).
+
+**Test Vitest:**
+```javascript
+import sampleValidation from '../../scripts/data/sample-validation-by-persona.json';
+
+describe('Catalog coverage by persona', () => {
+  Object.entries(sampleValidation).forEach(([persona, items]) => {
+    describe(persona, () => {
+      items.forEach(({ name, expected_group }) => {
+        it(`${name} → ${expected_group}`, async () => {
+          const { data } = await supabase.rpc('search_medications', { q: name.split(' ')[0], lim: 5 });
+          const match = data.find(m => m.nome_comercial.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+          expect(match).toBeTruthy(); // medicamento existe no catálogo
+          expect(match?.group_id).toBe(expected_group); // categoria correta
+        });
+      });
+    });
+  });
+});
+```
+
+**Aceite:** ≥75/80 passam (94%). <75 = revisar dicionário e/ou re-import CMED.
+
+**Branch:** `test/sample-validation-by-persona-expanded`
+
+---
+
+### P9.5 — Cron mensal `re-categorize-null-rows` (medicamentos cadastrados com group_id=NULL)
+
+**Origem:** doses criadas APÓS backfill mas com medicamentos não-cobertos no momento ficam NULL forever. Se catálogo expandir depois (P9.1 + P9.2), rows antigas continuam estagnadas.
+
+**Onde:** novo cron em `supabase/migrations/`:
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.re_categorize_null_rows()
+RETURNS jsonb AS $$
+DECLARE
+  v_treatments_fixed INT;
+  v_doses_fixed INT;
+  v_user_meds_fixed INT;
+BEGIN
+  -- 1. user_medications: re-classify via classify_medication_robust
+  WITH updated AS (
+    UPDATE medcontrol.user_medications
+    SET category = (medcontrol.classify_medication_robust(name)).group_id
+    WHERE category IS NULL
+      AND (medcontrol.classify_medication_robust(name)).group_id IS NOT NULL
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO v_user_meds_fixed FROM updated;
+
+  -- 2. treatments: same logic
+  WITH updated AS (
+    UPDATE medcontrol.treatments
+    SET group_id = (medcontrol.classify_medication_robust("medName")).group_id,
+        cmed_class = (medcontrol.classify_medication_robust("medName")).cmed_class
+    WHERE group_id IS NULL
+      AND (medcontrol.classify_medication_robust("medName")).group_id IS NOT NULL
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO v_treatments_fixed FROM updated;
+
+  -- 3. doses: cascata do treatment (preserva snapshot pra doses já confirmadas — usa treatment.group_id)
+  WITH updated AS (
+    UPDATE medcontrol.doses d
+    SET group_id = t.group_id,
+        cmed_class = t.cmed_class
+    FROM medcontrol.treatments t
+    WHERE d."treatmentId" = t.id
+      AND d.group_id IS NULL
+      AND t.group_id IS NOT NULL
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO v_doses_fixed FROM updated;
+
+  -- 4. Audit log
+  INSERT INTO medcontrol.audit_log (action, metadata)
+  VALUES ('re_categorize_null_rows_cron', jsonb_build_object(
+    'treatments_fixed', v_treatments_fixed,
+    'doses_fixed', v_doses_fixed,
+    'user_meds_fixed', v_user_meds_fixed,
+    'ran_at', NOW()
+  ));
+
+  RETURN jsonb_build_object(
+    'treatments_fixed', v_treatments_fixed,
+    'doses_fixed', v_doses_fixed,
+    'user_meds_fixed', v_user_meds_fixed
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = medcontrol, public;
+
+-- Cron mensal, 1 dia após CMED sync (CMED dia 5, re-categorize dia 6)
+SELECT cron.schedule(
+  're-categorize-null-rows-monthly',
+  '0 6 6 * *',
+  $$SELECT medcontrol.re_categorize_null_rows();$$
+);
+```
+
+**Aceite:** após 30 dias deploy, próxima rodada cron emite audit_log com `doses_fixed > 0` (se houver rows NULL). Distribuição `Outros` em Analytics reduz mês a mês organicamente.
+
+**Branch:** `feat/re-categorize-null-rows-monthly-cron`
+
+---
+
+### P9.6 — Flow "user vê Outros → re-categorizar bulk" via Analytics drill-down
+
+**Origem:** user que ABRE Analytics e vê 60% "Outros" não tem ação clara — precisa intuir abrir cada dose individualmente.
+
+**Onde:** `src/pages/Analytics.jsx` — tap na fatia `nao_classificado` do donut.
+
+**UX:**
+
+```jsx
+<Donut onSliceClick={(groupId) => {
+  if (groupId === 'nao_classificado') openBulkCategorizeModal();
+  else setDrillDownGroup(groupId);
+}} />
+
+function BulkCategorizeModal() {
+  // RPC nova: lista medicamentos únicos com group_id=NULL + sugestão classify_medication_robust
+  const { data } = useQuery({
+    queryKey: ['null-meds-with-suggestions'],
+    queryFn: () => supabase.rpc('list_null_meds_with_suggestions')
+  });
+
+  return (
+    <Modal>
+      <h3>X medicamentos sem categoria — categorizar de uma vez?</h3>
+      <List>
+        {data.map(item => (
+          <Row>
+            <Checkbox checked={item.selected} onChange={...} />
+            <strong>{item.med_name}</strong>
+            <span>({item.dose_count} doses)</span>
+            <CategoryBadge groupId={item.suggested_group} />
+            <span>{item.suggestion_reason}</span>
+            <Button kind="ghost" onClick={() => openCategoryPicker(item)}>Mudar</Button>
+          </Row>
+        ))}
+      </List>
+      <Button kind="primary" onClick={applyBulk}>
+        Aplicar {selectedCount} sugestões + re-categorizar doses passadas
+      </Button>
+    </Modal>
+  );
+}
+```
+
+**RPC nova `list_null_meds_with_suggestions`:**
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.list_null_meds_with_suggestions(p_user_id UUID DEFAULT auth.uid())
+RETURNS TABLE (med_name TEXT, dose_count INT, suggested_group TEXT, suggestion_reason TEXT) AS $$
+  SELECT
+    d."medName" AS med_name,
+    COUNT(*)::INT AS dose_count,
+    (medcontrol.classify_medication_robust(d."medName")).group_id AS suggested_group,
+    (medcontrol.classify_medication_robust(d."medName")).source AS suggestion_reason
+  FROM medcontrol.doses d
+  WHERE d."userId" = p_user_id
+    AND d.group_id IS NULL
+  GROUP BY d."medName"
+  ORDER BY COUNT(*) DESC
+  LIMIT 50;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+```
+
+**Aceite:** user com 60% Outros consegue reduzir pra <10% em 5 minutos via bulk modal.
+
+**Branch:** `feat/bulk-categorize-via-analytics-drilldown`
+
+---
+
+### P9.7 — Métrica dashboard `% doses não-categorizadas` com alarme P0
+
+**Onde:** PostHog dashboard `Categorization Health` + alarme webhook Slack/email DPO.
+
+**Métricas a monitorar:**
+- `% doses com group_id=NULL` (meta <2%, alarme P0 se >5%)
+- `% doses com group_id='outro'` (meta <8%, alarme se >15%)
+- `% medicamentos catálogo sem group_id` (meta <2%, alarme se >5%)
+- `Cobertura sample validation` (meta 75/80 = 94%, alarme se <70/80)
+
+**Implementação:**
+```sql
+-- View pra dashboard admin
+CREATE OR REPLACE VIEW medcontrol.v_categorization_health AS
+SELECT
+  COUNT(*) FILTER (WHERE group_id IS NULL) AS doses_null_count,
+  COUNT(*) FILTER (WHERE group_id = 'outro') AS doses_outro_count,
+  COUNT(*) AS doses_total,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE group_id IS NULL) / COUNT(*), 2) AS pct_null,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE group_id = 'outro') / COUNT(*), 2) AS pct_outro
+FROM medcontrol.doses
+WHERE "createdAt" > NOW() - INTERVAL '30 days';
+```
+
+Admin painel `admin.dosymed.app/categorization-health` consulta view + mostra trend.
+
+**Aceite:** dashboard funcional + webhook alerta DPO em <30s quando `pct_null > 5%` por 7 dias seguidos.
+
+**Branch:** `feat/categorization-health-dashboard`
+
+---
+
+### P9.8 — Documentar anti-pattern "patches superficiais MedNameInput não resolvem"
+
+**Origem:** Bloco B v0.2.5.0 fez 6 patches em MedNameInput (removeu Tab handler, visualViewport listener, touch 56px, removeu auto-open exact-match, onClick em vez de pointerDown+preventDefault, chip DCB badge) mas os 3 bugs raiz persistem porque **dropdown inline em mobile é o anti-pattern raiz**.
+
+**Onde:** documentar em `context/auditoria/2026-05-22-medication-picker-anti-pattern.md` (novo).
+
+**Conteúdo:**
+
+```markdown
+# Anti-Pattern: Dropdown inline em mobile pra autocomplete grande
+
+## Sintoma
+3 bugs reproduzíveis em qualquer dropdown inline >5 items em mobile:
+1. **Some quando arrasta** — click-outside captura tap em scrollbar
+2. **Teclado virtual cobre** — dropdown abaixo input + viewport reduz com teclado
+3. **Race blur/click** — blur do input dispara antes do click no item
+
+## Causa raiz
+Dropdown inline assume mouse + desktop viewport. Mobile tem:
+- Touch (não mouse) → scrollbars internos viram tap targets
+- Teclado virtual que cobre 50% da tela
+- `blur` event dispara em qualquer mudança de foco (touch outside)
+
+## Patches superficiais NÃO resolvem
+v0.2.5.0 Bloco B tentou:
+- Remover Tab handler ❌ não muda race
+- visualViewport listener ❌ teclado ainda cobre
+- Touch targets 56px ❌ não muda outside-click
+- Remover auto-open exact-match ❌ não muda race
+- onClick em vez de pointerDown+preventDefault ❌ piora race
+
+**Resultado:** 3 bugs persistem. Validation device confirma.
+
+## Solução estrutural (única que resolve)
+Bottom Sheet picker em mobile:
+- Sheet 80vh ocupa parte de baixo da tela → teclado abre ACIMA do sheet
+- Sheet só fecha via X / back gesture / tap item / footer "continuar livre"
+- `onPointerDown` em items (registra ANTES do blur)
+- Fora do scroll do form pai → arrastar não fecha
+
+## Referência implementação
+- spec: `dosy-app/docs/07-DESIGN_SYSTEM.md §3.13`
+- estados: `dosy-app/docs/08-ESTADOS_UI.md`
+- validações device: `dosy-app/docs/workflow/VALIDATIONS.md`
+- implementação: P0.7 deste roteiro
+```
+
+**Aceite:** doc presente + linkado em `context/PROJETO.md` seção "Anti-patterns".
+
+**Branch:** `docs/anti-pattern-dropdown-inline-mobile`
+
+---
+
+### P9.9 — RPC fallback PharmaDB pra long-tail (OPCIONAL — v1.1+ se necessário)
+
+**Origem:** mesmo com catálogo CMED completo (~30k), pode haver medicamentos:
+- Manipulados (farmácia de manipulação)
+- Importados/exceção (autorizados caso a caso)
+- Suplementos sem registro CMED
+- Cosméticos com função (cremes, pomadas)
+- Plantas medicinais
+
+**Decisão:** **NÃO implementar agora.** Após P9.1+P9.2 shipped e métrica P9.7 mostrar `% doses NULL > 5%` mensalmente sustained, então avaliar PharmaDB R$62-280/mês.
+
+**Pre-trabalho documentado:**
+- Sandbox account PharmaDB free trial 7 dias pra validar cobertura long-tail
+- Spec `Edge: search_medications_external_fallback` (chama PharmaDB quando local retorna 0)
+- Cache RPC result em catálogo local (lazy growth)
+
+**Aceite:** decisão go/no-go em release v1.1.0 baseada em métrica real, não especulação.
+
+**Branch:** `spike/pharmadb-fallback-evaluation` (apenas spike — não ship)
+
+---
+
+### P9.10 — Validações device priorizadas pra release pós-P9
+
+**Onde:** `context/Validar.md` (novo entries).
+
+**Lista validações obrigatórias antes ship v0.2.6.0:**
+
+```markdown
+[ ] Pixel 6 — cadastrar "Amoxil 500mg" → search retorna match + group_id=antibiotico
+[ ] Samsung A54 — cadastrar "Bactrim F" → match + antibiotico
+[ ] Xiaomi Redmi 12 — cadastrar "Sulfatrim" → match + antibiotico
+[ ] Pixel 6 — Analytics donut mostra "Antibiótico" (não "Outros") com 3 doses dos antibióticos acima
+[ ] Pixel 6 — MedicationPicker BottomSheet: 80vh + autofocus search + teclado acima
+[ ] Pixel 6 — MedicationPicker: scroll lista interno SEM fechar sheet (anti-bug #1)
+[ ] Samsung A54 — MedicationPicker: teclado virtual NÃO cobre resultados (anti-bug #2)
+[ ] Xiaomi Redmi 12 — MedicationPicker: tap em item registra valor correto (anti-bug #3)
+[ ] Pixel 6 — drill-down Analytics "Não classificado" abre BulkCategorizeModal
+[ ] Pixel 6 — Persona 6 simulada (font scaling 1.5×): targets ≥56dp + labels não cortados
+```
+
+**Aceite:** 10/10 validações verde antes de ship público.
+
+---
+
+## P9 — Critérios gerais de aceite (release v0.2.6.0)
+
+- [ ] **P0.7 MedicationPicker BottomSheet** shipado e validado em 3 devices (Pixel 6, Samsung A54, Xiaomi Redmi 12)
+- [ ] **P9.1 CMED import** ≥25k entries no catalog (vs 900 antes)
+- [ ] **P9.2 cron mensal** rodando + email admin recebido próximo dia 5
+- [ ] **P9.3 UI distingue** outro vs nao_classificado em Analytics + Histórico + Reports
+- [ ] **P9.4 sample validation** ≥75/80 brand-names passam
+- [ ] **P9.5 re-categorize cron** rodando + 1ª execução com fixed_count >0
+- [ ] **P9.6 bulk modal** funcional em Analytics drill-down
+- [ ] **P9.7 dashboard** funcional + alarme P0 testado em staging
+- [ ] **P9.8 anti-pattern doc** linkado em PROJETO
+- [ ] **P9.10 validações device** 10/10 verde
+- [ ] **Sanity check em prod:** 1 user cadastra 5 medicamentos pediátricos comuns → 5/5 categorizados corretamente
+
+## P9 — Cadência sugerida
+
+**Sprint emergencial (1-2 semanas):**
+- **Dias 1-3:** P0.7 MedicationPicker BottomSheet (branch paralela com P0 LGPD)
+- **Dias 4-5:** P9.1 CMED XLSX import + P9.2 cron mensal
+- **Dias 6-7:** P9.3 UI distingue + P9.4 sample validation expandida
+- **Dias 8-10:** P9.5 cron re-categorize + P9.6 bulk modal
+- **Dias 11-14:** P9.7 dashboard + P9.8 anti-pattern doc + P9.10 validações device
+- **Buffer:** 1 semana validação device + fix bugs encontrados
+
+**Ship v0.2.6.0** com P0 LGPD + P0.7 MedicationPicker + P9 completo.
+
+---
+
+## 🚨 ADENDO 2026-05-22 18:30 BRT — P8 Hardening de escala (GATE OBRIGATÓRIO pré-launch público)
+
+> **Contexto:** análise crítica de escala/egress aplicada ao roteiro P0-P7 completo (assumindo todos shipped) revelou **3 riscos altos + 7 médios** que, sem mitigação, podem reintroduzir o storm #157 (Realtime cascade) ou estourar quota de serviços terceiros (Sentry, Supabase Realtime, Supabase DB reads) ao escalar pra 1000+ users.
+>
+> **Esta seção é GATE OBRIGATÓRIO antes de release v1.0.0 (launch público Open Testing).** Sem P8 aplicado, lançamento pra audiência ampla é **financeiramente inviável**.
+>
+> **Projeção de custo mensal SEM P8 (1000 users ativos):**
+> - Supabase Realtime: $25-$100 (concurrent connections + messages)
+> - Supabase Egress: $200-$500 (Realtime backfire em hidden tabs)
+> - Sentry transactions: $80-$200 (tracesSampleRate 0.1 estoura 10k/mês free tier 30×)
+> - Sentry errors: $26 (sem dedup, single bug recorrente estoura 5k/mês)
+> - Supabase DB reads: $25 (feature_flags polling sem cache)
+> - **TOTAL: ~$350-850/mês**
+>
+> **Projeção de custo mensal COM P8 (1000 users ativos):**
+> - **TOTAL: ~$0-50/mês** (mantém maioria no free tier)
+>
+> **Diferença preservada: ~$300-800/mês** + headroom estrutural pra escalar até 10k+ users sem refactor.
+>
+> **Origem dessas mitigações:** auditoria forense pós-roteiro feita por análise reversa de cada item P0-P7 cruzada com bug histórico medcontrol #157 + pricing pages Supabase/Sentry/Firebase.
+
+### 🔴 Resumo dos riscos identificados
+
+| # | Item original | Risco | Impacto sem fix |
+|---|---|---|---|
+| **R1 (ALTO)** | P1.9 Realtime sob demanda | Sem lifecycle pause / idle detection → tabs hidden mantêm channels = repeat bug #157 | Storm 5GB/h egress + concurrent connections |
+| **R2 (ALTO)** | P1.11 + P2.18 `tracesSampleRate: 0.1` | 1000 users × 100 actions/dia × 0.1 = 300k traces/mês = 30× free tier | Sentry $80-200/mês ou perda observability |
+| **R3 (ALTO)** | P3.17 `treatment-changed-handler` AFTER UPDATE sem dedup | Edits massivos disparam N FCM × N devices | Storm FCM + cliente Java churn |
+| **R4 (MÉDIO)** | P0.6 `fcm_dispatched_log` cresce | Sem cleanup garantido + dispatch_kinds expandidos | Tabela 200k+ rows quente |
+| **R5 (MÉDIO)** | P3.2 `audit_log` sem retention | 1.8M rows/ano × 5 anos = 9M rows quentes | Queries lentas + LGPD violação minimização |
+| **R6 (MÉDIO)** | P3.9 `suggest_categories_for_unknown` | N+1 risk + sem cache adequado | Latência modal + DB load |
+| **R7 (MÉDIO)** | P4.10 `last_dose_per_group` | Chamado em cada abertura Histórico sem cache | 10k RPC calls/dia × 1000 users |
+| **R8 (MÉDIO)** | P3.3 `feature_flags` polling | 12k reads/hora sem edge cache | Pode comer Supabase free tier 50k/dia |
+| **R9 (MÉDIO)** | P1.10 `Sentry.captureException` 121 catches | Single bug recorrente estoura 5k events/mês free tier | Sentry quota + alert fatigue |
+| **R10 (MÉDIO)** | P2.5 server reagenda sempre | Edits frequentes = 10 reschedule storms/usuário/dia | Edge invocations + FCM dispatches |
+
+### 🟢 Pontos que JÁ melhoram escala (preservar)
+
+- **P0.4** PostHog consent gate — reduz eventos ~30%
+- **P2.2** Drop `dose-fire-time-notifier` — elimina **43.200 invocações/mês**
+- **P2.6** Tier via JWT — elimina N round-trips DB
+- **P3.16** `_shared/fcm.ts` consolidado — habilita dedup + retry centralizados
+- **P3.3** `feature_flags.realtime_enabled` master switch — rollback storm em segundos
+
+---
+
+## P8 — Hardening de escala (10 mitigações executáveis)
+
+### P8.1 🔴 Salvaguardas Realtime — lifecycle pause + idle + master switch (REFINA P1.9)
+
+**Origem do risco:** P1.9 propôs re-ativar Realtime sob demanda em PatientDetail compartilhado, mas sem lifecycle pause. Bug original #157 (Storm 13 req/s + 5GB/h egress idle) foi exatamente isso.
+
+**Mudança em `src/hooks/useRealtime.js`** (refinando o que P1.9 deixou):
+
+```javascript
+import { useEffect, useRef } from 'react';
+import { useFeatureFlag } from './useFeatureFlags';
+
+export function useRealtimePatient(patientId, isShared) {
+  const realtimeEnabled = useFeatureFlag('realtime_enabled', true);
+  const channelRef = useRef(null);
+  const lastUserActionRef = useRef(Date.now());
+
+  // Track user interaction pra idle detection
+  useEffect(() => {
+    const handler = () => { lastUserActionRef.current = Date.now(); };
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.addEventListener(ev, handler, { passive: true }));
+    return () => ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.removeEventListener(ev, handler));
+  }, []);
+
+  const subscribe = useCallback(() => {
+    if (channelRef.current) return; // já subscribed
+    if (!realtimeEnabled || !patientId || !isShared) return;
+
+    const channel = supabase.channel(`realtime:patient:${patientId}:${Date.now()}`);
+    channel
+      .on('postgres_changes', { event: '*', schema: 'medcontrol', table: 'doses', filter: `patientId=eq.${patientId}` }, ...)
+      .on('postgres_changes', { event: '*', schema: 'medcontrol', table: 'patient_shares', filter: `patientId=eq.${patientId}` }, ...)
+      .subscribe();
+    channelRef.current = channel;
+    posthog?.capture('realtime_subscribed', { patientId });
+  }, [patientId, isShared, realtimeEnabled]);
+
+  const unsubscribe = useCallback(() => {
+    if (!channelRef.current) return;
+    supabase.removeChannel(channelRef.current);
+    channelRef.current = null;
+    posthog?.capture('realtime_unsubscribed', { patientId });
+  }, [patientId]);
+
+  // 1. Initial subscribe + cleanup on unmount
+  useEffect(() => {
+    subscribe();
+    return unsubscribe;
+  }, [subscribe, unsubscribe]);
+
+  // 2. SALVAGUARDA: visibility change → unsubscribe em hidden tab
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        unsubscribe();
+      } else if (document.visibilityState === 'visible') {
+        subscribe();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [subscribe, unsubscribe]);
+
+  // 3. SALVAGUARDA: idle >5min → unsubscribe
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const idleMs = Date.now() - lastUserActionRef.current;
+      if (idleMs > 5 * 60 * 1000 && channelRef.current) {
+        unsubscribe();
+        posthog?.capture('realtime_idle_unsubscribed', { idle_minutes: Math.floor(idleMs / 60000) });
+      } else if (idleMs <= 5 * 60 * 1000 && !channelRef.current && document.visibilityState === 'visible') {
+        subscribe();
+      }
+    }, 30 * 1000); // check a cada 30s
+    return () => clearInterval(interval);
+  }, [subscribe, unsubscribe]);
+
+  // 4. SALVAGUARDA: hard limit 1 channel por user — qualquer tentativa de 2º subscribe é no-op
+  // (já garantido pelo channelRef check em subscribe())
+}
+```
+
+**Adicionar dashboard egress alert** em PostHog ou Sentry:
+- Track `realtime_message_received` per user/hora
+- Alert se `messages_per_hour > 500` por user (indica leak)
+
+**Habilitar/desabilitar via feature flag em runtime:**
+- Tabela `feature_flags.realtime_enabled` (P3.3) já criada
+- Rollback: `UPDATE medcontrol.feature_flags SET value='false' WHERE key='realtime_enabled'`
+- Cliente lê em 5min staleTime — rollback efetivo em ≤5min sem deploy
+
+**Aceite:**
+- Test manual: abrir PatientDetail compartilhado → trocar pra outra tab por 1min → DevTools Network mostra `removeChannel` chamado
+- Test manual: ficar idle 6min no PatientDetail → channel desconectado
+- Test sob carga: 100 users simultâneos hidden tab → 0 channels ativos no Supabase Realtime dashboard
+- Egress audit semanal: <100MB/h por user em pico
+
+**Branch:** `feat/realtime-lifecycle-safeguards`
+
+---
+
+### P8.2 🔴 Sentry tracesSampleRate dinâmico (REFINA P1.11)
+
+**Origem do risco:** 0.1 = 30× free tier mensal. $80-200/mês de fatura ou perda total observability.
+
+**Mudança em `src/main.jsx`:**
+
+```javascript
+Sentry.init({
+  // ...
+
+  // Sample dinâmico — bem abaixo de 0.1
+  tracesSampleRate: import.meta.env.PROD ? 0.01 : 0, // 1% sampling em prod
+
+  // Sample 100% pra erros + 1% pra transactions sucesso
+  beforeSendTransaction(transaction) {
+    if (!import.meta.env.PROD) return transaction;
+
+    // SEMPRE capturar transactions de RPCs healthcare críticas (oversample)
+    const criticalOps = ['confirm_dose', 'skip_dose', 'undo_dose', 'register_sos_dose', 'create_treatment_with_doses'];
+    if (criticalOps.some(op => transaction.transaction?.includes(op))) {
+      return transaction; // 100% capturado
+    }
+
+    // Resto: já filtrado pelo 0.01 sampling
+    return transaction;
+  },
+
+  beforeSend(event, hint) {
+    // ... PII strip (P0.3) ...
+
+    // Rate limit por user (anti single-bug-recorrente-estoura-quota)
+    const userId = event.user?.id;
+    if (userId) {
+      const key = `sentry_rate_${userId}_${new Date().toISOString().slice(0, 10)}`;
+      const count = parseInt(sessionStorage.getItem(key) || '0', 10);
+      if (count >= 10) return null; // max 10 events/dia/user
+      sessionStorage.setItem(key, String(count + 1));
+    }
+
+    // Whitelist de erros conhecidos pra skip
+    const knownErrors = ['Network request failed', 'NetworkError', 'Load failed', 'Failed to fetch', 'AbortError'];
+    if (knownErrors.some(e => event.exception?.values?.[0]?.value?.includes(e))) {
+      return null;
+    }
+
+    return event;
+  }
+});
+```
+
+**Projeção com mitigação:**
+- 1000 users × 100 actions/dia × 0.01 sampling = 1k traces/dia × 30 = 30k/mês
+- Critical ops oversampled: ~50/user/dia × 1000 = 50k/dia = 1.5M/mês ⚠️ ainda alto
+
+**Refinamento adicional:** critical ops também sample a 0.1:
+
+```javascript
+if (criticalOps.some(op => transaction.transaction?.includes(op))) {
+  if (Math.random() < 0.1) return transaction; // 10% mesmo pra críticas
+  return null;
+}
+```
+
+→ Critical: 100k traces/mês. Total: ~130k/mês. **Ainda excede free tier 10k.**
+
+**Decisão necessária:**
+- **Opção A (recomendada):** sample 0.005 (0.5%) em prod + critical 5% = ~16k traces/mês — cabe free tier
+- **Opção B:** plano Sentry Team $26/mês = 50k traces/mês
+- **Opção C:** self-host Sentry em VPS DigitalOcean $6/mês (medcontrol já tem `sentry-cli` configurado)
+
+**Aceite:** Sentry dashboard mostra <10k transactions/mês em prod 30 dias após deploy.
+
+**Branch:** `fix/sentry-sample-rate-budget-controlled`
+
+---
+
+### P8.3 🔴 Dedup window 30s em `treatment-changed-handler` (REFINA P3.17)
+
+**Origem do risco:** AFTER UPDATE sem dedup → edits massivos = storm FCM × N devices.
+
+**Mudança no trigger SQL:**
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.notify_treatment_changed()
+RETURNS TRIGGER AS $$
+DECLARE v_last_dispatch TIMESTAMPTZ;
+BEGIN
+  -- Evita cascade (UPDATE dentro de UPDATE)
+  IF pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Só dispara em campos relevantes
+  IF NEW.status IS NOT DISTINCT FROM OLD.status
+     AND NEW."intervalHours" IS NOT DISTINCT FROM OLD."intervalHours"
+     AND NEW."firstDoseTime" IS NOT DISTINCT FROM OLD."firstDoseTime"
+     AND NEW.group_id IS NOT DISTINCT FROM OLD.group_id THEN
+    RETURN NEW;
+  END IF;
+
+  -- Dedup window 30s: verifica fcm_dispatched_log (extender de P0.6 pra cobrir treatment_changed)
+  SELECT MAX(dispatched_at) INTO v_last_dispatch
+  FROM medcontrol.fcm_dispatched_log
+  WHERE dose_id = NEW.id -- reusa coluna com semântica "entity_id"
+    AND dispatch_kind = 'treatment_changed'
+    AND dispatched_at > NOW() - INTERVAL '30 seconds';
+
+  IF v_last_dispatch IS NOT NULL THEN
+    -- Skip — já disparou recentemente
+    RETURN NEW;
+  END IF;
+
+  -- Insere fingerprint ANTES de dispatchar (anti-race entre triggers paralelos)
+  INSERT INTO medcontrol.fcm_dispatched_log (dose_id, dispatch_kind, scheduled_at)
+  VALUES (NEW.id, 'treatment_changed', NOW())
+  ON CONFLICT DO NOTHING;
+
+  PERFORM net.http_post(
+    url := current_setting('app.settings.supabase_url') || '/functions/v1/treatment-changed-handler',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body := jsonb_build_object('record', row_to_json(NEW))
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = medcontrol, net, public;
+```
+
+**Adicionar debounce client-side em `TreatmentForm.jsx`:**
+
+```javascript
+import { debounce } from 'lodash';
+
+const saveDebounced = useMemo(() => debounce((payload) => {
+  updateTreatment.mutate(payload);
+}, 2000), []);
+
+// User edita 5× em 5s → única chamada server (após 2s de inatividade)
+```
+
+**Estender P0.6 schema** pra `fcm_dispatched_log` aceitar `dispatch_kind` genérico:
+```sql
+COMMENT ON COLUMN medcontrol.fcm_dispatched_log.dose_id IS 'Entity ID — pode ser dose_id, treatment_id, share_id, patient_id conforme dispatch_kind';
+```
+
+**Aceite:** simular 10 UPDATE em treatment em 30s → 1 FCM dispatch (não 10).
+
+---
+
+### P8.4 🟡 Cleanup garantido `fcm_dispatched_log` (REFINA P0.6)
+
+**Adicionar cron** pgcron diário em P0.6:
+
+```sql
+-- Adicionar à migration P0.6
+SELECT cron.schedule(
+  'cleanup-fcm-dispatched-log-daily',
+  '0 4 * * *', -- 4am UTC
+  $$DELETE FROM medcontrol.fcm_dispatched_log WHERE dispatched_at < NOW() - INTERVAL '7 days';$$
+);
+```
+
+**Monitoring:**
+```sql
+-- Query semanal manual ou dashboard admin
+SELECT COUNT(*) as row_count, MAX(dispatched_at) as last, MIN(dispatched_at) as first
+FROM medcontrol.fcm_dispatched_log;
+-- Alerta se row_count > 500_000
+```
+
+**Aceite:** após 7 dias prod, `SELECT COUNT(*)` mostra ~stable around 7d × dispatches/dia (não cresce indefinidamente).
+
+---
+
+### P8.5 🟡 Retention policy explícita `audit_log` (REFINA P3.2)
+
+**Adicionar à migration P3.2** politica por `action`:
+
+```sql
+-- Retention policy por tipo de action
+CREATE OR REPLACE FUNCTION medcontrol.cleanup_audit_log()
+RETURNS void AS $$
+BEGIN
+  -- dose_marked_* → 2 anos
+  DELETE FROM medcontrol.audit_log
+  WHERE action IN ('dose_marked_done', 'dose_marked_skipped', 'dose_undone', 'sos_registered', 'sos_forced_override')
+    AND "createdAt" < NOW() - INTERVAL '2 years';
+
+  -- treatment_* → 2 anos
+  DELETE FROM medcontrol.audit_log
+  WHERE action IN ('treatment_created', 'treatment_paused', 'treatment_resumed', 'treatment_ended')
+    AND "createdAt" < NOW() - INTERVAL '2 years';
+
+  -- share_* → 1 ano após patient_id NULL (paciente deletado)
+  DELETE FROM medcontrol.audit_log
+  WHERE action IN ('patient_shared', 'patient_unshared', 'share_access_changed', 'share_extended')
+    AND patient_id IS NULL
+    AND "createdAt" < NOW() - INTERVAL '1 year';
+
+  -- account_deleted, data_exported → indefinido (LGPD obrigação legal)
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+SELECT cron.schedule('cleanup-audit-log-monthly', '0 5 1 * *', $$SELECT medcontrol.cleanup_audit_log();$$);
+```
+
+**Particionamento Postgres** (preparação pra escala):
+```sql
+-- Após 1 ano de uso, particionar por mês via pg_partman OU manualmente:
+-- ALTER TABLE medcontrol.audit_log ... PARTITION BY RANGE ("createdAt");
+-- Criar partições mensais automatic via cron
+-- (não fazer agora — apenas planejar)
+```
+
+**Aceite:**
+- `SELECT COUNT(*) FROM audit_log` estável após 2 anos (não cresce além de 2y de dose_*)
+- Documento `context/decisoes/2026-XX-XX-audit-log-retention.md` registrando política
+
+---
+
+### P8.6 🟡 Cache + EXPLAIN ANALYZE em `suggest_categories_for_unknown` (REFINA P3.9)
+
+**Adicionar ao P3.9 ao implementar:**
+
+**1. Validação obrigatória durante dev:**
+```bash
+psql -c "EXPLAIN ANALYZE SELECT * FROM medcontrol.suggest_categories_for_unknown('Escitalopram', 'Escitalopram');"
+# Esperar: <100ms total + uso do GIN trgm index
+```
+
+**2. Cache TanStack agressivo:**
+```javascript
+// Em CategoryHintModal.jsx
+const { data: suggestions } = useQuery({
+  queryKey: ['suggest-cats', normalizeName(name), normalizeName(principio)],
+  queryFn: () => supabase.rpc('suggest_categories_for_unknown', { p_name: name, p_principio_ativo: principio }),
+  staleTime: 5 * 60 * 1000, // 5min
+  gcTime: 30 * 60 * 1000, // 30min
+  enabled: !!name && hintModalOpen
+});
+
+function normalizeName(s) {
+  return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+```
+
+**3. Otimização query SQL** (eliminar subquery N+1):
+
+```sql
+CREATE OR REPLACE FUNCTION medcontrol.suggest_categories_for_unknown(p_name TEXT, p_principio_ativo TEXT DEFAULT NULL, p_limit INT DEFAULT 3)
+RETURNS TABLE (group_id TEXT, score FLOAT, reason TEXT) AS $$
+  WITH name_normalized AS (
+    SELECT lower(extensions.unaccent(p_name)) AS q
+  ),
+  candidates AS (
+    SELECT
+      m.group_id,
+      m.nome_comercial,
+      similarity(lower(extensions.unaccent(m.nome_comercial)), (SELECT q FROM name_normalized)) AS sim
+    FROM medcontrol.medications_catalog m, name_normalized n
+    WHERE m.group_id IS NOT NULL
+      AND lower(extensions.unaccent(m.nome_comercial)) % n.q -- usa trigram index com %
+    ORDER BY sim DESC
+    LIMIT 50 -- bounded
+  ),
+  ranked AS (
+    SELECT
+      group_id,
+      AVG(sim) AS score,
+      (array_agg(nome_comercial ORDER BY sim DESC))[1] AS top_med
+    FROM candidates
+    GROUP BY group_id
+  )
+  SELECT
+    group_id,
+    score,
+    'similar a "' || top_med || '"' AS reason
+  FROM ranked
+  ORDER BY score DESC
+  LIMIT p_limit;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = medcontrol, extensions, public;
+```
+
+Mudanças vs versão original P3.9:
+- Operador `%` em vez de `similarity() > 0.3` → usa GIN trgm index direto
+- CTE `ranked` elimina subquery N+1 que pegava `nome_comercial` por group_id
+- LIMIT 50 inicial bounded
+
+**Aceite:** EXPLAIN ANALYZE retorna <50ms + plan usa `Bitmap Index Scan on medications_catalog_principio_unaccent_trgm_idx`.
+
+---
+
+### P8.7 🟡 Cache 1h `last_dose_per_group` + invalidação targeted (REFINA P4.10)
+
+**No queryKey em `LastDoseByCategory` component:**
+
+```javascript
+const { data } = useQuery({
+  queryKey: ['last-dose-by-group', userId],
+  queryFn: () => supabase.rpc('last_dose_per_group', { p_user_id: userId, p_limit: 5 }),
+  staleTime: 60 * 60 * 1000, // 1h — só invalidate quando dose nova confirmada
+  gcTime: 6 * 60 * 60 * 1000, // 6h
+});
+```
+
+**Invalidação targeted em `core/events.ts` ou mutationRegistry:**
+
+```javascript
+// Após confirm_dose sucesso:
+qc.invalidateQueries({ queryKey: ['last-dose-by-group', userId], exact: true });
+// NÃO invalida em outras mutations (skip, undo, register_sos do paciente diferente, etc.)
+```
+
+**Index composto** pra acelerar RPC:
+```sql
+CREATE INDEX IF NOT EXISTS doses_user_group_actual_done_idx
+  ON medcontrol.doses ("userId", group_id, "actualTime" DESC)
+  WHERE status = 'done' AND group_id IS NOT NULL;
+```
+
+**Aceite:**
+- 1 user × 10 aberturas Histórico/dia = 1 RPC call/dia (resto cache hit)
+- Após `confirm_dose`, próxima abertura Histórico = 1 RPC call refresh
+- EXPLAIN ANALYZE RPC usa novo index composto
+
+---
+
+### P8.8 🟡 Edge cache `feature_flags` (REFINA P3.3)
+
+**Adicionar Edge function** `get-feature-flags` com cache:
+
+```typescript
+// supabase/functions/get-feature-flags/index.ts
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5min
+let cache: { value: any[]; expiresAt: number } | null = null;
+
+Deno.serve(async (req) => {
+  if (cache && Date.now() < cache.expiresAt) {
+    return new Response(JSON.stringify(cache.value), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' }
+    });
+  }
+
+  const { data } = await adminSb.schema('medcontrol').from('feature_flags').select('*');
+  cache = { value: data, expiresAt: Date.now() + CACHE_TTL_MS };
+
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' }
+  });
+});
+```
+
+**Cliente consome via Edge** (não direto da tabela):
+
+```javascript
+// src/hooks/useFeatureFlags.js
+export function useFeatureFlag(key, defaultValue) {
+  const { data: flags } = useQuery({
+    queryKey: ['feature-flags'],
+    queryFn: () => fetch(`${SUPABASE_URL}/functions/v1/get-feature-flags`).then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+  return flags?.find(f => f.key === key)?.value ?? defaultValue;
+}
+```
+
+**Bonus:** invalidação push em mudança via Realtime channel `feature_flags` (admin atualiza → Edge cache invalidado em todos clients em <1s).
+
+**Aceite:**
+- 1000 users × 12 reads/hora = 12000 reads/hora ainda — mas TODOS hit Edge cache, não DB
+- Supabase DB reads pra `feature_flags` table: 1 read/5min = 12 reads/hora total (vs 12k antes)
+- DB reads economy: ~30M reads/mês
+
+---
+
+### P8.9 🟡 Sentry rate limit + dedup fingerprint (REFINA P1.10)
+
+**Já incluído parcialmente em P8.2** (rate limit per-user). Adicionar **dedup por fingerprint:**
+
+```javascript
+beforeSend(event, hint) {
+  // ... PII strip ...
+  // ... rate limit per-user (P8.2) ...
+
+  // Dedup fingerprint: agrupa erros similares pra não enviar 1000× o mesmo bug
+  if (event.exception?.values?.[0]) {
+    const exc = event.exception.values[0];
+    event.fingerprint = [
+      exc.type ?? 'UnknownError',
+      // Stack frame primário (sem line numbers — agrupar variantes do mesmo bug)
+      exc.stacktrace?.frames?.slice(-1)[0]?.function ?? 'unknown',
+      // Source file sem version hash
+      (exc.stacktrace?.frames?.slice(-1)[0]?.filename ?? '').replace(/-[a-f0-9]{8}\./, '.')
+    ];
+  }
+
+  // Sample por fingerprint: 100% pra primeiro evento, 1% pra repetições mesma fingerprint mesmo dia
+  // (Sentry server-side dedup por fingerprint, mas client pode reduzir antes de enviar)
+  const fpKey = `sentry_fp_${event.fingerprint?.join(':')}_${new Date().toISOString().slice(0,10)}`;
+  const seen = parseInt(sessionStorage.getItem(fpKey) || '0', 10);
+  if (seen >= 1 && Math.random() > 0.01) return null; // 1% após o primeiro
+  sessionStorage.setItem(fpKey, String(seen + 1));
+
+  return event;
+}
+```
+
+**Aceite:** simular 100 erros idênticos em sequência → Sentry recebe ~2 (primeiro + ~1% dos 99 restantes).
+
+---
+
+### P8.10 🟡 Throttle server-side `request-schedule-sync` (REFINA P2.1)
+
+**Adicionar rate limit** em `supabase/functions/request-schedule-sync/index.ts`:
+
+```typescript
+import { sendFcm } from '../_shared/fcm.ts';
+import { adminSb } from '../_shared/supabase.ts';
+
+const THROTTLE_SECONDS = 30;
+
+Deno.serve(async (req) => {
+  const auth = req.headers.get('Authorization');
+  if (!auth?.startsWith('Bearer ')) return new Response('unauthorized', { status: 401 });
+  const jwt = auth.slice(7);
+
+  const supabaseUser = createClient(SUPABASE_URL, ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } }
+  });
+  const { data: { user }, error: authErr } = await supabaseUser.auth.getUser();
+  if (authErr || !user) return new Response('unauthorized', { status: 401 });
+
+  // THROTTLE: max 1 invocação por user a cada 30s
+  const { data: recent } = await adminSb.schema('medcontrol')
+    .from('schedule_sync_throttle')
+    .select('last_invoked_at')
+    .eq('user_id', user.id)
+    .single();
+
+  if (recent && Date.now() - new Date(recent.last_invoked_at).getTime() < THROTTLE_SECONDS * 1000) {
+    return new Response(JSON.stringify({ throttled: true, retry_after: THROTTLE_SECONDS }), {
+      status: 429,
+      headers: { 'Retry-After': String(THROTTLE_SECONDS) }
+    });
+  }
+
+  await adminSb.schema('medcontrol').from('schedule_sync_throttle').upsert({
+    user_id: user.id,
+    last_invoked_at: new Date().toISOString()
+  });
+
+  // ... resto execução normal ...
+});
+```
+
+**Criar tabela throttle:**
+```sql
+CREATE TABLE medcontrol.schedule_sync_throttle (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  last_invoked_at TIMESTAMPTZ NOT NULL
+);
+SELECT cron.schedule('cleanup-schedule-throttle-daily', '0 3 * * *',
+  $$DELETE FROM medcontrol.schedule_sync_throttle WHERE last_invoked_at < NOW() - INTERVAL '1 day';$$
+);
+```
+
+**Cliente lida com 429:**
+```javascript
+// src/services/scheduling.js
+async function requestScheduleSync() {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/request-schedule-sync`, ...);
+  if (res.status === 429) {
+    const body = await res.json();
+    console.warn('[scheduling] throttled, retry in', body.retry_after);
+    // Re-tenta após retry_after ou ignora se outro trigger já vai disparar
+    return { throttled: true };
+  }
+  return res.json();
+}
+```
+
+**Aceite:** 10 chamadas em 5s pelo mesmo user → 1 success + 9 × 429.
+
+---
+
+## P8 — Critérios gerais de aceite (release-gate v1.0.0)
+
+Antes de declarar P8 completo e shippar pra Open Testing público:
+
+- [ ] Realtime test sob carga: 100 users hidden tab simultâneos → 0 channels ativos no dashboard Supabase
+- [ ] Sentry dashboard mostra <10k transactions/mês em prod 30 dias após deploy
+- [ ] Sentry dashboard mostra <5k errors/mês com dedup ativo
+- [ ] Treatment edit massivo (10 edits em 30s) → 1 FCM dispatch (verificar via Firebase console)
+- [ ] `audit_log` query plan usa index (`EXPLAIN ANALYZE` verifica)
+- [ ] `suggest_categories_for_unknown` <50ms p95 (medir via Sentry tracing)
+- [ ] `last_dose_per_group` cache hit rate >90% (PostHog metric)
+- [ ] `feature_flags` Supabase DB reads <20k/dia em prod (era 12k/hora antes)
+- [ ] `request-schedule-sync` 429 rate <5% (PostHog)
+- [ ] Supabase egress dashboard <10GB/mês em prod
+- [ ] Custo mensal real (medido em fatura) <$100 em 1000 users ativos
+
+## P8 — Cadência (executar como sprint dedicado pós-P7)
+
+**Sprint 11 (semana 25-26):** P8 completo
+- Semana 25: P8.1 (Realtime safeguards) + P8.2 (Sentry sample) + P8.3 (treatment-changed dedup)
+- Semana 26: P8.4-P8.10 paralelos + validação carga + ajuste fino
+- **Buffer:** 1 semana extra pra hardening final pré-launch público
+
+**Após P8 completo:** marcar release v1.0.0 e abrir Open Testing público no Play Store.
+
+---
+
+## P8 — Riscos residuais (aceitos conscientemente)
+
+Mesmo com P8 aplicado, alguns riscos secundários permanecem:
+
+1. **Realtime ainda pode ter spike** em eventos virais (e.g., post viral sobre Dosy → 5000 signups em 1h). Mitigação: master switch `realtime_enabled=false` via feature_flag em <5min.
+2. **Sentry sample 0.5%** = pequenos bugs raros podem passar despercebidos. Mitigação: `captureException` 100% pra erros graves (não-sampled).
+3. **Audit log particionamento** ainda planejado pra v1.1+ (não obrigatório v1.0). Cresce até 1.8M rows/ano em 1000 users — manageable.
+4. **`request-schedule-sync` 30s throttle** pode frustrar power users que editam muitos treatments. Trade-off aceito: consistência server-side > velocidade edit.
+
+---
+
+## P8 — Conexão com docs Dosy v2
+
+Após P8 aplicado em medcontrol, **atualizar Dosy v2 docs** com lições absorvidas:
+
+- `dosy-app/docs/16-INTEGRACOES.md` — adicionar Sentry sample budget docs + Edge cache feature_flags pattern
+- `dosy-app/docs/19-SEGURANCA.md` — adicionar HMAC validation webhooks + rate limit pattern
+- `dosy-app/docs/adr/` — criar ADR-016 "Realtime sob demanda com lifecycle safeguards"
+- `dosy-app/docs/04-METRICAS.md` — adicionar P8 acceptance criteria como KPIs P0
+
+---
+
+> **🚨 NÃO PULAR P8.** Sem essas 10 mitigações, launch público pra 1000+ users vai gerar fatura $350-850/mês de serviços terceiros + reintroduz storms que motivaram dezenas de horas de fix em prod. **P8 é o que diferencia o app "funciona pra 100 usuários" do app "escala pra 10k+".**
 
 ---
 
