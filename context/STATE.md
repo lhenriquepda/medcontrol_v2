@@ -10,8 +10,8 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.1` (em curso) — anterior `v0.2.6.0` shipped |
-| **versionCode** | `85` (v0.2.6.1) — anterior `84` (v0.2.6.0 shipped) |
+| **Versão** | `v0.2.6.2` (HOTFIX em curso) — anterior `v0.2.6.1` (vc 85 shipped mas tinha bugs críticos) |
+| **versionCode** | `86` (v0.2.6.2) — anterior `85` (v0.2.6.1 broken — Histórico/Analytics em "Outro" + UX mobile picker quebrado) |
 | **Branch ativa** | `master` |
 | **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
 | **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |

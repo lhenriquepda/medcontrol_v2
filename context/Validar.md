@@ -20,9 +20,47 @@
 
 ---
 
-## 🆕 Release atual — v0.2.6.1 EM CURSO (vc 85) — Roteiro Alinhamento Dosy v2
+## 🆕 Release atual — v0.2.6.2 HOTFIX EM CURSO (vc 86)
 
-**Status:** branch `release/v0.2.6.1`. Implementação Roteiro_Alinhamento_Dosy_v2.md (sprint 1-2).
+**Status:** branch `release/v0.2.6.1` (mantida — bump apenas versionCode+versionName). v0.2.6.1 vc 85 publicado mas tinha 2 bugs críticos reportados pelo user em prod.
+
+**Bugs reportados (2026-05-23 vc 85 prod):**
+
+- 🚨 **"Histórico/Analytics só mostra Outros"** — vários antibióticos pros filhos (Liam Sinot Clav, Rael Clavulin/Amoxi/Azitro = 47 doses done) não apareciam categorizados.
+- 🚨 **"Cadastro de tratamento está uma zona em mobile"** — campo de digitação some, teclado fica por cima, sugestões somem ao scroll, scroll do body compete com dropdown.
+
+**Root causes encontrados via debugging:**
+
+| Bug | Local | Razão |
+|---|---|---|
+| Tudo em "Outro" | `dosesService.DOSE_COLS_LIST` | NÃO incluía `group_id, cmed_class` no SELECT PostgREST. Cliente recebia `undefined` → fallback `d.group_id \|\| 'outro'` agrupava tudo |
+| Tudo em "Outro" | RPC `get_dashboard_payload` | `jsonb_build_object` omitia `group_id, cmed_class` do payload de doses |
+| UX mobile picker | `MedNameInput.jsx` dropdown inline | Capacitor WebView Android: teclado virtual reposiciona, dropdown absolute position fica atrás do teclado, scroll body desfocava input |
+
+**Fixes aplicados v0.2.6.2:**
+
+- `[x]` `DOSE_COLS_LIST` agora inclui `group_id, cmed_class` (commit `2bf8dad`)
+- `[x]` Migration `v0_2_6_2_dashboard_payload_includes_group_id` aplicada em prod — RPC retorna `group_id` + `cmed_class` no payload
+- `[x]` `MedNameInput.jsx` reescrito mobile-first: em mobile (matchMedia < 768 OR coarse pointer), input vira button trigger → tap abre **FULL-SCREEN sheet** position:fixed inset:0 z-index:1500
+  - Header fixo no topo (X close + search icon + input fontSize:16 anti-zoom Android)
+  - Lista flex-1 overflow-y auto + overscroll-behavior:contain (não vaza pro body)
+  - Lock body scroll quando sheet aberto
+  - autoFocus delay 80ms pós-animation
+  - Touch targets 64px min-height (vs 56 desktop)
+  - 30 sugestões mobile vs 8 desktop
+  - "+ Continuar com X digitado" sempre disponível
+  - Em desktop > 768px: dropdown inline antigo mantido
+- `[x]` Bump android versionCode 85→86, versionName 0.2.6.1→0.2.6.2
+
+**QA Android emulator Pixel8 vc 86 (CDP automation):**
+
+- `[x]` Sheet abre programaticamente via tap em button[aria-haspopup=dialog]
+- `[x]` Digitar "Escitalopram" no sheet input → 4 sugestões aparecem (Escitalopram DCB + Cipralex + Lexapro + RECONTER)
+- `[x]` Autofill detectou Antidepressivo via DCB ranking
+- `[x]` "+ Continuar com Escitalopram" botão presente
+- `[x]` Analytics em teste-plus: Escitalopram agora aparece como "Antidepressivo" (era "Outro" antes)
+
+
 
 **Entregas (Roteiro sprint Fases A→E):**
 
