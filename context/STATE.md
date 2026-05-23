@@ -26,13 +26,19 @@
 - P1.5 reconcileDoses ATIVO em useDashboardPayload ✅
 - P1.6 Conflict 409 — confirm/skip/undo_dose_v2 + conflictBus + ConflictListener ✅
 - P1.10 Sentry.captureException wrapper + adopt em mutationRegistry ✅
-- P1.11 tracesSampleRate 0.1 ✅
+- P1.11 tracesSampleRate ATUALIZADO 0.1 → 0.005 + critical ops 5% (P8.2) ✅
 - P3.4 treatment_user_alert_settings + AlertLevelToggle adopt TreatmentList ✅
 - P3.15 TTL share granular (access_level + is_temporary) + SharePatientSheet UI radio + 4 TTL chips + RPCs extend/update_access/cleanup ✅
 - P3.18 Edge expire-temporary-shares + pg_cron 0 * * * * ✅
 - PostHog 12 eventos categoria + 3 share TTL + 3 conflict + 2 consent ✅
+- P8.2 Sentry sample dinâmico + rate limit 10/dia + fingerprint dedup ✅
+- P8.7 last-dose cache 1h + index composto doses (group+actualTime) ✅
+- P8.9 Sentry skip known noise + fingerprint sample ✅
 - Migration versionada (P0.1 partial): `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` ✅
-- TODO: Build AAB CI Linux → Vetor 4 vc 85 → QA emulator dual-device 409 prompt + TTL share → fechar.
+- BD universal backfill: alert_level heurístico em TODOS users (teste-plus + lhenrique.pda) ✅
+- **QA web exaustivo Chrome MCP (Round 1)**: ConsentBanner, TreatmentForm autofill, AlertLevelToggle persist DB, Histórico cross-period, marcar dose RPC v2, SharePatientSheet TTL UI — **TODOS funcionando** ✅
+- **Bug crítico capturado e fixado**: TDZ TreatmentForm `Cannot access 'Se' before initialization` (pré-existente v0.2.5.0, só explode em build minificado) — commit `23213f9` ✅
+- TODO: CI #26331199159 termina → AAB download → Vetor 4 upload vc 85 → SQL app_releases → STOP merge.
 
 **Status release/v0.2.4.0 (sessão autônoma 2026-05-22):**
 

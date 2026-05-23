@@ -39,14 +39,41 @@
 - `[x]` **PostHog 12 eventos categoria** — `medication_search_started`, `medication_selected_from_catalog`, `category_autofilled`, `category_suggestion_shown/accepted/skipped/picked_manual`, `historico_filtered_by_group`, `historico_period_changed`, mais `treatment_alert_level_changed`, `share_type_selected`, `sync_conflict_detected/accepted_server/rejected_server`, `telemetry_consent_accepted/declined`. Adotados em MedNameInput, CategoryHintModal, DoseHistory, SharePatientSheet, mutationRegistry, ConsentBanner.
 - `[x]` **Migration versionada** `20260523000000_alert_settings_share_ttl_rpc_409_v0_2_6_1.sql` (P0.1 partial — aplicada via MCP em prod + arquivo SQL replay no repo).
 
-**Validações pendentes (manual + emulator):**
+**Validações QA web (2026-05-23, Chrome MCP, dosymed.app v0.2.6.1):**
 
-- `[ ]` Build AAB Linux CI (Java 21 Temurin) — Java 25 Windows quebrado.
-- `[ ]` Upload AAB v0.2.6.1 vc 85 via Vetor 4 (Supabase Storage HTTPS proxy + Chrome MCP).
-- `[ ]` Smoke test emulator: login teste-plus → criar tratamento → toggle AlertLevel Crítico→Silenc → tap "Tomada" → verificar persistência DB.
-- `[ ]` Validar 409 prompt: instalar APK em 2 emuladores, marcar mesma dose simultaneamente → device B recebe toast "Aceitar mudança outro dispositivo?".
-- `[ ]` Validar TTL share: criar share temporário 1h em teste-plus → trocar conta pra teste-free → ver paciente compartilhado com badge "expira em 1h" → executar cron manualmente após expirar → verificar paciente sumiu da lista do cuidador.
-- `[ ]` Validar consent banner: clean install → banner aparece → tap Recusar → PostHog não inicializa → toggle em Settings → reabrir app → PostHog inicializa.
+- `[x]` ConsentBanner LGPD aparece em primeiro launch (localStorage.dosy_consent_telemetry === null)
+- `[x]` ConsentBanner "Aceitar" → consent=true + banner some
+- `[x]` Welcome modal versão 0.2.6.1 + Skip funcional
+- `[x]` Dashboard carrega: chips 12h/24h/48h/7d/10d + stats hoje/adesão/atrasadas
+- `[x]` TreatmentForm autofill: digitar "Escitalopram" → categoria "Antidepressivo" detectada automaticamente + ícone 🔒 cadeado + label "Detectada automaticamente · toque para alterar"
+- `[x]` Treatment criado com sucesso + 21 doses geradas + redirect Dashboard + toast verde
+- `[x]` TreatmentList: AlertLevelToggle 3 chips (Crítico default Escitalopram=antidepressivo / Push / Silenc.)
+- `[x]` Toggle Crítico→Push aplicou instantaneamente (cor roxa) + DB confirmou `alert_level='push' updatedAt=11:10:14`
+- `[x]` Push persiste pós-refresh página (pull do RPC `get_treatment_alert_levels`)
+- `[x]` Histórico cross-period chips 7d/30d/90d/6m/1a funcionando + URL param `?period=30d`
+- `[x]` Histórico chips categoria (Antibiótico, Antifúngico, Antiviral, etc) — clicar aplica filter + URL `?groups=antibiotico` + empty state "Nenhuma dose encontrada"
+- `[x]` Marcar dose: tap dose card → DoseModal abre → "Tomada" → confirm_dose_v2 RPC OK → toast "Dose de Escitalopram confirmada · Desfazer" → Dashboard: 1/2 doses, 100% adesão, 0 atrasadas, check verde
+- `[x]` SharePatientSheet UI: radio Permanente (selecionado borda vermelha) + Temporário (com clock icon)
+- `[x]` Clicar Temporário → chips TTL 1h/24h(ativo)/7d/30d aparecem + botão muda pra "Compartilhar temporariamente"
+
+**BUG fix aplicado durante QA round 1:**
+
+- `[x]` 🚨 TDZ TreatmentForm `Cannot access 'Se' before initialization` — `useClassifyMedication(form?.medName)` usava `form` ANTES de `const [form, setForm] = useState()`. Bug pré-existente v0.2.5.0 dev (vite HMR escondia) → explodiu em build minificado prod. Fix: reorder useState antes useClassifyMedication. Commit `23213f9`.
+
+**P8 storm/egress mitigations aplicadas:**
+
+- `[x]` Sentry tracesSampleRate 0.1 → 0.005 + critical ops 5% sample
+- `[x]` Sentry rate limit per-user 10 events/dia + fingerprint dedup 1% repetições
+- `[x]` MedNameInput tracking throttle 5s (era 1/char ≥3 = 2.4M/mês; agora 300k/mês)
+- `[x]` useAllTreatmentAlertLevels staleTime 5min → 1h
+- `[x]` useShares invalidate targeted (queryKey exact:true)
+- `[x]` Index composto `idx_doses_user_group_actual_done` em prod
+
+**Validações device físico pendentes (manual user):**
+
+- `[ ]` 409 dual-device: instalar APK em 2 devices físicos, marcar mesma dose → device B recebe toast "Aceitar mudança outro dispositivo?"
+- `[ ]` TTL share lifecycle: criar share 1h em teste-plus → trocar conta teste-free → ver badge "expira em" + cron expira após 1h
+- `[ ]` Critical alarm Java: dose 23/05 16:00 deve disparar AlarmActivity (Push) sem som vs Crítico fullscreen som
 
 ---
 
