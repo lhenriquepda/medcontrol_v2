@@ -10,13 +10,13 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.4` (em curso) — anterior `v0.2.6.3` SHIPPED |
-| **versionCode** | `89` (v0.2.6.4 mandatory — em CI build) — anterior `88` (v0.2.6.3) |
-| **Branch ativa** | `release/v0.2.6.4` |
+| **Versão** | `v0.2.6.4` (Play Console SHIPPED — STOP pré-merge) — anterior `v0.2.6.3` SHIPPED |
+| **versionCode** | `89` (v0.2.6.4 mandatory) — anterior `88` (v0.2.6.3) |
+| **Branch ativa** | `release/v0.2.6.4` (aguarda merge autorizado pelo user) |
 | **Último tag master** | `v0.2.6.3` (mergeado 2026-05-23 10:35 BRT) — próximo: `v0.2.6.4` |
-| **Ship date v0.2.6.3** | 2026-05-23 10:29 BRT |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.6.4 (deploy em curso) |
-| **Play Console v0.2.6.4** | ⏳ CI #26334513946 em build — Vetor 4 upload pendente |
+| **Ship date v0.2.6.4** | 2026-05-23 11:27 BRT |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.6.4 (deploy auto post-merge) |
+| **Play Console v0.2.6.4** | ✅ vc 89 mandatory (CI #26335004972 AAB + Vetor 4 upload Chrome MCP) — Internal Testing 11:27 BRT |
 | **Play Console v0.2.6.3** | ✅ vc 88 mandatory (3 bugs P0: cache stale + sticky autofill + falta origem) |
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |

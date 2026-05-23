@@ -1,6 +1,5 @@
-v0.2.6.4 — Categorias mais precisas + foundation invisível pra rollback rápido
+v0.2.6.4 — Categorias mais precisas + Histórico repaginado
 
-• Mais antibióticos, anti-hipertensivos, anticoagulantes e hormonais agora aparecem com a categoria certa no Histórico e Análises (limpeza de 96 medicamentos no catálogo ANVISA).
-• Anlodipino e Sertralina deixam de embaralhar — regex de categorização agora distingue gender BR (a/o) com fronteiras corretas.
-• Toque na fatia "Não classificado" do gráfico de pizza em Análises pra ver lista de medicamentos pendentes + categorizar todos de uma vez (cascata histórico + futuras doses).
-• Bastidores: feature flags master switch (rollback de função em <5min sem update novo) + trilha de auditoria LGPD pra ações críticas.
+• 96 medicamentos do catálogo ANVISA recategorizados — antibióticos, anti-hipertensivos e hormonais aparecem certo no Histórico e Análises.
+• Histórico com cards de tratamento colapsáveis: toque para ver cada dose, contagem do plano original, categorias reordenadas por frequência.
+• Análise → "Não classificado" abre lista com sugestão IA + categoriza em lote.
