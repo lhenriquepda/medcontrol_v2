@@ -10,17 +10,28 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.2` (HOTFIX em curso) — anterior `v0.2.6.1` (vc 85 shipped mas tinha bugs críticos) |
-| **versionCode** | `86` (v0.2.6.2) — anterior `85` (v0.2.6.1 broken — Histórico/Analytics em "Outro" + UX mobile picker quebrado) |
-| **Branch ativa** | `master` |
-| **Último tag master** | `v0.2.4.1` · commit `cc5ff8f` — anterior `v0.2.4.0` `f6724f6` |
-| **Ship date v0.2.4.1** | **2026-05-22 19:02 BRT** Internal Testing |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.4.1 via push master |
-| **Play Console v0.2.4.1** | ✅ **vc 82 PUBLICADO 2026-05-22 19:02 BRT** — `is_mandatory=true` força update modal nos users vc 81 |
-| **Play Console v0.2.4.0** | ❌ vc 81 BROKEN superseded por vc 82 |
-| **Play Console v0.2.3.17** | ✅ vc 80 legacy |
+| **Versão** | `v0.2.6.2` (HOTFIX SHIPPED 2026-05-23 09:23 BRT) |
+| **versionCode** | `87` (v0.2.6.2 mandatory) — anterior `85` (v0.2.6.1 broken — Histórico/Analytics em "Outro" + UX mobile picker quebrado) |
+| **Branch ativa** | `master` (sem release em curso) |
+| **Último tag master** | `v0.2.6.2` (pendente — fechamento em curso) — anterior `v0.2.4.1` `cc5ff8f` |
+| **Ship date v0.2.6.2** | **2026-05-23 09:23 BRT** Internal Testing via Vetor 4 |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.6.2 (buildDate 2026-05-23 11:04 UTC) |
+| **Play Console v0.2.6.2** | ✅ **vc 87 PUBLICADO 2026-05-23 09:23 BRT** — `is_mandatory=true` força update nos users vc 85/86 |
+| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 (DOSE_COLS/RPC sem group_id + mobile picker UX) — superseded por vc 87 |
+| **Play Console v0.2.6.0** | ✅ vc 84 (TTL share foundation + Card Última dose) — superseded |
+| **Play Console v0.2.4.1** | ✅ vc 82 (hotfix Supabase config) — superseded |
 
-**v0.2.6.1 em curso (2026-05-23) — Roteiro Alinhamento Dosy v2 Sprint 1-2:**
+**v0.2.6.2 SHIPPED 2026-05-23 09:23 BRT — HOTFIX P9 + Roteiro Alinhamento Sprint 1-2:**
+
+**HOTFIX (Roteiro adendo P9 categorização):**
+- 🚨 **BUG #0012 FIXED**: Histórico/Analytics tudo em "Outro" — DOSE_COLS_LIST omitia group_id+cmed_class no SELECT PostgREST. Migration v0_2_6_2_dashboard_payload_includes_group_id (RPC jsonb_build_object incluído).
+- 🚨 **BUG #0013 FIXED**: TDZ TreatmentForm `Cannot access 'Se' before initialization` — useState form declarado ANTES de useClassifyMedication. Pré-existente v0.2.5.0, só explodia em build minificado prod.
+- 🚨 **BUG #0014 FIXED**: Mobile picker UX terrível — campo sumia, teclado por cima, sugestões somem ao scroll. MedNameInput.jsx reescrito como FULL-SCREEN sheet position:fixed inset:0 z-index:1500 em mobile (matchMedia ≤768 OR coarse pointer). Desktop dropdown inline mantido.
+- ✅ **P9.1 (parcial)**: catálogo expandido 896 → 984 (+88 brand-names BR cobrindo 6 personas Roteiro P9.4): Amoxil/Cefaclor/Bactrim, Captopril/Losartana/Metformina, Puran T4/Selene/Yaz, Sertralina/Lexapro/Clonazepam, Decadron/Prednisona, etc.
+- ✅ **P9.3**: GROUP_UNCLASSIFIED distinto de 'outro' (cinza claro vs cinza forte). Analytics/Histórico fallback `|| 'nao_classificado'`.
+- ✅ **P9.5**: RPC `re_categorize_null_rows` + pg_cron mensal dia 6 (1 dia após CMED sync futuro).
+
+**Roteiro Alinhamento Sprint 1-2 (já tinha sido shipped em v0.2.6.1 vc 85):**
 - P0.3 Sentry strip exhaustivo (23 campos + JWT/email/UUID regex breadcrumbs) ✅
 - P0.4 PostHog consent gate LGPD + ConsentBanner + Settings toggle ✅
 - P1.5 reconcileDoses ATIVO em useDashboardPayload ✅
@@ -70,15 +81,18 @@
 
 ---
 
-## P0 abertos (próxima release v0.2.4.0)
+## P0 abertos (próxima release)
 
-1. **#NEW** — Categorias de Medicamentos (Plano_Categorias_Medicamentos.md raiz) — ingest CMED + hierarquia 2 níveis + Analytics por categoria
-2. **#006** — device validation 3 devices físicos (manual user)
-3. **#131** — recrutamento Reddit testers (desbloqueado pós #130)
-4. **#132** — gate 14d ≥12 testers (depende #131)
-5. **#133** — Production access Console (depende #132)
-6. **#191/#192** — RevenueCat + Play Billing (Fase 3)
-7. **#300** — Validação device físico v0.2.3.13 disclaimer paciente compartilhado + cenário E cache offline + snooze 10min + Samsung One UI battery optimizer impact
+1. **P9.2** — Edge `cmed-monthly-sync` cron mensal (ANVISA XLSX scrape bloqueado 403 — precisa rota manual via admin upload). Catálogo atual 984, meta ≥25k.
+2. **P9.6** — BulkCategorizeModal via Analytics drill-down "Não classificado" — RPC `list_null_meds_with_suggestions` + UI bulk
+3. **P9.7** — Dashboard métrica `% doses não-categorizadas` + alarme P0 webhook DPO
+4. **P9.8** — Documentar anti-pattern "patches superficiais MedNameInput não resolvem" em `context/auditoria/`
+5. **P9.10** — Validações device físico priorizadas (3 devices: Pixel 6, Samsung A54, Xiaomi Redmi 12) — 10 checks
+6. **#006** — device validation 3 devices físicos (manual user)
+7. **#131** — recrutamento Reddit testers (desbloqueado pós #130)
+8. **#132** — gate 14d ≥12 testers (depende #131)
+9. **#133** — Production access Console (depende #132)
+10. **#191/#192** — RevenueCat + Play Billing (Fase 3)
 
 ---
 
