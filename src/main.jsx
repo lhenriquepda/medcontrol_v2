@@ -363,12 +363,17 @@ async function boot() {
           persister,
           maxAge: 1000 * 60 * 60 * 24, // 24h
           // Item #204: NÃO bumpar buster pra adicionar persist de mutations.
-          // TanStack hydrate é tolerante a campo extra `mutations` (legacy v1 sem
-          // mutations carrega normal, cache antigo continua válido). Bumpar
-          // invalidaria caches de TODOS users existentes 1x na atualização →
-          // pico egress global desnecessário (doses+patients+treatments refetch
-          // simultâneo). Mantém v1.
-          buster: 'v1',
+          //
+          // v0.2.6.3 #0015 — EXCEÇÃO LEGÍTIMA pra bump v1 → v2:
+          // Bug fix prévio v0.2.6.2 incluiu DOSE_COLS_LIST com group_id+cmed_class
+          // e RPC `get_dashboard_payload` atualizada. PORÉM payloads cached em IDB
+          // (key `dosy-query-cache`) ANTES do fix continham doses sem group_id.
+          // TanStack hydrate carrega esse cache stale → user vê doses sem
+          // categoria mesmo após update do APK. Bump buster força purge único
+          // do cache local na primeira abertura da nova versão. Próximo fetch
+          // bate no server e popula com group_id presente. Pico egress global
+          // aceito (1x) pelo benefício de UX correto pós-update.
+          buster: 'v2',
           dehydrateOptions: {
             // Persist mutations pausadas (offline) pra sobreviver a force-kill / reboot.
             // Sem isso, queue offline é perdida quando user fecha app antes reconectar.

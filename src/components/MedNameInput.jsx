@@ -123,6 +123,11 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     const local = suggestMedications(value, 4, userMeds)
     const normKey = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
+    // v0.2.6.3 #0017 — source codes pra badge de origem no dropdown:
+    //  'user'           → BD Pessoal (histórico do user)
+    //  'cmed_dcb'       → CMED ANVISA (DCB — denominação comum brasileira)
+    //  'cmed_comercial' → CMED ANVISA (nome comercial registrado)
+    //  'free'           → texto livre (sem match) — sem badge
     const localSuggestions = local.map((text) => {
       const hint = userHintFor ? userHintFor(text) : null
       return {
@@ -141,7 +146,7 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
       .map((item) => ({
         text: item.nome_comercial,
         principio: normKey(item.principio_ativo) !== normKey(item.nome_comercial) ? item.principio_ativo : undefined,
-        source: 'catalog',
+        source: item.is_dcb ? 'cmed_dcb' : 'cmed_comercial',
         is_dcb: !!item.is_dcb,
         group_id: item.group_id || null,
         cmed_class: item.cmed_class || null,
@@ -302,16 +307,30 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span>{highlightMatch(item.text, value)}</span>
-            {item.is_dcb && (
-              <span aria-label="Denominação genérica" style={{
-                fontSize: 9,
-                fontWeight: 700,
-                padding: '2px 6px',
-                borderRadius: 4,
+            {/* v0.2.6.3 #0017 — badge de origem do match */}
+            {item.source === 'cmed_dcb' && (
+              <span aria-label="Denominação Comum Brasileira — ANVISA" title="DCB · ANVISA" style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                 background: 'var(--dosy-blue-100, #e0f2fe)',
                 color: 'var(--dosy-blue-600, #0369a1)',
                 letterSpacing: '0.5px',
-              }}>DCB</span>
+              }}>DCB ANVISA</span>
+            )}
+            {item.source === 'cmed_comercial' && (
+              <span aria-label="Catálogo CMED ANVISA" title="CMED ANVISA — Câmara de Regulação de Preços" style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                background: 'var(--dosy-emerald-100, #d1fae5)',
+                color: 'var(--dosy-emerald-700, #047857)',
+                letterSpacing: '0.5px',
+              }}>CMED</span>
+            )}
+            {item.source === 'user' && (
+              <span aria-label="Catálogo pessoal — usado por você antes" title="BD pessoal — você já usou esse medicamento" style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                background: 'var(--dosy-peach-100, #ffedd5)',
+                color: 'var(--dosy-orange-700, #c2410c)',
+                letterSpacing: '0.5px',
+              }}>SEU</span>
             )}
           </div>
           {item.principio && (
