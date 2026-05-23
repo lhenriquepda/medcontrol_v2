@@ -29,7 +29,14 @@ function recomputeOverdue(rows) {
 // que ficava stale quando paciente recém-criado por outro device → AlarmActivity
 // agrupava "Sem paciente". Fix server-side: patient.name vem direto via PostgREST
 // embed, sem dependência de cache cliente. Custo: 1 LEFT JOIN, ~10 bytes/row.
-const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, patients(name)'
+// v0.2.6.2 BUGFIX QA: group_id + cmed_class ESTAVAM AUSENTES em DOSE_COLS_LIST.
+// Consequência: Analytics/Histórico recebiam d.group_id = undefined →
+// fallback `d.group_id || 'outro'` agrupava TUDO em "outro" (mostrou só 1 categoria).
+// Reportado pelo user 2026-05-23: "vários antibióticos pros filhos não aparecem
+// como antibiótico no Histórico... Analytics só mostra Outros".
+// BD estava correto (47 doses antibiotico Clavulin/Amoxi/Azitro/Sinot Clav) —
+// query select que omitia a coluna era o bug. Bug pre-existente desde v0.2.4.0.
+const DOSE_COLS_LIST = 'id, userId, treatmentId, patientId, medName, unit, scheduledAt, actualTime, status, type, group_id, cmed_class, patients(name)'
 const DOSE_COLS_FULL = DOSE_COLS_LIST + ', observation'
 
 // Flatten patients(name) embed pra dose.patientName direto.
