@@ -46,6 +46,12 @@ Nenhum bug P4 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.6.3 (2026-05-23, vc 88 mandatory)
+
+- **#0015** P0 — Histórico/Analytics ainda mostra "Outro" mesmo após fix DOSE_COLS+RPC em v0.2.6.2. Root cause: PersistQueryClientProvider IDB key `dosy-query-cache` com buster `v1` contém payloads serializados pré-fix (vc 84/85). TanStack hydrate carrega cache stale na 1ª abertura do novo APK. Fix: bump buster v1→v2 em main.jsx + mutationRegistry.js (commit `d38f356`). Pico egress global aceito 1×.
+- **#0016** P0 — Autofill sempre sugere "Antidepressivo" mesmo trocando medName. Root cause: useEffect em TreatmentForm/SOS aplicava classifyResult somente quando form.group_id era NULL (early return). User digitava Escitalopram→antidepressivo, depois Amoxil → categoria stale. Plus: useClassifyMedication só rodava com `!form.group_id`. Fix: hook sempre roda; useEffect re-aplica em `[classifyResult, medName]`; distingue manual pick (autoFilledGroup=false) de autofill — LIMPA stale autofill quando classifyResult null.
+- **#0017** P0 — RPC `classify_medication_robust` NÃO EXISTIA no DB (foi documentada v0.2.4.0 mas nunca criada). Hook caía sempre no fallback heurístico cliente com regex amplo (`/pram|alina/`). Falta cruzar nome digitado com BD CMED 30k real-time + dropdown não mostrava origem. Fix: migration `v0_2_6_3_classify_medication_robust_5tier` cria RPC 5-tier (DCB exact 1.0 / catalog exact 0.95 / catalog LIKE 0.85 / principio LIKE 0.75 / heurística sufixo 0.55 word-boundary-aware). MedNameInput exibe 3 badges: DCB ANVISA (azul) / CMED (verde) / SEU (laranja).
+
 ### v0.2.6.2 (2026-05-23, vc 87 mandatory)
 
 - **#0012** P0 — Histórico/Analytics tudo em "Outro" mesmo com antibióticos categorizados no DB. Root cause duplo: (a) `DOSE_COLS_LIST` em `dosesService.js` SELECT PostgREST omitia `group_id, cmed_class` → cliente recebia undefined → fallback `d.group_id || 'outro'` agrupava tudo; (b) RPC `get_dashboard_payload` `jsonb_build_object` omitia mesmos campos. Fix duplo (commit `2bf8dad` + migration `v0_2_6_2_dashboard_payload_includes_group_id`). BD estava correto (47 doses antibiotico done Liam Sinot Clav + Rael Clavulin/Amoxi/Azitro). Bug pre-existente desde v0.2.4.0. ✅ Validado QA Android emulator Pixel8.
