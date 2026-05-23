@@ -1,16 +1,17 @@
 import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X as XIcon, FileText, Check, AlertTriangle, X as XCloseIcon, Download } from 'lucide-react'
+import { Search, X as XIcon, FileText, Check, AlertTriangle, X as XCloseIcon, Download, ChevronDown, ChevronUp, Clock, Calendar } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import AdBanner from '../components/AdBanner'
 import PatientPicker from '../components/PatientPicker'
 import DoseModal from '../components/DoseModal'
 import { SkeletonList } from '../components/Skeleton'
-import { Card, Input, StatusPill, EmptyState, Sheet, Button, Chip } from '../components/dosy'
+import { Card, Input, StatusPill, EmptyState, Sheet, Button } from '../components/dosy'
 import { getGroup, MED_GROUPS } from '../constants/medCategories'
 import PageHeader from '../components/dosy/PageHeader'
 import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
+import { useTreatments } from '../hooks/useTreatments'
 import { formatTime, pad } from '../utils/dateUtils'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
 // v0.2.6.1 — PostHog instrumentação categoria (Roteiro_Alinhamento §10 P3.4)
@@ -98,6 +99,14 @@ export default function DoseHistory() {
     withObservation: !!search.trim(),
   })
 
+  // v0.2.6.4 — fetch treatments para cabeçalho cards (intervalHours, durationDays, startDate, status)
+  const { data: allTreatments = [] } = useTreatments(patientId ? { patientId } : {})
+  const treatmentsById = useMemo(() => {
+    const m = new Map()
+    for (const t of allTreatments) m.set(t.id, t)
+    return m
+  }, [allTreatments])
+
   // Filtro: search + multi-categoria
   const filteredDoses = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -149,6 +158,29 @@ export default function DoseHistory() {
     setSearchParams(next, { replace: true })
   }
 
+  // v0.2.6.4 — Reordenar chips de categoria por frequência (mais usadas primeiro).
+  // Quando paciente selecionado → conta só doses dele; sem paciente → conta todas do user.
+  // Usa rangeDoses (período atual) pra peso recente. Ties por ordem alfabética.
+  const groupCounts = useMemo(() => {
+    const counts = new Map()
+    for (const d of rangeDoses) {
+      const g = d.group_id || 'nao_classificado'
+      counts.set(g, (counts.get(g) || 0) + 1)
+    }
+    return counts
+  }, [rangeDoses])
+
+  const sortedMedGroups = useMemo(() => {
+    const arr = [...MED_GROUPS]
+    arr.sort((a, b) => {
+      const ca = groupCounts.get(a.id) || 0
+      const cb = groupCounts.get(b.id) || 0
+      if (cb !== ca) return cb - ca
+      return a.label.localeCompare(b.label)
+    })
+    return arr
+  }, [groupCounts])
+
   // Adesão % por dia (só quando period=7d, alimenta day strip)
   const adherenceByDay = useMemo(() => {
     if (period.id !== '7d') return new Map()
@@ -170,16 +202,35 @@ export default function DoseHistory() {
   }, [rangeDoses, today, period])
 
   // === RESUMO DO ESCOPO ATUAL (totals + adesão) ===
+  // v0.2.6.4 — adicionado `scheduledTotal` (cadastradas) — soma das doses planejadas pelos
+  // tratamentos visíveis (durationDays * 24/intervalHours) pra dar noção do tratamento total.
   const scopeSummary = useMemo(() => {
-    const past = filteredDoses.filter((d) => new Date(d.scheduledAt) <= new Date())
+    const past = filteredDoses.filter((d) => new Date(d.scheduledAt) <= new Date() && d.status !== 'cancelled')
     const total = past.length
     const done = past.filter((d) => d.status === 'done').length
     const skipped = past.filter((d) => d.status === 'skipped').length
     const overdue = past.filter((d) => d.status === 'overdue' || (d.status === 'pending' && new Date(d.scheduledAt) < new Date())).length
     const pct = total > 0 ? Math.round((done / total) * 100) : null
     const uniqueMeds = new Set(past.map(d => (d.medName || '').toLowerCase().trim())).size
-    return { total, done, skipped, overdue, pct, uniqueMeds }
-  }, [filteredDoses])
+
+    // Total cadastradas no(s) tratamento(s): soma do plano original de cada treatment único visível.
+    const treatmentIds = new Set(filteredDoses.map(d => d.treatmentId).filter(Boolean))
+    let scheduledTotal = 0
+    let anyContinuous = false
+    for (const tid of treatmentIds) {
+      const t = treatmentsById.get(tid)
+      if (!t) continue
+      if (t.isContinuous) { anyContinuous = true; continue }
+      if (t.durationDays && t.intervalHours) {
+        scheduledTotal += Math.ceil((t.durationDays * 24) / t.intervalHours)
+      }
+    }
+    // Doses SOS/órfãs (sem treatmentId) entram no scheduledTotal como 1×1 cada
+    const orphanCount = filteredDoses.filter(d => !d.treatmentId).length
+    scheduledTotal += orphanCount
+
+    return { total, done, skipped, overdue, pct, uniqueMeds, scheduledTotal, anyContinuous }
+  }, [filteredDoses, treatmentsById])
 
   // v0.2.6.0 audit A→B #5 — última dose por categoria (JTBD "quando foi última vez antibiótico?")
   // Só aparece quando há filtro de categoria ativo OU groupingMode='med' (resultado focado)
@@ -238,19 +289,32 @@ export default function DoseHistory() {
     return [...map.values()].sort((a, b) => b.weekStart - a.weekStart)
   }, [filteredDoses, groupingMode])
 
-  // Para mode='med': agrupa por medicamento
-  const medGroups = useMemo(() => {
+  // v0.2.6.4 — Para mode='med': agrupa por TRATAMENTO (treatmentId) em vez de medName.
+  // Mesmo med pode ter múltiplos tratamentos (ex: antibiótico em 2 épocas). Cabeçalho exibe
+  // resumo (12 em 12h por X dias, iniciado dd/mm, status). Cards COLAPSÁVEIS — expandir mostra
+  // CADA dose do tratamento (sem "+XX" cutoff). Doses SOS (sem treatmentId) agrupadas por medName.
+  const treatmentGroups = useMemo(() => {
     if (groupingMode !== 'med') return []
     const map = new Map()
     for (const d of filteredDoses) {
-      const key = (d.medName || '').trim()
+      // Doses sem treatmentId (SOS / órfãs) agrupam por medName (key prefixada pra não colidir).
+      const key = d.treatmentId || `sos:${(d.medName || '').toLowerCase().trim()}`
       if (!key) continue
-      if (!map.has(key)) map.set(key, { medName: key, doses: [], group_id: d.group_id })
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          treatmentId: d.treatmentId || null,
+          medName: d.medName,
+          group_id: d.group_id,
+          doses: [],
+        })
+      }
       map.get(key).doses.push(d)
     }
     const arr = [...map.values()]
-    // ordena por última dose mais recente
+    // ordena doses dentro do grupo: mais recente primeiro
     arr.forEach(g => g.doses.sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)))
+    // ordena grupos por última dose mais recente (consistente com pedido user "mais recente no topo")
     arr.sort((a, b) => b.doses[0].scheduledAt.localeCompare(a.doses[0].scheduledAt))
     return arr
   }, [filteredDoses, groupingMode])
@@ -320,13 +384,15 @@ export default function DoseHistory() {
           })}
         </div>
 
-        {/* CATEGORIA chips multi-select */}
+        {/* CATEGORIA chips multi-select — v0.2.6.4 reorderadas por frequência (mais usadas primeiro).
+            Sem paciente: conta todas doses do user no período; com paciente: só do paciente selecionado. */}
         <div className="dosy-scroll" style={{
           display: 'flex', gap: 6, overflowX: 'auto',
           padding: '2px 2px 4px',
         }}>
-          {MED_GROUPS.map((g) => {
+          {sortedMedGroups.map((g) => {
             const isActive = selectedGroups.includes(g.id)
+            const count = groupCounts.get(g.id) || 0
             return (
               <button
                 key={g.id}
@@ -341,6 +407,7 @@ export default function DoseHistory() {
                   fontSize: 12, fontWeight: isActive ? 700 : 500,
                   whiteSpace: 'nowrap', flexShrink: 0,
                   fontFamily: 'var(--dosy-font-body)',
+                  opacity: count === 0 && !isActive ? 0.55 : 1,
                 }}
               >
                 <span style={{
@@ -348,6 +415,15 @@ export default function DoseHistory() {
                   boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                 }} aria-hidden="true" />
                 {g.label}
+                {count > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, marginLeft: 2,
+                    padding: '1px 6px', borderRadius: 999,
+                    background: isActive ? 'rgba(255,255,255,0.6)' : 'var(--dosy-bg-sunken)',
+                    color: 'var(--dosy-fg-secondary)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>{count}</span>
+                )}
               </button>
             )
           })}
@@ -421,6 +497,14 @@ export default function DoseHistory() {
                 fontSize: 12, color: 'var(--dosy-fg-secondary)', marginTop: 2,
               }}>
                 {scopeSummary.uniqueMeds} medicamento{scopeSummary.uniqueMeds === 1 ? '' : 's'} · {scopeSummary.overdue} atraso{scopeSummary.overdue === 1 ? '' : 's'}
+                {scopeSummary.scheduledTotal > 0 && (
+                  <>
+                    {' · '}
+                    <span style={{ fontWeight: 600 }}>
+                      {scopeSummary.scheduledTotal}{scopeSummary.anyContinuous ? '+' : ''} cadastrada{scopeSummary.scheduledTotal === 1 ? '' : 's'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
@@ -591,15 +675,17 @@ export default function DoseHistory() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {medGroups.map((mg) => (
-              <MedGroup
-                key={mg.medName}
-                medName={mg.medName}
-                groupId={mg.group_id}
-                doses={mg.doses}
+            {treatmentGroups.map((tg, idx) => (
+              <TreatmentGroup
+                key={tg.key}
+                medName={tg.medName}
+                groupId={tg.group_id}
+                doses={tg.doses}
+                treatment={tg.treatmentId ? treatmentsById.get(tg.treatmentId) : null}
                 patients={patientById}
                 showPatient={patients.length > 1 && !patientId}
                 onSelect={setSelected}
+                defaultOpen={idx === 0}
               />
             ))}
           </div>
@@ -696,61 +782,223 @@ function WeekGroup({ weekStart, doses, patients, showPatient, onSelect }) {
   )
 }
 
-function MedGroup({ medName, groupId, doses, patients, showPatient, onSelect }) {
-  const done = doses.filter(d => d.status === 'done').length
-  const pct = doses.length > 0 ? Math.round((done / doses.length) * 100) : null
-  const lastDose = doses[0] // já ordenado por mais recente
-  const lastDate = lastDose ? new Date(lastDose.scheduledAt) : null
+// v0.2.6.4 — TreatmentGroup substitui MedGroup. Card colapsável com cabeçalho de tratamento
+// (intervalHours, durationDays, startDate, status), 3 métricas (tomadas / passadas / cadastradas)
+// e lista COMPLETA de doses quando expandido (sem cutoff "+XX").
+//
+// Suporta também doses SOS órfãs (sem treatmentId) — nesse caso `treatment` é null e cabeçalho
+// mostra só "SOS / avulsa" sem dados de cadência.
+function TreatmentGroup({ medName, groupId, doses, treatment, patients, showPatient, onSelect, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
   const group = getGroup(groupId)
+
+  // === Métricas ===
+  // doses recebidas já filtradas pelo período/categoria/busca do parent.
+  // Aplica regras:
+  //  • tomadas = status='done'
+  //  • passadas = scheduledAt <= now AND status != 'cancelled' (só doses que existiam de fato)
+  //  • cadastradas_total = calculado do treatment (durationDays * 24/intervalHours) — total que ESTAVA planejado
+  //  • cadastradas_periodo = doses.length (todas no escopo atual do filtro)
+  const now = new Date()
+  const taken = doses.filter(d => d.status === 'done').length
+  const passed = doses.filter(d => new Date(d.scheduledAt) <= now && d.status !== 'cancelled').length
+  const skipped = doses.filter(d => d.status === 'skipped').length
+  const overdue = doses.filter(d => d.status === 'overdue' || (d.status === 'pending' && new Date(d.scheduledAt) < now)).length
+
+  // Total cadastrado (planejado quando tratamento foi criado). Se contínuo → '∞'.
+  let scheduledTotalLabel = null
+  if (treatment) {
+    if (treatment.isContinuous) {
+      scheduledTotalLabel = 'contínuo'
+    } else if (treatment.durationDays && treatment.intervalHours) {
+      const total = Math.ceil((treatment.durationDays * 24) / treatment.intervalHours)
+      scheduledTotalLabel = `${total} planejada${total === 1 ? '' : 's'}`
+    }
+  }
+
+  // === Cabeçalho descritivo ===
+  // Ex: "12 em 12h por 7 dias · iniciado 15/05 · ativo" ou "SOS / avulsa".
+  let scheduleText
+  let periodText = ''
+  let statusLabel = ''
+  if (treatment) {
+    const ih = treatment.intervalHours
+    const dd = treatment.durationDays
+    const sd = treatment.startDate ? new Date(treatment.startDate) : null
+    const cadence = ih ? `${ih} em ${ih}h` : 'cadência variável'
+    const duration = treatment.isContinuous ? 'contínuo' : (dd ? `${dd} dia${dd === 1 ? '' : 's'}` : '')
+    scheduleText = duration ? `${cadence} · ${duration}` : cadence
+    if (sd) {
+      const endDate = (treatment.isContinuous || !dd) ? null : addDays(sd, dd - 1)
+      periodText = endDate
+        ? `${pad(sd.getDate())}/${pad(sd.getMonth() + 1)} → ${pad(endDate.getDate())}/${pad(endDate.getMonth() + 1)}`
+        : `desde ${pad(sd.getDate())}/${pad(sd.getMonth() + 1)}`
+    }
+    statusLabel = treatment.status === 'active' ? 'ativo'
+      : treatment.status === 'paused' ? 'pausado'
+      : treatment.status === 'ended' ? 'encerrado'
+      : treatment.status === 'completed' ? 'completo'
+      : treatment.status || ''
+  } else {
+    scheduleText = 'avulsa / SOS'
+  }
+
+  const pct = passed > 0 ? Math.round((taken / passed) * 100) : null
+  const lastDose = doses[0]
+  const lastDate = lastDose ? new Date(lastDose.scheduledAt) : null
+
   return (
-    <Card padding={12}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: 10, gap: 8,
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{
-              width: 10, height: 10, borderRadius: '50%', background: group.color,
-              flexShrink: 0,
-            }} aria-hidden="true" />
-            <span style={{
-              fontSize: 16, fontWeight: 700, color: 'var(--dosy-fg)',
-              fontFamily: 'var(--dosy-font-display)', letterSpacing: '-0.01em',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{medName}</span>
+    <Card padding={0}>
+      {/* CABEÇALHO clicável — toggle expand/collapse */}
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        aria-expanded={isOpen}
+        style={{
+          width: '100%', padding: '14px 14px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          textAlign: 'left', fontFamily: 'var(--dosy-font-body)',
+          borderBottom: isOpen ? '1px solid var(--dosy-border)' : 'none',
+        }}
+      >
+        {/* linha 1: nome + categoria + chevron */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%', background: group.color,
+                flexShrink: 0,
+              }} aria-hidden="true" />
+              <span style={{
+                fontSize: 16, fontWeight: 700, color: 'var(--dosy-fg)',
+                fontFamily: 'var(--dosy-font-display)', letterSpacing: '-0.01em',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{medName}</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--dosy-fg-muted)', marginTop: 2 }}>
+              {group.label}{statusLabel ? ` · ${statusLabel}` : ''}
+            </div>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--dosy-fg-muted)' }}>
-            {group.label} · última: {lastDate ? fullDateLabel(lastDate) : '—'}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+            <span style={{
+              fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              color: 'var(--dosy-fg)',
+            }}>
+              {taken}/{passed}{pct != null ? ` · ${pct}%` : ''}
+            </span>
+            {scheduledTotalLabel && (
+              <span style={{
+                fontSize: 10, color: 'var(--dosy-fg-muted)',
+                marginTop: 1, fontVariantNumeric: 'tabular-nums',
+              }}>
+                de {scheduledTotalLabel}
+              </span>
+            )}
           </div>
         </div>
+
+        {/* linha 2: cadência + período + chevron */}
         <div style={{
-          fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-          color: 'var(--dosy-fg)', flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 10,
+          fontSize: 11.5, color: 'var(--dosy-fg-secondary)',
+          flexWrap: 'wrap',
         }}>
-          {done}/{doses.length}{pct != null ? ` · ${pct}%` : ''}
+          {scheduleText && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={11} strokeWidth={2} />
+              {scheduleText}
+            </span>
+          )}
+          {periodText && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Calendar size={11} strokeWidth={2} />
+              {periodText}
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--dosy-fg-muted)' }}>
+            {doses.length} dose{doses.length === 1 ? '' : 's'} no período
+            {isOpen ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />}
+          </span>
         </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {doses.slice(0, 8).map(d => (
-          <DoseRowCompact
-            key={d.id}
-            dose={d}
-            patient={patients.get(d.patientId)}
-            showPatient={showPatient}
-            onClick={() => onSelect(d)}
-          />
-        ))}
-        {doses.length > 8 && (
+
+        {/* linha 3: detalhes (apenas se houver pulada/atrasada/última) */}
+        {(skipped > 0 || overdue > 0 || lastDate) && (
           <div style={{
-            padding: '6px 12px', fontSize: 11,
-            color: 'var(--dosy-fg-muted)', textAlign: 'center',
+            display: 'flex', alignItems: 'center', gap: 10,
+            fontSize: 11, color: 'var(--dosy-fg-muted)',
+            flexWrap: 'wrap',
           }}>
-            +{doses.length - 8} doses
+            {overdue > 0 && <span>{overdue} atrasada{overdue === 1 ? '' : 's'}</span>}
+            {skipped > 0 && <span>{skipped} pulada{skipped === 1 ? '' : 's'}</span>}
+            {lastDate && <span style={{ marginLeft: 'auto' }}>última: {fullDateLabel(lastDate)}</span>}
           </div>
         )}
-      </div>
+      </button>
+
+      {/* LISTA EXPANDIDA — todas as doses (sem corte). Virtualiza se >40 pra não pesar. */}
+      {isOpen && (
+        <div style={{ padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {doses.length > 40 ? (
+            <VirtualDoseList
+              doses={doses}
+              patients={patients}
+              showPatient={showPatient}
+              onSelect={onSelect}
+            />
+          ) : (
+            doses.map(d => (
+              <DoseRowCompact
+                key={d.id}
+                dose={d}
+                patient={patients.get(d.patientId)}
+                showPatient={showPatient}
+                onClick={() => onSelect(d)}
+              />
+            ))
+          )}
+        </div>
+      )}
     </Card>
+  )
+}
+
+// v0.2.6.4 — virtualizer pra listas longas (>40 doses) dentro de TreatmentGroup expandido.
+// Mantém performance quando user expande tratamento com 200+ doses (1 ano contínuo etc).
+function VirtualDoseList({ doses, patients, showPatient, onSelect }) {
+  const parentRef = useRef(null)
+  const ROW_HEIGHT = 48
+  const ROW_GAP = 6
+  const v = useVirtualizer({
+    count: doses.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT + ROW_GAP,
+    overscan: 5,
+  })
+  return (
+    <div ref={parentRef} style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+      <div style={{ height: v.getTotalSize(), position: 'relative', width: '100%' }}>
+        {v.getVirtualItems().map(vi => {
+          const d = doses[vi.index]
+          return (
+            <div
+              key={d.id}
+              style={{
+                position: 'absolute', top: 0, left: 0, width: '100%',
+                transform: `translateY(${vi.start}px)`, height: ROW_HEIGHT,
+              }}
+            >
+              <DoseRowCompact
+                dose={d}
+                patient={patients.get(d.patientId)}
+                showPatient={showPatient}
+                onClick={() => onSelect(d)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
