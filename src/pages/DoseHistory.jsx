@@ -104,7 +104,7 @@ export default function DoseHistory() {
     let list = rangeDoses
     if (selectedGroups.length > 0) {
       const set = new Set(selectedGroups)
-      list = list.filter((d) => set.has(d.group_id || 'outro'))
+      list = list.filter((d) => set.has(d.group_id || 'nao_classificado'))
     }
     if (term) {
       list = list.filter((d) =>
@@ -188,7 +188,7 @@ export default function DoseHistory() {
     const done = filteredDoses.filter(d => d.status === 'done')
     const byGroup = new Map()
     for (const d of done) {
-      const g = d.group_id || 'outro'
+      const g = d.group_id || 'nao_classificado'
       const existing = byGroup.get(g)
       if (!existing || new Date(d.actualTime || d.scheduledAt) > new Date(existing.date)) {
         byGroup.set(g, {
