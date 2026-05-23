@@ -14,6 +14,57 @@ const ADMOB_BANNER_ANDROID = USE_TEST || !REAL_AD_UNIT ? TEST_AD_UNIT : REAL_AD_
 const isNative = Capacitor.isNativePlatform()
 
 /**
+ * v0.2.6.5 — Margem topo do banner AdMob (DP) por device.
+ *
+ * AdMob banner usa coordenadas ABSOLUTAS da tela (não relativas ao WebView),
+ * mesmo com `StatusBar.setOverlaysWebView({ overlay: false })`. `margin: 0`
+ * coloca o ad EM CIMA da status bar (battery/clock/notch covered).
+ *
+ * MainActivity.java mede WindowInsetsCompat.statusBars + displayCutout nativamente
+ * e injeta como CSS var `--system-status-bar-height` + `window.__dosySystemStatusBarHeight`.
+ * Lemos esse valor — funciona corretamente em qualquer device (Pixel punch-hole 32dp,
+ * Samsung notch 44dp, devices antigos sem notch 24dp).
+ *
+ * Fallback 30 DP cobre caso edge (race antes do native injetar) — Android típico.
+ */
+const STATUS_BAR_MARGIN_FALLBACK_DP = 30
+
+function getStatusBarTopMargin() {
+  if (typeof window === 'undefined') return STATUS_BAR_MARGIN_FALLBACK_DP
+  try {
+    // 1) Tentar variável JS injetada pelo MainActivity (rápido, sem layout)
+    if (typeof window.__dosySystemStatusBarHeight === 'number' && window.__dosySystemStatusBarHeight > 0) {
+      return window.__dosySystemStatusBarHeight
+    }
+    // 2) Fallback: ler CSS var (caso JS ainda não tenha sido populado mas CSS foi)
+    const cssVal = getComputedStyle(document.documentElement)
+      .getPropertyValue('--system-status-bar-height').trim()
+    const cssPx = parseInt(cssVal, 10)
+    if (Number.isFinite(cssPx) && cssPx > 0) return cssPx
+  } catch { /* ignore */ }
+  return STATUS_BAR_MARGIN_FALLBACK_DP
+}
+
+/** Aguarda até timeoutMs pela injeção do status bar height pelo native (com listener event). */
+function waitForStatusBarHeight(timeoutMs = 500) {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve()
+    if (typeof window.__dosySystemStatusBarHeight === 'number' && window.__dosySystemStatusBarHeight > 0) {
+      return resolve()
+    }
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      window.removeEventListener('dosy:statusBarHeight', finish)
+      resolve()
+    }
+    window.addEventListener('dosy:statusBarHeight', finish, { once: true })
+    setTimeout(finish, timeoutMs)
+  })
+}
+
+/**
  * Singleton AdMob banner init/destroy hook.
  *
  * Mount EXACTLY ONCE at App root level (App.jsx), NOT in pages.
@@ -67,7 +118,16 @@ export function useAdMobBanner() {
             document.body.classList.remove('has-ad-banner')
           }).catch(() => {})
 
-          await AdMob.initialize({ initializeForTesting: !import.meta.env.PROD })
+          // v0.2.6.5 fix: amarrar `initializeForTesting` ao uso do TEST_AD_UNIT (não ao
+          // build mode). `vite build` seta PROD=true, então `!PROD=false` → modo prod com
+          // test slot = NO_FILL imediato (Google rejeita real ad request em test slot).
+          // Quando usando test ad unit, SEMPRE precisa initializeForTesting:true +
+          // testingDevices:['EMULATOR'] pra forçar test mode garantido.
+          const isUsingTestAd = ADMOB_BANNER_ANDROID === TEST_AD_UNIT
+          await AdMob.initialize({
+            initializeForTesting: isUsingTestAd,
+            testingDevices: isUsingTestAd ? ['EMULATOR'] : undefined,
+          })
           if (cancelled) return
 
           // PRE-APLICA padding default ANTES do showBanner pra evitar race condition.
@@ -80,12 +140,20 @@ export function useAdMobBanner() {
           // v0.2.3.6 #262 REVERT: banner TOP_CENTER. User feedback 2026-05-15
           // confirmou que TOP era certo (ad no topo, abaixo da status bar e
           // ANTES do header Dosy). BOTTOM_CENTER tentado causou regressão visual.
+          // v0.2.6.5: aguarda native injetar status bar height (até 500ms).
+          // MainActivity.injectStatusBarHeightCssVar dispara em 0/500/2000ms post-layout.
+          // Sem wait, race condition pode usar fallback 30 antes do valor real chegar.
+          await waitForStatusBarHeight(500)
+          // `margin` dinâmico do device — funciona em Pixel/Samsung/devices antigos.
+          const statusBarMargin = getStatusBarTopMargin()
+          console.log('[AdMob] showBanner margin (DP):', statusBarMargin, 'adId:', ADMOB_BANNER_ANDROID)
           await AdMob.showBanner({
             adId: ADMOB_BANNER_ANDROID,
             adSize: BannerAdSize.ADAPTIVE_BANNER,
             position: BannerAdPosition.TOP_CENTER,
-            margin: 0
+            margin: statusBarMargin
           })
+          console.log('[AdMob] showBanner returned OK')
 
           if (!cancelled) {
             window.__dosyAdMobShown = true

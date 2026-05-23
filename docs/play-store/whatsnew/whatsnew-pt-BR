@@ -1,5 +1,6 @@
-v0.2.6.4 — Categorias mais precisas + Histórico repaginado
+v0.2.6.5 — Teclado, atalho de atualizar e dose marcada não volta atrás
 
-• 96 medicamentos do catálogo ANVISA recategorizados — antibióticos, anti-hipertensivos e hormonais aparecem certo no Histórico e Análises.
-• Histórico com cards de tratamento colapsáveis: toque para ver cada dose, contagem do plano original, categorias reordenadas por frequência.
-• Análise → "Não classificado" abre lista com sugestão IA + categoriza em lote.
+• Campos rolam pro topo ao tocar — teclado nunca mais cobre o que você está digitando.
+• Banner publicitário fica abaixo da câmera e relógio do celular, sem sobrepor.
+• Puxe pra atualizar agora funciona em Histórico, Pacientes, Análise e detalhes do paciente também.
+• Marcou dose como Tomada pelo alarme? Painel inicial atualiza na hora, sem voltar a mostrar "atrasada".

@@ -14,6 +14,10 @@ import { useDoses } from '../hooks/useDoses'
 import { useTreatments } from '../hooks/useTreatments'
 import { formatTime, pad } from '../utils/dateUtils'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
+// v0.2.6.5 — pull-to-refresh
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import PullToRefreshOverlay from '../components/PullToRefreshOverlay'
+import { useQueryClient } from '@tanstack/react-query'
 // v0.2.6.1 — PostHog instrumentação categoria (Roteiro_Alinhamento §10 P3.4)
 import { track, EVENTS } from '../services/analytics'
 
@@ -60,6 +64,15 @@ function weekLabel(weekStart) {
 
 export default function DoseHistory() {
   usePrivacyScreen()
+  const qc = useQueryClient()
+  // v0.2.6.5 — PTR refetcha doses + treatments (queries usadas nesta página)
+  const ptr = usePullToRefresh(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['doses'] }),
+      qc.invalidateQueries({ queryKey: ['treatments'] }),
+      qc.invalidateQueries({ queryKey: ['patients'] }),
+    ])
+  })
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState(null)
   const [search, setSearch] = useState('')
@@ -351,6 +364,7 @@ export default function DoseHistory() {
 
   return (
     <div style={{ paddingBottom: 110 }}>
+      <PullToRefreshOverlay ptr={ptr} />
       <PageHeader title="Histórico de doses" back/>
 
       <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

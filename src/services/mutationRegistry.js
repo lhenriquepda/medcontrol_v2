@@ -274,7 +274,10 @@ let _refetchDosesTimer = null
 function refetchDoses(qc) {
   if (_refetchDosesTimer) clearTimeout(_refetchDosesTimer)
   _refetchDosesTimer = setTimeout(() => {
+    // v0.2.6.5 BUG #0020 — invalidar AMBOS namespaces. AppHeader usa ['doses', filter]
+    // pra contar overdue; sem invalidate aqui, alert badge ficava stale após mutation.
     qc.invalidateQueries({ queryKey: ['dashboard-payload'], refetchType: 'active' })
+    qc.invalidateQueries({ queryKey: ['doses'], refetchType: 'active' })
     _refetchDosesTimer = null
   }, 1500)
 }
@@ -294,7 +297,14 @@ export function registerMutationDefaults(qc, persister = null) {
       // Refactor Fase 1: gate fecha Realtime invalidate em ['dashboard-payload']
       // e ['doses'] enquanto mutation está em curso. Limpa em onSettled.
       markDosesInFlight()
-      await qc.cancelQueries({ queryKey: ['doses'] })
+      // v0.2.6.5 BUG #0020: cancelar AMBAS as query keys. Dashboard usa
+      // ['dashboard-payload', *] (não ['doses', *]); sem cancel, query in-flight
+      // termina depois do patch e SOBRESCREVE o optimistic com server stale →
+      // overdueNow continua mostrando dose antiga "atrasada" após user marcar tomada.
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ['doses'] }),
+        qc.cancelQueries({ queryKey: ['dashboard-payload'] }),
+      ])
       const snapshots = patchDoseInCache(qc, id, {
         status: 'done',
         actualTime: actualTime || new Date().toISOString()
@@ -319,7 +329,11 @@ export function registerMutationDefaults(qc, persister = null) {
     mutationFn: ({ id, ...rest }) => skipDose(id, rest),
     onMutate: async ({ id }) => {
       markDosesInFlight()
-      await qc.cancelQueries({ queryKey: ['doses'] })
+      // v0.2.6.5 BUG #0020 — ver comentário em confirmDose acima
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ['doses'] }),
+        qc.cancelQueries({ queryKey: ['dashboard-payload'] }),
+      ])
       const snapshots = patchDoseInCache(qc, id, { status: 'skipped' })
       await flushPersistImmediate()
       return { snapshots }
@@ -337,7 +351,11 @@ export function registerMutationDefaults(qc, persister = null) {
     mutationFn: (id) => undoDose(id),
     onMutate: async (id) => {
       markDosesInFlight()
-      await qc.cancelQueries({ queryKey: ['doses'] })
+      // v0.2.6.5 BUG #0020 — ver comentário em confirmDose acima
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ['doses'] }),
+        qc.cancelQueries({ queryKey: ['dashboard-payload'] }),
+      ])
       const snapshots = patchDoseInCache(qc, id, { status: 'pending', actualTime: null })
       await flushPersistImmediate()
       return { snapshots }
@@ -359,7 +377,11 @@ export function registerMutationDefaults(qc, persister = null) {
     mutationFn: registerSos,
     onMutate: async (vars) => {
       markDosesInFlight()
-      await qc.cancelQueries({ queryKey: ['doses'] })
+      // v0.2.6.5 BUG #0020 — também cancelar dashboard-payload
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ['doses'] }),
+        qc.cancelQueries({ queryKey: ['dashboard-payload'] }),
+      ])
       const tempId = makeTempId()
       const tempDose = {
         id: tempId,

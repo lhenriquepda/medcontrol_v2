@@ -12,8 +12,19 @@ import PatientAvatar from '../components/PatientAvatar'
 import { usePatients } from '../hooks/usePatients'
 import { pruneStalePhotoCaches } from '../hooks/usePatientPhoto'
 import { usePatientLimitReached, useMyTier, useOwnPatientCount, FREE_PATIENT_LIMIT } from '../hooks/useSubscription'
+// v0.2.6.5 — pull-to-refresh
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import PullToRefreshOverlay from '../components/PullToRefreshOverlay'
+import { useQueryClient } from '@tanstack/react-query'
 
 export default function Patients() {
+  const qc = useQueryClient()
+  const ptr = usePullToRefresh(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['patients'] }),
+      qc.invalidateQueries({ queryKey: ['shares'] }),
+    ])
+  })
   const { data: patients = [], isLoading } = usePatients()
   const limitReached = usePatientLimitReached()
   const ownCount = useOwnPatientCount()
@@ -35,6 +46,7 @@ export default function Patients() {
 
   return (
     <div style={{ paddingBottom: 110 }}>
+      <PullToRefreshOverlay ptr={ptr} />
       <PageHeader
         title="Pacientes"
         right={<IconButton icon={Plus} kind="sunset" onClick={handleNew} ariaLabel="Novo paciente"/>}

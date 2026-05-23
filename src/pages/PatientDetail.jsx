@@ -20,6 +20,10 @@ import { useIsPro } from '../hooks/useSubscription'
 import { useToast } from '../hooks/useToast'
 import PaywallModal from '../components/PaywallModal'
 import { usePrivacyScreen } from '../hooks/usePrivacyScreen'
+// v0.2.6.5 — pull-to-refresh
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import PullToRefreshOverlay from '../components/PullToRefreshOverlay'
+import { useQueryClient } from '@tanstack/react-query'
 
 // #160 (v0.2.1.2) — Treatment status logic copy de TreatmentList.jsx.
 // Mantém parity: paused/ended explicit + auto-ended (active mas endDate < now).
@@ -44,6 +48,15 @@ const BY_CREATED_ASC = (a, b) => (a.createdAt || '').localeCompare(b.createdAt |
 export default function PatientDetail() {
   // Aud 4.5.4 G2 — info médica de paciente
   usePrivacyScreen()
+  const qc = useQueryClient()
+  const ptr = usePullToRefresh(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['patients'] }),
+      qc.invalidateQueries({ queryKey: ['treatments'] }),
+      qc.invalidateQueries({ queryKey: ['doses'] }),
+      qc.invalidateQueries({ queryKey: ['shares'] }),
+    ])
+  })
   const { id } = useParams()
   const { user } = useAuth()
   const { data: patient } = usePatient(id)
@@ -146,6 +159,7 @@ export default function PatientDetail() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: TIMING.base, ease: EASE.inOut }}
     >
+      <PullToRefreshOverlay ptr={ptr} />
       <PageHeader
         title={patient.name}
         back

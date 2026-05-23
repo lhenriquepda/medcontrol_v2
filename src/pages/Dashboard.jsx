@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { TIMING, EASE } from '../animations'
 import { supabase, hasSupabase } from '../services/supabase'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import PullToRefreshOverlay from '../components/PullToRefreshOverlay'
 import FilterBar from '../components/FilterBar'
 import DoseCard from '../components/DoseCard'
 import DoseModal from '../components/DoseModal'
@@ -308,41 +309,13 @@ export default function Dashboard() {
     ])
   }
   const ptr = usePullToRefresh(handleRefresh)
-  const ptrVisible = ptr.pulling || ptr.refreshing
 
   return (
     <>
-    {ptrVisible && (
-      <div
-        className="fixed left-0 right-0 z-50 flex items-end justify-center pointer-events-none safe-top"
-        style={{
-          top: 0,
-          height: Math.max(ptr.pullDistance, 56),
-          transition: ptr.refreshing ? 'height 0.2s ease-out' : 'none',
-        }}
-      >
-        <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/85 backdrop-blur shadow-lg">
-          <span
-            className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white ${
-              ptr.refreshing ? 'animate-spin' : ''
-            }`}
-            style={{
-              transform: ptr.refreshing
-                ? undefined
-                : `rotate(${(ptr.pullDistance / ptr.threshold) * 360}deg)`,
-            }}
-            aria-hidden="true"
-          />
-          <span className="text-[11px] font-medium text-white">
-            {ptr.refreshing
-              ? 'Atualizando…'
-              : ptr.pullDistance >= ptr.threshold
-                ? 'Solte para atualizar'
-                : 'Puxe para atualizar'}
-          </span>
-        </div>
-      </div>
-    )}
+    {/* v0.2.6.5 — extraído pra <PullToRefreshOverlay> reutilizável.
+        Posiciona ABAIXO da pilha sticky (ad-banner + update-banner) — antes spinner
+        ficava atrás do banner AdMob native overlay. */}
+    <PullToRefreshOverlay ptr={ptr} />
     <div className="pb-28">
       <FilterBar filters={filters} setFilters={setFilters} patients={patients} />
 

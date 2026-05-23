@@ -10,19 +10,28 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.4` (Play Console SHIPPED — STOP pré-merge) — anterior `v0.2.6.3` SHIPPED |
-| **versionCode** | `89` (v0.2.6.4 mandatory) — anterior `88` (v0.2.6.3) |
-| **Branch ativa** | `release/v0.2.6.4` (aguarda merge autorizado pelo user) |
-| **Último tag master** | `v0.2.6.3` (mergeado 2026-05-23 10:35 BRT) — próximo: `v0.2.6.4` |
+| **Versão** | `v0.2.6.5` (em curso, CI build) — anterior `v0.2.6.4` SHIPPED |
+| **versionCode** | `90` (v0.2.6.5, não-mandatory) — anterior `89` (v0.2.6.4) |
+| **Branch ativa** | `release/v0.2.6.5` |
+| **Último tag master** | `v0.2.6.4` (mergeado 2026-05-23 ~11:30 BRT) — próximo: `v0.2.6.5` |
 | **Ship date v0.2.6.4** | 2026-05-23 11:27 BRT |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.6.4 (deploy auto post-merge) |
-| **Play Console v0.2.6.4** | ✅ vc 89 mandatory (CI #26335004972 AAB + Vetor 4 upload Chrome MCP) — Internal Testing 11:27 BRT |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.5 (deploy auto post-merge) |
+| **Play Console v0.2.6.5** | ⏳ CI #26341554631 em build — Vetor 4 upload pendente |
+| **Play Console v0.2.6.4** | ✅ vc 89 mandatory |
 | **Play Console v0.2.6.3** | ✅ vc 88 mandatory (3 bugs P0: cache stale + sticky autofill + falta origem) |
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
 
-**v0.2.6.4 em curso (2026-05-23) — Roteiro Sprint P0+P3+P9 (foundation + categorização robusta):**
+**v0.2.6.5 em curso (2026-05-23) — UX mobile fixes + AdMob banner display + bug #0020 dose state stale:**
+
+- ✅ **#0018 Keyboard-aware scroll** — `useKeyboardAwareScroll` hook global. focusin listener + Capacitor `Keyboard.keyboardWillShow` → scrollIntoView({block:'start'}) com offset dinâmico (ad-banner + update-banner + app-header + 12px). Funciona em todos forms (Login, TreatmentForm, PatientForm, SOS, Settings, DoseHistory search, etc).
+- ✅ **#0019 AdMob banner display** — duplo fix: (a) `initializeForTesting: isUsingTestAd` (não `!PROD` — `vite build` sempre seta PROD=true causando NO_FILL no test slot); (b) `MainActivity.java` mede WindowInsets.statusBars + displayCutout nativo, injeta como `--system-status-bar-height` CSS var + `window.__dosySystemStatusBarHeight` JS var. `useAdMobBanner` lê o valor + `waitForStatusBarHeight(500ms)` + passa como margin no showBanner. Per-device (Pixel 38dp, Samsung 44dp, devices antigos 24dp).
+- ✅ **#0020 Dashboard overdue stale** — confirmDose/skipDose/undoDose/registerSos `onMutate` agora cancela AMBAS queries (`['doses']` + `['dashboard-payload']`). Antes só `['doses']` → query dashboard-payload in-flight terminava após patch e sobrescrevia o `_localActedAt` stamp → Dashboard mostrava dose ainda "atrasada" mesmo após mark done.
+- ✅ **PullToRefreshOverlay reutilizável** — top respeita `--ad-banner-height` (antes spinner ficava atrás do banner native overlay). PTR adicionado em **Dashboard + DoseHistory + Patients + PatientDetail + Analytics** (antes só Dashboard).
+- ✅ **LiveReload dev infra** — `capacitor.config.ts` `DOSY_LIVERELOAD=1` opt-in + `network_security_config.xml` permite cleartext em `10.0.2.2` (emulator host). Permite hot reload sem RUNs subsequentes durante dev.
+
+**v0.2.6.4 SHIPPED 2026-05-23 11:27 BRT — Roteiro Sprint P0+P3+P9 (foundation + categorização robusta):**
 
 - ✅ **P3.2 audit_log LGPD append-only** — table 19 actions + RLS owner_or_admin + write_audit_log helper + confirm/skip/undo_dose_v2 atualizados + cleanup_audit_log cron mensal (retention 2y/1y/6M/90d)
 - ✅ **P3.3 feature_flags master switch runtime** — table key→JSONB + 6 seed flags (realtime_enabled/engine_interactions/ocr/cmed_sync/classify_realtime/share_temporary) + admin_set_feature_flag RPC. Rollback <5min sem deploy

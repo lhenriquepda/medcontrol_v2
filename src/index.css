@@ -216,3 +216,27 @@ a:focus-visible,
   animation: shimmer 1.3s infinite;
 }
 @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* =============================================================================
+   v0.2.6.5 — Keyboard-aware scroll offset
+   ============================================================================= */
+/* Input/textarea/select focado rola pro topo via useKeyboardAwareScroll.
+   "Topo" = abaixo da pilha sticky: safe-area + AdBanner + UpdateBanner + AppHeader.
+   Cada um seta sua própria CSS var via ResizeObserver — somamos pra offset real.
+   +12px de breathing space pra não ficar colado no header. */
+input:focus, textarea:focus, select:focus, [contenteditable]:focus,
+[data-keyboard-scroll="true"]:focus {
+  /* StatusBar.setOverlaysWebView({overlay:false}) faz WebView começar ABAIXO da status
+     bar — env(safe-area-inset-top)=0, status bar fica fora do coordinate system. Logo
+     scroll-margin só precisa cobrir elementos sticky DENTRO do WebView:
+       ad-banner (overlay native em screen-y=statusBar) + update-banner + app-header + breathing.
+     `env()` mantido pra future-proof caso app mude pra overlay:true. */
+  scroll-margin-top: calc(
+    env(safe-area-inset-top, 0px)
+    + var(--ad-banner-height, 0px)
+    + var(--update-banner-height, 0px)
+    + var(--app-header-height, 64px)
+    + 12px
+  );
+  scroll-margin-bottom: 20px;
+}

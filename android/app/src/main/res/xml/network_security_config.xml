@@ -41,6 +41,12 @@
         </trust-anchors>
     </domain-config>
 
+    <!-- v0.2.6.5 LiveReload dev — emulator loopback (10.0.2.2 = host's localhost).
+         Cleartext permitted APENAS pra esse IP — IP privado emulator-only, não atinge real device. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
     <!-- Default: TLS obrigatório, validação CA padrão (sem pinning) -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
