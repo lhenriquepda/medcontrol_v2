@@ -10,16 +10,23 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.2` (HOTFIX SHIPPED 2026-05-23 09:23 BRT) |
-| **versionCode** | `87` (v0.2.6.2 mandatory) — anterior `85` (v0.2.6.1 broken — Histórico/Analytics em "Outro" + UX mobile picker quebrado) |
-| **Branch ativa** | `master` (sem release em curso) |
-| **Último tag master** | `v0.2.6.2` (pendente — fechamento em curso) — anterior `v0.2.4.1` `cc5ff8f` |
-| **Ship date v0.2.6.2** | **2026-05-23 09:23 BRT** Internal Testing via Vetor 4 |
-| **Vercel prod** | ✅ `dosymed.app` v0.2.6.2 (buildDate 2026-05-23 11:04 UTC) |
-| **Play Console v0.2.6.2** | ✅ **vc 87 PUBLICADO 2026-05-23 09:23 BRT** — `is_mandatory=true` força update nos users vc 85/86 |
-| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 (DOSE_COLS/RPC sem group_id + mobile picker UX) — superseded por vc 87 |
-| **Play Console v0.2.6.0** | ✅ vc 84 (TTL share foundation + Card Última dose) — superseded |
-| **Play Console v0.2.4.1** | ✅ vc 82 (hotfix Supabase config) — superseded |
+| **Versão** | `v0.2.6.3` (HOTFIX em curso) — anterior `v0.2.6.2` SHIPPED |
+| **versionCode** | `88` (v0.2.6.3 mandatory — em CI build) — anterior `87` (v0.2.6.2) |
+| **Branch ativa** | `release/v0.2.6.3` |
+| **Último tag master** | `v0.2.6.2` (mergeado 2026-05-23 09:30 BRT) — próximo: `v0.2.6.3` |
+| **Ship date v0.2.6.2** | 2026-05-23 09:23 BRT |
+| **Vercel prod** | ✅ `dosymed.app` v0.2.6.3 (deploy em curso) |
+| **Play Console v0.2.6.3** | ⏳ CI #26333789161 em build — Vetor 4 upload pendente |
+| **Play Console v0.2.6.2** | ✅ vc 87 mandatory (hotfix DOSE_COLS + RPC group_id + MedNameInput sheet) |
+| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |
+| **Play Console v0.2.6.0** | ✅ vc 84 superseded |
+
+**v0.2.6.3 em curso (2026-05-23) — Hotfix #2 (categorização inteligente + origem badge):**
+
+- 🚨 **#0015 FIXED**: Cache TanStack IDB stale com payloads pré-fix → bump buster v1→v2 força purge único na 1ª abertura
+- 🚨 **#0016 FIXED**: Autofill sticky "sempre Antidepressivo" → useEffect re-aplica classifyResult em TODA mudança via dep `[classifyResult, medName]`. useClassifyMedication sempre roda (sem condicional `!form.group_id`). Distingue manual pick de autofill
+- 🚨 **#0017 FIXED**: RPC `classify_medication_robust` NÃO EXISTIA — migration `v0_2_6_3_classify_medication_robust_5tier` cria RPC 5-tier server-side (DCB exact / catalog exact / catalog LIKE / principio LIKE / heurística sufixo word-boundary-aware). MedNameInput exibe badges DCB ANVISA / CMED / SEU
+- QA Android emulator Pixel8 vc 88: **20/20 PASS** + smoke test interativo Amoxil/Escitalopram troca dinâmica
 
 **v0.2.6.2 SHIPPED 2026-05-23 09:23 BRT — HOTFIX P9 + Roteiro Alinhamento Sprint 1-2:**
 

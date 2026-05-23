@@ -84,7 +84,7 @@ async function flushPersistImmediate() {
   if (!_persisterRef || !_qcRef) return
   try {
     await _persisterRef.persistClient({
-      buster: 'v1',
+      buster: 'v2', // v0.2.6.3 #0015 bumped → DEVE bater com main.jsx PersistQueryClientProvider
       timestamp: Date.now(),
       clientState: dehydrate(_qcRef, {
         shouldDehydrateMutation: () => true,

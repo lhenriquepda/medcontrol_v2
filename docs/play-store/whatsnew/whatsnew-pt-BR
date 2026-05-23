@@ -1,6 +1,6 @@
-v0.2.6.2 — Hotfix categorização + novo seletor de medicamento
+v0.2.6.3 — Categorização inteligente em tempo real + origem da sugestão
 
-• Antibióticos, anti-hipertensivos e outras categorias agora aparecem corretas no Histórico e Análises (corrigida falha que jogava tudo em "Outro").
-• Novo seletor de medicamento em tela cheia: sugestões grandes, busca rápida, sem teclado por cima nem campos sumindo.
-• Catálogo expandido com +88 medicamentos comuns (Amoxil, Cefaclor, Bactrim, Lexapro, Metformina, Losartana, etc).
-• Categoria "Não classificado" agora aparece separada de "Outro" (cinza claro vs cinza forte) — toque pra atribuir.
+• Sugestões agora cruzam o que você digita com o catálogo CMED ANVISA na hora — categoria detectada automaticamente em milésimos.
+• Cada sugestão mostra a origem: DCB ANVISA (azul), CMED (verde — nome comercial), SEU (laranja — histórico pessoal).
+• Trocar de medicamento (ex: Escitalopram → Amoxil) agora atualiza a categoria automaticamente em vez de manter a anterior.
+• Cache local atualizado para garantir que doses passadas (antibióticos, anti-hipertensivos, etc.) apareçam corretamente no Histórico e Análises.

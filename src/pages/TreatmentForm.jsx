@@ -86,23 +86,45 @@ export default function TreatmentForm() {
     templateName: '',
   })
 
-  // v0.2.5.0 — background classification: roda quando medName digitado >3 chars + sem group_id setado
-  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(
-    form?.medName && !form?.group_id ? form.medName : null
-  )
+  // v0.2.6.3 — background classification em real-time enquanto user digita.
+  // Sempre roda quando medName ≥3 chars (mesmo se já tem group_id, pra detectar
+  // mudança de medicamento — ex: user troca "Escitalopram" → "Amoxil" e a
+  // categoria deve resetar pra antibiótico).
+  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(form?.medName)
 
-  // Aplica auto-categorização quando classify retorna group válido (debounced via useQuery cache)
+  // v0.2.6.3 #0016 BUGFIX — autofill sticky:
+  //   ANTES: useEffect só rodava quando classifyResult tinha group_id E form.group_id era null.
+  //   Resultado: se user digitava "Escitalopram" (set antidepressivo) e depois apagava +
+  //   digitava "Amoxil", classifyResult mudava pra null/antibiotico mas form.group_id
+  //   ainda era 'antidepressivo' (early return). Categoria ficava sticky errada.
+  //
+  //   AGORA: useEffect roda em TODA mudança de classifyResult/medName. Só pula se
+  //   user CLICOU no chip de categoria manualmente (autoFilledGroup=false).
   useEffect(() => {
-    if (!classifyResult?.group_id) return
-    if (form.group_id) return // user já tem categoria — não sobrescrever
-    setForm((f) => ({
-      ...f,
-      group_id: classifyResult.group_id,
-      cmed_class: classifyResult.cmed_class || f.cmed_class,
-    }))
-    setAutoFilledGroup(true)
-    if (errors.group_id) setErrors((e) => ({ ...e, group_id: undefined }))
-  }, [classifyResult])
+    // Pula apenas em edit mode quando user explicitamente mexeu na categoria.
+    // Se autoFilledGroup=true, significa que veio do autofill anterior — pode atualizar.
+    const userPickedManually = form.group_id && !autoFilledGroup
+    if (userPickedManually) return
+
+    if (classifyResult?.group_id) {
+      // Aplica nova categoria detectada
+      setForm((f) => {
+        if (f.group_id === classifyResult.group_id && f.cmed_class === classifyResult.cmed_class) return f
+        return {
+          ...f,
+          group_id: classifyResult.group_id,
+          cmed_class: classifyResult.cmed_class || null,
+        }
+      })
+      setAutoFilledGroup(true)
+      if (errors.group_id) setErrors((e) => ({ ...e, group_id: undefined }))
+    } else if (form.group_id && autoFilledGroup) {
+      // ClassifyResult null/sem match + categoria atual veio de autofill → LIMPA.
+      // Evita categoria stale da classificação anterior.
+      setForm((f) => ({ ...f, group_id: null, cmed_class: null }))
+      setAutoFilledGroup(false)
+    }
+  }, [classifyResult, form?.medName])
 
   // Top group_ids mais usados pelo user histórico (pra ranking modal)
   const userTopGroups = useMemo(() => {

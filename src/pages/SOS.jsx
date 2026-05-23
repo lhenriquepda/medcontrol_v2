@@ -38,17 +38,28 @@ export default function SOS() {
   const [hintModalOpen, setHintModalOpen] = useState(false)
   const [pendingSosSubmit, setPendingSosSubmit] = useState(null)
   const { upsertAsync: upsertUserMedication, hintFor: userMedHint, data: userMedHistory = [] } = useUserMedicationCategories()
-  // v0.2.5.0 — background classify
-  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(
-    medName && !groupId ? medName : null
-  )
+  // v0.2.6.3 — background classify em real-time (mesmo se groupId já setado).
+  // #0016 BUGFIX sticky autofill — re-aplica nova categoria quando medName muda;
+  // limpa autoFilledGroup se classifyResult null e usuário não escolheu manual.
+  const { data: classifyResult, isFetching: classifyFetching } = useClassifyMedication(medName)
+
   useEffect(() => {
-    if (!classifyResult?.group_id || groupId) return
-    setGroupId(classifyResult.group_id)
-    setCmedClass(classifyResult.cmed_class || null)
-    setAutoFilledGroup(true)
-    setGroupError(null)
-  }, [classifyResult])
+    const userPickedManually = groupId && !autoFilledGroup
+    if (userPickedManually) return
+
+    if (classifyResult?.group_id) {
+      if (groupId !== classifyResult.group_id) {
+        setGroupId(classifyResult.group_id)
+        setCmedClass(classifyResult.cmed_class || null)
+        setAutoFilledGroup(true)
+        setGroupError(null)
+      }
+    } else if (groupId && autoFilledGroup) {
+      setGroupId(null)
+      setCmedClass(null)
+      setAutoFilledGroup(false)
+    }
+  }, [classifyResult, medName])
 
   const userTopGroups = useMemo(() => {
     const counts = new Map()
