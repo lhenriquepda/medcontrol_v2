@@ -16,6 +16,8 @@ import { usePatients } from '../hooks/usePatients'
 import { useDoses } from '../hooks/useDoses'
 import { useIsPro } from '../hooks/useSubscription'
 import { formatDate } from '../utils/dateUtils'
+// v0.2.6.4 P9.6 — bulk categorize modal pro slice "Não classificado" do donut
+import BulkCategorizeModal from '../components/BulkCategorizeModal'
 import { getGroup } from '../constants/medCategories'
 
 // v0.2.3.5 #241 — Analytics redesign healthcare-focused.
@@ -45,6 +47,8 @@ export default function Analytics() {
   const { data: patients = [] } = usePatients()
   const [period, setPeriod] = useState('30')
   const [patientId, setPatientId] = useState(null)
+  // v0.2.6.4 P9.6 — modal bulk categorize
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
   const isPro = useIsPro()
 
   const days = Number(period)
@@ -528,46 +532,92 @@ export default function Analytics() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {dosesByGroup.list.slice(0, 6).map((g) => (
-                      <Link
-                        key={g.groupId}
-                        to={`/historico?group=${encodeURIComponent(g.groupId)}`}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '8px 4px',
-                          textDecoration: 'none',
-                          color: 'inherit',
-                          borderRadius: 8,
-                          transition: 'background 150ms var(--dosy-ease-out)',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--dosy-bg)' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                      >
-                        <span style={{
-                          width: 12, height: 12, borderRadius: '50%',
-                          background: g.info.color,
-                          flexShrink: 0,
-                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-                        }} aria-hidden="true" />
-                        <span style={{
-                          fontSize: 13, fontWeight: 600, flex: 1,
-                          color: 'var(--dosy-fg)',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {g.info.label}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'var(--dosy-fg-tertiary)' }}>
-                          {g.medsCount} med{g.medsCount === 1 ? '' : 's'}
-                        </span>
-                        <span style={{
-                          fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)',
-                          fontVariantNumeric: 'tabular-nums',
-                          minWidth: 32, textAlign: 'right',
-                        }}>
-                          {g.count}
-                        </span>
-                      </Link>
-                    ))}
+                    {dosesByGroup.list.slice(0, 6).map((g) => {
+                      // v0.2.6.4 P9.6 — "nao_classificado" abre BulkCategorizeModal em vez de navegar pra Histórico
+                      if (g.groupId === 'nao_classificado') {
+                        return (
+                          <button
+                            key={g.groupId}
+                            type="button"
+                            onClick={() => setBulkModalOpen(true)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '8px 4px',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              borderRadius: 8,
+                              transition: 'background 150ms var(--dosy-ease-out)',
+                              textAlign: 'left',
+                              font: 'inherit',
+                              color: 'inherit',
+                              width: '100%',
+                            }}
+                          >
+                            <span style={{
+                              width: 12, height: 12, borderRadius: '50%',
+                              background: g.info.color,
+                              flexShrink: 0,
+                              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                            }} aria-hidden="true" />
+                            <span style={{
+                              fontSize: 13, fontWeight: 600, flex: 1,
+                              color: 'var(--dosy-fg)',
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>
+                              {g.info.label} <span style={{ fontSize: 10, color: 'var(--dosy-primary)', fontWeight: 700 }}>· toque pra categorizar →</span>
+                            </span>
+                            <span style={{
+                              fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)',
+                              fontVariantNumeric: 'tabular-nums',
+                              minWidth: 32, textAlign: 'right',
+                            }}>
+                              {g.count}
+                            </span>
+                          </button>
+                        )
+                      }
+                      return (
+                        <Link
+                          key={g.groupId}
+                          to={`/historico?group=${encodeURIComponent(g.groupId)}`}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '8px 4px',
+                            textDecoration: 'none',
+                            color: 'inherit',
+                            borderRadius: 8,
+                            transition: 'background 150ms var(--dosy-ease-out)',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--dosy-bg)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span style={{
+                            width: 12, height: 12, borderRadius: '50%',
+                            background: g.info.color,
+                            flexShrink: 0,
+                            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                          }} aria-hidden="true" />
+                          <span style={{
+                            fontSize: 13, fontWeight: 600, flex: 1,
+                            color: 'var(--dosy-fg)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {g.info.label}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--dosy-fg-tertiary)' }}>
+                            {g.medsCount} med{g.medsCount === 1 ? '' : 's'}
+                          </span>
+                          <span style={{
+                            fontSize: 13, fontWeight: 700, color: 'var(--dosy-fg)',
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: 32, textAlign: 'right',
+                          }}>
+                            {g.count}
+                          </span>
+                        </Link>
+                      )
+                    })}
                   </div>
                 </Card>
               </motion.div>
@@ -821,6 +871,8 @@ export default function Analytics() {
           </>
         )}
       </div>
+      {/* v0.2.6.4 P9.6 — Modal bulk re-categorize (drill-down "Não classificado") */}
+      <BulkCategorizeModal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} />
     </div>
   )
 }
