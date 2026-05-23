@@ -75,6 +75,31 @@
 - `[ ]` TTL share lifecycle: criar share 1h em teste-plus → trocar conta teste-free → ver badge "expira em" + cron expira após 1h
 - `[ ]` Critical alarm Java: dose 23/05 16:00 deve disparar AlarmActivity (Push) sem som vs Crítico fullscreen som
 
+**QA Android REAL Round 2 (emulator Pixel8 5554, CDP WebView script `scripts/qa_v0_2_6_1_android.mjs`, 2026-05-23):**
+
+- `[x]` APK debug v0.2.6.1 vc 85 instalado em emulator-5554
+- `[x]` Login teste-plus@teste.com via CDP form submit
+- `[x]` Dashboard rota correta + hero "pendentes" + adesão visíveis
+- `[x]` ConsentBanner LGPD aparece em fresh install (consent=null) — accept → consent=true + banner some
+- `[x]` Bottom nav (Início/Pacientes/SOS/Mais) presente
+- `[x]` TreatmentList: renderiza sem crash + header + AlertLevelToggle role=radiogroup + chips Crítico/Push/Silenc visíveis
+- `[x]` 🎯 TreatmentForm `/tratamento/novo` carrega SEM crash (fix TDZ confirmado em Android)
+- `[x]` TreatmentForm header "Novo tratamento" + campo medName
+- `[x]` Autofill Escitalopram → Antidepressivo detectado + label "Detectada automaticamente"
+- `[x]` Histórico cross-period: chips 7 dias/30 dias/90 dias/6 meses/1 ano
+- `[x]` SOS page renderiza sem crash
+- `[x]` Pacientes renderiza
+- `[x]` Console errors: **0** TDZ "Cannot access X before initialization"
+
+**Resultado: 22/22 PASS, 0 FAIL**
+
+**ROOT CAUSE BUG INTERMEDIÁRIO descoberto durante QA Round 2:**
+
+- `cap sync android` não rodou após meu commit `23213f9` localmente, então o APK debug local que tinha sido instalado continha bundle ANTIGO `TreatmentForm-CXKoA1Mz.js` (sem o fix). O AAB CI #26331199159 commit `23213f9` ✅ inclui o fix porque o workflow GitHub Actions sempre faz `npm run build:android` (cap sync) antes de bundlear.
+- Fix QA workflow: `cap sync` rodado manualmente + gradle assembleDebug + adb install -r → bundle correto `TreatmentForm-B2B2g-8q.js` → TDZ ausente.
+
+**AAB v0.2.6.1 vc 85 baixado e validado: `C:/temp/aab_v85_final/app-release-aab/app-release.aab` (32.9MB signed).**
+
 ---
 
 ## 📦 Release anterior — v0.2.6.0 SHIPPED (vc 84, TTL share foundation + Card Última dose)
