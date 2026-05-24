@@ -66,11 +66,36 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
     return new Date().toISOString() // agora
   }
 
-  function handleConfirm() {
+  // v0.2.6.12 FIX B102 REAL — mutateAsync + await em vez de mutate fire-and-forget.
+  //
+  // Logcat QA real S25 Ultra (2026-05-24) confirmou bug:
+  //   17:40:04  user tap Tomada (UI mostra ✅ otimista)
+  //   17:42:32  app pra background
+  //   17:49:14  PID NOVO 21330 cold start (Android OS KILLED process antigo)
+  //   0 chamadas /rpc/confirm_dose_v2 em ambas sessões = mutation NUNCA virou fetch HTTP
+  //
+  // Root cause: confirmMut.mutate() é fire-and-forget. handleConfirm chamava onClose()
+  // IMEDIATAMENTE depois, sem aguardar mutation async completar. TanStack mutationFn
+  // ficava em fila a executar depois mas Samsung One UI / Android Doze KILL o process
+  // (battery opt + memory pressure) antes do fetch sair → mutation perdida no kill.
+  //
+  // Fix: mutateAsync + await. Modal não fecha + UI bloqueada (spinner via isPending)
+  // até RPC completar. Tradeoff: tap → 200ms-2000ms blocking. Mas garante fetch HTTP
+  // enviado antes de user fechar app/process morrer.
+  //
+  // Offline: TanStack networkMode: 'offlineFirst' faz mutate pausar imediatamente
+  // (não tenta fetch quando offline), retorna paused state. Comportamento offline
+  // queue paused inalterado — drena via resumePausedMutations no boot.
+  async function handleConfirm() {
     const actualIso = computeActualIso()
     const doseId = dose.id
     const medName = dose.medName
-    confirmMut.mutate({ id: doseId, actualTime: actualIso, observation })
+    try {
+      await confirmMut.mutateAsync({ id: doseId, actualTime: actualIso, observation })
+    } catch (e) {
+      // onError já trata via handleDoseMutationError (toast + rollback + Sentry).
+      console.warn('[DoseModal] confirmDose mutateAsync rejected:', e?.message)
+    }
     onClose?.()
     toast.show({
       message: `Dose de ${medName} confirmada.`, kind: 'success',
@@ -78,10 +103,14 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
     })
   }
 
-  function handleSkip() {
+  async function handleSkip() {
     const doseId = dose.id
     const medName = dose.medName
-    skipMut.mutate({ id: doseId, observation })
+    try {
+      await skipMut.mutateAsync({ id: doseId, observation })
+    } catch (e) {
+      console.warn('[DoseModal] skipDose mutateAsync rejected:', e?.message)
+    }
     onClose?.()
     toast.show({
       message: `Dose de ${medName} marcada como pulada.`, kind: 'warn',
@@ -89,8 +118,13 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
     })
   }
 
-  function handleUndo() {
-    undoMut.mutate(dose.id)
+  async function handleUndo() {
+    const doseId = dose.id
+    try {
+      await undoMut.mutateAsync(doseId)
+    } catch (e) {
+      console.warn('[DoseModal] undoDose mutateAsync rejected:', e?.message)
+    }
     onClose?.()
     toast.show({ message: 'Dose revertida para pendente.', kind: 'info' })
   }
