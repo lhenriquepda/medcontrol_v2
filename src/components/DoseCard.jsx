@@ -55,17 +55,35 @@ function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
     onSwiped: (e) => {
       const wasHorizontal = axisLocked === 'h'
       setAxisLocked(null)
-      if (!wasHorizontal || !isActionable || busy) { setDelta(0); return }
+      // v0.2.6.14 — telemetria verbose swipe (console.warn level W → sempre logcat).
+      // QA real S25U v0.2.6.13 mostrou ZERO fetch breadcrumb após swipe → mutation
+      // nunca disparada. Captura entry/abort/handler-fired pra isolar onde swipe morre.
+      console.warn('[DoseCard] onSwiped', { doseId: dose.id, medName: dose.medName, status: dose.status, wasHorizontal, isActionable, busy, dx: e.deltaX })
+      if (!wasHorizontal || !isActionable || busy) {
+        console.warn('[DoseCard] onSwiped ABORT', { reason: !wasHorizontal ? 'not-horizontal' : !isActionable ? 'not-actionable' : 'busy' })
+        setDelta(0); return
+      }
       const dx = e.deltaX
       if (dx > ACTION_THRESHOLD && onSwipeConfirm) {
+        console.warn('[DoseCard] SWIPE CONFIRM trigger', { doseId: dose.id, hasHandler: !!onSwipeConfirm })
         setBusy(true)
         setDelta(MAX_DRAG)
-        setTimeout(() => { onSwipeConfirm(dose); setDelta(0); setBusy(false) }, 150)
+        setTimeout(() => {
+          console.warn('[DoseCard] SWIPE CONFIRM handler-fire', { doseId: dose.id })
+          try { onSwipeConfirm(dose) } catch (err) { console.warn('[DoseCard] onSwipeConfirm threw:', err?.message) }
+          setDelta(0); setBusy(false)
+        }, 150)
       } else if (dx < -ACTION_THRESHOLD && onSwipeSkip) {
+        console.warn('[DoseCard] SWIPE SKIP trigger', { doseId: dose.id, hasHandler: !!onSwipeSkip })
         setBusy(true)
         setDelta(-MAX_DRAG)
-        setTimeout(() => { onSwipeSkip(dose); setDelta(0); setBusy(false) }, 150)
+        setTimeout(() => {
+          console.warn('[DoseCard] SWIPE SKIP handler-fire', { doseId: dose.id })
+          try { onSwipeSkip(dose) } catch (err) { console.warn('[DoseCard] onSwipeSkip threw:', err?.message) }
+          setDelta(0); setBusy(false)
+        }, 150)
       } else {
+        console.warn('[DoseCard] SWIPE below threshold', { dx, threshold: ACTION_THRESHOLD })
         setDelta(0)
       }
     },
