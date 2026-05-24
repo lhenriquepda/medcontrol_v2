@@ -420,23 +420,30 @@ Total adicional QA real: **10 melhorias** + cross-ref pra bugs descobertos no me
 
 ### Implementadas v0.2.6.7
 
-| ID | Status | Detalhe |
-|---|---|---|
-| **E01** (M-realq4) | 🟢 FIX | `useAdMobBanner.js` event name typo corrigido — `bannerAdSize` → `bannerAdSizeChanged`. Resolve B001 (gap visual) também porque altura agora atualiza dinamicamente. |
-| **E02** | 🟢 FIX | Migration `20260524150000_v0_2_6_7_get_user_medications_rpc.sql` cria RPC ausente. Categorias custom do user vão funcionar pela primeira vez. |
-| **E04** (M-realq2 indireto) | 🟢 FIX | `CategoryPicker.jsx` prop `showRequiredError` (default false). SOS + TreatmentForm passam `showRequiredError={!!medName}` — mensagem não aparece mais premature. |
-| **M-realq5** | 🟢 FIX parcial | B100 fix em `AlarmScheduler.java` agora **separa caminhos** (ceil + fallback tray broadcast). Mensagem genérica "past trigger or permission" pode permanecer em outros paths mas casos comuns têm fallback. |
+| ID | Status | Detalhe | Commit |
+|---|---|---|---|
+| **E01** (M-realq4) | 🟢 FIX | `useAdMobBanner.js` event name typo corrigido — `bannerAdSize` → `bannerAdSizeChanged`. Resolve B001 (gap visual) também porque altura agora atualiza dinamicamente. | `3c58767` |
+| **E02** | 🟢 FIX | Migration `20260524150000_v0_2_6_7_get_user_medications_rpc.sql` cria RPC ausente. Categorias custom do user vão funcionar pela primeira vez. | `b0b4152` |
+| **E04** (M-realq2 indireto) | 🟢 FIX | `CategoryPicker.jsx` prop `showRequiredError` (default false). SOS + TreatmentForm passam `showRequiredError={!!medName}` — mensagem não aparece mais premature. | `3c58767` |
+| **M-realq3** | 🟢 FIX | Toast Undo 5s→8s (`useToast.jsx`). Tempo suficiente pra reagir após marcação errada. | `f475836` |
+| **M101** | 🟢 FIX | Dashboard range default 12h→24h (`Dashboard.jsx`). Dia completo visível ao abrir o app. | `f475836` |
+| **M201** (M-realq5) | 🟢 FIX | `CriticalAlarmPlugin.java` separa 3 causas distintas: `permission_denied_exact_alarm` (Android 12+ canScheduleExactAlarms false), `too_close_threshold_60s_fallback_tray` (deltaSec<60), `past_trigger`. Mensagem genérica `"schedule failed (past trigger or permission)"` eliminada. | `cc7a383` |
+| **M500** (M-realq8) | 🟢 FIX | Nova função `overdueLabel(scheduledAt)` em `dateUtils.js` + uso em `DoseCard.jsx`. Labels proporcionais: `atrasada 5min` / `atrasada 2h` / `atrasada 1d`. Resolve severidade visual igual entre atraso pequeno vs grande. | `cc7a383` |
 
-### Pendentes (próximo release)
+### Pendentes (próximo release v0.2.6.8+)
 
 - M-realq2 — DoseModal hit area botões (aria-busy timeout reset deve cobrir parcial)
-- M-realq3 — Toast Undo 5s→8s
-- M-realq6 — Skeleton states no Dashboard load
-- M001 — AdMob banner gap visual (B001 RESOLVIDO automaticamente via E01)
-- M101 — Default range Dashboard 12h→24h
-- M102 — Toast "Atualizando..." sem feedback
-- M201 — Mensagem erro alarme separar 3 causas
-- M500 — Indicador "atrasada há X min"
+- M-realq6 — Skeleton states no Dashboard load (>5s "Carregando" white screen)
+- M-realq7 — CTA "Cadastrar primeiro paciente" próximo demais do BottomNav
+- M-realq9 — Validar pg_cron `extend_continuous_treatments` rodando
+- M001 — AdMob banner gap visual (B001 RESOLVIDO via E01)
+- M102 — Toast "Atualizando..." sem feedback PtR
 - M600 — BottomNav badge shares received
+- MEL-001 — `data-testid` em components-chave (~6h)
+- MEL-002 — Documentar `window.__dosy*` debug toggles
+- MEL-004 — Gate `/relatorios` Plus (#QA-001)
+- MEL-006 — Estrutura `e2e/` Appium reusável (~16h)
+- MEL-007 — SQL reset test data idempotente (~4h)
+- MEL-010 — CI workflow QA pre-merge (~16h)
 
-Recomendação: criar `release/v0.2.6.8` pra atacar M-realq3 (Undo extender) + M101 (range default) + M201 (mensagem alarme) — quick wins UX.
+**Acompanhamento**: `docs/qa-reports/qa-real-v0266/_BUGS.md` lista bugs P0; este arquivo trata UX/melhorias.

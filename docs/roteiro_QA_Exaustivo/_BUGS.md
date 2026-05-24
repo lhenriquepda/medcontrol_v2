@@ -245,7 +245,7 @@ Screenshot: `coverage/emul5554-15-offline.png` mostra banner "2 ações salvas o
 
 ---
 
-## 🟢 STATUS FIX v0.2.6.7 (commit 3c58767 + migration 20260524150000)
+## 🟢 STATUS FIX v0.2.6.7 (commits 3c58767 + b0b4152 + f475836 + cc7a383 + migration 20260524150000)
 
 | ID | Status | Commit | Linha do fix |
 |---|---|---|---|
@@ -255,7 +255,16 @@ Screenshot: `coverage/emul5554-15-offline.png` mostra banner "2 ações salvas o
 | **B103** | 🟢 INDIRETO FIX (B102 root cause compartilhado — botões disabled era consequência do retry loop eterno) | `3c58767` | mesma fix B102 |
 | **B001** | 🟢 FIX (typo evento) | `3c58767` | `useAdMobBanner.js:98` `bannerAdSize`→`bannerAdSizeChanged` (resolve E01 também — gap visual era consequência da altura não atualizar) |
 | **E01** | 🟢 FIXED | `3c58767` | `useAdMobBanner.js:98` event name correto |
-| **E02** | 🟢 FIXED | migration `20260524150000` | RPC `medcontrol.get_user_medications(p_limit)` criado |
+| **E02** | 🟢 FIXED | migration `20260524150000` + commit `b0b4152` | RPC `medcontrol.get_user_medications(p_limit)` criado |
 | **E04** | 🟢 FIXED | `3c58767` | `CategoryPicker.jsx:42` `showRequiredError` prop + 2 callers atualizados |
 
-**Validação**: AAB v0.2.6.7 sendo gerado em CI (run #26364183801). Pós-build, instalar nos 2 emul + re-rodar QA fluxo doses pra confirmar B102 finalmente persiste no BD.
+### Melhorias UX implementadas no mesmo release
+
+| ID | Status | Commit | Detalhe |
+|---|---|---|---|
+| **M-realq3** | 🟢 FIX | `f475836` | Toast Undo 5s→8s (`useToast.jsx`) |
+| **M101** | 🟢 FIX | `f475836` | Dashboard range default 12h→24h |
+| **M201** (M-realq5) | 🟢 FIX | `cc7a383` | `CriticalAlarmPlugin.java` 3 causas distintas para erro alarme |
+| **M500** (M-realq8) | 🟢 FIX | `cc7a383` | `overdueLabel()` em `dateUtils.js` — "atrasada Xmin/h/d" |
+
+**Validação**: AAB v0.2.6.7 build CI (run #26364605373 in_progress, run anterior #26364183801 falhou apenas no Upload to Play Store — AAB OK). Pós-build, instalar nos emuladores + re-rodar QA fluxo doses pra confirmar B102 finalmente persiste no BD. Upload Play Console via Chrome MCP manual.

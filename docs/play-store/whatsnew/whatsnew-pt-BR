@@ -1,5 +1,9 @@
-v0.2.6.6 — Acabou o "salvei mas não salvou"
+v0.2.6.7 — QA exaustivo: 5 bugs P0 + 5 melhorias UX
 
-• Bug crônico resolvido: app ficava algumas horas aberto/inativo, depois SOS e tratamento não gravavam silenciosamente. Agora detecta sessão expirada e recupera automaticamente.
-• Se algo falhar, você vê na hora — toast claro explica o motivo em vez de o app fingir que salvou.
-• Performance: limpeza de comandos antigos no servidor que podiam ser chamados por engano.
+• Bug crítico: marcar dose Tomada/Pular agora persiste de verdade no servidor — antes ficava só no cache local e sumia ao reabrir o app.
+• Alarme: doses agendadas para menos de 1 minuto agora disparam notificação imediata em vez de falhar silenciosamente.
+• AdMob: banner pro plano Plus ajusta altura corretamente ao carregar.
+• SOS/Tratamento: mensagem "Escolha uma categoria" não aparece mais antes de você digitar o nome do medicamento.
+• Dashboard: filtro padrão expandido de 12h para 24h — dia completo visível ao abrir.
+• Histórico/Dashboard: doses atrasadas mostram "atrasada 5min" / "2h" / "1d" em vez de só "atrasada".
+• Toast "Desfazer" estendido de 5s para 8s — tempo suficiente pra reagir.
