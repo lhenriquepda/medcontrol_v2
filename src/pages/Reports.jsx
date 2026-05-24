@@ -397,6 +397,43 @@ export default function Reports() {
       <div className="max-w-md mx-auto px-4 pt-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AdBanner />
 
+        {/* v0.2.6.8 FIX MEL-004 [QA-001]: gate Plus prominente no TOPO da página.
+            Free pode visualizar resumo do BD mas exportar PDF/CSV é Plus.
+            Antes o aviso só aparecia no rodapé da página, perto dos botões — user
+            chegava aqui sem saber que era pago. Agora vê upfront. */}
+        {!isPro && (
+          <Card
+            padding={14}
+            style={{
+              background: 'linear-gradient(135deg, var(--dosy-warning-bg), rgba(255,255,255,0.95))',
+              border: '1px solid rgba(197,132,26,0.35)',
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+            }}
+          >
+            <Lock size={18} strokeWidth={2.4} style={{ flexShrink: 0, marginTop: 1, color: '#C5841A' }}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#8B5E12', marginBottom: 2 }}>
+                Exportar PDF/CSV é recurso Plus
+              </div>
+              <div style={{ fontSize: 12, color: '#8B5E12', lineHeight: 1.4, marginBottom: 10 }}>
+                Você pode pré-visualizar o relatório, mas baixar/enviar exige assinatura.
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaywall(true)}
+                style={{
+                  background: '#C5841A', color: 'white', border: 'none',
+                  padding: '6px 14px', borderRadius: 999,
+                  fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                  fontFamily: 'var(--dosy-font-display)', cursor: 'pointer',
+                }}
+              >
+                Conhecer Plus
+              </button>
+            </div>
+          </Card>
+        )}
+
         {/* PATIENT FILTER chips — padrão Tratamentos/Analytics */}
         {patients.length > 0 && (
           <div>

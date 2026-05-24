@@ -36,7 +36,11 @@ export default function Dashboard() {
   // v0.2.3.4 #163 — extend_continuous_treatments agora roda dentro do RPC consolidado
   // get_dashboard_payload (chamado pelo useDashboardPayload hook abaixo). Side-effect
   // separado removido. extend_result fica no payload se caller precisar inspecionar.
-  const [filters, setFilters] = useState({ range: '12h', patientId: null, status: null, type: null })
+  // v0.2.6.7 FIX M101 [QA real 2026-05-24]: range default 12h → 24h.
+  // QA real revelou que 12h escondia doses iminentes em borda. 24h cobre dia
+  // completo (user típico checka 1x/dia) sem custo egress extra — RPC dashboard
+  // já trazia janela mais ampla pra cache. Mudança aqui é só filtro display.
+  const [filters, setFilters] = useState({ range: '24h', patientId: null, status: null, type: null })
 
   // Notif-tap → IDs pra abrir em modal multi-dose
   const [multiDoseIds, setMultiDoseIds] = useState([])

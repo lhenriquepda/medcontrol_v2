@@ -473,11 +473,32 @@ public class AlarmScheduler {
      * @return true if scheduled, false if invalid/past
      */
     public static boolean scheduleDose(Context ctx, int id, long triggerAtEpochMs, JSONArray doses) {
-        // Floor to minute boundary (ignore residual seconds)
-        long triggerAt = (triggerAtEpochMs / 60000L) * 60000L;
+        // v0.2.6.7 FIX B100 [QA real 2026-05-24]:
+        // ANTES: `Floor to minute` (`(t/60000)*60000`) — dose em NOW+12s virava NOW-48s
+        //   após floor → marcada como "past trigger" → scheduleGroup falhou silente.
+        //   User com tela bloqueada NÃO recebia alarme crítico full-screen porque
+        //   schedule rejeitou. Só tray notification (downgrade silencioso).
+        // AGORA: `Ceil to minute` (`(t+59999)/60000)*60000`) — preserva precisão
+        //   pra doses iminentes. Se ainda <NOW após ceil (ex: ms<0), retorna false
+        //   gracefully (não é erro reportável — dose já passou de verdade).
+        long triggerAt = ((triggerAtEpochMs + 59999L) / 60000L) * 60000L;
 
-        if (triggerAt <= System.currentTimeMillis()) {
-            Log.d(TAG, "skip past trigger id=" + id + " at=" + triggerAt);
+        long now = System.currentTimeMillis();
+        if (triggerAt <= now) {
+            // Dose já passou OU está muito próxima (<1min). Dispara FALLBACK imediato:
+            // tray notification IMEDIATA via TrayNotificationReceiver pra garantir
+            // que user veja. Plugin caller (JS) já agendou tray separadamente também,
+            // mas redundância aqui evita silent drop em borda.
+            Log.d(TAG, "ceil ainda passado; trigger=" + triggerAt + " now=" + now + " — fallback tray imediato");
+            try {
+                Intent immediateIntent = new Intent(ctx, TrayNotificationReceiver.class);
+                immediateIntent.putExtra("id", id);
+                immediateIntent.putExtra("doses", doses.toString());
+                ctx.sendBroadcast(immediateIntent);
+                Log.d(TAG, "fallback tray broadcast disparado id=" + id);
+            } catch (Exception e) {
+                Log.w(TAG, "fallback tray fail: " + e.getMessage());
+            }
             return false;
         }
 

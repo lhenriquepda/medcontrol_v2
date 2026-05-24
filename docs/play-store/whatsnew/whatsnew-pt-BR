@@ -1,5 +1,5 @@
-v0.2.6.6 — Acabou o "salvei mas não salvou"
+v0.2.6.9 — hotfix lentidão pós minutos
 
-• Bug crônico resolvido: app ficava algumas horas aberto/inativo, depois SOS e tratamento não gravavam silenciosamente. Agora detecta sessão expirada e recupera automaticamente.
-• Se algo falhar, você vê na hora — toast claro explica o motivo em vez de o app fingir que salvou.
-• Performance: limpeza de comandos antigos no servidor que podiam ser chamados por engano.
+• App não fica mais lento depois de alguns minutos aberto — removida instrumentação verbose do caminho crítico que sobrecarregava o WebView.
+• Reconexão automática: checagem ativa de saúde a cada 60s + reconnect WebSocket se necessário (antes só rodava após 5min de tela bloqueada).
+• Dashboard não refaz a busca pesada em cada foco — atualização vem via realtime + puxar pra atualizar.

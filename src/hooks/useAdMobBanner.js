@@ -94,8 +94,13 @@ export function useAdMobBanner() {
         if (typeof window !== 'undefined' && window.__dosyAdMobShown) return
 
         try {
-          // Listeners — registrados ANTES showBanner pra não perder primeiros eventos
-          AdMob.addListener('bannerAdSize', (info) => {
+          // Listeners — registrados ANTES showBanner pra não perder primeiros eventos.
+          // v0.2.6.7 FIX #E01 [QA real 2026-05-24]: evento correto é `bannerAdSizeChanged`
+          // (vide @capacitor-community/admob `BannerAdPluginEvents.SizeChanged.webEventName`).
+          // Antes era `bannerAdSize` (typo): logcat `Capacitor/AdMob: No listeners found
+          // for event bannerAdSizeChanged` x3 por refresh ad. CSS var `--ad-banner-height`
+          // ficava fixo em 60px fallback (pre-apply linha 137) sem ajustar pra altura real.
+          AdMob.addListener('bannerAdSizeChanged', (info) => {
             const h = info?.height
             if (typeof h === 'number' && h > 0) {
               // #113 [Note 10 fix 2026-05-04]: buffer +16 era exagerado, gerava

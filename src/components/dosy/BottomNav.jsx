@@ -16,10 +16,11 @@ import { memo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, Users, Plus, Siren, MoreHorizontal } from 'lucide-react'
 import { usePatients } from '../../hooks/usePatients'
+import { useReceivedShares } from '../../hooks/useShares'
 
 const TABS = [
   { id: 'inicio',    to: '/',          end: true,  icon: Home,             label: 'Início' },
-  { id: 'pacientes', to: '/pacientes', end: false, icon: Users,            label: 'Pacientes' },
+  { id: 'pacientes', to: '/pacientes', end: false, icon: Users,            label: 'Pacientes', badge: 'shares' },
   { id: 'fab',       fab: true,        icon: Plus,                          label: 'Novo' },
   { id: 'sos',       to: '/sos',       end: false, icon: Siren,             label: 'S.O.S' },
   { id: 'mais',      to: '/mais',      end: false, icon: MoreHorizontal,    label: 'Mais' },
@@ -28,6 +29,10 @@ const TABS = [
 function DosyBottomNav() {
   const nav = useNavigate()
   const { data: patients = [] } = usePatients()
+  // v0.2.6.8 FIX M600: badge BottomNav tab Pacientes com count shares recebidos.
+  // useReceivedShares já tem staleTime 5min — não infla egress. Falsy/empty → null.
+  const { data: receivedShares = [] } = useReceivedShares()
+  const sharesCount = Array.isArray(receivedShares) ? receivedShares.length : 0
   const fabTarget = patients.length === 0 ? '/pacientes/novo' : '/tratamento/novo'
 
   return (
@@ -108,7 +113,30 @@ function DosyBottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <IconCmp size={20} strokeWidth={isActive ? 2 : 1.75}/>
+                  <div style={{ position: 'relative', display: 'inline-flex' }}>
+                    <IconCmp size={20} strokeWidth={isActive ? 2 : 1.75}/>
+                    {/* v0.2.6.8 FIX M600: badge count shares recebidos sobre ícone Pacientes */}
+                    {tab.badge === 'shares' && sharesCount > 0 && (
+                      <span
+                        aria-label={`${sharesCount} compartilhamentos recebidos`}
+                        style={{
+                          position: 'absolute',
+                          top: -4, right: -8,
+                          minWidth: 16, height: 16, padding: '0 4px',
+                          borderRadius: 999,
+                          background: 'var(--dosy-danger)',
+                          color: 'var(--dosy-fg-on-sunset)',
+                          fontSize: 9.5, fontWeight: 800,
+                          fontFamily: 'var(--dosy-font-display)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: '1.5px solid var(--dosy-bg-elevated)',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {sharesCount > 9 ? '9+' : sharesCount}
+                      </span>
+                    )}
+                  </div>
                   <span>{tab.label}</span>
                 </>
               )}

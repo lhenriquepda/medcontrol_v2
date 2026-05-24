@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import Icon from './Icon'
-import { formatTime, relativeLabel } from '../utils/dateUtils'
+import { formatTime, relativeLabel, overdueLabel } from '../utils/dateUtils'
 import { STATUS_CONFIG } from '../utils/statusUtils'
 
 const ACTION_THRESHOLD = 90   // px — drag past this → triggers action on release
@@ -180,7 +180,10 @@ function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
           textTransform: 'lowercase',
           fontFamily: 'var(--dosy-font-display)',
         }}>
-          {s.label}
+          {/* v0.2.6.7 FIX M500 [QA real 2026-05-24]: pra dose overdue, mostrar
+              "atrasada há Xmin/h" em vez de só "atrasada". Severidade visual
+              proporcional ao tempo decorrido (5min vs 5h hoje tinham mesma label). */}
+          {isOverdue ? overdueLabel(dose.scheduledAt) : s.label}
         </span>
       </div>
     </button>

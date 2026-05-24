@@ -58,7 +58,14 @@ export function useDashboardPayload({ from, to, daysAhead = 5 } = {}) {
     staleTime: 2 * 60_000,
     refetchOnMount: true,
     refetchOnReconnect: true,
-    refetchOnWindowFocus: true,
+    // v0.2.6.9 FIX UI-LENTA: focus refetch OFF. RPC `get_dashboard_payload` é
+    // pesado (joins patients+treatments+doses+overdue compute server-side).
+    // Antes: cada modal open/close, scroll snap mobile, tab switch → focus event
+    // → refetch full payload. Múltiplas vezes/min. PostgreSQL CPU + WebView main
+    // thread parse JSON ~50-200KB. Cobertura mantida: Realtime postgres_changes
+    // + manual PtR + setInterval setTick recompute overdue. useAppResume cobre
+    // soft recover pós-idle >=5min.
+    refetchOnWindowFocus: false,
     // v0.2.3.4 #237 fix — placeholderData cobre RPC falhar silentemente (401/network
     // drop) mantendo Dashboard UI com último dado conhecido em vez de SkeletonList eterno.
     //

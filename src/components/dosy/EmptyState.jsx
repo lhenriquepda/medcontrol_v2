@@ -109,7 +109,10 @@ export default function EmptyState({
           </p>
         )}
       </div>
-      {action && <div style={{ marginTop: 4 }}>{action}</div>}
+      {/* v0.2.6.8 FIX M-realq7: aumentar marginTop pra evitar action button colar
+          no BottomNav em telas pequenas. paddingBottom 110 já cobre, mas espaçamento
+          visual aqui melhora hit area + reduz tap acidental BottomNav baixo. */}
+      {action && <div style={{ marginTop: 12, marginBottom: 4 }}>{action}</div>}
     </Card>
   )
 }

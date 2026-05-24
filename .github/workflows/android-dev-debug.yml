@@ -1,0 +1,64 @@
+name: Android Dev Debug APK
+
+# v0.2.6.7 — workflow temporário pra gerar APK devDebug (com applicationIdSuffix .dev
+# + PrivacyScreen.disable() permitindo QA via screenshots ADB).
+# Workflow_dispatch only (não roda em push). Manualmente trigger via:
+#   gh workflow run "Android Dev Debug APK"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dev-debug-apk:
+    name: Build APK devDebug
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build web bundle
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_SCHEMA: medcontrol
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_ADMOB_BANNER_ANDROID: ${{ secrets.VITE_ADMOB_BANNER_ANDROID }}
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Build APK devDebug
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDevDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-dev-debug-apk
+          path: android/app/build/outputs/apk/dev/debug/app-dev-debug.apk
+          retention-days: 7

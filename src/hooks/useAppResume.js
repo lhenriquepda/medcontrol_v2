@@ -38,6 +38,20 @@ let refreshInProgress = false
 let lastResumeAt = 0
 const RESUME_DEBOUNCE_MS = 1000
 
+// v0.2.6.9 FIX UI-LENTA — heartbeat ativo independente de visibility.
+// Bug crônico: user reporta app abre OK, <5min depois fica lento + mutations não
+// persistem BD. Cenário com app VISÍVEL o tempo todo → sem visibilitychange →
+// soft recover NUNCA dispara. WebSocket Realtime ou supabase-js client podem
+// degradar silenciosamente (TCP keepalive expira, processLock orphan, network
+// glitch invisível à camada navigator.onLine).
+// Heartbeat 60s faz ping leve. Se timeout/401 → trigger reconnect:
+//   - supabase.removeAllChannels() drop dead sockets
+//   - qc.refetchQueries active → recupera cache stale
+//   - qc.resumePausedMutations → drena mutations dormindo
+// Custo: 1 req/min em idle ativo (~60 req/hr extras). Aceitável vs UX broken.
+const HEARTBEAT_INTERVAL_MS = 60_000
+const HEARTBEAT_TIMEOUT_MS = 5_000
+
 export function useAppResume() {
   const qc = useQueryClient()
   const lastActiveRef = useRef(Date.now())
@@ -245,11 +259,62 @@ export function useAppResume() {
       })()
     }
 
+    // v0.2.6.9 FIX UI-LENTA — heartbeat ativo (independente visibilitychange).
+    // Roda mesmo com app visível continuamente. Detecta supabase client zombie,
+    // WebSocket Realtime dead, processLock orphan que NÃO disparam events.
+    // Se ping falha, repete soft recover (drop channels + refetch + drain mutations).
+    const heartbeatTimer = setInterval(async () => {
+      // Skip se documento hidden (foreground listener cobre quando volta).
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      // Skip se refresh em curso (mutex same that onResume usa).
+      if (refreshInProgress) return
+      try {
+        const pingResult = await Promise.race([
+          supabase.from('user_prefs').select('user_id').limit(1).maybeSingle(),
+          new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), HEARTBEAT_TIMEOUT_MS)),
+        ])
+        const isTimeout = pingResult?.__timeout
+        const is401 = pingResult?.error && (pingResult.error.status === 401 || pingResult.error.code === 'PGRST301')
+        if (!isTimeout && !is401) return  // saudável, nada a fazer
+
+        console.warn('[useAppResume] heartbeat fail', isTimeout ? 'TIMEOUT' : '401', '→ soft reconnect')
+        refreshInProgress = true
+        try {
+          // Drop dead WebSocket channels — useRealtime re-subscribe via auth event.
+          await supabase.removeAllChannels()
+          // Re-sync online state (bridge nativa pode estar com cached stale).
+          if (Capacitor.isNativePlatform()) {
+            try {
+              const { Network } = await import('@capacitor/network')
+              const status = await Network.getStatus()
+              onlineManager.setOnline(status.connected)
+            } catch (e) {
+              console.warn('[useAppResume] heartbeat Network.getStatus failed:', e?.message)
+            }
+          }
+          // Refetch active queries pra recuperar payload stale.
+          await qc.refetchQueries({ type: 'active' })
+          // Drena mutations persistidas dormindo durante degradação.
+          qc.resumePausedMutations().catch(() => { /* best-effort */ })
+        } catch (e) {
+          console.warn('[useAppResume] heartbeat soft reconnect exception:', e?.message)
+        } finally {
+          refreshInProgress = false
+        }
+      } catch (e) {
+        // Network exception transitória — não loga storm em offline real.
+        if (e?.message && !/network|fetch/i.test(e.message)) {
+          console.warn('[useAppResume] heartbeat exception:', e?.message)
+        }
+      }
+    }, HEARTBEAT_INTERVAL_MS)
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onResume)
       window.removeEventListener('blur', onPause)
       stateHandle?.remove?.()
+      clearInterval(heartbeatTimer)
     }
   }, [qc])
 }

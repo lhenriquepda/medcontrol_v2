@@ -473,6 +473,8 @@ export default function SOS() {
             }}
             autoFilled={autoFilledGroup}
             required={!autoFilledGroup}
+            /* v0.2.6.7 FIX E04 — só mostra erro premature quando user já digitou med. */
+            showRequiredError={!!medName?.trim()}
             helperText={
               classifyFetching && !groupId
                 ? 'Identificando categoria automaticamente…'

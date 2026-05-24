@@ -236,8 +236,15 @@ const queryClient = new QueryClient({
     },
     mutations: {
       networkMode: 'offlineFirst',
-      retry: 3,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000)
+      // v0.2.6.7 FIX B102 — retry de mutations healthcare reduzido pra 1.
+      // Razão: retry exponential original (3x + backoff 2/4/8s) causava efeito
+      // colateral em RPCs v2 que retornam JSONB `{ok:false, code:409}` (não throws
+      // de network). DoseConflictError throws sintético dispara retry policy do
+      // TanStack mesmo sendo 409 lógico → estado cache fica em "loading" 14s+ e
+      // user fecha modal antes onSettled rodar. Com retry:1, mutation resolve
+      // rápido (ok ou error) e estado se estabiliza.
+      retry: 1,
+      retryDelay: 1000,
     }
   }
 })

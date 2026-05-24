@@ -56,25 +56,47 @@ export default function Patients() {
         <AdBanner />
 
         {tier === 'free' && ownCount > 0 && (
+          // v0.2.6.8 FIX MEL-012: Free counter CTA mais proeminente.
+          // Antes: linha discreta "1/1 paciente. Conhecer Pro" — passava despercebida.
+          // Agora: 2 linhas com badge "Plus", contagem em destaque, CTA com seta.
           <button
             type="button"
             onClick={() => setPaywall(true)}
             className="dosy-press"
             style={{
               width: '100%',
-              padding: '12px 14px',
-              borderRadius: 14,
+              padding: '14px 16px',
+              borderRadius: 16,
               background: 'var(--dosy-gradient-sunset-soft)',
-              border: 'none', cursor: 'pointer', textAlign: 'left',
-              display: 'flex', alignItems: 'center', gap: 10,
+              border: '1px solid rgba(231,134,76,0.2)',
+              cursor: 'pointer', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 12,
               fontFamily: 'var(--dosy-font-body)',
               color: 'var(--dosy-fg)',
             }}
           >
-            <Info size={18} strokeWidth={1.75}/>
-            <div style={{ flex: 1, fontSize: 12.5, fontWeight: 600, lineHeight: 1.4 }}>
-              Plano Free: {ownCount}/{FREE_PATIENT_LIMIT} paciente.{' '}
-              <span style={{ textDecoration: 'underline' }}>Conhecer Pro</span>
+            <Info size={20} strokeWidth={2} style={{ color: 'var(--dosy-primary)', flexShrink: 0 }}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 800, lineHeight: 1.2,
+                fontFamily: 'var(--dosy-font-display)',
+                letterSpacing: '-0.01em',
+                display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+              }}>
+                Você usa {ownCount}/{FREE_PATIENT_LIMIT} paciente no Free
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--dosy-fg-secondary)', marginTop: 3, lineHeight: 1.35 }}>
+                Plus libera pacientes ilimitados, compartilhamento e relatórios PDF/CSV.
+              </div>
+            </div>
+            <div style={{
+              padding: '5px 10px', borderRadius: 999,
+              background: 'var(--dosy-primary)', color: 'white',
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+              textTransform: 'uppercase', flexShrink: 0,
+              fontFamily: 'var(--dosy-font-display)',
+            }}>
+              Plus →
             </div>
           </button>
         )}
