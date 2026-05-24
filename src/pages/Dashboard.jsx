@@ -21,8 +21,9 @@ import { MiniStat } from '../components/dosy/MiniStat'
 import StatGrid from '../components/dosy/StatGrid'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
+// v0.2.7.0 Fase 2 — useDashboardData substitui useDashboardPayload (Zustand store, sem persist).
 import { useToast } from '../hooks/useToast'
-import { useDashboardPayload } from '../hooks/useDashboardPayload'
+import { useDashboardData } from '../hooks/useDashboardData'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
@@ -93,21 +94,21 @@ export default function Dashboard() {
   // (usePatients + useTreatments + useDoses) + 1 RPC (extend_continuous_treatments) por
   // single round-trip. Hook popula caches individuais via qc.setQueryData side-effect,
   // outras telas (Patients, DoseHistory, Reports) continuam usando hooks separados sem regressão.
-  const { data: payload, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useDashboardPayload(baseWindow)
-  // v0.2.3.6 #270 fix — detectar query travada mascarada por placeholderData (#267).
-  // Quando current queryKey está fetching há >8s + temos placeholderData de OUTRA key,
-  // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
-  // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
-  //
-  // Refactor Fase 5 sub-tarefa 8.2 (v0.2.3.16) — guard sessionMountedAt.
-  // `dataUpdatedAt` vem do TanStack hidratado da sessão anterior (PersistQueryClient 24h).
-  // Resultado pre-fix: na primeira reabertura do app após >8s sem usar, banner aparecia
-  // falsamente porque `dataUpdatedAt` era do dia anterior. Agora state local marca o
-  // mount da sessão atual; banner só ativa se houve sucesso DEPOIS desse mount.
-  // useState lazy initializer (chamado 1× no mount) — evita acesso a ref durante render.
+  const { data: payload, isLoading, isError, error, refetch, isFetching } = useDashboardData(baseWindow)
+  // v0.2.7.0 Fase 2 — banner "Sincronizando..." simplificado.
+  // useDashboardData expõe isFetching diretamente; sem placeholderData cross-key
+  // (Zustand não tem o problema cross-queryKey transition entre horas), o banner
+  // só precisa ativar quando refetch dura >8s (raro, mas mostra ao user que rede está lenta).
   const [sessionMountedAt] = useState(() => Date.now())
-  const hasFreshSuccess = dataUpdatedAt && dataUpdatedAt > sessionMountedAt
-  const isStaleSync = isFetching && hasFreshSuccess && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
+  // v0.2.7.0 Fase 2 — banner "Sincronizando..." quando refetch demora >8s.
+  // Useful pra Realtime que disparou refetch invisível ao user.
+  const [fetchStartedAt, setFetchStartedAt] = useState(null)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (isFetching && !fetchStartedAt) setFetchStartedAt(Date.now())
+    if (!isFetching && fetchStartedAt) setFetchStartedAt(null)
+  }, [isFetching, fetchStartedAt])
+  const isStaleSync = isFetching && fetchStartedAt && (Date.now() - fetchStartedAt > 8000) && (Date.now() - sessionMountedAt > 1000)
   // v0.2.3.15 — exclui doses canceladas do Dashboard.
   // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
   // pending+futuras pra status='cancelled' (preserva histórico mas marca como

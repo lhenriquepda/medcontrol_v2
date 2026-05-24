@@ -38,7 +38,7 @@ let lastResumeAt = 0
 
 export function useAppResume() {
   const qc = useQueryClient()
-  const lastActiveRef = useRef(Date.now())
+  const lastActiveRef = useRef(0)
 
   useEffect(() => {
     const onResume = async () => {
