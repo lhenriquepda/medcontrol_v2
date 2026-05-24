@@ -20,7 +20,12 @@ export function ToastProvider({ children }) {
       kind: opts.kind || 'info',
       undoLabel: opts.undoLabel,
       onUndo: opts.onUndo,
-      duration: opts.duration ?? 5000
+      // v0.2.6.7 FIX M-realq3 [QA real 2026-05-24]: 5s → 8s.
+      // Toast Undo de 5s era apertado pra user ler+reagir, especialmente em
+      // marcações erradas de dose (healthcare-crítico). 8s alinha com Material 3
+      // ("brief actions" 4-10s) e dá margem pra senior users.
+      // Caller pode override (alguns toasts auto-dismiss rápido, ex: "Atualizado").
+      duration: opts.duration ?? 8000
     }
     setToasts((t) => [...t, toast])
     if (toast.duration > 0) setTimeout(() => dismiss(id), toast.duration)
