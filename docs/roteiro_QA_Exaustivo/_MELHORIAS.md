@@ -430,20 +430,34 @@ Total adicional QA real: **10 melhorias** + cross-ref pra bugs descobertos no me
 | **M201** (M-realq5) | 🟢 FIX | `CriticalAlarmPlugin.java` separa 3 causas distintas: `permission_denied_exact_alarm` (Android 12+ canScheduleExactAlarms false), `too_close_threshold_60s_fallback_tray` (deltaSec<60), `past_trigger`. Mensagem genérica `"schedule failed (past trigger or permission)"` eliminada. | `cc7a383` |
 | **M500** (M-realq8) | 🟢 FIX | Nova função `overdueLabel(scheduledAt)` em `dateUtils.js` + uso em `DoseCard.jsx`. Labels proporcionais: `atrasada 5min` / `atrasada 2h` / `atrasada 1d`. Resolve severidade visual igual entre atraso pequeno vs grande. | `cc7a383` |
 
-### Pendentes (próximo release v0.2.6.8+)
+## 🟢 STATUS FIX v0.2.6.8 (UX quick wins follow-up)
 
-- M-realq2 — DoseModal hit area botões (aria-busy timeout reset deve cobrir parcial)
-- M-realq6 — Skeleton states no Dashboard load (>5s "Carregando" white screen)
-- M-realq7 — CTA "Cadastrar primeiro paciente" próximo demais do BottomNav
-- M-realq9 — Validar pg_cron `extend_continuous_treatments` rodando
-- M001 — AdMob banner gap visual (B001 RESOLVIDO via E01)
-- M102 — Toast "Atualizando..." sem feedback PtR
-- M600 — BottomNav badge shares received
-- MEL-001 — `data-testid` em components-chave (~6h)
-- MEL-002 — Documentar `window.__dosy*` debug toggles
-- MEL-004 — Gate `/relatorios` Plus (#QA-001)
-- MEL-006 — Estrutura `e2e/` Appium reusável (~16h)
-- MEL-007 — SQL reset test data idempotente (~4h)
-- MEL-010 — CI workflow QA pre-merge (~16h)
+### Implementadas v0.2.6.8
+
+| ID | Status | Detalhe |
+|---|---|---|
+| **MEL-004** (#QA-001) | 🟢 FIX | `Reports.jsx` — Card prominent no topo "Exportar PDF/CSV é recurso Plus" + CTA "Conhecer Plus" antes do user navegar até botões. Free entende upfront que tem gate. |
+| **MEL-012** | 🟢 FIX | `Patients.jsx` — Counter Free expandido pra 2 linhas com badge "Plus →" destacado + descrição "libera ilimitados + share + relatórios". Antes era 1 linha discreta. |
+| **M-realq7** | 🟢 FIX | `dosy/EmptyState.jsx` — `action` marginTop 4→12 + marginBottom 4. Padding visual entre CTA empty state e BottomNav. |
+| **M600** | 🟢 FIX | `dosy/BottomNav.jsx` — Badge vermelho com count de shares recebidos sobre ícone Pacientes. `useReceivedShares` já tem staleTime 5min (zero egress extra). |
+| **M102** | 🟢 FIX | `PullToRefreshOverlay.jsx` — Estado "✓ Atualizado" por 1200ms após refresh completar. Antes user via spinner sumir abruptamente. |
+| **MEL-005** | 🟢 FIX | `scripts/qa-v0266/cdp.mjs` — Helper `ptrSwipe(adbSerial)` via adb input swipe. Permite testar §4.9 PtR e §11 offline scroll. |
+| **MEL-009** | 🟢 FIX | `scripts/qa-v0266/cdp.mjs` — Helper `resetAppData(adbSerial, pkg)` via pm clear + monkey launcher. Garante ConsentBanner fresh em Mod 01.1. |
+| **MEL-002** | 🟢 FIX | `context/recipes/debug-toggles.md` — Tabela completa dos 8 toggles `window.__dosy*` + cenários comuns + como inspecionar release build via chrome://inspect. |
+| **MEL-007** | 🟢 FIX | `scripts/qa-v0266/reset-test-data.sql` — Reset idempotente das 3 contas teste-* + seed canônico (Plus/Pro 1 patient cada, Free 0 patients). |
+
+### Diferido (próximos releases — escopo > pragmatic time)
+
+| ID | Esforço estimado | Bloqueador / Rationale |
+|---|---|---|
+| **MEL-001** data-testid em ~12 components | ~6h | Alta refactor surface — só compensa quando MEL-006 (e2e/) for criada. Sem suite consumindo, ROI baixo. |
+| **MEL-006** estrutura `e2e/` Appium reusável | ~16h | Setup wdio + 13 specs portados. Bloqueado por MEL-001 (data-testid) pra reduzir flakiness. |
+| **MEL-008** Capacitor `autoWebview` research | ~4-6h | Spike investigativo sem garantia de ganho. Atual hybrid switch funciona — diminishing returns. |
+| **MEL-010** CI workflow QA pre-merge | ~16-24h | Setup emulator headless + secrets Play Store + keystore via base64. Quase release process completa. |
+| **MEL-011** ConsentBanner decision | PO call | Decisão de produto: integrar no Permissions ou banner standalone. Não é dev decision. |
+| **M-realq2** DoseModal hit area | parcial | aria-busy timeout reset (v0.2.6.7) já cobre maioria. Aumentar padding requer test de regressão em todos os modais. |
+| **M-realq6** Skeleton states Dashboard | médio | Depende de pre-fetch dashboard_payload em paralelo com auth check — exige refactor de bootstrap. |
+| **M-realq9** pg_cron `extend_continuous_treatments` | observability | Não é fix, é validação. Requer monitoring em prod (Sentry/PostHog evento) — não código. |
+| **M001** AdMob banner gap | RESOLVIDO | B001 já fechado via E01 fix (event typo). Linha histórica. |
 
 **Acompanhamento**: `docs/qa-reports/qa-real-v0266/_BUGS.md` lista bugs P0; este arquivo trata UX/melhorias.

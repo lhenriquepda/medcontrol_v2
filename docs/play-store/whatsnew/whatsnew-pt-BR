@@ -1,9 +1,7 @@
-v0.2.6.7 — QA exaustivo: 5 bugs P0 + 5 melhorias UX
+v0.2.6.8 — UX polishes pós QA
 
-• Bug crítico: marcar dose Tomada/Pular agora persiste de verdade no servidor — antes ficava só no cache local e sumia ao reabrir o app.
-• Alarme: doses agendadas para menos de 1 minuto agora disparam notificação imediata em vez de falhar silenciosamente.
-• AdMob: banner pro plano Plus ajusta altura corretamente ao carregar.
-• SOS/Tratamento: mensagem "Escolha uma categoria" não aparece mais antes de você digitar o nome do medicamento.
-• Dashboard: filtro padrão expandido de 12h para 24h — dia completo visível ao abrir.
-• Histórico/Dashboard: doses atrasadas mostram "atrasada 5min" / "2h" / "1d" em vez de só "atrasada".
-• Toast "Desfazer" estendido de 5s para 8s — tempo suficiente pra reagir.
+• Relatórios: aviso "Exportar PDF/CSV é Plus" agora aparece logo ao abrir, antes do scroll.
+• Pacientes: contador Free "1/1" virou banner Plus com call-to-action visível.
+• Pacientes (BottomNav): badge vermelho com nº de compartilhamentos recebidos.
+• Puxar pra atualizar: mostra "✓ Atualizado" por 1s ao concluir.
+• Empty state: botão "Adicionar paciente" com mais respiro acima do BottomNav.
