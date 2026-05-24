@@ -1,6 +1,5 @@
-v0.2.6.5 — Teclado, atalho de atualizar e dose marcada não volta atrás
+v0.2.6.6 — Acabou o "salvei mas não salvou"
 
-• Campos rolam pro topo ao tocar — teclado nunca mais cobre o que você está digitando.
-• Banner publicitário fica abaixo da câmera e relógio do celular, sem sobrepor.
-• Puxe pra atualizar agora funciona em Histórico, Pacientes, Análise e detalhes do paciente também.
-• Marcou dose como Tomada pelo alarme? Painel inicial atualiza na hora, sem voltar a mostrar "atrasada".
+• Bug crônico resolvido: app ficava algumas horas aberto/inativo, depois SOS e tratamento não gravavam silenciosamente. Agora detecta sessão expirada e recupera automaticamente.
+• Se algo falhar, você vê na hora — toast claro explica o motivo em vez de o app fingir que salvou.
+• Performance: limpeza de comandos antigos no servidor que podiam ser chamados por engano.

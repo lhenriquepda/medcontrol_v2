@@ -45,6 +45,8 @@ import OfflineBanner from './components/OfflineBanner'
 import ConsentBanner from './components/ConsentBanner'
 // v0.2.6.1 P1.6 — listener pra conflict bus 409 (mostra toast "Aceitar")
 import ConflictListener from './components/ConflictListener'
+// v0.2.6.6 F5 — toast UI quando mutation falha sem ser 409 (cura silent fail pós-idle)
+import MutationErrorListener from './components/MutationErrorListener'
 import LockScreen from './components/LockScreen'
 import ForceNewPasswordModal from './components/ForceNewPasswordModal'
 import { useAppLock } from './hooks/useAppLock'
@@ -587,6 +589,8 @@ export default function App() {
     <ConsentBanner />
     {/* v0.2.6.1 P1.6 — escuta conflict bus 409 + mostra toast "Aceitar mudança outro dispositivo?" */}
     <ConflictListener />
+    {/* v0.2.6.6 F5 — escuta mutation error bus (não-409) + mostra toast user-friendly */}
+    <MutationErrorListener />
     </>
   )
 }

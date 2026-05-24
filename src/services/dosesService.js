@@ -173,15 +173,45 @@ function parseDoseV2Response(data) {
   return data
 }
 
+// v0.2.6.6 F4 — wrapper de retry pra RPCs v2 quando token zombie (401).
+// RPCs SECURITY DEFINER retornam JSONB {ok:false, code:401} quando auth.uid()
+// é NULL (token expirado pós-idle). parseDoseV2Response lança Error com code=401.
+// Aqui interceptamos: tenta refreshSession() + retry 1× antes de propagar.
+// Cobre cenário "app idle 1h+ → JWT expirou silencioso → user clica → falha mas
+// refresh recupera". Sem isso user vê falha onde recovery automática era possível.
+async function rpcV2WithAuthRetry(rpcName, params) {
+  const callOnce = async () => {
+    const { data, error } = await supabase.rpc(rpcName, params)
+    if (error) throw error
+    return parseDoseV2Response(data)
+  }
+  try {
+    return await callOnce()
+  } catch (e) {
+    const isAuth = e?.code === 401 || e?.code === 403 || /unauthorized|forbidden|jwt/i.test(e?.message || '')
+    if (!isAuth) throw e
+    console.warn('[rpcV2] auth error, tentando refreshSession + retry:', rpcName, e?.code, e?.message)
+    try {
+      const { error: refreshErr } = await supabase.auth.refreshSession()
+      if (refreshErr) {
+        console.warn('[rpcV2] refreshSession falhou:', refreshErr?.message)
+        throw e // propaga original (cliente vai mostrar erro)
+      }
+    } catch (refreshExc) {
+      console.warn('[rpcV2] refreshSession exception:', refreshExc?.message)
+      throw e
+    }
+    return await callOnce()
+  }
+}
+
 export async function confirmDose(id, { actualTime, observation } = {}) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('confirm_dose_v2', {
+    return rpcV2WithAuthRetry('confirm_dose_v2', {
       p_dose_id:     id,
       p_actual_time: actualTime || new Date().toISOString(),
       p_observation: observation || ''
     })
-    if (error) throw error
-    return parseDoseV2Response(data)
   }
   return mock.update('doses', id, {
     status: 'done',
@@ -192,12 +222,10 @@ export async function confirmDose(id, { actualTime, observation } = {}) {
 
 export async function skipDose(id, { observation } = {}) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('skip_dose_v2', {
+    return rpcV2WithAuthRetry('skip_dose_v2', {
       p_dose_id:    id,
       p_observation: observation || ''
     })
-    if (error) throw error
-    return parseDoseV2Response(data)
   }
   return mock.update('doses', id, {
     status: 'skipped',
@@ -208,9 +236,7 @@ export async function skipDose(id, { observation } = {}) {
 
 export async function undoDose(id) {
   if (hasSupabase) {
-    const { data, error } = await supabase.rpc('undo_dose_v2', { p_dose_id: id })
-    if (error) throw error
-    return parseDoseV2Response(data)
+    return rpcV2WithAuthRetry('undo_dose_v2', { p_dose_id: id })
   }
   return mock.update('doses', id, { status: 'pending', actualTime: null })
 }

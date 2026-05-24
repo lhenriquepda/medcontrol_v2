@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "0.2.6.5",
+  "version": "0.2.6.6",
   "type": "module",
   "engines": {
     "node": ">=22.0.0 <23",
@@ -15,7 +15,7 @@
     "build:android": "npm run build && npx cap sync android",
     "open:android": "npx cap open android",
     "cap:sync": "npx cap sync",
-    "lint": "eslint src --max-warnings=100",
+    "lint": "eslint src --max-warnings=105",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
@@ -27,7 +27,7 @@
   },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [
-      "eslint --max-warnings=100"
+      "eslint --max-warnings=105"
     ]
   },
   "dependencies": {

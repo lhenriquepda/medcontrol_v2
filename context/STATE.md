@@ -10,20 +10,31 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.5` (em curso, CI build) — anterior `v0.2.6.4` SHIPPED |
-| **versionCode** | `90` (v0.2.6.5, não-mandatory) — anterior `89` (v0.2.6.4) |
-| **Branch ativa** | `release/v0.2.6.5` |
-| **Último tag master** | `v0.2.6.4` (mergeado 2026-05-23 ~11:30 BRT) — próximo: `v0.2.6.5` |
-| **Ship date v0.2.6.4** | 2026-05-23 11:27 BRT |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.5 (deploy auto post-merge) |
-| **Play Console v0.2.6.5** | ⏳ CI #26341554631 em build — Vetor 4 upload pendente |
+| **Versão** | `v0.2.6.6` (em curso, CI build) — anterior `v0.2.6.5` SHIPPED |
+| **versionCode** | `91` (v0.2.6.6, não-mandatory) — anterior `90` (v0.2.6.5) |
+| **Branch ativa** | `release/v0.2.6.6` |
+| **Último tag master** | `v0.2.6.5` (mergeado 2026-05-23 ~17:00 BRT) — próximo: `v0.2.6.6` |
+| **Ship date v0.2.6.5** | 2026-05-23 16:40 BRT |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.6 (deploy auto post-merge) |
+| **Play Console v0.2.6.6** | ⏳ CI #26347374322 em build — Vetor 4 upload pendente |
+| **Play Console v0.2.6.5** | ✅ vc 90 não-mandatory |
 | **Play Console v0.2.6.4** | ✅ vc 89 mandatory |
 | **Play Console v0.2.6.3** | ✅ vc 88 mandatory (3 bugs P0: cache stale + sticky autofill + falta origem) |
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
 
-**v0.2.6.5 em curso (2026-05-23) — UX mobile fixes + AdMob banner display + bug #0020 dose state stale:**
+**v0.2.6.6 em curso (2026-05-23) — Bug crônico #0023 "perde comunicação BD após idle" RESOLVIDO (8 fixes):**
+
+- ✅ **F1+F2+F3 [`useAppResume.js`]** — re-sync onlineManager (Capacitor Network status) + `qc.resumePausedMutations()` pós-soft-recover + watchdog ping com timeout 5s (token zombie → signOut+reload).
+- ✅ **F4 [`dosesService.js`]** — `rpcV2WithAuthRetry` detecta 401 → refreshSession() + retry 1× antes de propagar. Cura idle longo → user clica → recupera automático.
+- ✅ **F5 [`mutationErrorBus.js` + `MutationErrorListener.jsx` + `mutationRegistry.js`]** — event bus + 8 onError handlers emitem toast UI user-friendly em vez de rollback silent. Cura "salvei mas não salvou".
+- ✅ **F7 [migration drop_rpc_overloads]** — DROP 8 RPC overloads stale: register_sos_dose 3→1, create_treatment_with_doses 2→1, extend_continuous_treatments 2→1, share_patient_by_email 3→1, confirm_dose/skip_dose/undo_dose v1 deprecated. Zero ambiguidade PostgREST.
+- ✅ **F8 [`main.jsx beforeSend`]** — Sentry visibilidade total pra 401/403/409 RPC v2 (skip rate-limit + fingerprint sample). Detecção precoce em prod.
+
+Diagnóstico via 4 agentes paralelos. Postgres_log prod últimas 24h confirmou `permission denied for table doses/patients` recorrente.
+
+**v0.2.6.5 SHIPPED 2026-05-23 16:40 BRT — UX mobile fixes + AdMob banner display + bug #0020 dose state stale:**
 
 - ✅ **#0018 Keyboard-aware scroll** — `useKeyboardAwareScroll` hook global. focusin listener + Capacitor `Keyboard.keyboardWillShow` → scrollIntoView({block:'start'}) com offset dinâmico (ad-banner + update-banner + app-header + 12px). Funciona em todos forms (Login, TreatmentForm, PatientForm, SOS, Settings, DoseHistory search, etc).
 - ✅ **#0019 AdMob banner display** — duplo fix: (a) `initializeForTesting: isUsingTestAd` (não `!PROD` — `vite build` sempre seta PROD=true causando NO_FILL no test slot); (b) `MainActivity.java` mede WindowInsets.statusBars + displayCutout nativo, injeta como `--system-status-bar-height` CSS var + `window.__dosySystemStatusBarHeight` JS var. `useAdMobBanner` lê o valor + `waitForStatusBarHeight(500ms)` + passa como margin no showBanner. Per-device (Pixel 38dp, Samsung 44dp, devices antigos 24dp).

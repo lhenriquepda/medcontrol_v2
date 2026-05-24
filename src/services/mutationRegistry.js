@@ -45,6 +45,8 @@ import { generateDoses } from '../utils/generateDoses'
 import { markInFlight, clearInFlight } from '../state/realtimeGate'
 // v0.2.6.1 P1.6 — bus de conflict 409 (toast "Aceitar mudança outro dispositivo?")
 import { emitConflict } from '../state/conflictBus'
+// v0.2.6.6 F5 — toast UI quando mutation falha (cura bug "silent fail" pós-idle).
+import { emitMutationError } from '../state/mutationErrorBus'
 // v0.2.6.1 P1.10 — Sentry.captureException nos catches healthcare críticos
 import { captureCaught } from './sentry'
 
@@ -256,6 +258,26 @@ function handleDoseMutationError(qc, mutation, error, variables, ctx) {
   }
   // Erro genérico (network, 500, etc) — rollback simples
   rollback(qc, ctx?.snapshots)
+  // v0.2.6.6 F5 — emite toast UI. Pular cancelamento intencional do TanStack
+  // (CancelledError, AbortError) que acontece em flow normal.
+  const isCancelled = error?.name === 'CancelError' || error?.name === 'AbortError'
+  if (!isCancelled) {
+    emitMutationError({ mutation, error, code: error?.code })
+  }
+}
+
+// v0.2.6.6 F5 — helper pra rollback + emit error pras mutations não-healthcare
+// (treatments, patients, registerSos). Antes cada onError fazia rollback silent.
+function rollbackAndEmit(qc, mutation, error, snapshotsKey, ctx, opts = {}) {
+  const snaps = ctx?.[snapshotsKey] ?? []
+  for (const [key, data] of snaps) qc.setQueryData(key, data)
+  if (opts?.extraRollback) {
+    try { opts.extraRollback(ctx) } catch (e) { console.warn('extraRollback fail:', e?.message) }
+  }
+  const isCancelled = error?.name === 'CancelError' || error?.name === 'AbortError'
+  if (!isCancelled) {
+    emitMutationError({ mutation, error, code: error?.code, label: opts?.label })
+  }
 }
 
 // Debounce pra consolidar invalidate de mutações em sequência rápida
@@ -408,8 +430,12 @@ export function registerMutationDefaults(qc, persister = null) {
       await flushPersistImmediate()
       return { doseSnapshots, tempId }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       for (const [key, data] of (ctx?.doseSnapshots ?? [])) qc.setQueryData(key, data)
+      // v0.2.6.6 F5 — toast user em vez de silent rollback
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'registerSos', error, code: error?.code })
+      }
     },
     onSuccess: (_data, _v, ctx) => {
       track(EVENTS.SOS_DOSE_REGISTERED)
@@ -450,8 +476,11 @@ export function registerMutationDefaults(qc, persister = null) {
       qc.setQueryData(['patients'], (old = []) => [tempPatient, ...(old || [])])
       return { prev, tempId }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       if (ctx?.prev !== undefined) qc.setQueryData(['patients'], ctx.prev)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'createPatient', error, code: error?.code })
+      }
     },
     onSuccess: (data, _v, ctx) => {
       track(EVENTS.PATIENT_CREATED)
@@ -488,9 +517,12 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       return { prev, prevSingle, id }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       if (ctx?.prev !== undefined) qc.setQueryData(['patients'], ctx.prev)
       if (ctx?.prevSingle !== undefined) qc.setQueryData(['patients', ctx.id], ctx.prevSingle)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'updatePatient', error, code: error?.code })
+      }
     },
     onSuccess: (data, _v, ctx) => {
       // Remove _optimistic flag substituindo entry pelo retorno real.
@@ -599,12 +631,16 @@ export function registerMutationDefaults(qc, persister = null) {
         doseSnapshots,
       }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       // Rollback treatments via snapshots (todas queryKeys ['treatments', *])
       rollback(qc, ctx?.treatmentSnapshots)
       // Rollback doses por snapshot (todas queryKeys ['doses'] afetadas)
       for (const [key, data] of (ctx?.doseSnapshots ?? [])) {
         qc.setQueryData(key, data)
+      }
+      // v0.2.6.6 F5
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'createTreatment', error, code: error?.code })
       }
     },
     onSuccess: (data, _v, ctx) => {
@@ -663,9 +699,12 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       return { prev, prevSingle, id }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       if (ctx?.prev !== undefined) qc.setQueryData(['treatments'], ctx.prev)
       if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'updateTreatment', error, code: error?.code })
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['treatments'] })
@@ -714,10 +753,13 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       return { treatmentSnapshots, doseSnapshots, prevSingle, id }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       rollback(qc, ctx?.treatmentSnapshots)
       rollback(qc, ctx?.doseSnapshots)
       if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'pauseTreatment', error, code: error?.code })
+      }
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_PAUSED || 'treatment_paused')
@@ -742,9 +784,12 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       return { snapshots, prevSingle, id }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       rollback(qc, ctx?.snapshots)
       if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'resumeTreatment', error, code: error?.code })
+      }
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_RESUMED || 'treatment_resumed')
@@ -780,10 +825,13 @@ export function registerMutationDefaults(qc, persister = null) {
       }
       return { treatmentSnapshots, doseSnapshots, prevSingle, id }
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       rollback(qc, ctx?.treatmentSnapshots)
       rollback(qc, ctx?.doseSnapshots)
       if (ctx?.prevSingle !== undefined) qc.setQueryData(['treatments', ctx.id], ctx.prevSingle)
+      if (!['CancelError','AbortError'].includes(error?.name)) {
+        emitMutationError({ mutation: 'endTreatment', error, code: error?.code })
+      }
     },
     onSuccess: () => {
       track(EVENTS.TREATMENT_ENDED || 'treatment_ended')
