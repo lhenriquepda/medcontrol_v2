@@ -226,35 +226,26 @@ export default function Dashboard() {
   const toggleCollapse = useCallback((id) => setCollapsed((s) => ({ ...s, [id]: !s[id] })), [])
 
   // v0.2.3.9 P1 — handlers swipe estáveis pra preservar React.memo de DoseCard
-  // v0.2.6.14 — telemetria verbose (console.warn) pra rastrear se mutation dispara.
   const handleSwipeConfirm = useCallback(async (dose) => {
-    console.warn('[Dashboard] handleSwipeConfirm ENTER', { doseId: dose.id, medName: dose.medName, mutStatus: confirmMut.status })
     try {
-      console.warn('[Dashboard] confirmMut.mutateAsync calling', { doseId: dose.id })
-      const result = await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
-      console.warn('[Dashboard] confirmMut.mutateAsync RESOLVED', { doseId: dose.id, hasResult: !!result })
+      await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
       toast.show({
         message: `${dose.medName} marcada como tomada.`, kind: 'success',
         undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
       })
     } catch (e) {
-      console.warn('[Dashboard] confirmMut.mutateAsync REJECTED', { doseId: dose.id, errName: e?.name, errMsg: e?.message })
       toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
     }
   }, [confirmMut, undoMut, toast])
 
   const handleSwipeSkip = useCallback(async (dose) => {
-    console.warn('[Dashboard] handleSwipeSkip ENTER', { doseId: dose.id, medName: dose.medName, mutStatus: skipMut.status })
     try {
-      console.warn('[Dashboard] skipMut.mutateAsync calling', { doseId: dose.id })
-      const result = await skipMut.mutateAsync({ id: dose.id, observation: '' })
-      console.warn('[Dashboard] skipMut.mutateAsync RESOLVED', { doseId: dose.id, hasResult: !!result })
+      await skipMut.mutateAsync({ id: dose.id, observation: '' })
       toast.show({
         message: `${dose.medName} marcada como pulada.`, kind: 'warn',
         undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
       })
     } catch (e) {
-      console.warn('[Dashboard] skipMut.mutateAsync REJECTED', { doseId: dose.id, errName: e?.name, errMsg: e?.message })
       toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
     }
   }, [skipMut, undoMut, toast])
