@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, onlineManager } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
@@ -133,12 +133,65 @@ export function useAppResume() {
           // 2. Drop dead websocket channels — useRealtime resubscribe via
           //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
           await supabase.removeAllChannels()
+
+          // v0.2.6.6 F1 — re-sync onlineManager com Capacitor Network. Bridge
+          // listener pode ter morrido junto com WebView durante Doze, deixando
+          // onlineManager.isOnline()=false sticky → toda mutation 'offlineFirst'
+          // pausa silenciosamente. Re-query Network.getStatus() recupera estado real.
+          if (Capacitor.isNativePlatform()) {
+            try {
+              const { Network } = await import('@capacitor/network')
+              const status = await Network.getStatus()
+              onlineManager.setOnline(status.connected)
+            } catch (e) {
+              console.warn('[useAppResume] Network.getStatus failed:', e?.message)
+            }
+          }
+
           // 3. Item #134 (egress-audit-2026-05-05 F1): refetchQueries sem
           //    invalidateQueries antes. invalidate marca TODAS queries stale
           //    e dispara refetch separado em cada useQuery active — duplica
           //    round-trips com refetchOnWindowFocus. refetchQueries({active})
           //    sozinho re-executa só queries observadas.
           await qc.refetchQueries({ type: 'active' })
+
+          // v0.2.6.6 F2 — drenar fila de mutations persistidas durante idle.
+          // PersistQueryClientProvider só chama resumePausedMutations() no boot
+          // hydrate. Após soft recover pós-idle, mutations dormindo no IDB ficam
+          // sem dispatch. Esta linha força reprocessar.
+          qc.resumePausedMutations().catch((e) => {
+            console.warn('[useAppResume] resumePausedMutations failed:', e?.message)
+          })
+
+          // v0.2.6.6 F3 — watchdog ping pós-resume. Token pode ter sido
+          // "renovado" pelo refreshSession() acima mas estar zombie (processLock
+          // órfão pós WebView pause). Ping leve detecta esse estado: se 401 ou
+          // timeout 5s, força signOut + reload — único caso onde reload é OK
+          // porque o client supabase-js está corrompido (processLock state machine).
+          try {
+            const pingPromise = supabase
+              .from('user_prefs')
+              .select('user_id')
+              .limit(1)
+              .maybeSingle()
+            const pingResult = await Promise.race([
+              pingPromise,
+              new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), 5000)),
+            ])
+            if (pingResult?.__timeout) {
+              console.warn('[useAppResume] watchdog ping timeout 5s → supabase client zombie → reload')
+              try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+              window.location.reload()
+              return
+            }
+            if (pingResult?.error && (pingResult.error.status === 401 || pingResult.error.code === 'PGRST301')) {
+              console.warn('[useAppResume] watchdog ping 401 → token zombie → signOut')
+              await supabase.auth.signOut()
+              return
+            }
+          } catch (e) {
+            console.warn('[useAppResume] watchdog ping exception (não-crítico):', e?.message)
+          }
         } catch (err) {
           // Item #190 (release v0.2.1.3): NÃO forçar reload em catch.
           // Reload remonta React tree → useAuth init → getUser() boot check.

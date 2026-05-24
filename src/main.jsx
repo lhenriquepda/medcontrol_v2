@@ -170,6 +170,17 @@ if (SENTRY_DSN && import.meta.env.PROD) {
       const excValue = event.exception?.values?.[0]?.value || ''
       if (SENTRY_KNOWN_NOISE.some((n) => excValue.includes(n))) return null
 
+      // v0.2.6.6 F8 — visibilidade total pra silent fails healthcare (401/403/409
+       // RPC v2). Eventos raros mas críticos: pular rate-limit + dedup pra ter
+      // visibilidade prod completa. Sem isso bug crônico "mutation falha silencioso
+      // pós-idle" demora pra detectar (sample 1% reduz já-raros eventos pra zero).
+      const errorCode = event.tags?.error_code
+      const mutationTag = event.tags?.mutation
+      const isCriticalAuthError = mutationTag && ['401','403','409'].includes(String(errorCode))
+      if (isCriticalAuthError) {
+        return event // sem rate-limit, sem fingerprint sample
+      }
+
       // v0.2.6.1 P8.9 — fingerprint dedup: agrupa erros similares + amostra 1% repetições
       if (event.exception?.values?.[0]) {
         const exc = event.exception.values[0]
