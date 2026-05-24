@@ -4,6 +4,8 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
 import { getValidSession, AuthLostError, onAuthLost } from '../services/sessionManager'
+// v0.2.7.0 Fase 3 — drena mutations pendentes no resume (idempotência server-side).
+import { drainPendingMutations } from '../services/markDose'
 
 /**
  * useAppResume — handle app coming back from background/inactive state.
@@ -76,10 +78,17 @@ export function useAppResume() {
         }
       }
 
+      // Drena mutations pendentes ANTES de refetch — evita race condition
+      // (refetch carregaria server stale antes de drain aplicar mutations locais).
+      // Idempotência server-side via mutation_log garante exactly-once mesmo se
+      // drain duplica (ex: heartbeat e onResume concorrentes).
+      try {
+        await drainPendingMutations()
+      } catch (e) {
+        console.warn('[useAppResume] drainPendingMutations failed:', e?.message)
+      }
+
       // Refetch active queries pra trazer fresh data.
-      // NOTA: removido predicate gate-aware (realtimeGate.isInFlight) — Fase 4
-      // remove o gate inteiro. Por ora todas active queries refetcham; mutations
-      // em flight são protegidas por idempotência server-side (Fase 3, mutation_log).
       try {
         await qc.refetchQueries({ type: 'active' })
       } catch (e) {

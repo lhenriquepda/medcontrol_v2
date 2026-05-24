@@ -1,12 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listDoses, listSosRules, upsertSosRule, deleteSosRule } from '../services/dosesService'
+import { markDose } from '../services/markDose'
+import { useDoseStore } from '../state/doseStore'
 
 // #092 (release v0.1.7.5) — queryKey timestamp normalization.
-// Callers tipicamente passam `new Date().toISOString()` em filter.from/to,
-// gerando queryKey diferente a cada render → refetch storm.
-// Soluciona arredondando pra hora corrente no queryKey (mas mantém timestamp
-// real no queryFn pra precisão da query SQL).
 function roundToHour(iso) {
   if (!iso) return iso
   const d = new Date(iso)
@@ -15,9 +13,13 @@ function roundToHour(iso) {
   return d.toISOString()
 }
 
+/**
+ * useDoses — Para queries com filter custom (DoseHistory, Reports, Analytics).
+ * Dashboard NÃO usa este hook — usa useDashboardData (Zustand store via fetchDashboard).
+ *
+ * v0.2.7.0 Fase 2 — TanStack persist removido, mas useQuery sem persist mantém.
+ */
 export function useDoses(filter = {}, options = {}) {
-  // Normaliza timestamps pra queryKey estável dentro da hora.
-  // Usa filter.from/to crus na queryFn (precisão real).
   const keyFilter = useMemo(() => ({
     ...filter,
     from: roundToHour(filter.from),
@@ -27,15 +29,6 @@ export function useDoses(filter = {}, options = {}) {
   return useQuery({
     queryKey: ['doses', keyFilter],
     queryFn: () => listDoses(filter),
-    // #151 (release v0.2.0.11) — refetchInterval OPT-IN.
-    // Antes: 5min hardcoded em TODAS queries → 5 active queryKeys polling juntas.
-    // Math idle: 5 × 50KB × 12 cycles/h × 24h × 1000 users = 14GB/dia.
-    //
-    // Agora: default OFF. Dashboard (caller principal) passa pollIntervalMs:15*60_000.
-    // Outros (Settings, DoseHistory, Reports) ficam sem polling — refetch só em
-    // mount + Realtime postgres_changes + invalidate explícito.
-    //
-    // Estimado população 1000 users idle: 5GB/dia (antes #151) → ~1GB/dia (-80%).
     refetchInterval: options.pollIntervalMs || false,
     refetchIntervalInBackground: false,
     staleTime: 2 * 60_000,
@@ -43,26 +36,66 @@ export function useDoses(filter = {}, options = {}) {
   })
 }
 
-// Item #204 (release v0.2.1.7) — Mutation queue offline.
-// Hooks de mutations referem mutationKey; mutationFn + onMutate/onError/onSettled
-// vêm de src/services/mutationRegistry.js (registrados em main.jsx antes do hydrate).
-// Permite resumePausedMutations encontrar mutationFn pós-hydrate de queue persistida.
-export function useConfirmDose() {
-  return useMutation({ mutationKey: ['confirmDose'] })
+/**
+ * v0.2.7.0 Fase 3 — Mutation hooks substituídos.
+ *
+ * Antes (v0.2.6.x): `useMutation({ mutationKey: ['confirmDose'] })` + defaults
+ * registrados em mutationRegistry. Cadeia: hook → TanStack mutation pipeline →
+ * setMutationDefaults onMutate/mutationFn/onError/onSettled → realtimeGate →
+ * versionedCache → flushPersistImmediate → 6 camadas mal coordenadas.
+ *
+ * Agora: thin wrappers em torno de markDose() (Refactor_Sync_v2 §5).
+ * Mantém API `useXDose()` compat com Dashboard / DoseModal / MultiDoseModal:
+ *   const mut = useConfirmDose()
+ *   mut.mutate({ id, actualTime, observation })  ou  mut.mutateAsync(...)
+ *   mut.status === 'pending' enquanto await
+ */
+function useDoseAction(action) {
+  const [status, setStatus] = useState('idle')
+  const [error, setError] = useState(null)
+
+  const exec = useCallback(async (vars) => {
+    setStatus('pending')
+    setError(null)
+    const { id, ...rest } = (action === 'undo' && typeof vars === 'string')
+      ? { id: vars }
+      : vars
+    const result = await markDose({
+      doseId: id,
+      action,
+      payload: rest,
+    })
+    if (result.ok) {
+      setStatus('success')
+      return result.dose
+    }
+    setStatus('error')
+    setError(result.error || new Error('markDose failed'))
+    if (result.error) throw result.error
+    return null
+  }, [action])
+
+  // Compat com TanStack mutation API
+  return {
+    status,
+    error,
+    isPending: status === 'pending',
+    isSuccess: status === 'success',
+    isError: status === 'error',
+    mutate: (vars) => { exec(vars).catch(() => {}) },
+    mutateAsync: exec,
+    reset: () => { setStatus('idle'); setError(null) },
+  }
 }
 
-export function useSkipDose() {
-  return useMutation({ mutationKey: ['skipDose'] })
-}
+export function useConfirmDose() { return useDoseAction('confirm') }
+export function useSkipDose() { return useDoseAction('skip') }
+export function useUndoDose() { return useDoseAction('undo') }
 
-export function useUndoDose() {
-  return useMutation({ mutationKey: ['undoDose'] })
-}
-
+// ─── SOS rules (não-healthcare-critical, mantém TanStack) ───────────────────
 export function useRegisterSos() {
   return useMutation({ mutationKey: ['registerSos'] })
 }
-
 export function useSosRules(patientId) {
   return useQuery({
     queryKey: ['sos_rules', patientId],
@@ -83,4 +116,11 @@ export function useDeleteSosRule() {
     mutationFn: ({ id }) => deleteSosRule(id),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['sos_rules', vars.patientId] })
   })
+}
+
+// Exporta hook do store pra Dashboard/outros que querem ler doses do store local.
+// Equivalente a useDoses sem filter — retorna todas doses memoizadas.
+export function useDosesFromStore() {
+  const dosesMap = useDoseStore(s => s.doses)
+  return useMemo(() => Array.from(dosesMap.values()), [dosesMap])
 }

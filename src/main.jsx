@@ -337,10 +337,12 @@ if (Capacitor.isNativePlatform()) {
 }
 
 // [Fix B v0.2.1.8] Boot bloqueante — pre-mount sync Network.getStatus + setOnline
-// pra garantir onlineManager.isOnline() reflete realidade ANTES React mount +
-// PersistQueryClientProvider hydrate + resumePausedMutations. Sem isso, mutations
-// rehydradas em avião mode tentam executar (1s), falham, re-pausam — burn fetches
-// + race condition observada logcat 09:24:22.
+// pra garantir onlineManager.isOnline() reflete realidade ANTES React mount.
+//
+// v0.2.7.0 Fase 3 — drena pending mutations queue (IDB) ANTES do mount.
+// Mutations persistidas em sessão anterior (process kill mid-RPC) são retomadas
+// via idempotência server-side (mutation_log PK request_id). Não-bloqueante:
+// fire-and-forget pra não atrasar UI mount.
 async function boot() {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -351,6 +353,12 @@ async function boot() {
       console.warn('[onlineManager] pre-mount fail:', e?.message)
     }
   }
+
+  // Drena pending mutations em background (não bloqueia UI mount).
+  // Vai ser tentado de novo no useAppResume onResume (defesa em camadas).
+  import('./services/markDose').then(({ drainPendingMutations }) => {
+    drainPendingMutations().catch(e => console.warn('[boot] drain fail:', e?.message))
+  })
 
   ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
