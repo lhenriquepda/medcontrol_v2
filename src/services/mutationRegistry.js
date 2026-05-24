@@ -56,8 +56,15 @@ const DOSE_PROTECTED_KEYS = [
   ['dashboard-payload'],
   ['doses'],
 ]
+// v0.2.6.10 FIX B102 H1 — TTL explícito 10s (default era 2500ms via realtimeGate).
+// Mutation lifecycle real: onMutate (10ms) → RPC (200-2000ms) → onSuccess (10ms)
+// → refetchDoses debounce 1500ms → RPC refetch (200-2000ms) → setQueryData.
+// Total 5-7s. TTL 2500ms expirava ANTES do refetch terminar → Realtime/refetch
+// payload passava no gate → cache otimista sobrescrito → dose voltava pending.
+// 10s cobre toda janela com folga. Cleared explicitamente em onSettled.
+const GATE_TTL_MS = 10_000
 function markDosesInFlight() {
-  for (const key of DOSE_PROTECTED_KEYS) markInFlight(key)
+  for (const key of DOSE_PROTECTED_KEYS) markInFlight(key, GATE_TTL_MS)
 }
 function clearDosesInFlight() {
   for (const key of DOSE_PROTECTED_KEYS) clearInFlight(key)

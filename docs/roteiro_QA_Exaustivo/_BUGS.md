@@ -271,9 +271,35 @@ Screenshot: `coverage/emul5554-15-offline.png` mostra banner "2 ações salvas o
 
 ---
 
-## 🔴 B102 REOPEN — v0.2.6.9 hotfix (2026-05-24 15:30 BRT)
+## 🔴 B102 REOPEN #2 — v0.2.6.10 hotfix (2026-05-24 15:35 BRT)
 
-**User reportou que v0.2.6.7 NÃO resolveu o bug crônico**. Sintoma atualizado:
+**User reportou novamente após v0.2.6.9**:
+> "fiquei um tempinho com app aberto, marquei uma dose como tomada, fechei app
+> e quando abri a mesma dose tava atrasada ainda"
+
+**Diagnóstico v3 (agente investigador)**: Race condition entre **heartbeat 60s
+(adicionado em v0.2.6.9)** e mutation otimista em flight. Ironicamente o fix
+v0.2.6.9 INTRODUZIU o bug que se manifestou pra user.
+
+**Root cause real (3 vetores combinados)**:
+
+| H | Causa | Fix v0.2.6.10 |
+|---|---|---|
+| **H1** | `realtimeGate` TTL 2500ms expirava ANTES do refetch da mutation terminar (lifecycle real: 5-7s). Refetch payload trazia status server stale, passava no gate (expirado) → cache otimista sobrescrito. | TTL gate 2500→10000ms em `realtimeGate.js` + `versionedCache.js` + `mutationRegistry.js` (`GATE_TTL_MS=10_000` passado explicitamente em `markDosesInFlight`). |
+| **H2** | Heartbeat 60s usava `supabase.from('user_prefs').limit(1)` (network ping) que disparava `refetchQueries({type:'active'})` em paralelo a mutation user-initiated → server stale vencia. | Heartbeat mudou pra `supabase.auth.getSession()` LOCAL-ONLY (sem rede). Token expired detectado direto pelo `expires_at` da session. |
+| **H3** | `qc.refetchQueries({type:'active'})` em useAppResume.onResume e heartbeat NÃO filtravam por `isInFlight`. Atropelava mutation in-flight protegida pelo gate. | Adicionado `predicate: q => !isInFlight(q.queryKey)` em ambos paths. Importa `isInFlight` de realtimeGate. |
+
+**Validação esperada**: User reproduz fluxo: abre app, espera 60s+ (heartbeat
+roda 1+ vezes), marca dose, fecha app, reabre. Sucesso = dose persiste BD.
+
+**Trade-off**: TTL gate 10s introduz delay de até 10s em mutations cross-device
+(outro cuidador no mesmo paciente vê delay). Aceito vs catástrofe data loss.
+
+---
+
+## 🟡 B102 REOPEN #1 — v0.2.6.9 hotfix (HISTÓRICO — não resolveu)
+
+**User reportou que v0.2.6.7 NÃO resolveu o bug crônico**. Sintoma:
 > "abro o app e tudo funciona, fica aberto uns minutos ele fica muito lento
 > e qualquer alteração não persiste no BD"
 

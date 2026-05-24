@@ -24,10 +24,15 @@
  *   - Limpeza centralizada via setInterval de housekeeping.
  */
 
-// 2.5s = janela suficiente pra mutation otimista + RPC + onSettled.
-// Mantém-se curto pra não bloquear updates legítimos por muito tempo (ex.
-// outro cuidador no mesmo paciente fez mutação em outro device).
-const LATENCY_BUDGET_MS = 2500
+// v0.2.6.10 FIX B102 H1+H3 — 2500 → 10000ms.
+// Diagnóstico v3 (2026-05-24): mutation lifecycle típico mede 5-7s:
+//   onMutate (10ms) + RPC (200-2000ms) + onSuccess (10ms) + refetchDoses
+//   debounce 1500ms + RPC refetch (200-2000ms) + setQueryData (~10ms).
+// TTL 2500ms expirava ANTES do refetch terminar → Realtime/refetch payload
+// passava no gate → cache otimista sobrescrito por server stale.
+// 10s cobre toda janela. Trade-off: outro device cuidador no mesmo paciente
+// vê delay de até 10s em vez de 2.5s — aceitável vs bug crônico data loss.
+const LATENCY_BUDGET_MS = 10000
 
 const inFlight = new Map() // serializedKey -> expiresAt (timestamp)
 

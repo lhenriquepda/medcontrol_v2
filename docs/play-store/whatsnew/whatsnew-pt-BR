@@ -1,5 +1,7 @@
-v0.2.6.10 — últimas melhorias UX pós-QA
+v0.2.6.10 — fix DEFINITIVO bug crônico "marquei, fechei, voltou pendente"
 
-• DoseModal: botões Ignorar/Pular/Tomada com área de toque 48dp (Material) + mais espaço entre eles — menos toque acidental no botão errado.
-• Ajustes > Versão: nova linha "Última sincronização" mostra há quanto tempo o app puxou dados do servidor (debug rápido se algo parece atrasado).
-• QA automation: data-testid em DoseCard, DoseModal, MedNameInput e CategoryPicker — base pra testes E2E determinísticos.
+• Bug do "marquei dose mas voltou atrasada após fechar app" finalmente corrigido — race entre heartbeat de saúde e gravação no servidor que sobrescrevia a marcação otimista.
+• Heartbeat agora usa checagem local em vez de chamada de rede (não atropela mais mutations em curso).
+• Janela de proteção do cache aumentada de 2.5s pra 10s — cobre lifecycle completo da marcação até refetch final.
+• DoseModal: botões com área de toque 48dp + espaçamento maior (menos toque acidental).
+• Ajustes: nova linha "Última sincronização" pra debug rápido.
