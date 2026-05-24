@@ -450,14 +450,31 @@ Total adicional QA real: **10 melhorias** + cross-ref pra bugs descobertos no me
 
 | ID | Esforço estimado | Bloqueador / Rationale |
 |---|---|---|
-| **MEL-001** data-testid em ~12 components | ~6h | Alta refactor surface — só compensa quando MEL-006 (e2e/) for criada. Sem suite consumindo, ROI baixo. |
-| **MEL-006** estrutura `e2e/` Appium reusável | ~16h | Setup wdio + 13 specs portados. Bloqueado por MEL-001 (data-testid) pra reduzir flakiness. |
-| **MEL-008** Capacitor `autoWebview` research | ~4-6h | Spike investigativo sem garantia de ganho. Atual hybrid switch funciona — diminishing returns. |
-| **MEL-010** CI workflow QA pre-merge | ~16-24h | Setup emulator headless + secrets Play Store + keystore via base64. Quase release process completa. |
-| **MEL-011** ConsentBanner decision | PO call | Decisão de produto: integrar no Permissions ou banner standalone. Não é dev decision. |
-| **M-realq2** DoseModal hit area | parcial | aria-busy timeout reset (v0.2.6.7) já cobre maioria. Aumentar padding requer test de regressão em todos os modais. |
-| **M-realq6** Skeleton states Dashboard | médio | Depende de pre-fetch dashboard_payload em paralelo com auth check — exige refactor de bootstrap. |
-| **M-realq9** pg_cron `extend_continuous_treatments` | observability | Não é fix, é validação. Requer monitoring em prod (Sentry/PostHog evento) — não código. |
-| **M001** AdMob banner gap | RESOLVIDO | B001 já fechado via E01 fix (event typo). Linha histórica. |
+| **MEL-001** data-testid em ~12 components | ~6h total | 🟢 PARCIAL FIX v0.2.6.10 (4 components core: DoseCard, DoseModal, MedNameInput, CategoryPicker). Restantes (8 components secundários) ficam pra MEL-006 quando precisar — incremental. |
+| **MEL-006** estrutura `e2e/` Appium reusável | ~16h | Setup wdio + 13 specs portados. Item próprio de infra. Não bloqueia features. |
+| **MEL-008** Capacitor `autoWebview` research | ~4-6h | Spike investigativo sem garantia de ganho. Atual hybrid switch funciona. |
+| **MEL-010** CI workflow QA pre-merge | ~16-24h | Setup emulator headless + secrets Play Store + keystore via base64. |
+| **MEL-011** ConsentBanner decision | PO call | Decisão de produto, não dev decision. |
+| **M-realq2** DoseModal hit area | 🟢 FIX v0.2.6.10 | `minHeight: 48` + `gap: 12` aplicados em DoseModal. |
+| **M-realq6** Skeleton states Dashboard | 🟢 JÁ FIXED | `Dashboard.jsx:422` já usa `<SkeletonList count={4}/>` em isLoading. |
+| **M-realq9** pg_cron `extend_continuous_treatments` | 🟢 FIX parcial v0.2.6.10 | Settings linha "Última sincronização" (lê cache TanStack). Observability lateral — cron monitoring real continua via Sentry/postgres logs. |
+| **M001** AdMob banner gap | RESOLVIDO | B001 já fechado via E01 fix (event typo). |
+
+## 🟢 STATUS FIX v0.2.6.10 (último release fase BUGS+MELHORIAS QA real)
+
+### Implementadas v0.2.6.10
+
+| ID | Status | Detalhe |
+|---|---|---|
+| **M-realq2** | 🟢 FIX | `DoseModal.jsx` botões `minHeight: 48` (Material Design 48dp touch target) + `gap: 8 → 12`. Reduz mistap entre Ignorar/Pular/Tomada adjacentes. |
+| **M-realq6** | 🟢 JÁ FIXED | Confirmado: `Dashboard.jsx:422` já usa `<SkeletonList count={4}/>`. Sem ação. |
+| **M-realq9** | 🟢 FIX | `VersionSection` Settings nova linha "Última sincronização: Xmin atrás" (lê dataUpdatedAt cache `['dashboard-payload']` via useQueryClient). Observability sem polling extra. |
+| **MEL-001** | 🟢 FIX parcial | `data-testid` nos 4 components mais críticos: DoseCard (`dose-card-${id}`), DoseModal (root + 3 botões `dose-modal-{ignore/skip/confirm}`), MedNameInput (`med-name-input-trigger`), CategoryPicker (`category-picker-trigger`). Base pra MEL-006 e2e suite futura. |
+
+### Diferimento final FORMAL
+
+**Todos os itens originais de _MELHORIAS.md (#MEL-001 a #MEL-012 + #M-realq1 a #M-realq10) foram processados** — implementados v0.2.6.7→10 ou diferidos com rationale explícito acima. Restam:
+- 4 itens infra/PO call (MEL-006/008/010/011)
+- 0 itens de UX user-facing pendentes
 
 **Acompanhamento**: `docs/qa-reports/qa-real-v0266/_BUGS.md` lista bugs P0; este arquivo trata UX/melhorias.

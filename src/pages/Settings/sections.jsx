@@ -425,7 +425,20 @@ export function DataPrivacySection({ exportingData, exportUserData, onDeleteClic
 }
 
 // ─── Versão / Update / FAQ ───
-export function VersionSection({ update }) {
+export function VersionSection({ update, lastSyncAt }) {
+  // v0.2.6.10 M-realq9 — formato relativo "agora / Xmin / Xh" pra última sync RPC dashboard.
+  // Source: dataUpdatedAt do useDashboardPayload cache (passado via prop).
+  const lastSyncLabel = (() => {
+    if (!lastSyncAt) return 'nunca'
+    const sec = Math.floor((Date.now() - lastSyncAt) / 1000)
+    if (sec < 30) return 'agora mesmo'
+    if (sec < 60) return `${sec}s atrás`
+    const min = Math.floor(sec / 60)
+    if (min < 60) return `${min}min atrás`
+    const h = Math.floor(min / 60)
+    if (h < 24) return `${h}h atrás`
+    return `${Math.floor(h / 24)}d atrás`
+  })()
   return (
     <motion.section variants={sectionVariant}>
       <Card padding={16}>
@@ -437,6 +450,12 @@ export function VersionSection({ update }) {
             }}>Versão</p>
             <p style={{ fontSize: 12, color: 'var(--dosy-fg-secondary)', margin: '2px 0 0 0' }}>
               Dosy v{update.current} · pt-BR
+            </p>
+            <p style={{
+              fontSize: 11, color: 'var(--dosy-fg-tertiary)', margin: '4px 0 0 0',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              Última sincronização: <strong>{lastSyncLabel}</strong>
             </p>
           </div>
           {update.available ? (

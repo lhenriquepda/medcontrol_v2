@@ -91,6 +91,7 @@ export default function CategoryPicker({
 
       <button
         type="button"
+        data-testid="category-picker-trigger"
         disabled={disabled}
         onClick={() => !disabled && setOpen(true)}
         aria-haspopup="dialog"

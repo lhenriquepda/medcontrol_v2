@@ -3,6 +3,10 @@ import { useQueryClient, onlineManager } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
+// v0.2.6.10 FIX B102 H3 — proteger refetchQueries do useAppResume com gate.
+// Heartbeat/onResume disparavam refetch sem filtro, atropelando mutation
+// otimista em flight — server retornava status stale → cache sobrescrito.
+import { isInFlight } from '../state/realtimeGate'
 
 /**
  * useAppResume — handle app coming back from background/inactive state.
@@ -167,7 +171,15 @@ export function useAppResume() {
           //    e dispara refetch separado em cada useQuery active — duplica
           //    round-trips com refetchOnWindowFocus. refetchQueries({active})
           //    sozinho re-executa só queries observadas.
-          await qc.refetchQueries({ type: 'active' })
+          //
+          // v0.2.6.10 FIX B102 H3 — predicate gate-aware. Mutation otimista
+          // em flight marca queryKey no gate (TTL 10s). Sem filtro, soft
+          // recover refetchQueries atropelava mutation em curso, server
+          // retornava status stale → cache sobrescrito → dose voltava pending.
+          await qc.refetchQueries({
+            type: 'active',
+            predicate: (q) => !isInFlight(q.queryKey),
+          })
 
           // v0.2.6.6 F2 — drenar fila de mutations persistidas durante idle.
           // PersistQueryClientProvider só chama resumePausedMutations() no boot
@@ -262,7 +274,13 @@ export function useAppResume() {
     // v0.2.6.9 FIX UI-LENTA — heartbeat ativo (independente visibilitychange).
     // Roda mesmo com app visível continuamente. Detecta supabase client zombie,
     // WebSocket Realtime dead, processLock orphan que NÃO disparam events.
-    // Se ping falha, repete soft recover (drop channels + refetch + drain mutations).
+    //
+    // v0.2.6.10 FIX B102 H2 — heartbeat ping mudou de network query (`from('user_prefs')`)
+    // para `getSession()` LOCAL-ONLY (sem rede). Diagnóstico v3 revelou que o ping
+    // de rede a cada 60s race-condition-ava com mutation otimista em flight: heartbeat
+    // disparava refetch ANTES da mutation drenar → server stale sobrescrevia cache.
+    // getSession() lê SecureStorage local, retorna null/session sem network call.
+    // Token zombie (expires_at < now) é detectado direto + soft reconnect.
     const heartbeatTimer = setInterval(async () => {
       // Skip se documento hidden (foreground listener cobre quando volta).
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
@@ -270,14 +288,17 @@ export function useAppResume() {
       if (refreshInProgress) return
       try {
         const pingResult = await Promise.race([
-          supabase.from('user_prefs').select('user_id').limit(1).maybeSingle(),
+          supabase.auth.getSession(),
           new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), HEARTBEAT_TIMEOUT_MS)),
         ])
         const isTimeout = pingResult?.__timeout
-        const is401 = pingResult?.error && (pingResult.error.status === 401 || pingResult.error.code === 'PGRST301')
+        const sess = pingResult?.data?.session
+        const nowSec = Math.floor(Date.now() / 1000)
+        const tokenExpired = sess?.expires_at && sess.expires_at < nowSec
+        const is401 = !sess || tokenExpired
         if (!isTimeout && !is401) return  // saudável, nada a fazer
 
-        console.warn('[useAppResume] heartbeat fail', isTimeout ? 'TIMEOUT' : '401', '→ soft reconnect')
+        console.warn('[useAppResume] heartbeat fail', isTimeout ? 'TIMEOUT' : (tokenExpired ? 'EXPIRED' : '401'), '→ soft reconnect')
         refreshInProgress = true
         try {
           // Drop dead WebSocket channels — useRealtime re-subscribe via auth event.
@@ -293,7 +314,12 @@ export function useAppResume() {
             }
           }
           // Refetch active queries pra recuperar payload stale.
-          await qc.refetchQueries({ type: 'active' })
+          // v0.2.6.10 FIX B102 H3 — predicate gate-aware. Sem filtro, heartbeat
+          // refetch atropelava mutation otimista em flight (server stale vencia).
+          await qc.refetchQueries({
+            type: 'active',
+            predicate: (q) => !isInFlight(q.queryKey),
+          })
           // Drena mutations persistidas dormindo durante degradação.
           qc.resumePausedMutations().catch(() => { /* best-effort */ })
         } catch (e) {

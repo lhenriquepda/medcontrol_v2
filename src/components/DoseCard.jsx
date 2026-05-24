@@ -195,6 +195,7 @@ function DoseCard({ dose, onClick, onSwipeConfirm, onSwipeSkip }) {
   // Actionable → wrap. Outer wrapper carrega border-radius pra clip swipe layers.
   return (
     <div
+      data-testid={`dose-card-${dose.id}`}
       style={{
         position: 'relative',
         overflow: 'hidden',

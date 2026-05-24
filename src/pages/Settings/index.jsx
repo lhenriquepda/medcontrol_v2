@@ -2,8 +2,9 @@
 // Antes: 692 LOC monolítico. Agora: ~200 LOC orchestrator + sections.jsx + Row.jsx + constants.js.
 // Sections puras receivem state via props. State + handlers + queries ficam aqui.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useQueryClient } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { TIMING } from '../../animations'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -53,6 +54,19 @@ export default function Settings() {
   const appLock = useAppLock()
   const guard = useOfflineGuard()
   const isNative = Capacitor.isNativePlatform()
+
+  // v0.2.6.10 M-realq9 — última sincronização Dashboard (observability).
+  // Lê dataUpdatedAt do cache TanStack `['dashboard-payload', *]` mais recente.
+  // O(N) no findAll vale: chave inativa após user sair do Dashboard, ~1-3 entries cache.
+  const qc = useQueryClient()
+  const lastSyncAt = useMemo(() => {
+    try {
+      const entries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+      if (!entries.length) return null
+      const sorted = entries.slice().sort((a, b) => (b.state.dataUpdatedAt || 0) - (a.state.dataUpdatedAt || 0))
+      return sorted[0]?.state?.dataUpdatedAt || null
+    } catch { return null }
+  }, [qc])
 
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -263,7 +277,7 @@ export default function Settings() {
           />
         )}
 
-        <VersionSection update={update} />
+        <VersionSection update={update} lastSyncAt={lastSyncAt} />
       </motion.div>
 
       <ConfirmDialog

@@ -27,7 +27,10 @@
  *     caso comum sem depender de relógio.
  */
 
-const LATENCY_BUDGET_MS = 2500
+// v0.2.6.10 FIX B102 H1 — alinhar com realtimeGate (2500 → 10000ms).
+// Mutation lifecycle real mede 5-7s; janela 2.5s expirava cedo → server
+// refetch vencia stamp local → dose voltava pra pending.
+const LATENCY_BUDGET_MS = 10000
 
 /**
  * Stampa uma dose com timestamp local. Use no onMutate antes de setQueryData.
