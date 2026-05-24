@@ -70,12 +70,15 @@ export default defineConfig(({ mode }) => {
     build: {
       // Aud 4.5.7 G1: source maps gerados pra upload Sentry. Excluídos do client final.
       sourcemap: isProd ? 'hidden' : 'inline',
-      // Aud 4.5.1 G5 — strip console.log/warn/info/debug via Terser.
+      // Aud 4.5.1 G5 — strip console.log/info/debug via Terser.
+      // v0.2.6.15 — console.warn PRESERVADO temporariamente pra capturar
+      // telemetria swipe handler (B102 diagnóstico devDebug build).
+      // Re-add 'console.warn' em pure_funcs em v0.2.6.16+ após root cause.
       minify: isProd ? 'terser' : 'esbuild',
       terserOptions: isProd
         ? {
             compress: {
-              pure_funcs: ['console.log', 'console.warn', 'console.info', 'console.debug'],
+              pure_funcs: ['console.log', 'console.info', 'console.debug'],
               drop_debugger: true,
             },
           }
