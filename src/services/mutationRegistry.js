@@ -313,14 +313,22 @@ export function registerMutationDefaults(qc, persister = null) {
   _qcRef = qc
   _persisterRef = persister
   // ─── Doses ──────────────────────────────────────────────────────────
-  // v0.2.6.7 INSTRUMENTAÇÃO B102 — telemetria verbose pra trackear lifecycle
-  // (cura bug crônico "marca dose mas BD não persiste"). Cada estágio loga
-  // via Sentry breadcrumb pra reconstruir o que aconteceu em prod.
-  // Remover quando B102 fechado.
+  // v0.2.6.7 INSTRUMENTAÇÃO B102 — telemetria verbose pra trackear lifecycle.
+  //
+  // v0.2.6.9 FIX UI-LENTA: wrap em DEV-only. Em PROD WebView Android, cada
+  // `console.info` faz bridge JS↔Native (~1-3ms) + cada `Sentry.addBreadcrumb`
+  // serializa JSON pra buffer 100-entry. 7 calls/mutation × 50 mutations sessão
+  // = 350+ bridge calls + 350 breadcrumbs sliding/dropping. Hot path acumula
+  // event loop pressure → UI scroll/animação travada após poucos minutos.
+  //
+  // DEV/devDebug: mantém logs pra reproduzir B102.
+  // PROD: silencia. Sentry continua capturando errors via captureException
+  // em handleDoseMutationError (cobertura preservada).
+  const _IS_DEV = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV
   function logMut(stage, mutation, extra = {}) {
+    if (!_IS_DEV) return
     try {
       console.info(`[mut:${mutation}] ${stage}`, extra)
-      // Sentry breadcrumb invisível — só ativa se telemetria opt-in
       if (typeof window !== 'undefined' && window.Sentry?.addBreadcrumb) {
         window.Sentry.addBreadcrumb({
           category: `mutation.${mutation}`,

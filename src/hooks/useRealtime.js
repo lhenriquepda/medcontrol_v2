@@ -46,15 +46,16 @@ const TABLE_TO_KEYS = {
  *   3. patient_shares fica sem filter (multi-user resource — necessário
  *      receber notif quando outro user compartilha paciente comigo)
  */
-// v0.2.2.2 (#212) — 60s → 300s. Audit revelou storm rescheduleAll cadência 60s
-// gatilhado por watchdog reconnect cycle (channel state !== 'joined' em Android
-// Doze + token refresh window → force reconnect → refetchQueries ['doses'] →
-// useEffect App.jsx detecta new data ref → scheduleDoses → rescheduleAll storm).
-// 5min reduz frequência 5×. Status callbacks (CLOSED/CHANNEL_ERROR/TIMED_OUT)
-// continuam funcionando — watchdog é só safety net pra silent fail (heartbeat
-// parou mas status não disparou). Item separado: investigar pq channel state
-// não é 'joined' a cada watchdog tick em S25 Ultra.
-const WATCHDOG_INTERVAL_MS = 300_000 // 5min — verifica saúde do channel
+// v0.2.6.9 FIX UI-LENTA — 300s → 60s.
+// Bug crônico: user reportou app fica lento + mutations não persistem em <5min.
+// Watchdog 300s não detectava WebSocket morto dentro dessa janela. Combinado com
+// degradação ativa (sem trigger visibility) → Realtime morre invisivelmente,
+// futuras invalidates Postgres changes nunca chegam, UI fica stale.
+// 60s tick + connection state check direto pega esses casos.
+// Tradeoff #212 (rescheduleAll storm pós-reconnect) mitigado por: (a) scheduleDoses
+// debounce em App.jsx, (b) refetchQueries scoped 'active', (c) heartbeat useAppResume
+// que também drena qc.refetchQueries — overlap intencional pra cobertura.
+const WATCHDOG_INTERVAL_MS = 60_000
 
 export function useRealtime() {
   const qc = useQueryClient()
@@ -190,18 +191,36 @@ export function useRealtime() {
 
     // Watchdog: detecta silent fail (heartbeat parou mas status callback
     // não disparou). Verifica channel.state — se !== 'joined' mas deveria estar,
-    // força reconnect. Roda a cada 60s.
+    // força reconnect. Roda a cada 60s (v0.2.6.9 fix UI-lenta).
+    //
+    // v0.2.6.9 ADIÇÃO — também checa supabase.realtime.connection state direto.
+    // Caso onde channel.state="joined" mas WebSocket subjacente está CLOSED:
+    // supabase-js mantém referência do channel mas socket morreu silently.
+    // Sem este check, watchdog não dispara reconnect → invalidates Postgres
+    // changes nunca chegam.
     const startWatchdog = () => {
       watchdogTimer = setInterval(async () => {
         if (!channel) return
-        const state = channel.state
-        if (state !== 'joined' && state !== 'joining') {
-          console.warn(`[useRealtime] watchdog: state=${state} → force reconnect`)
+        const channelState = channel.state
+        // Check WebSocket subjacente. supabase-js v2: `supabase.realtime.connectionState()`
+        // retorna 'connecting' | 'open' | 'closing' | 'closed'. Cobertura defensiva
+        // pra APIs que mudam entre versões: try/catch + fallback string check.
+        let wsState = 'unknown'
+        try {
+          if (typeof supabase.realtime?.connectionState === 'function') {
+            wsState = supabase.realtime.connectionState()
+          } else if (supabase.realtime?.conn?.readyState != null) {
+            const rs = supabase.realtime.conn.readyState
+            wsState = rs === 0 ? 'connecting' : rs === 1 ? 'open' : rs === 2 ? 'closing' : 'closed'
+          }
+        } catch { /* ignore */ }
+        const channelUnhealthy = channelState !== 'joined' && channelState !== 'joining'
+        const wsUnhealthy = wsState === 'closed' || wsState === 'closing'
+        if (channelUnhealthy || wsUnhealthy) {
+          console.warn(`[useRealtime] watchdog: channel=${channelState} ws=${wsState} → force reconnect`)
           await unsubscribe()
           await subscribe()
           // #145 (release v0.2.0.11): scoped refetch active-only após watchdog reconnect.
-          // Mesma rationale do onStatusChange. Watchdog dispara mais raramente
-          // (intervalos de 60s), mas mesma economia aplica.
           for (const keys of Object.values(TABLE_TO_KEYS)) {
             for (const key of keys) {
               qc.refetchQueries({ queryKey: key, type: 'active' })
