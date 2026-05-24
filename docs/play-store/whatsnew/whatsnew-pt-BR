@@ -1,5 +1,5 @@
-v0.2.6.9 — hotfix lentidão pós minutos
+v0.2.6.10 — últimas melhorias UX pós-QA
 
-• App não fica mais lento depois de alguns minutos aberto — removida instrumentação verbose do caminho crítico que sobrecarregava o WebView.
-• Reconexão automática: checagem ativa de saúde a cada 60s + reconnect WebSocket se necessário (antes só rodava após 5min de tela bloqueada).
-• Dashboard não refaz a busca pesada em cada foco — atualização vem via realtime + puxar pra atualizar.
+• DoseModal: botões Ignorar/Pular/Tomada com área de toque 48dp (Material) + mais espaço entre eles — menos toque acidental no botão errado.
+• Ajustes > Versão: nova linha "Última sincronização" mostra há quanto tempo o app puxou dados do servidor (debug rápido se algo parece atrasado).
+• QA automation: data-testid em DoseCard, DoseModal, MedNameInput e CategoryPicker — base pra testes E2E determinísticos.

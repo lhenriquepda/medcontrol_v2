@@ -375,6 +375,7 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
         {/* "Botão" disfarçado de input — abre o sheet */}
         <button
           type="button"
+          data-testid="med-name-input-trigger"
           onClick={handleFocus}
           aria-haspopup="dialog"
           aria-expanded={open}

@@ -101,8 +101,8 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
 
   return (
     <Sheet open={open} onClose={onClose}>
-      {/* Header — pill icon + med name + status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+      {/* v0.2.6.10 MEL-001 — data-testid pra QA automation determinístico */}
+      <div data-testid="dose-modal" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
         <div style={{
           width: 56, height: 56, borderRadius: 14,
           background: 'var(--dosy-peach-100)',
@@ -245,12 +245,17 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {/* v0.2.6.10 M-realq2 — botões com minHeight 48dp (Material Design touch target)
+              + data-testid (MEL-001). gap 10 → 12 melhora separação visual e reduz
+              mistap entre botões adjacentes em hands largas. */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Button
               kind="ghost"
               onClick={onClose}
               disabled={skipMut.isPending || confirmMut.isPending}
               full
+              data-testid="dose-modal-ignore"
+              style={{ minHeight: 48 }}
             >
               Ignorar
             </Button>
@@ -259,6 +264,8 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
               onClick={handleSkip}
               disabled={skipMut.isPending}
               full
+              data-testid="dose-modal-skip"
+              style={{ minHeight: 48 }}
             >
               Pular
             </Button>
@@ -267,6 +274,8 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
               onClick={handleConfirm}
               disabled={confirmMut.isPending}
               full
+              data-testid="dose-modal-confirm"
+              style={{ minHeight: 48 }}
             >
               Tomada
             </Button>
