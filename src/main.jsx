@@ -181,6 +181,16 @@ if (SENTRY_DSN && import.meta.env.PROD) {
         return event // sem rate-limit, sem fingerprint sample
       }
 
+      // v0.2.6.11 AUTO-VALIDATE B102 — audit events sempre passam, pra confirmar
+      // que fix B102 v0.2.6.10 está funcionando em prod sem depender de user
+      // reportar manualmente. Tag `is_audit: 'true'` marca esses eventos.
+      // Outcome=bug = race ainda existe (alarme). Outcome=ok = fix confirmed
+      // (info level — agregação total mostra ratio bug/ok). Remover quando
+      // confidence > 99% (estimado 2-3 releases).
+      if (event.tags?.is_audit === 'true') {
+        return event // sem rate-limit, sem fingerprint sample
+      }
+
       // v0.2.6.1 P8.9 — fingerprint dedup: agrupa erros similares + amostra 1% repetições
       if (event.exception?.values?.[0]) {
         const exc = event.exception.values[0]
