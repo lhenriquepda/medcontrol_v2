@@ -313,9 +313,39 @@ export function registerMutationDefaults(qc, persister = null) {
   _qcRef = qc
   _persisterRef = persister
   // ─── Doses ──────────────────────────────────────────────────────────
+  // v0.2.6.7 INSTRUMENTAÇÃO B102 — telemetria verbose pra trackear lifecycle
+  // (cura bug crônico "marca dose mas BD não persiste"). Cada estágio loga
+  // via Sentry breadcrumb pra reconstruir o que aconteceu em prod.
+  // Remover quando B102 fechado.
+  function logMut(stage, mutation, extra = {}) {
+    try {
+      console.info(`[mut:${mutation}] ${stage}`, extra)
+      // Sentry breadcrumb invisível — só ativa se telemetria opt-in
+      if (typeof window !== 'undefined' && window.Sentry?.addBreadcrumb) {
+        window.Sentry.addBreadcrumb({
+          category: `mutation.${mutation}`,
+          message: stage,
+          level: 'info',
+          data: extra,
+        })
+      }
+    } catch {}
+  }
+
   qc.setMutationDefaults(['confirmDose'], {
-    mutationFn: ({ id, ...rest }) => confirmDose(id, rest),
+    mutationFn: async ({ id, ...rest }) => {
+      logMut('mutationFn:start', 'confirmDose', { id })
+      try {
+        const result = await confirmDose(id, rest)
+        logMut('mutationFn:ok', 'confirmDose', { id, hasResult: !!result })
+        return result
+      } catch (e) {
+        logMut('mutationFn:throw', 'confirmDose', { id, errCode: e?.code, errMsg: e?.message?.slice(0, 80) })
+        throw e
+      }
+    },
     onMutate: async ({ id, actualTime }) => {
+      logMut('onMutate', 'confirmDose', { id })
       // Refactor Fase 1: gate fecha Realtime invalidate em ['dashboard-payload']
       // e ['doses'] enquanto mutation está em curso. Limpa em onSettled.
       markDosesInFlight()
@@ -336,12 +366,17 @@ export function registerMutationDefaults(qc, persister = null) {
       return { snapshots }
     },
     // v0.2.6.1 P1.6 — detect 409 + dispara conflict bus
-    onError: (error, variables, ctx) => handleDoseMutationError(qc, 'confirmDose', error, variables, ctx),
-    onSuccess: () => {
+    onError: (error, variables, ctx) => {
+      logMut('onError', 'confirmDose', { errName: error?.name, errCode: error?.code, errMsg: error?.message?.slice(0, 100) })
+      handleDoseMutationError(qc, 'confirmDose', error, variables, ctx)
+    },
+    onSuccess: (data) => {
+      logMut('onSuccess', 'confirmDose', { doseId: data?.id, doseStatus: data?.status })
       track(EVENTS.DOSE_CONFIRMED)
       incrementReviewSignal('dose_confirmed')
     },
     onSettled: () => {
+      logMut('onSettled', 'confirmDose')
       clearDosesInFlight()
       refetchDoses(qc)
     },

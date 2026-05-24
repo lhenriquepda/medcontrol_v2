@@ -32,6 +32,13 @@ export default function CategoryPicker({
   disabled = false,
   label = 'Categoria do medicamento',
   ariaDescribedBy = null,
+  // v0.2.6.7 FIX E04 [QA real 2026-05-24]: prop nova `showRequiredError`.
+  // Antes, mensagem "Escolha uma categoria — não conseguimos detectar pelo nome."
+  // aparecia ASSIM que tela SOS abria (vide screenshot qa-real-v0266/45-sos.png),
+  // mesmo SEM o user ter digitado medicamento ainda — scare-text horrível.
+  // Agora caller é responsável por dizer quando mostrar (após usuário interagir
+  // com med name OU após tentativa de submit). Default false = silent até interagir.
+  showRequiredError = false,
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -39,7 +46,7 @@ export default function CategoryPicker({
 
   const selected = useMemo(() => getGroup(value), [value])
   const isEmpty = !value
-  const showError = required && isEmpty && !autoFilled
+  const showError = required && isEmpty && !autoFilled && showRequiredError
 
   const filteredGroups = useMemo(() => {
     if (!query.trim()) return MED_GROUPS

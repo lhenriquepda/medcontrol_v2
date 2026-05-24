@@ -573,6 +573,8 @@ export default function TreatmentForm() {
             }}
             autoFilled={autoFilledGroup}
             required={!autoFilledGroup}
+            /* v0.2.6.7 FIX E04 — só mostra erro depois que user digitou med name. */
+            showRequiredError={!!form.medName?.trim()}
             helperText={
               classifyFetching && !form.group_id
                 ? 'Identificando categoria automaticamente…'
