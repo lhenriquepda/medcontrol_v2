@@ -1,7 +1,5 @@
-v0.2.6.8 — UX polishes pós QA
+v0.2.6.9 — hotfix lentidão pós minutos
 
-• Relatórios: aviso "Exportar PDF/CSV é Plus" agora aparece logo ao abrir, antes do scroll.
-• Pacientes: contador Free "1/1" virou banner Plus com call-to-action visível.
-• Pacientes (BottomNav): badge vermelho com nº de compartilhamentos recebidos.
-• Puxar pra atualizar: mostra "✓ Atualizado" por 1s ao concluir.
-• Empty state: botão "Adicionar paciente" com mais respiro acima do BottomNav.
+• App não fica mais lento depois de alguns minutos aberto — removida instrumentação verbose do caminho crítico que sobrecarregava o WebView.
+• Reconexão automática: checagem ativa de saúde a cada 60s + reconnect WebSocket se necessário (antes só rodava após 5min de tela bloqueada).
+• Dashboard não refaz a busca pesada em cada foco — atualização vem via realtime + puxar pra atualizar.

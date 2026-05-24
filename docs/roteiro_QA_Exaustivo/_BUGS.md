@@ -268,3 +268,34 @@ Screenshot: `coverage/emul5554-15-offline.png` mostra banner "2 ações salvas o
 | **M500** (M-realq8) | 🟢 FIX | `cc7a383` | `overdueLabel()` em `dateUtils.js` — "atrasada Xmin/h/d" |
 
 **Validação**: AAB v0.2.6.7 build CI (run #26364605373 in_progress, run anterior #26364183801 falhou apenas no Upload to Play Store — AAB OK). Pós-build, instalar nos emuladores + re-rodar QA fluxo doses pra confirmar B102 finalmente persiste no BD. Upload Play Console via Chrome MCP manual.
+
+---
+
+## 🔴 B102 REOPEN — v0.2.6.9 hotfix (2026-05-24 15:30 BRT)
+
+**User reportou que v0.2.6.7 NÃO resolveu o bug crônico**. Sintoma atualizado:
+> "abro o app e tudo funciona, fica aberto uns minutos ele fica muito lento
+> e qualquer alteração não persiste no BD"
+
+**Diagnóstico corrigido**: o fix v0.2.6.7 (retry 3→1 + instrumentação verbose)
+atacou o ALVO ERRADO. O bug NÃO é mutation queue corrupted (determinístico) —
+é **degradação de PERFORMANCE temporal** em <5min com app VISÍVEL continuamente.
+
+Mutations "não persistem" é SINTOMA SECUNDÁRIO: app lento → main thread WebView
+bloqueado → tap em Tomada não chega no RPC → user fecha → cache otimista perdido.
+
+**Root causes identificados (4 vetores)**:
+
+| # | Causa | Fix v0.2.6.9 |
+|---|---|---|
+| 1 | `mutationRegistry.logMut()` console.info + Sentry.addBreadcrumb em hot path (7 calls × N mutations × bridge JS↔Native ~1-3ms cada) | wrap em `import.meta.env.DEV` only |
+| 2 | `useDashboardPayload refetchOnWindowFocus: true` — RPC pesado a cada modal open/close/tab switch | true → false (Realtime + PtR cobrem) |
+| 3 | `useAppResume` soft recover só dispara após 5min `visibilitychange`. App visível continuamente nunca cura WebSocket dead | heartbeat 60s ativo INDEPENDENTE visibility |
+| 4 | `useRealtime` watchdog 300s (5min) não detecta WebSocket dead dentro da janela do bug | watchdog 60s + check `supabase.realtime.connectionState()` direto |
+
+**Validação**: AAB v0.2.6.9 build CI #26368897917. User testa 10-30min app aberto
+visível + tenta marcar dose e fechar/reabrir. Sucesso = mutation persiste BD após
+qualquer tempo aberto.
+
+**Notas**: ironicamente a instrumentação Sentry verbose ADICIONADA em v0.2.6.7
+pra debugar B102 estava PIORANDO o bug. Catch-22 classic.
