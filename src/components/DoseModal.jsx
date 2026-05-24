@@ -66,6 +66,24 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
     return new Date().toISOString() // agora
   }
 
+  // v0.2.6.13 — telemetria verbose. Captura tap REAL nos botões via Sentry breadcrumb
+  // dedicado (sempre ativo, sem _IS_DEV gate). QA real S25U mostrou que taps em
+  // Tomada/Pular NÃO chegavam — selectors registrados eram do Dashboard, não DoseModal.
+  // Diagnóstico próximo round = onde EXATAMENTE o tap está indo.
+  function bcDoseModalTap(action, doseId, medName, status) {
+    try {
+      if (typeof window !== 'undefined' && window.Sentry?.addBreadcrumb) {
+        window.Sentry.addBreadcrumb({
+          category: 'dose-modal',
+          message: `tap.${action}`,
+          level: 'info',
+          data: { doseId, medName, status, ts: Date.now() },
+        })
+      }
+      console.info(`[DoseModal] TAP ${action}`, { doseId, medName, status })
+    } catch { /* fail-safe */ }
+  }
+
   // v0.2.6.12 FIX B102 REAL — mutateAsync + await em vez de mutate fire-and-forget.
   //
   // Logcat QA real S25 Ultra (2026-05-24) confirmou bug:
@@ -90,6 +108,7 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
     const actualIso = computeActualIso()
     const doseId = dose.id
     const medName = dose.medName
+    bcDoseModalTap('confirm', doseId, medName, dose.status)
     try {
       await confirmMut.mutateAsync({ id: doseId, actualTime: actualIso, observation })
     } catch (e) {
@@ -106,6 +125,7 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
   async function handleSkip() {
     const doseId = dose.id
     const medName = dose.medName
+    bcDoseModalTap('skip', doseId, medName, dose.status)
     try {
       await skipMut.mutateAsync({ id: doseId, observation })
     } catch (e) {
@@ -120,6 +140,7 @@ export default function DoseModal({ dose, open, onClose, patientName, queueRemai
 
   async function handleUndo() {
     const doseId = dose.id
+    bcDoseModalTap('undo', doseId, dose.medName, dose.status)
     try {
       await undoMut.mutateAsync(doseId)
     } catch (e) {

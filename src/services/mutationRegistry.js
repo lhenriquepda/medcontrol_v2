@@ -331,9 +331,12 @@ export function registerMutationDefaults(qc, persister = null) {
   // DEV/devDebug: mantém logs pra reproduzir B102.
   // PROD: silencia. Sentry continua capturando errors via captureException
   // em handleDoseMutationError (cobertura preservada).
+  // v0.2.6.13 — gate _IS_DEV removido temporariamente pra capturar mutation
+  // lifecycle em devDebug build via logcat. Re-add em v0.2.6.14 após diagnóstico.
   const _IS_DEV = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV
   function logMut(stage, mutation, extra = {}) {
-    if (!_IS_DEV) return
+    // v0.2.6.13: sempre loga (gate removido) — re-adicionar `if (!_IS_DEV) return` em v0.2.6.14
+    void _IS_DEV
     try {
       console.info(`[mut:${mutation}] ${stage}`, extra)
       if (typeof window !== 'undefined' && window.Sentry?.addBreadcrumb) {
