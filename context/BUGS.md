@@ -46,6 +46,10 @@ Nenhum bug P4 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.6.6 (2026-05-23, vc 91)
+
+- **#0023** P0 crônico — App fica horas aberto/idle (Android Doze) → JWT Supabase expira (default 1h) → WebView pausada mid-refresh → `processLock` supabase-js órfão → next mutation usa JWT stale → RPC v2 SECURITY DEFINER detecta `auth.uid()=NULL` e retorna JSONB `{ok:false, code:401}` HTTP 200 (NÃO throw) → `parseDoseV2Response` lança Error → `mutationRegistry.onError` faz rollback silent + Sentry log (sample 1%) → user vê optimistic reverter sem toast → "perdeu BD silencioso". Diagnóstico: 4 agentes paralelos confirmaram cadeia. Postgres_log prod últimas 24h: `permission denied for table doses/patients` recorrente. **Fix em 8 camadas:** F1 onlineManager re-sync pós-resume (Capacitor Network) + F2 `qc.resumePausedMutations()` pós-soft-recover + F3 watchdog ping timeout 5s (token zombie → signOut+reload) + F4 `rpcV2WithAuthRetry` wrapper (detect 401 → refreshSession + retry 1×) + F5 mutationErrorBus + MutationErrorListener (toast UI em 8 onError handlers) + F7 DROP 8 RPC overloads stale (zero ambiguidade PostgREST) + F8 Sentry visibilidade total 401/403/409 (skip rate-limit + dedup).
+
 ### v0.2.6.5 (2026-05-23, vc 90)
 
 - **#0020** P1 — Dashboard "X atrasadas" continua mostrando dose como overdue após user marcar como Tomada via MultiDoseModal (alarme → Ciente). Root cause: `confirmDose/skipDose/undoDose/registerSos` `onMutate` cancela apenas `cancelQueries({queryKey:['doses']})` MAS NÃO cancela `['dashboard-payload', *]` que é o que Dashboard usa. Query in-flight `dashboard-payload` continua, retorna server data pre-mutation, TanStack `setQueryData` SOBRESCREVE cache patched (perdendo `_localActedAt` stamp) → reconcile não protege → Dashboard mostra dose stale. HeaderAlertIcon funcionou corretamente porque usa `useDoses` (queryKey `['doses', *]`, cancelada). Fix: cancelar AMBAS queries em todas 4 mutations + `refetchDoses()` em `onSettled` invalida ambos namespaces.
