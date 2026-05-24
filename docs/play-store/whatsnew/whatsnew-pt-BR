@@ -1,7 +1,7 @@
-v0.2.6.10 — fix DEFINITIVO bug crônico "marquei, fechei, voltou pendente"
+v0.2.6.11 — encerramento ciclo QA + monitoramento auto
 
-• Bug do "marquei dose mas voltou atrasada após fechar app" finalmente corrigido — race entre heartbeat de saúde e gravação no servidor que sobrescrevia a marcação otimista.
-• Heartbeat agora usa checagem local em vez de chamada de rede (não atropela mais mutations em curso).
-• Janela de proteção do cache aumentada de 2.5s pra 10s — cobre lifecycle completo da marcação até refetch final.
-• DoseModal: botões com área de toque 48dp + espaçamento maior (menos toque acidental).
-• Ajustes: nova linha "Última sincronização" pra debug rápido.
+• Monitoramento automático: app envia evento anônimo a cada marcação de dose pra confirmar que a correção do bug "marquei e voltou pendente" (v0.2.6.10) está funcionando — sem você precisar reportar nada.
+• Estrutura interna de testes E2E pronta (uso interno desenvolvedor).
+• Documentação de decisões técnicas registradas no repositório.
+
+Sem mudanças visuais — release de infra/monitoramento.

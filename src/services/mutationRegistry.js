@@ -361,13 +361,7 @@ export function registerMutationDefaults(qc, persister = null) {
     },
     onMutate: async ({ id, actualTime }) => {
       logMut('onMutate', 'confirmDose', { id })
-      // Refactor Fase 1: gate fecha Realtime invalidate em ['dashboard-payload']
-      // e ['doses'] enquanto mutation está em curso. Limpa em onSettled.
       markDosesInFlight()
-      // v0.2.6.5 BUG #0020: cancelar AMBAS as query keys. Dashboard usa
-      // ['dashboard-payload', *] (não ['doses', *]); sem cancel, query in-flight
-      // termina depois do patch e SOBRESCREVE o optimistic com server stale →
-      // overdueNow continua mostrando dose antiga "atrasada" após user marcar tomada.
       await Promise.all([
         qc.cancelQueries({ queryKey: ['doses'] }),
         qc.cancelQueries({ queryKey: ['dashboard-payload'] }),
@@ -376,11 +370,9 @@ export function registerMutationDefaults(qc, persister = null) {
         status: 'done',
         actualTime: actualTime || new Date().toISOString()
       })
-      // v0.2.3.12 NB-4 — persist IDB imediato. Cobertura force-kill <1s.
       await flushPersistImmediate()
-      return { snapshots }
+      return { snapshots, startedAt: Date.now(), doseId: id }
     },
-    // v0.2.6.1 P1.6 — detect 409 + dispara conflict bus
     onError: (error, variables, ctx) => {
       logMut('onError', 'confirmDose', { errName: error?.name, errCode: error?.code, errMsg: error?.message?.slice(0, 100) })
       handleDoseMutationError(qc, 'confirmDose', error, variables, ctx)
@@ -390,10 +382,59 @@ export function registerMutationDefaults(qc, persister = null) {
       track(EVENTS.DOSE_CONFIRMED)
       incrementReviewSignal('dose_confirmed')
     },
-    onSettled: () => {
+    onSettled: (_data, _err, _vars, ctx) => {
       logMut('onSettled', 'confirmDose')
       clearDosesInFlight()
       refetchDoses(qc)
+      // v0.2.6.11 AUTO-VALIDATE B102 — capture FINAL cache state pós-onSettled.
+      // Sample 100% pra confirmar fix prod sem depender de user reportar.
+      // Captura 1500ms após onSettled (espera refetchDoses debounce) e compara
+      // dose.status final vs esperado 'done'. Se != 'done' = race ainda existe.
+      // Skip rate-limit Sentry via tag is_audit (beforeSend handler).
+      try {
+        const auditDoseId = ctx?.doseId
+        const startedAt = ctx?.startedAt
+        if (!auditDoseId) return
+        setTimeout(() => {
+          try {
+            const dpQueries = qc.getQueryCache().findAll({ queryKey: ['dashboard-payload'] })
+            let finalStatus = null
+            let hasLocalActed = false
+            let hasServerConf = false
+            for (const q of dpQueries) {
+              const data = q.state.data
+              if (!data?.doses) continue
+              const found = data.doses.find((d) => d.id === auditDoseId)
+              if (found) {
+                finalStatus = found.status
+                hasLocalActed = !!found._localActedAt
+                hasServerConf = !!found._serverConfirmedAt
+                break
+              }
+            }
+            const expected = 'done'
+            const isBug = finalStatus && finalStatus !== expected
+            captureCaught(new Error(isBug ? 'B102_RACE_DETECTED' : 'B102_OK'), {
+              source: 'mutationRegistry.confirmDose.audit',
+              level: isBug ? 'error' : 'info',
+              tags: {
+                mutation: 'confirmDose',
+                is_audit: 'true',
+                outcome: isBug ? 'bug' : 'ok',
+                final_status: finalStatus || 'missing',
+              },
+              extra: {
+                dose_id: auditDoseId,
+                expected_status: expected,
+                final_status: finalStatus,
+                has_local_acted: hasLocalActed,
+                has_server_confirmed: hasServerConf,
+                elapsed_ms: startedAt ? Date.now() - startedAt : null,
+              },
+            })
+          } catch { /* fail-safe */ }
+        }, 1500)
+      } catch { /* fail-safe */ }
     },
   })
 

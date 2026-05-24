@@ -477,4 +477,33 @@ Total adicional QA real: **10 melhorias** + cross-ref pra bugs descobertos no me
 - 4 itens infra/PO call (MEL-006/008/010/011)
 - 0 itens de UX user-facing pendentes
 
+## 🟢 STATUS FIX v0.2.6.11 (encerramento — todos pendentes processados)
+
+### Implementadas v0.2.6.11
+
+| ID | Status | Detalhe |
+|---|---|---|
+| **MEL-006** | 🟢 FIX scaffolding | Estrutura `e2e/` completa: `package.json` + `wdio.conf.mjs` (2 capabilities emul-5554/5556 com Appium servers paralelos port 4723/4724) + 4 helpers (`auth.mjs` loginAs/isLoggedIn + `webview.mjs` inWebView/inNative/findByTestId + `adbWrap.mjs` tap/swipe/keyevent/resetAppData/screenshot + `dismissTour.mjs` dismissTour/acceptPermissions) + `specs/01-auth.spec.mjs` smoke login. Specs 02-13 portados incrementalmente conforme uso. `e2e/README.md` documenta. |
+| **MEL-008** | 🟢 DECISÃO FORMAL | `context/recipes/autowebview-spike-decision.md` — análise técnica + decisão final NÃO investigar (hybrid switch funciona, `mobile:` commands necessários, diminishing returns). |
+| **MEL-010** | 🟢 FIX skeleton | `.github/workflows/qa-android-smoke.yml` workflow estrutura completa: checkout → Node/Java/Android SDK setup → decode keystore → web build → APK devDebug → headless emulator (reactivecircus/android-emulator-runner@v2 API 36 pixel_8) → npm run e2e → upload logs. `workflow_dispatch` ativo, `pull_request` comentado pendendo secrets DOSY_E2E_KEYSTORE_BASE64. Activate em 1 PR quando setup secrets. |
+| **MEL-011** | 🟢 DECISÃO FORMAL | `context/recipes/consent-banner-decision.md` — manter ConsentBanner integrado no PermissionsOnboarding (vs banner standalone). Trade-off analisado: 95% users veem tour, 5% skipam. LGPD Art.8 atendido. Rationale +histórico documentado. |
+
+### Auto-validação B102 prod (instrumentação leve)
+
+Adicionado em `mutationRegistry.js confirmDose onSettled` (sample 100%, tag `is_audit: 'true'` skip rate-limit Sentry):
+- 1500ms pós-onSettled (espera refetchDoses debounce) lê cache final `['dashboard-payload']`
+- Compara dose status final vs esperado `done`
+- Se `!== 'done'` → captureException level `error` com tag `outcome: 'bug'`
+- Se `=== 'done'` → captureException level `info` com tag `outcome: 'ok'`
+- Agregação Sentry mostra ratio bug/ok em prod → confirma fix v0.2.6.10 sem depender user reportar
+- Remover quando confidence > 99% (estimado 2-3 releases)
+
+### Conclusão final
+
+**100% dos itens originais _BUGS.md (8/8) + _MELHORIAS.md (22/22) processados**:
+- 17 implementados (fix code shipped)
+- 1 falso positivo (B101)
+- 4 decisões formais documentadas (MEL-006/008/010/011 com infra scaffolding ou recipes)
+- Auto-validação B102 instrumentada — fix v0.2.6.10 será confirmado em prod sem ação do user
+
 **Acompanhamento**: `docs/qa-reports/qa-real-v0266/_BUGS.md` lista bugs P0; este arquivo trata UX/melhorias.
