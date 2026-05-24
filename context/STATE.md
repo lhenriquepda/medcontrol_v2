@@ -10,19 +10,33 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.6` (em curso, CI build) — anterior `v0.2.6.5` SHIPPED |
-| **versionCode** | `91` (v0.2.6.6, não-mandatory) — anterior `90` (v0.2.6.5) |
-| **Branch ativa** | `release/v0.2.6.6` |
-| **Último tag master** | `v0.2.6.5` (mergeado 2026-05-23 ~17:00 BRT) — próximo: `v0.2.6.6` |
-| **Ship date v0.2.6.5** | 2026-05-23 16:40 BRT |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.6 (deploy auto post-merge) |
-| **Play Console v0.2.6.6** | ⏳ CI #26347374322 em build — Vetor 4 upload pendente |
+| **Versão** | `v0.2.6.9` SHIPPED (hotfix UI lenta + BD não persiste) — anteriores `v0.2.6.7/8` SHIPPED |
+| **versionCode** | `94` (v0.2.6.9, não-mandatory) — anterior `93` (v0.2.6.8) → `92` (v0.2.6.7) |
+| **Branch ativa** | `release/v0.2.6.9` (pré-merge master) |
+| **Último tag master** | `v0.2.6.6` (mergeado 2026-05-24) — próximo: `v0.2.6.9` |
+| **Ship date v0.2.6.9** | 2026-05-24 15:18 BRT (Internal Testing) |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.9 (deploy auto post-merge) |
+| **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
+| **Play Console v0.2.6.8** | ✅ vc 93 não-mandatory (UX quick wins MEL-001/004/005/007/009/012/M102/M600/M-realq7) |
+| **Play Console v0.2.6.7** | ✅ vc 92 não-mandatory (8 fixes: B100 ceil minute + B102 retry 3→1 + B001/E01 admob + E02 RPC + E04 + M-realq3 toast + M101 24h + M201/M500) |
+| **Play Console v0.2.6.6** | ✅ vc 91 — F1-F8 perde-comunicação-BD pós-idle (parcial, root cause real só identificado em v0.2.6.9) |
 | **Play Console v0.2.6.5** | ✅ vc 90 não-mandatory |
 | **Play Console v0.2.6.4** | ✅ vc 89 mandatory |
-| **Play Console v0.2.6.3** | ✅ vc 88 mandatory (3 bugs P0: cache stale + sticky autofill + falta origem) |
+| **Play Console v0.2.6.3** | ✅ vc 88 mandatory |
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
-| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED mas com 2 bugs P0 — superseded por vc 87 |
+| **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED com 2 bugs P0 — superseded |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
+
+**v0.2.6.9 SHIPPED 2026-05-24 15:18 BRT — hotfix REAL bug crônico "UI lenta + BD não persiste em <5min":**
+
+- ✅ **FIX 1 [`mutationRegistry.js logMut()`]** — wrap em `import.meta.env.DEV`. Em PROD WebView Android, cada `console.info` faz bridge JS↔Native (~1-3ms) + Sentry.addBreadcrumb JSON serialize. 7 calls × N mutations = hot path overhead acumulava → UI scroll/animação travada após poucos minutos. Sentry errors continuam via captureException.
+- ✅ **FIX 2 [`useDashboardPayload`]** — `refetchOnWindowFocus: true → false`. RPC pesado (joins patients+treatments+doses+overdue compute) a cada modal open/close + scroll mobile + tab switch. Realtime postgres_changes + manual PtR + setInterval setTick cobrem updates.
+- ✅ **FIX 3 [`useAppResume`]** — heartbeat ativo 60s INDEPENDENTE de visibility. App visível continuamente nunca disparava soft recover (`SOFT_RECOVER_THRESHOLD_MS=5min` só ativa em visibilitychange). Ping leve `supabase.from('user_prefs').limit(1)` timeout 5s. Se timeout/401 → drop channels + refetch active + drain mutations. Custo: +60 req/hr idle ativo.
+- ✅ **FIX 4 [`useRealtime`]** — watchdog 300s → 60s + check `supabase.realtime.connectionState()` direto. Caso onde `channel.state="joined"` mas WebSocket subjacente CLOSED (TCP keepalive expired silently) não disparava reconnect → invalidates Postgres changes nunca chegavam.
+
+**Diagnóstico corrigido**: v0.2.6.7 atacou alvo errado (mutation retry policy assumindo bug determinístico). Bug real é **degradação de performance** no main thread WebView em <5min com app visível continuamente. Mutations "não persistem BD" era sintoma secundário do main thread bloqueado.
+
+**Ironia**: instrumentação Sentry verbose adicionada em v0.2.6.7 pra debug do B102 estava AMPLIFICANDO o bug — catch-22 documentado em `_BUGS.md`.
 
 **v0.2.6.6 em curso (2026-05-23) — Bug crônico #0023 "perde comunicação BD após idle" RESOLVIDO (8 fixes):**
 
