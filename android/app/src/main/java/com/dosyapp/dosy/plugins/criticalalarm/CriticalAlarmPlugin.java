@@ -164,9 +164,30 @@ public class CriticalAlarmPlugin extends Plugin {
 
         // Item #081 (release v0.1.7.1) — delegate to AlarmScheduler helper
         // (mesmo código usado pelo DoseSyncWorker em background).
+        // v0.2.6.7 FIX M201 [QA real 2026-05-24]: separar causas distintas pra
+        // debug mais preciso. Antes mensagem genérica agrupava 3 cenários:
+        //   1. dose <60s (B100 já fixado — fallback tray imediato)
+        //   2. SCHEDULE_EXACT_ALARM permission revogada (Android 14+)
+        //   3. AlarmManager null/system issue
+        // Caller (JS) pode treat differentemente: prompt user pra reactivate
+        // perm vs assumir scheduled (caso 1 já tem fallback) vs Sentry capture.
+        AlarmManager amCheck = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+        boolean canExact = true;
+        if (amCheck != null && android.os.Build.VERSION.SDK_INT >= 31) {
+            try { canExact = amCheck.canScheduleExactAlarms(); } catch (Exception ignored) {}
+        }
         boolean ok = AlarmScheduler.scheduleDose(getContext(), id, triggerAt, doses);
         if (!ok) {
-            call.reject("schedule failed (past trigger or permission)");
+            String reason;
+            long deltaSec = (triggerAt - System.currentTimeMillis()) / 1000L;
+            if (!canExact) {
+                reason = "permission_denied_exact_alarm";
+            } else if (deltaSec < 60) {
+                reason = "too_close_threshold_60s_fallback_tray";
+            } else {
+                reason = "past_trigger";
+            }
+            call.reject("schedule failed: " + reason);
             return;
         }
 

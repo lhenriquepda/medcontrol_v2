@@ -28,6 +28,21 @@ export function relativeLabel(d) {
   return formatDate(x)
 }
 
+// v0.2.6.7 FIX M500 [QA real 2026-05-24]: pra dose overdue, label
+// proporcional ao tempo decorrido. <60min mostra "atrasada 5min", >1h
+// mostra "atrasada 2h", >24h mostra "atrasada 2d".
+export function overdueLabel(scheduledAt) {
+  const diff = Date.now() - new Date(scheduledAt).getTime()
+  if (diff < 0) return 'atrasada'
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'atrasada'
+  if (min < 60) return `atrasada ${min}min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `atrasada ${h}h`
+  const d = Math.floor(h / 24)
+  return `atrasada ${d}d`
+}
+
 export function toDatetimeLocalInput(iso) {
   const d = iso ? new Date(iso) : new Date()
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
