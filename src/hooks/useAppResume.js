@@ -6,6 +6,8 @@ import { supabase } from '../services/supabase'
 import { getValidSession, AuthLostError, onAuthLost } from '../services/sessionManager'
 // v0.2.7.0 Fase 3 — drena mutations pendentes no resume (idempotência server-side).
 import { drainPendingMutations } from '../services/markDose'
+// v0.2.7.0 hardening — schedule notification se queue > 0 quando app vai bg.
+import { schedulePendingSyncNotification, cancelPendingSyncNotification } from '../services/pendingSyncNotifier'
 
 /**
  * useAppResume — handle app coming back from background/inactive state.
@@ -104,10 +106,18 @@ export function useAppResume() {
       } catch (e) {
         console.warn('[useAppResume] refetchQueries failed:', e?.message)
       }
+
+      // v0.2.7.0 hardening — cancela notification "doses não sincronizadas"
+      // já que app voltou + drain rodou (queue agora vazia idealmente).
+      cancelPendingSyncNotification().catch(() => { /* fail-safe */ })
     }
 
     const onPause = () => {
       lastActiveRef.current = Date.now()
+      // v0.2.7.0 hardening — se queue tem entries quando app vai bg,
+      // schedule notification 30s alertando user pra reabrir e sincronizar.
+      // Sem isso, cuidadores compartilhados nunca veem mutations queued.
+      schedulePendingSyncNotification().catch(() => { /* fail-safe */ })
     }
 
     // Web: document visibility change

@@ -425,19 +425,24 @@ export default function Dashboard() {
           <div role="status" style={{
             background: 'var(--dosy-warning-bg)',
             color: 'var(--dosy-warning)',
-            padding: '8px 14px',
+            padding: '10px 14px',
             borderRadius: 12,
             fontSize: 12.5,
-            display: 'flex', alignItems: 'center', gap: 8,
+            display: 'flex', flexDirection: 'column', gap: 4,
             marginTop: 8,
           }}>
-            <span style={{
-              width: 10, height: 10, borderRadius: 99,
-              background: 'currentColor',
-              animation: 'shimmer 1.3s infinite',
-              opacity: 0.7,
-            }} />
-            Salvando {pendingQueueCount} {pendingQueueCount === 1 ? 'dose' : 'doses'}... (offline ou rede lenta)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: 99,
+                background: 'currentColor',
+                animation: 'shimmer 1.3s infinite',
+                opacity: 0.7,
+              }} />
+              {pendingQueueCount} {pendingQueueCount === 1 ? 'dose ainda não foi salva' : 'doses ainda não foram salvas'}
+            </div>
+            <div style={{ fontSize: 11.5, opacity: 0.85, paddingLeft: 18 }}>
+              Marcação só vai para nuvem (e cuidadores) quando reconectar. Mantenha o app aberto até sincronizar.
+            </div>
           </div>
         )}
 
