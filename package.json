@@ -1,7 +1,7 @@
 {
   "name": "medcontrol",
   "private": true,
-  "version": "0.2.7.0",
+  "version": "0.2.8.0",
   "type": "module",
   "engines": {
     "node": ">=22.0.0 <23",
@@ -45,6 +45,7 @@
     "@capacitor/keyboard": "^8.0.3",
     "@capacitor/local-notifications": "^8.0.2",
     "@capacitor/network": "^8.0.1",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",

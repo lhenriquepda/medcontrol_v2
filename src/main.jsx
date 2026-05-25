@@ -350,6 +350,48 @@ if (Capacitor.isNativePlatform()) {
 // via idempotência server-side (mutation_log PK request_id). Não-bloqueante:
 // fire-and-forget pra não atrasar UI mount.
 async function boot() {
+  // v0.2.8.0 — migração one-way IDB → @capacitor/preferences (decisão user #5).
+  //
+  // Por quê: v0.2.7.0 usava idb-keyval (IndexedDB), acessível apenas pela WebView JS.
+  // v0.2.8.0 introduz MutationDrainWorker (Java nativo) que precisa ler a queue
+  // independente do WebView (drena durante Doze / app killed). SharedPreferences
+  // é o storage compartilhado mais simples (plugin @capacitor/preferences).
+  //
+  // Estratégia one-way: lê IDB legacy uma vez, escreve em Preferences, deleta IDB.
+  // Sem fallback de volta pra IDB (decisão explícita user). Próximo boot: no-op
+  // (IDB key não existe).
+  //
+  // Idempotente: se rodar 2× sem entries em IDB, no-op silencioso.
+  // Robust: try/catch envolvendo tudo — falha de migração não bloqueia app boot
+  // (mutations ficam temporariamente invisíveis pro drain JS mas Worker nativo
+  // ainda lê do mesmo SharedPreferences depois).
+  try {
+    const { get: idbGet, del: idbDel } = await import('idb-keyval')
+    const LEGACY_KEY = 'dosy:pending-mutations'
+    const oldQueue = await idbGet(LEGACY_KEY)
+    if (Array.isArray(oldQueue) && oldQueue.length > 0) {
+      const { Preferences } = await import('@capacitor/preferences')
+      const NEW_KEY = 'dosy_pending_mutations'
+      // Lê Preferences atual (idealmente vazio em primeira execução, mas pode
+      // ter algo se v0.2.8.0 instalada e desinstalada — defensive).
+      const { value: existingValue } = await Preferences.get({ key: NEW_KEY })
+      let existing = []
+      try { existing = existingValue ? JSON.parse(existingValue) : [] } catch { existing = [] }
+      if (!Array.isArray(existing)) existing = []
+      // Dedupe por requestId (IDB entries têm prioridade — vieram primeiro)
+      const seenIds = new Set(existing.map(e => e.requestId))
+      const merged = [
+        ...oldQueue.filter(e => e?.requestId && !seenIds.has(e.requestId)),
+        ...existing,
+      ]
+      await Preferences.set({ key: NEW_KEY, value: JSON.stringify(merged) })
+      await idbDel(LEGACY_KEY)
+      console.log('[migrate v028] IDB→Preferences:', oldQueue.length, 'entries migradas,', merged.length, 'total')
+    }
+  } catch (e) {
+    console.warn('[migrate v028] IDB→Preferences fail:', e?.message)
+  }
+
   if (Capacitor.isNativePlatform()) {
     try {
       const { Network } = await import('@capacitor/network')

@@ -290,7 +290,12 @@ function trackAction(action) {
 // (mutation_log) garante exactly-once mesmo se entry foi parcialmente processada
 // em runtime anterior.
 
-import { getAll as queueGetAll, remove as _queueRemove, size as queueSize } from '../state/pendingMutationsQueue'
+import { getAll as queueGetAll, remove as _queueRemove, size as queueSize, incrementRetry as queueIncrementRetry } from '../state/pendingMutationsQueue'
+
+// v0.2.8.0 — decisão user #3: erro real (não-network, não-auth) tem 3× retry
+// antes de descartar. Cobre bugs transitórios server (500 esporádico) que se
+// resolveriam num retry. Antes era 1× descart imediato.
+const REAL_ERROR_MAX_RETRIES = 3
 
 let currentDrainPromise = null
 let retryDrainTimer = null
@@ -457,14 +462,29 @@ async function _runDrain(options = {}) {
           scheduleRetryDrain()
           break
         }
-        // Erro real — descarta mutation pra não retry forever.
-        await _queueRemove(mut.requestId)
-        failedReal += 1
-        captureCaught(e, {
-          source: 'drainPendingMutations',
-          level: 'warning',
-          extra: { mut },
-        })
+        // Erro real (não-network, não-auth).
+        // v0.2.8.0 — decisão user #3: retry 3× antes de descartar. Cobre
+        // bugs intermitentes server-side. Antes era descart imediato 1×.
+        const newRetry = await queueIncrementRetry(mut.requestId)
+        if (newRetry >= REAL_ERROR_MAX_RETRIES) {
+          await _queueRemove(mut.requestId)
+          failedReal += 1
+          captureCaught(e, {
+            source: 'drainPendingMutations',
+            level: 'warning',
+            extra: { mut, retryCount: newRetry },
+          })
+        } else {
+          // Mantém entry, agenda retry posterior. Não break — outras entries
+          // no loop ainda tentam (talvez sejam OK).
+          failedTransient += 1
+          scheduleRetryDrain()
+          captureCaught(e, {
+            source: 'drainPendingMutations.retry',
+            level: 'info',
+            extra: { mut, retryCount: newRetry, maxRetries: REAL_ERROR_MAX_RETRIES },
+          })
+        }
       }
     }
   } catch (e) {
