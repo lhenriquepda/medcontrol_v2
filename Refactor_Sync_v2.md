@@ -397,10 +397,29 @@ async function markDose({ doseId, action, payload }) {
 
 ### 5.5 Drain da queue
 
-Roda em 3 momentos:
-1. **App boot:** depois de validar sessão
-2. **App resume:** depois de validar sessão
-3. **Network reconnect:** evento online → drain
+Roda em **4 momentos** (v0.2.8.0 adicionou Worker nativo):
+1. **App boot:** depois de validar sessão (JS)
+2. **App resume:** depois de validar sessão (JS)
+3. **Network reconnect:** evento online → drain (JS)
+4. **WorkManager 15min:** Worker Java drena INDEPENDENTE da WebView (v0.2.8.0)
+
+**Por que Worker nativo (v0.2.8.0):** os 3 caminhos JS só funcionam com WebView viva.
+Em estado Android Doze (idle + tela bloqueada >5min), o JavaScript engine é
+suspended — `setInterval`, `addEventListener('online')`, `visibilitychange`
+NÃO disparam. User marca dose com app suspended → queue stuck até user
+desbloquear tela. Worker Java independente cobre esse último 10% caminho B102.
+
+Detalhes do Worker em `Plano_Worker_Native_v028.md`. Resumo:
+- `MutationDrainWorker.java` (`com.dosyapp.dosy.sync`) roda 15min CONNECTED
+- Lê queue de SharedPreferences "CapacitorStorage" key `dosy_pending_mutations`
+  (mesma fonte que `@capacitor/preferences` usa do JS — single source of truth)
+- POST `${rpc}_dose_v3` com mesmo timeout/headers que JS `authedRpc`
+- Token: lê access_token cached. Se expirado, refresh nativo Java (Opção B)
+  via POST `/auth/v1/token?grant_type=refresh_token`, persiste novos tokens
+- Retry 3× erro real (não-network) antes de descartar. Network = break loop,
+  próximo cycle tenta.
+- Idempotência server-side via `mutation_log` PK request_id garante que
+  drain Worker + drain JS concorrentes = 1 RPC executado server-side
 
 ```js
 async function drainPendingMutations() {
