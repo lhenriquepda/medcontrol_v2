@@ -42,7 +42,25 @@ import { emitConflict } from '../state/conflictBus'
 import { emitMutationError } from '../state/mutationErrorBus'
 import { track, EVENTS } from './analytics'
 
-const MUTATION_TIMEOUT_MS = 10_000
+const MUTATION_TIMEOUT_NORMAL_MS = 10_000
+const MUTATION_TIMEOUT_COLD_MS = 30_000
+const COLD_START_WINDOW_MS = 60_000
+
+// v0.2.7.0 hardening — cold start (boot ou pós-Samsung-kill / idle longo) tem
+// latência alta na primeira RPC (TLS handshake, WebView pre-warm, supabase-js init).
+// Timeout dinâmico: 30s durante COLD_START_WINDOW (60s) após boot ou resume tardio.
+// Sem isso, primeira marcação após idle longo SEMPRE caía em pendingSync.
+let lastColdStartAt = Date.now()
+
+export function markColdStart() {
+  lastColdStartAt = Date.now()
+}
+
+function getMutationTimeoutMs() {
+  return (Date.now() - lastColdStartAt < COLD_START_WINDOW_MS)
+    ? MUTATION_TIMEOUT_COLD_MS
+    : MUTATION_TIMEOUT_NORMAL_MS
+}
 
 const RPC_BY_ACTION = {
   confirm: 'confirm_dose_v3',
@@ -135,14 +153,15 @@ export async function markDose({ doseId, action, payload = {} }) {
     console.warn('[markDose] queue.add fail:', e?.message)
   }
 
-  // 4. RPC tentativa.
+  // 4. RPC tentativa. v0.2.7.0 hardening: timeout dinâmico — 30s em cold-start
+  // window (boot ou resume tardio), 10s em regime normal.
   try {
     const result = await authedRpc(rpcName, {
       p_request_id: requestId,
       p_dose_id: doseId,
       ...(action === 'confirm' ? { p_actual_time: optimisticPatch.actualTime } : {}),
       ...(payload.observation !== undefined ? { p_observation: payload.observation || '' } : {}),
-    }, { timeoutMs: MUTATION_TIMEOUT_MS })
+    }, { timeoutMs: getMutationTimeoutMs() })
 
     // RPC v3 retorna JSONB { ok, dose } | { ok:false, error, code, current_state }
     if (result?.ok === false) {
@@ -308,7 +327,7 @@ export async function drainPendingMutations(options = {}) {
 }
 
 async function _runDrain(options = {}) {
-  const rpcTimeoutMs = options.rpcTimeoutMs ?? MUTATION_TIMEOUT_MS
+  const rpcTimeoutMs = options.rpcTimeoutMs ?? getMutationTimeoutMs()
   let drained = 0
   let failedTransient = 0
   let failedReal = 0

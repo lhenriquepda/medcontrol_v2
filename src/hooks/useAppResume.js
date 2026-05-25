@@ -5,7 +5,7 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
 import { getValidSession, AuthLostError, onAuthLost } from '../services/sessionManager'
 // v0.2.7.0 Fase 3 — drena mutations pendentes no resume (idempotência server-side).
-import { drainPendingMutations } from '../services/markDose'
+import { drainPendingMutations, markColdStart } from '../services/markDose'
 // v0.2.7.0 hardening — schedule notification se queue > 0 quando app vai bg.
 import { schedulePendingSyncNotification, cancelPendingSyncNotification } from '../services/pendingSyncNotifier'
 
@@ -50,8 +50,16 @@ export function useAppResume() {
       // quando user retoma app. Sem debounce, múltiplas validações concorrentes.
       const now = Date.now()
       if (now - lastResumeAt < RESUME_DEBOUNCE_MS) return
+      const inactiveMs = now - lastResumeAt
       lastResumeAt = now
       lastActiveRef.current = now
+
+      // v0.2.7.0 hardening — resume tardio (>30s idle) marca cold start de novo.
+      // Primeira RPC pós-resume tem latência alta (network re-establish, processLock
+      // pode estar zombie). markDose vai usar timeout 30s em vez de 10s.
+      if (inactiveMs > 30_000) {
+        markColdStart()
+      }
 
       try {
         // sessionManager garante token válido (refresh sync se necessário, mutex).
