@@ -295,13 +295,20 @@ export async function getPendingQueueSize() {
 // fetchDashboard (Dashboard mount) em paralelo. fetchDashboard pulava drain
 // (mutex), pegava server payload ANTES da mutation drenar → setAllDoses
 // sobrescrevia patchDose feita pelo drain → UI mostrava status antigo.
-export async function drainPendingMutations() {
+/**
+ * @param {object} [options]
+ * @param {number} [options.rpcTimeoutMs=10000] — timeout por RPC. Boot usa 30s
+ *   pra cobrir cold-start latência (TLS handshake, WebView pre-warm). Resume/
+ *   heartbeat usa default 10s.
+ */
+export async function drainPendingMutations(options = {}) {
   if (currentDrainPromise) return currentDrainPromise
-  currentDrainPromise = _runDrain().finally(() => { currentDrainPromise = null })
+  currentDrainPromise = _runDrain(options).finally(() => { currentDrainPromise = null })
   return currentDrainPromise
 }
 
-async function _runDrain() {
+async function _runDrain(options = {}) {
+  const rpcTimeoutMs = options.rpcTimeoutMs ?? MUTATION_TIMEOUT_MS
   let drained = 0
   let failedTransient = 0
   let failedReal = 0
@@ -323,7 +330,7 @@ async function _runDrain() {
           p_dose_id: mut.doseId,
           ...(mut.action === 'confirm' ? { p_actual_time: mut.payload?.actualTime || new Date().toISOString() } : {}),
           ...(mut.payload?.observation !== undefined ? { p_observation: mut.payload.observation || '' } : {}),
-        }, { timeoutMs: MUTATION_TIMEOUT_MS })
+        }, { timeoutMs: rpcTimeoutMs })
 
         if (result?.ok === false && result?.code === 409 && result?.current_state) {
           patchDose(mut.doseId, {
