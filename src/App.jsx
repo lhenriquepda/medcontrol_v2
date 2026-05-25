@@ -67,17 +67,17 @@ export default function App() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  // #157 (v0.2.1.0) — DISABLED. Bug investigation 2026-05-05 found:
-  //   1. publication `supabase_realtime` empty (NO postgres_changes events delivered)
-  //   2. useRealtime reconnect cascade burns ~13 req/s storm sustained idle hidden
-  //      tab (server logs: ChannelRateLimitReached + Stop tenant cycles)
-  //   3. onStatusChange backoff 1-2s × refetchQueries({type:'active'}) loop
-  //      generates ~5GB/h egress per idle user (extrapolated)
-  // Net: zero functional value (publication empty) + catastrophic egress cost.
-  // Re-enable plan v0.2.2.0+: populate publication via Studio → Database → Replication
-  // → supabase_realtime toggle tables (medcontrol.doses/patients/treatments/etc) +
-  // verify reconnect logic doesn't storm under empty channel state.
-  // useRealtime()
+  // ADR-016 RealtimeManager (Gemini Fase 4, v0.2.8.2): reativa Realtime com 5 salvaguardas.
+  //   (a) visibilitychange pause/resume canal único
+  //   (b) idle detection 5min (pointerdown/keydown/touchstart) → pauseAll
+  //   (c) feature flag `realtime_enabled` master switch (default false — admin habilita
+  //       via RPC `admin_set_feature_flag` quando publication populated em Studio)
+  //   (d) canal único postgres_changes em 6 tables (não fan-out)
+  //   (e) PostHog telemetria realtime_subscribed/paused/resumed/message_received
+  // Histórico: #157 (v0.2.1.0) desativou useRealtime() por storm 5GB/h (publication
+  // vazia + reconnect cascade ~13 req/s sustained). v0.2.7.0 Fase 4 simplificou pra
+  // 110 linhas. v0.2.8.2 Fase 4 ADR-016 adiciona safeguards + reativa SOB flag.
+  useRealtime()
   useAppResume()
   useAdMobBanner()
   // v0.2.6.5 — input/textarea/select foca → scrollIntoView('start') pra cima do teclado.

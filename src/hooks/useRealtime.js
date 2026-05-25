@@ -3,9 +3,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { hasSupabase, supabase } from '../services/supabase'
 import { useAuth } from './useAuth'
 import { fetchDashboard } from '../services/fetchDashboard'
+import { useRealtimeManager } from './useRealtimeManager'
+import { realtimeManager } from '../core/realtime/manager'
 
 /**
- * useRealtime — Refactor Sync v2 Fase 4 (v0.2.7.0).
+ * useRealtime — Refactor Sync v2 Fase 4 (v0.2.7.0) + Gemini Fase 4 ADR-016 (v0.2.8.2).
  *
  * Substitui versão anterior (275 linhas, gate-aware, debounce 2.5s, watchdog
  * 60s, generation counter, reconnect backoff) por wrapper mínimo.
@@ -17,15 +19,21 @@ import { fetchDashboard } from '../services/fetchDashboard'
  * race conditions entre mutation otimista e refetch.
  *
  * Comportamento:
- *   - Subscribe quando user logado + Supabase configurado
+ *   - Subscribe quando user logado + Supabase configurado + RealtimeManager.isActive
+ *     (feature flag `realtime_enabled` true + não pausado por visibility/idle/etc)
  *   - postgres_changes em doses/patients/treatments/sos_rules/treatment_templates/patient_shares
- *     → scheduleRefetch (debounce 1.5s)
+ *     → scheduleRefetch (debounce 1.5s) + realtimeManager.trackMessageReceived(table)
  *   - Auto-reconnect via Supabase JS (heartbeatIntervalMs 30s configurado em supabase.js)
  *   - Outras tables (sos_rules, etc) invalidam queries TanStack — não usam Zustand stores
  *
+ * Gemini Fase 4 ADR-016 (v0.2.8.2):
+ *   - Gate via RealtimeManager: subscribe só se isActive=true
+ *   - Quando isActive vira false → cleanup automático via useEffect deps
+ *   - 5 salvaguardas (visibility/idle/feature flag/canal único/telemetria) em manager.js
+ *
  * Removido:
- *   - realtimeGate.isInFlight check (Fase 4 deleta o gate)
- *   - versionedCache reconcileDoses (Fase 4 deleta)
+ *   - realtimeGate.isInFlight check (Fase 4 v0.2.7.0 deleta o gate)
+ *   - versionedCache reconcileDoses (Fase 4 v0.2.7.0 deleta)
  *   - generation counter / lock manual (delegado pra Supabase JS internals)
  *   - watchdog timer (heartbeat sessionManager cobre auth; Supabase JS cobre WebSocket)
  */
@@ -43,15 +51,20 @@ const TANSTACK_TABLES_TO_KEYS = {
 export function useRealtime() {
   const qc = useQueryClient()
   const { user } = useAuth()
+  const { isActive } = useRealtimeManager()
 
   useEffect(() => {
-    if (!hasSupabase || !user) return
+    // ADR-016 gate: só subscribe se manager autoriza
+    // (feature flag enabled + não pausado por visibility/idle/auth/network)
+    if (!hasSupabase || !user || !isActive) return
 
     let refetchTimer = null
     const tanstackTimers = new Map()
     let channel = null
 
-    const scheduleRefetch = () => {
+    const scheduleRefetch = (payload) => {
+      // Telemetria PostHog throttled (ADR-016 salvaguarda E)
+      try { realtimeManager.trackMessageReceived(payload?.table) } catch { /* */ }
       if (refetchTimer) clearTimeout(refetchTimer)
       refetchTimer = setTimeout(() => {
         refetchTimer = null
@@ -59,7 +72,8 @@ export function useRealtime() {
       }, REFETCH_DEBOUNCE_MS)
     }
 
-    const scheduleInvalidate = (queryKey) => {
+    const scheduleInvalidate = (queryKey, payload) => {
+      try { realtimeManager.trackMessageReceived(payload?.table) } catch { /* */ }
       const k = JSON.stringify(queryKey)
       if (tanstackTimers.has(k)) clearTimeout(tanstackTimers.get(k))
       tanstackTimers.set(k, setTimeout(() => {
@@ -71,7 +85,7 @@ export function useRealtime() {
     const chanName = `realtime:${user.id}:${Date.now()}`
     channel = supabase.channel(chanName)
 
-    // Subscribe pra tables que afetam dashboard.
+    // Subscribe pra tables que afetam dashboard (canal único — ADR-016 salvaguarda D)
     for (const table of DASHBOARD_TABLES) {
       const filter = table === 'patient_shares'
         ? `sharedWithUserId=eq.${user.id}`  // recurso multi-user
@@ -85,13 +99,15 @@ export function useRealtime() {
     for (const [table, queryKeys] of Object.entries(TANSTACK_TABLES_TO_KEYS)) {
       channel.on('postgres_changes', {
         event: '*', schema: SCHEMA, table, filter: `userId=eq.${user.id}`,
-      }, () => {
-        for (const k of queryKeys) scheduleInvalidate(k)
+      }, (payload) => {
+        for (const k of queryKeys) scheduleInvalidate(k, payload)
       })
     }
 
     channel.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'SUBSCRIBED') {
+        try { realtimeManager.trackSubscribed(chanName) } catch { /* */ }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn(`[useRealtime] channel ${status}`)
         // Supabase JS auto-reconnect via reconnectAfterMs config em supabase.js.
       }
@@ -105,5 +121,5 @@ export function useRealtime() {
         supabase.removeChannel(channel).catch(() => { /* ignore */ })
       }
     }
-  }, [user, qc])
+  }, [user, qc, isActive])
 }

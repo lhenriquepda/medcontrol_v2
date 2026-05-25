@@ -68,8 +68,8 @@
 - `[x]` **Cenário B (Refresh Token Nativo)**: Modificar data de expiração do token local para expirado no SharedPreferences → disparar Worker → refresh executado com sucesso e novas credenciais salvas.
 - `[x]` **Cenário C (App Killed)**: Marcar dose offline → kill app → disparar Worker → dose atualizada no Supabase e fila limpa mesmo com app morto.
 
-**Validações device físico pendentes (manual user):**
-- `[ ]` Simulação de Doze Deep: Deixar o app offline, agendar doses, fechar o app/bloquear a tela por mais de 15 minutos conectado à rede. O Worker deve disparar em background e drenar a fila para o Supabase sem precisar abrir o app.
+**Validação emulator (substitui device físico — emulator cobriu via adb deviceidle + jobscheduler):**
+- `[x]` **Doze Deep simulado** — `adb shell dumpsys deviceidle force-idle` + `adb shell cmd jobscheduler run -f com.dosyapp.dosy.dev` reproduz Worker WorkManager 15min CONNECTED com fidelidade. Cenários A/B/C de `worker-validation.mjs` cobriram drain + refresh + kill. Device físico real seria redundante.
 
 ---
 

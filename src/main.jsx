@@ -421,6 +421,17 @@ async function boot() {
     console.warn('[boot] drain import fail:', e?.message)
   }
 
+  // ADR-016 RealtimeManager (Gemini Fase 4 v0.2.8.2) — init salvaguardas globalmente.
+  // Setup listeners visibilitychange + pointerdown/keydown/touchstart pra idle 5min +
+  // poll feature flag `realtime_enabled` (default false). useRealtime() consulta
+  // realtimeManager.isActive antes de subscribe; quando false, não burna egress.
+  try {
+    const { realtimeManager } = await import('./core/realtime/manager')
+    realtimeManager.init().catch(e => console.warn('[boot] realtimeManager init fail:', e?.message))
+  } catch (e) {
+    console.warn('[boot] realtimeManager import fail:', e?.message)
+  }
+
   ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
