@@ -320,6 +320,16 @@ Tabelas detalhadas (status + categorias + prioridade) ficam no **§📍 Legenda 
 
 #### 🟠 P1 — Alta
 
+**Plano Gemini — Alinhamento medcontrol_v2 → spec dosy-app** ([implementation_plan.md](../docs/Gemini/implementation_plan.md)):
+
+- ⏳ **#GEM-2** 🟠 **Fase 2 — Ingestão CMED 30k (ADR-015)** — `scripts/ingest-cmed.mjs` lote planilha CMED ANVISA ~30k rows + `dosy.cmed_class_to_group_mapping` + trigger Postgres `classify_medication_robust` 5 níveis + `dosy.medication_categorization_suggestions` aprendizado coletivo + fix regex `src/constants/medCategories.js` falso-positivo anlodipINA→antidepressivo. Catálogo atual 984, meta ≥25k. **Bloqueia P9.2** cron mensal cmed-monthly-sync.
+- ⏳ **#GEM-3** 🟠 **Fase 3 — Schema rename `medcontrol`→`dosy`** — `ALTER SCHEMA medcontrol RENAME TO dosy` + ajustar TODAS chamadas RPC/queries front-end + Java agendador nativo (`AlarmScheduler`, `MutationDrainWorker`, `DoseSyncWorker` etc) pra novo namespace + completar tabelas `profiles`/`fcm_dispatched_log`/`treatment_versions` (já existem `audit_log`+`feature_flags` da v0.2.6.4). Migração breaking — coordenar pre-launch.
+- ⏳ **#GEM-4** 🟠 **Fase 4 — RealtimeManager (ADR-016)** — `src/core/realtime/manager.ts` 5 salvaguardas: (a) `visibilitychange` pause/resume canal único · (b) idle detection 5min (`pointerdown`/`keydown`/`touchstart`) · (c) feature flag `realtime_enabled` master switch (table v0.2.6.4 já existe) · (d) dashboard PostHog egress monitoring · (e) reativar bootstrap `App.jsx`. **Bloqueia RTM-01 + RTM-02** do qa_plan.md. Reativa Realtime com egress controlado (postgres_changes desativado desde v0.2.1.0 storm fix #157).
+- ⏳ **#GEM-5** 🟠 **Fase 5 — Folder boundaries + ESLint** — restruturar `src/` em `src/pages` / `src/components` / `src/core` (entityFactory `useList`/`useGet`/`useMutate`) / `src/storage` / `src/sync` / `src/native` + `eslint.config.js` `no-restricted-imports` (UI não importa `@supabase/supabase-js` nem `@capacitor/*` direto). Architecture cleanup — preserve sync v2 + worker nativo intactos.
+- ⏳ **#BUG-MEDINPUT-001** 🟠 **Dedup catalog-vs-local em `MedNameInput.jsx:142-144`** — filtra catálogo Supabase quando nome bate `localSuggestions` → badges CMED/DCB nunca renderizam pra meds em ambas fontes. Fix: `search_medications` retornar `is_dcb`/`cmed_class`/`group_id` OU dedup logic preservar catalog source. Bug latente descoberto QA v0.2.8.1.
+
+**Pre-launch + marketing:**
+
 - ✅ **#018** AdMob Android prod flag flip + banner real ads (v0.2.1.3)
 - ⏳ **#021** 🟠 Backup keystore 3 locais seguros
 - ✅ **#024** Pre-commit hooks gitleaks + lint-staged + Husky 9 (v0.2.0.5)

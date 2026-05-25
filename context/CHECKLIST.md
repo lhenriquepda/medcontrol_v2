@@ -28,6 +28,88 @@
 
 ---
 
+### #plano-Gemini-Fase2-5 — Alinhamento medcontrol_v2 → spec dosy-app ⏳ PENDING (próximas releases)
+
+> Fonte: [`docs/Gemini/implementation_plan.md`](../docs/Gemini/implementation_plan.md) consolidado pós Fase 1 v0.2.8.1. Sequencia 4 fases que alinham o codebase atual à spec `dosy-app` documentada em `dosy-app/docs/`. Esforço estimado total 60-80h dividido em ~4 releases.
+
+#### #GEM-2 — Fase 2: Ingestão Catálogo CMED 30k (ADR-015)
+
+- **Status:** ⏳ aberto. Esforço estimado ~20h. Próxima release após v0.2.8.1 close.
+- **Bug case raiz:** catálogo Supabase `medications_catalog` tem 984 rows (94% cobertura BR via brand-names + DCB ANVISA), mas spec ADR-015 exige ≥25k pra cobrir CMED ANVISA completo. Falha hoje: meds menos comuns caem em "outro" + regex frontend falso-positivo `anlodipINA` → antidepressivo (sufixo `-ina` match).
+- **Escopo:**
+  - **`scripts/ingest-cmed.mjs`** novo — lote planilha CMED ANVISA (~30k rows), parsing XLSX → upsert `medcontrol.medications_catalog`. Idempotente. ANVISA scrape via XLSX manual (P9.2 admin upload bloqueado por 403 captcha).
+  - **`medcontrol.cmed_class_to_group_mapping`** nova table (`cmed_class TEXT PK → group_id TEXT`) — dicionário CMED Class → Grupo Dosy (substitui regex frontend).
+  - **`medcontrol.classify_medication_robust`** RPC 5 níveis (já existe parcialmente v0.2.6.3; trigger no insert/update de `medications_catalog` propagating to `treatments`/`doses`).
+  - **`medcontrol.medication_categorization_suggestions`** nova table (`name TEXT`, `suggested_group_id TEXT`, `votes INT`, `user_ids UUID[]`) — aprendizado coletivo de meds não-catalogados.
+  - **`src/constants/medCategories.js`** — fix regex falso-positivo `anlodipINA→antidepressivo` (já em v0.2.6.4 P0.2 partial; consolidar).
+- **Auditoria egress:** ingest é one-shot (admin) + dedup server-side. `classify_medication_robust` trigger é SECURITY DEFINER já existente — sem impacto runtime.
+- **Validação:** verificar 25k+ rows pós-ingest + 0 falso-positivos amilodipina/anlodipino em test suite + cobertura categorização ≥85% em catalog real.
+- **is_mandatory:** `false` (catalog expansion; UX fallback "outro" continua funcionando).
+
+#### #GEM-3 — Fase 3: Schema rename `medcontrol` → `dosy`
+
+- **Status:** ⏳ aberto. Esforço estimado ~15h. Coordenar pre-launch (breaking).
+- **Bug case raiz:** brand já é Dosy mas schema BD ainda `medcontrol` (rename app foi feito v0.1.7.5 mas schema preservado pra compat). Spec dosy-app docs assumem `dosy.` namespace. Discrepância pra IA novos e onboarding.
+- **Escopo:**
+  - **Migration `ALTER SCHEMA medcontrol RENAME TO dosy`** — Postgres atomic rename. Todas tables/RPCs/views/triggers preservados.
+  - **`src/services/*` + `src/hooks/*`** — replace `from('table')` com schema config (já é runtime via `VITE_SUPABASE_SCHEMA` env). Atualizar `.env.local` + `.env.production` + Vercel + GH Secrets de `medcontrol` pra `dosy`.
+  - **Java agendador nativo** — `AlarmScheduler.java` / `MutationDrainWorker.java` / `BootReceiver.java` queries Postgres REST atualizar URL base `medcontrol.*` → `dosy.*`.
+  - **Tabelas faltantes spec** — completar `profiles` (FK auth.users, prefs JSONB), `fcm_dispatched_log` (idempotência push), `treatment_versions` (audit imutável de edições) — `audit_log` + `feature_flags` já existem v0.2.6.4.
+- **Auditoria egress:** zero impacto runtime (apenas namespace rename + 3 tables novas pequenas).
+- **Validação:** rebuild + reinstall em emulator → fluxo completo (login + dose + share + alarm) sem erro 42P01 "relation does not exist".
+- **is_mandatory:** `false` (transparente pro user; rebuild necessário pra Java picks up novo namespace).
+
+#### #GEM-4 — Fase 4: RealtimeManager (ADR-016) — BLOQUEIA RTM-01 + RTM-02
+
+- **Status:** ⏳ aberto. Esforço estimado ~12h. Reativa Realtime postgres_changes (desativado desde v0.2.1.0 storm fix #157).
+- **Bug case raiz:** v0.2.1.0 desativou `useRealtime` no `App.jsx` por storm 12 req/s sustained idle. v0.2.7.0 reintroduziu simplificado (debounce 1.5s + scheduleRefetch) mas sem salvaguardas egress. ADR-016 spec exige 5 salvaguardas pra reativar sem queimar egress free tier.
+- **Escopo:**
+  - **`src/core/realtime/manager.ts`** novo (TypeScript ou JSX) — class `RealtimeManager` singleton:
+    - **(a)** `visibilitychange` listener: `document.hidden` → `pauseAll()` (unsubscribe canais), `!hidden` → `resumeAll()` (re-subscribe).
+    - **(b)** Idle detection: `pointerdown`/`keydown`/`touchstart` resetam timer 5min. Expiração → `pauseAll(reason='idle')`. Próxima interação → `resumeAll()`.
+    - **(c)** Feature flag `realtime_enabled` (table `feature_flags` v0.2.6.4) — master switch runtime. Polled boot + refetch 60min.
+    - **(d)** Canal único `doses-${userId}` agregando postgres_changes de `doses`/`treatments`/`patients`/`patient_shares` (em vez de 4 canais separados).
+    - **(e)** PostHog egress dashboard — `realtime_message_received` + `realtime_paused` + `realtime_resumed` events.
+  - **`src/App.jsx`** — bootstrap `realtimeManager.init()` pós-auth.
+  - **`src/hooks/useRealtime.js`** — deprecado em favor do manager (mantido como wrapper compat 1 release).
+- **Auditoria egress:** spec ADR-016 estima 90% redução vs realtime sempre-on. Cenário pior caso 5 users ativos simultâneos < 50KB/h.
+- **Validação:** `RTM-01` Visibility Pause + `RTM-02` Idle Timeout do `docs/Gemini/qa_plan.md` voltam de `Bloqueado` → `Pendente` → `Sucesso` em QA Appium emulador.
+- **is_mandatory:** `false` (Realtime é UX; FCM + manual PtR + watchdog 30s cobrem fallback).
+
+#### #GEM-5 — Fase 5: Folder boundaries + ESLint `no-restricted-imports`
+
+- **Status:** ⏳ aberto. Esforço estimado ~15h. Architecture cleanup low-risk.
+- **Bug case raiz:** `src/` mistura UI + native bridges + storage + services sem barreiras. Componente React qualquer pode `import { supabase } from 'src/lib/supabaseClient'` direto, dificultando refactor e teste isolado. Spec `dosy-app/docs/10-ARCHITECTURE.md` exige boundaries rígidos.
+- **Escopo:**
+  - **Reestruturação `src/`:**
+    - `src/pages/` — só páginas React (já existe).
+    - `src/components/` — primitives + dosy/* (já existe).
+    - `src/core/` (NOVO) — entityFactory `useList`/`useGet`/`useMutate` per entity (patients/treatments/doses/shares).
+    - `src/storage/` (NOVO) — `@capacitor/preferences` wrapper genérico + IDB legacy fallback.
+    - `src/sync/` (NOVO) — `pendingMutationsQueue` + `markDose` + `drainPendingMutations` movidos pra cá.
+    - `src/native/` (NOVO) — `secureStorage` + `criticalAlarm` + `appUpdate` + `network` wrappers.
+  - **`eslint.config.js`** — `no-restricted-imports` rule: pages/components não podem importar `@supabase/supabase-js` ou `@capacitor/*` direto. Devem usar wrappers `src/native/` ou hooks `src/core/`.
+- **Auditoria egress:** zero (refactor estrutural).
+- **Validação:** `npm run lint` zero erros + `npm run build` verde + `npm run test` 66 testes passing + smoke QA Appium emulador (boot + dose + share + alarm).
+- **is_mandatory:** `false` (transparente).
+
+---
+
+### #BUG-MEDINPUT-001 — Badge CMED/DCB não renderiza em med com nome em catalog + local
+
+- **Status:** ⏳ aberto P1. Descoberto QA Appium v0.2.8.1 (digitar "amox" não exibe badge mesmo retornando 5 rows do RPC). Item BUGS.md #0024.
+- **Bug case raiz:** `src/components/MedNameInput.jsx:142-144` filtra catálogo Supabase quando nome bate com `localSuggestions` (de `src/data/medications.js` heurística `suggestMedications`). Local entries têm `source: 'free'` ou `source: 'user'` (sem `is_dcb`, `cmed_class`, `group_id`). Como dedup é local-first, item visualmente vem como local → sem badge.
+- **Plano fix (alternativas):**
+  - **A.** RPC `search_medications` retornar `is_dcb`/`cmed_class`/`group_id`/`source: 'cmed'` — frontend usa pra rendering badge mesmo após dedup.
+  - **B.** Dedup logic preservar catalog source (filtrar local pra mesmo nome) — local serve só pra autocomplete UX sem badges, catálogo serve metadados.
+  - **C.** Merge: bate por nome canonicalizado, merge metadados de ambas fontes (priorizando catalog `is_dcb`/`cmed_class`).
+- **Decisão:** propor **C** em próxima release — melhor UX + zero perda de dados.
+- **Auditoria egress:** N/A — bug rendering frontend puro.
+- **Validação:** Appium emulador — digitar "amox" deve mostrar badge CMED no item "Amoxicilina" (catálogo) + "Amoxicilina + Clavulanato" (catálogo).
+- **is_mandatory:** `false` (UX badge é informativo; user pode digitar sem badge sem perder funcionalidade).
+
+---
+
 ### #release-v0.2.8.0 — MutationDrainWorker nativo Java (B102 FECHADO categoricamente) ✅ SHIPPED 2026-05-25 01:48 BRT
 
 - **Status:** master tag `v0.2.8.0` (merge commit `e8d776f`). Play Console vc 102 publicado 2026-05-25 01:48 BRT via Vetor 4 (Supabase Storage proxy bypass file_upload share-path). Esforço ~11h (5 passos do plano).

@@ -40,9 +40,16 @@
 - `[x]` Inserir uma mutação maliciosa/inválida local na fila offline e validar que o drain reverte o estado visual e emite o toast de erro apropriado ao restabelecer a rede.
 - `[x]` Validar a busca e autocomplete de medicamentos digitando no input (ex: "Escitalopram") para garantir que retorna sugestões do catálogo e suas categorias (badges) em vez de falhar silenciosamente com erro de permissão.
 
-**Validações device físico pendentes (manual user):**
-- `[ ]` Validar em device real que a alteração dinâmica de intervalo/modo de tratamento atualiza `durationUnit` de forma limpa e síncrona sem crash ou lentidão.
-- `[ ]` Validar rollback otimista no device real ao forçar falhas lógicas de rede (ex: tentar marcar dose de tratamento deletado).
+**Validações emulator (CDP automation, 2026-05-25) — substituem device físico:**
+- `[x]` **TreatmentForm switch dinâmico** — emulator-5554 via `scripts/qa-v028/v0281-validar-pendencias.mjs`: rota `/tratamento/novo` carrega sem crash; clicks sequenciais nos chips de frequência `6h` → `8h` + toggle modo `Intervalo fixo`/`Horários` 2× extras pra estressar setState. Resultado: **0 exceptions, 0 console warnings, 0 `set-state-in-effect`/`Maximum update depth`**. Confirma fix Gemini de `useEffect` reativo → handlers síncronos.
+- `[x]` **Rollback otimista forçando 404** — fixture SQL: treatment + dose `pending` criados pro teste-free, depois `DELETE FROM medcontrol.doses WHERE id='b1bb83af-...'` server-side enquanto cache local React Query mantinha a dose. Tap "Tomada" no DoseModal via `scripts/qa-v028/v0281-val2-trigger.mjs`. Sequência observada:
+  1. Optimistic patch + toast verde "Dose de QA-Rollback Med confirmada. Desfazer"
+  2. RPC `POST /rest/v1/rpc/confirm_dose_v3` retorna HTTP 200 com payload `{ok: false, code: 404}` (semântica RPCs v3 idempotentes)
+  3. `markDose._runDrain` detecta `result?.ok === false` não-409 → chama `revertDose` + `emitMutationError`
+  4. Toast vermelho **"Item não encontrado para operação."** aparece
+  5. Dose volta visualmente pra `pendente` (`doseStillPending: true`, `doseMarkedAsDone: false`)
+
+  Fixture limpa pós-teste (`DELETE treatment` ok). Confirma fix Fase 1 Gemini de tratamento de erros lógicos 401/403/404 no drain offline (commit `3956d38`).
 
 ---
 

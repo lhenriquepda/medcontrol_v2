@@ -4,7 +4,7 @@
 >
 > **Última revisão:** 2026-05-25 — sumário enxuto. Histórico granular release-por-release em [`context/ROADMAP.md §6.3 Δ release log`](ROADMAP.md) + [`context/updates/`](updates/) + [`context/STATE.md`](STATE.md).
 
-## Snapshot (junho-2026)
+## Snapshot (maio-2026)
 
 | Campo | Valor |
 |---|---|
@@ -54,7 +54,9 @@ Decisões de UX devem balancear todas essas personas — letras legíveis e flux
 | UI | React 19 + Vite 5.4 + Tailwind 3 (darkMode: 'class') |
 | Animações | framer-motion 11 |
 | Roteamento | React Router DOM v6 |
-| Estado servidor | TanStack React Query v5 + PersistQueryClient (localStorage, 24h TTL) |
+| Estado servidor | TanStack React Query v5 (sem PersistQueryClient — removido em v0.2.7.0 Refactor Sync v2) |
+| Estado cliente | **Zustand 5** — 3 stores (`doseStore` + `patientStore` + `treatmentStore`) com `Map` + revert snapshot, optimistic patches em healthcare mutations |
+| Queue offline | **`@capacitor/preferences`** (SharedPreferences `dosy_pending_mutations` em `CapacitorStorage`) acessível JS + Java — base do MutationDrainWorker nativo v0.2.8.0 |
 | Backend | Supabase (projeto `guefraaqbkcehofchnrc`, nome `dosy-app`) |
 | Schema DB | `medcontrol` (dedicado, isolado do `public`) |
 | Auth | Supabase Auth email/senha + metadata (name) — SecureStorage Android (KeyStore AES-256) |
@@ -247,7 +249,7 @@ schedule-alarms-fcm      — DEPRECATED stub 410 Gone (substituído por daily-al
 
 ```
 src/
-├── main.jsx                    # PersistQueryClient (24h TTL), StatusBar (native), Sentry/PostHog init
+├── main.jsx                    # QueryClient (sem persist v0.2.7.0+), one-way IDB→Preferences migration boot, StatusBar (native), Sentry/PostHog init
 ├── App.jsx                     # Rotas + AppHeader + BottomNav + UpdateBanner + listeners notif
 │                                 # + Capacitor back button + DailySummaryModal + PermissionsOnboarding
 │                                 # + APP-LEVEL RESCHEDULE (useEffect watches useDoses + usePatients)
@@ -697,9 +699,10 @@ queries: { staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true,
 mutations: { retry: 3, retryDelay: exponential backoff (max 30s) }
 ```
 
-### PersistQueryClientProvider:
-- localStorage (`dosy-query-cache`)
-- maxAge 24h, buster `v1`
+### Persistência (v0.2.7.0+ refactor):
+- **PersistQueryClientProvider REMOVIDO** em v0.2.7.0 — TanStack cache passou a viver só em memória + Zustand stores (`doseStore`, `patientStore`, `treatmentStore`) cobrem optimistic patches com `Map` + revert snapshot
+- Queue offline: `@capacitor/preferences` (SharedPreferences `dosy_pending_mutations` group `CapacitorStorage`) substitui `idb-keyval` (one-way IDB→Preferences migration no boot `main.jsx`) — acessível JS + Java
+- Base do `MutationDrainWorker.java` nativo v0.2.8.0 que drena queue 15min CONNECTED independente do WebView Doze
 
 ### Query keys:
 ```
