@@ -128,8 +128,29 @@ export default function MedNameInput({ value, onChange, onSelectFull, required =
     //  'cmed_dcb'       → CMED ANVISA (DCB — denominação comum brasileira)
     //  'cmed_comercial' → CMED ANVISA (nome comercial registrado)
     //  'free'           → texto livre (sem match) — sem badge
+    //
+    // BUG-MEDINPUT-001 fix (v0.2.8.2): quando nome local bate com catálogo,
+    // promove a sugestão local pra fonte catálogo (cmed_dcb/cmed_comercial)
+    // herdando is_dcb/cmed_class/group_id/principio_ativo do RPC search_medications.
+    // Antes filtrava catálogo silenciosamente → badges CMED/DCB nunca renderizavam
+    // pra meds com nome em ambas fontes (ex: "Amoxicilina", "Escitalopram").
+    const catalogByKey = new Map((catalogItems || []).map((item) => [normKey(item.nome_comercial), item]))
     const localSuggestions = local.map((text) => {
       const hint = userHintFor ? userHintFor(text) : null
+      const catalogMatch = catalogByKey.get(normKey(text))
+      if (catalogMatch) {
+        // Merge: catálogo Supabase é fonte autoritativa pra metadados
+        return {
+          text,
+          principio: normKey(catalogMatch.principio_ativo) !== normKey(text) ? catalogMatch.principio_ativo : undefined,
+          source: catalogMatch.is_dcb ? 'cmed_dcb' : 'cmed_comercial',
+          is_dcb: !!catalogMatch.is_dcb,
+          group_id: catalogMatch.group_id || hint?.group_id || null,
+          cmed_class: catalogMatch.cmed_class || hint?.cmed_class || null,
+          principio_ativo: catalogMatch.principio_ativo || hint?.principio_ativo || null,
+        }
+      }
+      // Sem match no catálogo — só hint user ou livre
       return {
         text,
         source: hint ? 'user' : 'free',

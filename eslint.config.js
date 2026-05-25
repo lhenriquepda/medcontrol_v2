@@ -56,6 +56,32 @@ export default [
     settings: { react: { version: 'detect' } }
   },
   prettier,
+  // Gemini Fase 5 (v0.2.8.2): folder boundaries — UI (pages + components) não importa
+  // @supabase/supabase-js nem @capacitor/* direto. Devem usar wrappers em src/services
+  // (services agnostic) ou src/core/* (entityFactory + realtime manager).
+  // Iniciado como WARN — devs migram gradualmente conforme tocarem nos arquivos.
+  // Subir pra ERROR em release futura quando toda UI estiver limpa.
+  {
+    files: ['src/pages/**/*.{js,jsx}', 'src/components/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-imports': ['warn', {
+        paths: [
+          { name: '@supabase/supabase-js', message: 'UI não importa Supabase direto. Use wrappers em src/services/ ou src/core/.' },
+          { name: '@capacitor/preferences', message: 'UI não importa Capacitor direto. Use wrappers em src/services/ ou src/state/.' },
+          { name: '@capacitor/filesystem', message: 'UI não importa Capacitor direto. Use wrappers em src/services/.' },
+          { name: '@capacitor/network', message: 'UI não importa Capacitor direto. Use wrappers em src/services/.' },
+          { name: '@aparajita/capacitor-secure-storage', message: 'UI não importa SecureStorage direto. Use wrappers em src/services/.' },
+        ],
+        patterns: [
+          {
+            group: ['../services/supabase', '../../services/supabase'],
+            message: 'UI deve passar por hooks (useDoses/usePatients/etc) ou services específicos — não tocar supabase client direto.',
+            allowTypeImports: false,
+          },
+        ],
+      }],
+    },
+  },
   {
     ignores: [
       'dist/**', 'android/**', 'node_modules/**',

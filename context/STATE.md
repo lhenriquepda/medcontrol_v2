@@ -10,13 +10,14 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.8.1` ✅ SHIPPED — Correção de bugs, testes unitários e ESLint (Fase 1) |
-| **versionCode** | `103` (v0.2.8.1, não-mandatory) — anteriores `102` (v0.2.8.0) → `101` (v0.2.7.0) |
-| **Branch ativa** | `0.2.8.1` (commit `28db9b9`) — aguarda merge master |
-| **Último tag master** | `v0.2.8.0` (next: `v0.2.8.1` após merge) |
-| **Ship date v0.2.8.1** | 2026-05-25 11:42 BRT (Internal Testing) |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.1 (deploy auto post-merge) |
-| **Play Console v0.2.8.1** | ✅ vc 103 não-mandatory (25 mai 11:42 BRT) — Fase 1 Gemini fixes (grant medications_catalog 403 + drain offline revert + lint warnings). v0.2.8.0 vc 102 + v0.2.7.0 vc 101 consolidados em master anteriormente. |
+| **Versão** | `v0.2.8.2` ✅ SHIPPED — RealtimeManager ADR-016 + folder boundaries + BUG-MEDINPUT |
+| **versionCode** | `104` (v0.2.8.2, não-mandatory) — anteriores `103` (v0.2.8.1) → `102` (v0.2.8.0) |
+| **Branch ativa** | `0.2.8.2` (commit `7e6f51c`) — aguarda merge master |
+| **Último tag master** | `v0.2.8.1` (next: `v0.2.8.2` após merge) |
+| **Ship date v0.2.8.2** | 2026-05-25 13:39 BRT (Internal Testing) |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.2 (deploy auto post-merge) |
+| **Play Console v0.2.8.2** | ✅ vc 104 não-mandatory (25 mai 13:39 BRT) — Gemini Fase 4 RealtimeManager (5 salvaguardas ADR-016) + Fase 5 folder boundaries (`src/core/realtime/` + ESLint `no-restricted-imports`) + BUG-MEDINPUT-001 dedup catalog-vs-local fix. Flag `realtime_enabled=true` em prod, mas gate dual `useHasActiveShares` zero-egress pra user solo. |
+| **Play Console v0.2.8.1** | ✅ vc 103 não-mandatory (25 mai 11:42 BRT) — Fase 1 Gemini fixes (grant medications_catalog 403 + drain offline revert + lint warnings) |
 | **Play Console v0.2.8.0** | ✅ vc 102 não-mandatory (25 mai 01:48 BRT) — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java. v0.2.7.0 (vc 101) consolidado neste shipping (Play Console pula vc 96 → 102, whatsnew cobre both). |
 | **Play Console v0.2.7.0** | — vc 101 build local apenas (consolidado em vc 102) — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
 | **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
