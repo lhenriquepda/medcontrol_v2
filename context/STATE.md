@@ -10,12 +10,13 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.8.0` SHIPPED — MutationDrainWorker nativo Java (B102 FECHADO categoricamente) |
-| **versionCode** | `102` (v0.2.8.0, não-mandatory) — anteriores `101` (v0.2.7.0 refactor sync v2) → `94` (v0.2.6.9) |
-| **Branch ativa** | `release/v0.2.8.0` (close em curso) |
-| **Último tag master** | (próximo: `v0.2.8.0`) |
-| **Ship date v0.2.8.0** | 2026-05-25 (Internal Testing) |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.0 (deploy auto post-merge) |
+| **Versão** | `v0.2.8.1` ✅ SHIPPED — Correção de bugs, testes unitários e ESLint (Fase 1) |
+| **versionCode** | `103` (v0.2.8.1, não-mandatory) — anteriores `102` (v0.2.8.0) → `101` (v0.2.7.0) |
+| **Branch ativa** | `0.2.8.1` (commit `28db9b9`) — aguarda merge master |
+| **Último tag master** | `v0.2.8.0` (next: `v0.2.8.1` após merge) |
+| **Ship date v0.2.8.1** | 2026-05-25 11:42 BRT (Internal Testing) |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.1 (deploy auto post-merge) |
+| **Play Console v0.2.8.1** | ✅ vc 103 não-mandatory (25 mai 11:42 BRT) — Fase 1 Gemini fixes (grant medications_catalog 403 + drain offline revert + lint warnings). v0.2.8.0 vc 102 + v0.2.7.0 vc 101 consolidados em master anteriormente. |
 | **Play Console v0.2.8.0** | ✅ vc 102 não-mandatory (25 mai 01:48 BRT) — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java. v0.2.7.0 (vc 101) consolidado neste shipping (Play Console pula vc 96 → 102, whatsnew cobre both). |
 | **Play Console v0.2.7.0** | — vc 101 build local apenas (consolidado em vc 102) — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
 | **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
@@ -28,6 +29,25 @@
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED com 2 bugs P0 — superseded |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
+
+**v0.2.8.1 EM CURSO 2026-05-25 — Correções de QA, testes unitários e ESLint (Fase 1):**
+
+Resolve bugs menores, limpa warnings do linter e corrige permissão silenciosa no autocomplete do catálogo de medicamentos.
+
+- ✅ **Exclusão de E2E do Vitest** (commit `3956d38`): Configuração `vitest.config.js` exclui pasta `e2e/**` da execução padrão de testes unitários para evitar erros com a sintaxe do Appium.
+- ✅ **Correções de Testes Unitários** (commit `3956d38`): `dateUtils.test.js` corrigido para esperar hora de início `0h` em vez de `6h` no mock de `24h`. `statusUtils.test.js` atualizado para conter os 5 status (adicionado `cancelled`) e a rotulagem correta.
+- ✅ **Tratamento de erros no Offline Drain** (commit `3956d38`): `markDose.js` (`_runDrain`) agora reverte o estado local e chama `emitMutationError` em caso de erros lógicos (como 401, 403, 404) no Supabase.
+- ✅ **Warnings do Linter** (commit `3956d38`): `TreatmentForm.jsx` atualiza a unidade de duração de forma síncrona nos cliques em vez de efeito reativo (`useEffect`), eliminando warning de set-state-in-effect. `notifications/index.js` remove chamada duplicada a `setPermState`.
+- ✅ **Grant SELECT em medications_catalog** (migration `20260525124500`): Concedida permissão de leitura à tabela de catálogo para as roles `anon`, `authenticated` e `service_role`, resolvendo o bug silencioso HTTP 403 no autocomplete do nome do medicamento.
+
+**Validação QA emulador (Pixel 10 Pro XL 5554, commit `672dc2b`):**
+- ✅ `npm run test` 66 testes vitest passando após exclude `e2e/**`
+- ✅ `npm run lint` zero erros
+- ✅ `npm run build` 19.10s + `npx cap sync android` + `./gradlew assembleDebug` 32s OK
+- ✅ Grant SELECT confirmado em prod (4 grantees: anon/authenticated/postgres/service_role) — RPC `search_medications('amox')` retorna 5 rows sem 403
+- ✅ Appium UI test: `MedNameInput` sheet abre, digita "amox" → "Amoxicilina" + "Amoxicilina + Clavulanato" exibidos (sem permission error)
+- ⚠️ **Bug latente descoberto durante QA (não regressão v0.2.8.1):** badges CMED/DCB não renderizam quando nome local-dedupa contra catálogo (`MedNameInput.jsx:142-144` filtra catálogo se nome bate com `localSuggestions`). Local entries herdam `source='free'|'user'` sem badge. Item separado para próxima release — não bloqueia v0.2.8.1 close
+- ✅ Form switch: chips 24h/Contínuo responsivos, `hasError=false`, sem render loop ou crash (confirma fix `useEffect`→handler síncrono em `TreatmentForm.jsx`)
 
 **v0.2.8.0 SHIPPED 2026-05-25 — MutationDrainWorker nativo Android (B102 FECHADO CATEGORICAMENTE):**
 
@@ -162,16 +182,26 @@ Diagnóstico via 4 agentes paralelos. Postgres_log prod últimas 24h confirmou `
 
 ## P0 abertos (próxima release)
 
-1. **P9.2** — Edge `cmed-monthly-sync` cron mensal (ANVISA XLSX scrape bloqueado 403 — precisa rota manual via admin upload). Catálogo atual 984, meta ≥25k.
-2. **P9.6** — BulkCategorizeModal via Analytics drill-down "Não classificado" — RPC `list_null_meds_with_suggestions` + UI bulk
-3. **P9.7** — Dashboard métrica `% doses não-categorizadas` + alarme P0 webhook DPO
-4. **P9.8** — Documentar anti-pattern "patches superficiais MedNameInput não resolvem" em `context/auditoria/`
-5. **P9.10** — Validações device físico priorizadas (3 devices: Pixel 6, Samsung A54, Xiaomi Redmi 12) — 10 checks
-6. **#006** — device validation 3 devices físicos (manual user)
-7. **#131** — recrutamento Reddit testers (desbloqueado pós #130)
+**Plano Gemini Fases 2-5** ([`docs/Gemini/implementation_plan.md`](../docs/Gemini/implementation_plan.md) — alinha medcontrol_v2 → spec dosy-app):
+
+1. **Gemini Fase 2 — CMED 30k ANVISA** ([ADR-015]) — `scripts/ingest-cmed.mjs` lote planilha CMED ANVISA ~30k rows + tabela `dosy.cmed_class_to_group_mapping` + trigger `classify_medication_robust` Postgres 5 níveis + tabela `dosy.medication_categorization_suggestions` (aprendizado coletivo) + fix regex `src/constants/medCategories.js` falso-positivo anlodipINA→antidepressivo. Catálogo atual 984, meta ≥25k. **Bloqueia P9.2** (cron mensal cmed-monthly-sync).
+2. **Gemini Fase 3 — Schema rename `medcontrol`→`dosy`** — migração `ALTER SCHEMA medcontrol RENAME TO dosy` + ajustar TODAS chamadas RPC/queries front-end pro namespace `dosy.` + atualizar código Java agendador nativo (`AlarmScheduler.java`, `MutationDrainWorker.java` etc) pra ler tabelas novo namespace + criar `profiles`, `audit_log` (✅ já existe v0.2.6.4), `feature_flags` (✅ v0.2.6.4), `fcm_dispatched_log`, versionamento `treatments`/`treatment_versions`.
+3. **Gemini Fase 4 — RealtimeManager ADR-016** (BLOQUEIA RTM-01 + RTM-02 do qa_plan) — `src/core/realtime/manager.ts` com 5 salvaguardas: (a) visibility change pause/resume canal único · (b) idle detection 5min (pointerdown/keydown/touchstart) · (c) feature flag `realtime_enabled` master switch (já existe table v0.2.6.4) · (d) dashboard PostHog egress · (e) reativar bootstrap `App.jsx`. Reativa Realtime de forma financeiramente viável (egress baixo).
+4. **Gemini Fase 5 — Folder boundaries + ESLint** — restruturar `src/` em `src/pages` / `src/components` / `src/core` (entityFactory `useList`/`useGet`/`useMutate`) / `src/storage` (IDB genérico) / `src/sync` (queue + erros) / `src/native` + `eslint.config.js` `no-restricted-imports` (UI não importa Supabase nem Capacitor direto).
+
+**Bug latente descoberto QA v0.2.8.1:**
+
+5. **BUG-MEDINPUT-001** — `MedNameInput.jsx:142-144` filtra catálogo Supabase quando nome bate com `localSuggestions` de `src/data/medications.js` → badges CMED/DCB nunca renderizam pra meds com nome em ambas fontes. Local entries herdam `source='free'|'user'` sem badge. **Fix**: RPC `search_medications` precisa retornar `is_dcb`/`cmed_class`/`group_id` OU dedup logic preserva catalog source. Pré-existente, não bloqueia close v0.2.8.1.
+
+**Launch Play Store gating:**
+
+6. **#006** — device validation 3 devices físicos (Pixel 6, Samsung A54, Xiaomi Redmi 12 — manual user, 10 checks)
+7. **#131** — recrutamento Reddit testers (desbloqueado pós #130, meta ≥12 ativos)
 8. **#132** — gate 14d ≥12 testers (depende #131)
 9. **#133** — Production access Console (depende #132)
-10. **#191/#192** — RevenueCat + Play Billing (Fase 3)
+10. **#191/#192** — RevenueCat + Play Billing (Fase 3 monetização)
+11. **P9.8** — Documentar anti-pattern "patches superficiais MedNameInput não resolvem" em `context/auditoria/`
+12. **P9.10** — Validações device físico priorizadas (3 devices) — 10 checks
 
 ---
 

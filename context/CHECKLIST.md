@@ -6,7 +6,153 @@
 
 ---
 
-### #release-v0.2.3.17 — Refactor Fase 2 thread-safety + Fase 4 componentes core 🚧 EM CURSO
+### #release-v0.2.8.1 — QA + lint + grant medications_catalog (Plano Gemini Fase 1) 🚧 EM CURSO
+
+- **Status:** branch `0.2.8.1` (commit `672dc2b` pós-`3956d38`). Pre-merge master + sem AAB Play Console shipping ainda. Esforço total ~3h (Gemini Fase 1 + sync docs + QA emulador).
+- **Bug case raiz:** silent HTTP 403 no autocomplete medicamentos (RPC `search_medications` retornava `data: []` sem erro visível, PostgREST permission denied swallowed por TanStack). Plus testes vitest quebrados pós-mudança de timezone mock + warnings ESLint `react-hooks/set-state-in-effect` em `TreatmentForm` + duplicação de `setPermState` em notifications + drain offline esconde erros lógicos 4xx que não 409.
+- **Escopo (commit `3956d38` Gemini + `672dc2b` Claude sync):**
+  - **`vitest.config.js`** — exclui `e2e/**` da execução padrão (sintaxe Mocha/Appium incompatível com Vitest unit runner).
+  - **`src/utils/dateUtils.test.js`** — `rangeNow('24h')` agora espera `0h` (meia-noite local) em vez de `6h` no mock de 12h recuo.
+  - **`src/utils/statusUtils.test.js`** — `STATUS_CONFIG has 4 statuses` → check 5 keys (`done/skipped/overdue/pending/cancelled`) + rotulagem `cancelled = "Cancelada"`.
+  - **`src/services/markDose.js`** — `_runDrain` agora chama `revertDose(mut.doseId)` + `emitMutationError()` quando `result?.ok === false` e código NÃO é 409 (401/403/404 antes silenciados via remove queue sem feedback UI).
+  - **`src/services/notifications/index.js`** — remove `setPermState(Notification.permission)` redundante no `useEffect` (estado já é init no `useState` constructor).
+  - **`src/pages/TreatmentForm.jsx`** — `durationUnit` autoswitch movido de `useEffect` reativo para handlers síncronos diretos (chip click + mudança de modo), elimina warning `react-hooks/set-state-in-effect`.
+  - **`supabase/migrations/20260525124500_v0_2_8_2_grant_medications_catalog_select.sql`** — `GRANT SELECT ON medcontrol.medications_catalog TO anon, authenticated, service_role`. Aplicado em prod via MCP. 4 grantees confirmados.
+  - **`android/app/build.gradle` + `package.json`** — bump `versionCode 102→103`, `versionName 0.2.8.0→0.2.8.1`.
+  - **`context/{BUGS,PROJETO,ROADMAP,RULES,STATE,Validar}.md` + `context/recipes/emulator-setup.md` + `docs/play-store/whatsnew/whatsnew-pt-BR` + `docs/Gemini/{alignment_audit,analysis_results,implementation_plan}.md`** — sync docs Δ release entry + plano consolidado das 5 fases.
+- **Auditoria egress:** N/A — release puramente QA/lint/migration permission grant; sem mudança em fetch pattern ou cron.
+- **Validação:** `npm run test` 66 verdes; `npm run lint` 0 erros; `npm run build` 19.10s; `npx cap sync android` 1.45s; `./gradlew assembleDebug` 32s. Appium emulador Pixel 10 Pro XL: digitar "amox" retorna sugestões Amoxicilina + Amoxicilina + Clavulanato (sem 403); chip 24h + switch Contínuo OK `hasError=false`.
+- **Bug latente descoberto durante QA (BUGS.md #0024 P4 OPEN):** `MedNameInput.jsx:142-144` dedupa local-first → badges CMED/DCB não renderizam quando catálogo Supabase e dicionário local convergem no mesmo nome. Não é regressão da v0.2.8.1; design preexistente. Item próxima release.
+- **Pendências device físico (Validar.md user):** validar form switch + autocomplete em S25 Ultra real após instalar APK; validar rollback otimista forçando erro lógico (deletar dose pelo BD pelo painel admin enquanto mark vai).
+- **is_mandatory v0.2.8.1:** `false` (lint/QA + grant DB; sem mudança de comportamento user-facing além do fix invisível 403).
+
+---
+
+### #plano-Gemini-Fase2-5 — Alinhamento medcontrol_v2 → spec dosy-app ⏳ PENDING (próximas releases)
+
+> Fonte: [`docs/Gemini/implementation_plan.md`](../docs/Gemini/implementation_plan.md) consolidado pós Fase 1 v0.2.8.1. Sequencia 4 fases que alinham o codebase atual à spec `dosy-app` documentada em `dosy-app/docs/`. Esforço estimado total 60-80h dividido em ~4 releases.
+
+#### #GEM-2 — Fase 2: Ingestão Catálogo CMED 30k (ADR-015)
+
+- **Status:** ⏳ aberto. Esforço estimado ~20h. Próxima release após v0.2.8.1 close.
+- **Bug case raiz:** catálogo Supabase `medications_catalog` tem 984 rows (94% cobertura BR via brand-names + DCB ANVISA), mas spec ADR-015 exige ≥25k pra cobrir CMED ANVISA completo. Falha hoje: meds menos comuns caem em "outro" + regex frontend falso-positivo `anlodipINA` → antidepressivo (sufixo `-ina` match).
+- **Escopo:**
+  - **`scripts/ingest-cmed.mjs`** novo — lote planilha CMED ANVISA (~30k rows), parsing XLSX → upsert `medcontrol.medications_catalog`. Idempotente. ANVISA scrape via XLSX manual (P9.2 admin upload bloqueado por 403 captcha).
+  - **`medcontrol.cmed_class_to_group_mapping`** nova table (`cmed_class TEXT PK → group_id TEXT`) — dicionário CMED Class → Grupo Dosy (substitui regex frontend).
+  - **`medcontrol.classify_medication_robust`** RPC 5 níveis (já existe parcialmente v0.2.6.3; trigger no insert/update de `medications_catalog` propagating to `treatments`/`doses`).
+  - **`medcontrol.medication_categorization_suggestions`** nova table (`name TEXT`, `suggested_group_id TEXT`, `votes INT`, `user_ids UUID[]`) — aprendizado coletivo de meds não-catalogados.
+  - **`src/constants/medCategories.js`** — fix regex falso-positivo `anlodipINA→antidepressivo` (já em v0.2.6.4 P0.2 partial; consolidar).
+- **Auditoria egress:** ingest é one-shot (admin) + dedup server-side. `classify_medication_robust` trigger é SECURITY DEFINER já existente — sem impacto runtime.
+- **Validação:** verificar 25k+ rows pós-ingest + 0 falso-positivos amilodipina/anlodipino em test suite + cobertura categorização ≥85% em catalog real.
+- **is_mandatory:** `false` (catalog expansion; UX fallback "outro" continua funcionando).
+
+#### #GEM-3 — Fase 3: Schema rename `medcontrol` → `dosy`
+
+- **Status:** ⏳ aberto. Esforço estimado ~15h. Coordenar pre-launch (breaking).
+- **Bug case raiz:** brand já é Dosy mas schema BD ainda `medcontrol` (rename app foi feito v0.1.7.5 mas schema preservado pra compat). Spec dosy-app docs assumem `dosy.` namespace. Discrepância pra IA novos e onboarding.
+- **Escopo:**
+  - **Migration `ALTER SCHEMA medcontrol RENAME TO dosy`** — Postgres atomic rename. Todas tables/RPCs/views/triggers preservados.
+  - **`src/services/*` + `src/hooks/*`** — replace `from('table')` com schema config (já é runtime via `VITE_SUPABASE_SCHEMA` env). Atualizar `.env.local` + `.env.production` + Vercel + GH Secrets de `medcontrol` pra `dosy`.
+  - **Java agendador nativo** — `AlarmScheduler.java` / `MutationDrainWorker.java` / `BootReceiver.java` queries Postgres REST atualizar URL base `medcontrol.*` → `dosy.*`.
+  - **Tabelas faltantes spec** — completar `profiles` (FK auth.users, prefs JSONB), `fcm_dispatched_log` (idempotência push), `treatment_versions` (audit imutável de edições) — `audit_log` + `feature_flags` já existem v0.2.6.4.
+- **Auditoria egress:** zero impacto runtime (apenas namespace rename + 3 tables novas pequenas).
+- **Validação:** rebuild + reinstall em emulator → fluxo completo (login + dose + share + alarm) sem erro 42P01 "relation does not exist".
+- **is_mandatory:** `false` (transparente pro user; rebuild necessário pra Java picks up novo namespace).
+
+#### #GEM-4 — Fase 4: RealtimeManager (ADR-016) — BLOQUEIA RTM-01 + RTM-02
+
+- **Status:** ⏳ aberto. Esforço estimado ~12h. Reativa Realtime postgres_changes (desativado desde v0.2.1.0 storm fix #157).
+- **Bug case raiz:** v0.2.1.0 desativou `useRealtime` no `App.jsx` por storm 12 req/s sustained idle. v0.2.7.0 reintroduziu simplificado (debounce 1.5s + scheduleRefetch) mas sem salvaguardas egress. ADR-016 spec exige 5 salvaguardas pra reativar sem queimar egress free tier.
+- **Escopo:**
+  - **`src/core/realtime/manager.ts`** novo (TypeScript ou JSX) — class `RealtimeManager` singleton:
+    - **(a)** `visibilitychange` listener: `document.hidden` → `pauseAll()` (unsubscribe canais), `!hidden` → `resumeAll()` (re-subscribe).
+    - **(b)** Idle detection: `pointerdown`/`keydown`/`touchstart` resetam timer 5min. Expiração → `pauseAll(reason='idle')`. Próxima interação → `resumeAll()`.
+    - **(c)** Feature flag `realtime_enabled` (table `feature_flags` v0.2.6.4) — master switch runtime. Polled boot + refetch 60min.
+    - **(d)** Canal único `doses-${userId}` agregando postgres_changes de `doses`/`treatments`/`patients`/`patient_shares` (em vez de 4 canais separados).
+    - **(e)** PostHog egress dashboard — `realtime_message_received` + `realtime_paused` + `realtime_resumed` events.
+  - **`src/App.jsx`** — bootstrap `realtimeManager.init()` pós-auth.
+  - **`src/hooks/useRealtime.js`** — deprecado em favor do manager (mantido como wrapper compat 1 release).
+- **Auditoria egress:** spec ADR-016 estima 90% redução vs realtime sempre-on. Cenário pior caso 5 users ativos simultâneos < 50KB/h.
+- **Validação:** `RTM-01` Visibility Pause + `RTM-02` Idle Timeout do `docs/Gemini/qa_plan.md` voltam de `Bloqueado` → `Pendente` → `Sucesso` em QA Appium emulador.
+- **is_mandatory:** `false` (Realtime é UX; FCM + manual PtR + watchdog 30s cobrem fallback).
+
+#### #GEM-5 — Fase 5: Folder boundaries + ESLint `no-restricted-imports`
+
+- **Status:** ⏳ aberto. Esforço estimado ~15h. Architecture cleanup low-risk.
+- **Bug case raiz:** `src/` mistura UI + native bridges + storage + services sem barreiras. Componente React qualquer pode `import { supabase } from 'src/lib/supabaseClient'` direto, dificultando refactor e teste isolado. Spec `dosy-app/docs/10-ARCHITECTURE.md` exige boundaries rígidos.
+- **Escopo:**
+  - **Reestruturação `src/`:**
+    - `src/pages/` — só páginas React (já existe).
+    - `src/components/` — primitives + dosy/* (já existe).
+    - `src/core/` (NOVO) — entityFactory `useList`/`useGet`/`useMutate` per entity (patients/treatments/doses/shares).
+    - `src/storage/` (NOVO) — `@capacitor/preferences` wrapper genérico + IDB legacy fallback.
+    - `src/sync/` (NOVO) — `pendingMutationsQueue` + `markDose` + `drainPendingMutations` movidos pra cá.
+    - `src/native/` (NOVO) — `secureStorage` + `criticalAlarm` + `appUpdate` + `network` wrappers.
+  - **`eslint.config.js`** — `no-restricted-imports` rule: pages/components não podem importar `@supabase/supabase-js` ou `@capacitor/*` direto. Devem usar wrappers `src/native/` ou hooks `src/core/`.
+- **Auditoria egress:** zero (refactor estrutural).
+- **Validação:** `npm run lint` zero erros + `npm run build` verde + `npm run test` 66 testes passing + smoke QA Appium emulador (boot + dose + share + alarm).
+- **is_mandatory:** `false` (transparente).
+
+---
+
+### #BUG-MEDINPUT-001 — Badge CMED/DCB não renderiza em med com nome em catalog + local
+
+- **Status:** ⏳ aberto P1. Descoberto QA Appium v0.2.8.1 (digitar "amox" não exibe badge mesmo retornando 5 rows do RPC). Item BUGS.md #0024.
+- **Bug case raiz:** `src/components/MedNameInput.jsx:142-144` filtra catálogo Supabase quando nome bate com `localSuggestions` (de `src/data/medications.js` heurística `suggestMedications`). Local entries têm `source: 'free'` ou `source: 'user'` (sem `is_dcb`, `cmed_class`, `group_id`). Como dedup é local-first, item visualmente vem como local → sem badge.
+- **Plano fix (alternativas):**
+  - **A.** RPC `search_medications` retornar `is_dcb`/`cmed_class`/`group_id`/`source: 'cmed'` — frontend usa pra rendering badge mesmo após dedup.
+  - **B.** Dedup logic preservar catalog source (filtrar local pra mesmo nome) — local serve só pra autocomplete UX sem badges, catálogo serve metadados.
+  - **C.** Merge: bate por nome canonicalizado, merge metadados de ambas fontes (priorizando catalog `is_dcb`/`cmed_class`).
+- **Decisão:** propor **C** em próxima release — melhor UX + zero perda de dados.
+- **Auditoria egress:** N/A — bug rendering frontend puro.
+- **Validação:** Appium emulador — digitar "amox" deve mostrar badge CMED no item "Amoxicilina" (catálogo) + "Amoxicilina + Clavulanato" (catálogo).
+- **is_mandatory:** `false` (UX badge é informativo; user pode digitar sem badge sem perder funcionalidade).
+
+---
+
+### #release-v0.2.8.0 — MutationDrainWorker nativo Java (B102 FECHADO categoricamente) ✅ SHIPPED 2026-05-25 01:48 BRT
+
+- **Status:** master tag `v0.2.8.0` (merge commit `e8d776f`). Play Console vc 102 publicado 2026-05-25 01:48 BRT via Vetor 4 (Supabase Storage proxy bypass file_upload share-path). Esforço ~11h (5 passos do plano).
+- **Bug case raiz (Plano_Worker_Native_v028.md):** v0.2.7.0 cobriu 90% B102 (kill mid-RPC + boot drain idempotente), mas remaining 10% = marcar dose com WebView suspended em Doze deep → JS `setTimeout`/`setInterval`/eventos `online`/`visibilitychange` não disparam → queue fica stuck até user reabrir app. Limite arquitetural de JavaScript em WebView — só solucionável com código nativo independente.
+- **Escopo (commits `4d212ee` + `9ae8414` + `54c7e32` + merge `e8d776f`):**
+  - **Passo 1 — Storage migration**: `src/state/pendingMutationsQueue.js` migra de `idb-keyval` (IDB JS-only) para `@capacitor/preferences` (SharedPreferences `CapacitorStorage` key `dosy_pending_mutations`, acessível JS + Java). Migration one-way no boot `src/main.jsx` (decisão #5 sem fallback). `src/services/markDose.js` adiciona `incrementRetry` — erro real (não-network, não-auth) retry 3× antes de descartar (decisão #3).
+  - **Passo 2+3+4 — Worker Java + schedule + test plan**: `android/app/src/main/java/com/dosyapp/dosy/sync/MutationDrainWorker.java` + `MutationQueueStore.java`. POST RPC v3 idempotentes via `HttpURLConnection`. **Refresh nativo Java (Opção B — decisão #2)** POST `/auth/v1/token?grant_type=refresh_token`, persiste novos tokens em `dosy_sync_credentials` SharedPreferences (~200 linhas Java extras). `MainActivity.enqueueMutationDrainWorker` PeriodicWorkRequest 15min `NetworkType.CONNECTED` policy KEEP (decisão #1). SEM `setRequiresBatteryNotLow` (decisão #4 — healthcare > bateria). ProGuard `-keep class com.dosyapp.dosy.sync.**`. Test plan §6 expandido com 5 cenários adb + logcat.
+  - **Passo 5 — Docs**: `Refactor_Sync_v2.md` §5.5 drain agora em 4 momentos (boot/resume/online/Worker 15min). BUGS.md entry v0.2.8.0 com B102 FECHADO + explicação cadeia 3 root causes.
+  - **Bump**: versionCode 101→102, versionName 0.2.7.0→0.2.8.0.
+- **Auditoria egress (§2 Plano_Worker_Native_v028.md):**
+
+  | Cenário | Egress |
+  |---|---|
+  | Idle típico (queue vazia) | 4 SharedPref reads/h = **0 RPC = 0 bytes/dia** |
+  | 5 doses offline + reboot online | ~5KB únicos |
+  | 50 mutations offline 24h | ~50KB únicos |
+  | Pior caso (queue stuck dias) | ~100KB/dia |
+
+  **Menos agressivo que v0.2.7.0 watchdog 30s** (120 reads/h JS vs 4 reads/h Worker).
+- **Validação:** assembleDebug + bundleRelease OK. Worker scheduled correto no boot (logcat `MutationDrainWorker enqueued (15min CONNECTED)` + primeiro cycle `queue vazia — skip cycle`). RPC v3 endpoint validado via curl direto. AAB signed 33MB upload Play Console autônomo via Vetor 4.
+- **Pendências device físico (Validar.md):** Simulação Doze Deep S25 Ultra — marcar dose com app fechado + tela bloqueada >15min conectado → Worker deve drenar.
+- **is_mandatory v0.2.8.0:** `false` (Worker é defense-in-depth; comportamento JS fallback continua funcionando).
+
+---
+
+### #release-v0.2.7.0 — Refactor Sync v2 (resolve 90% B102) ✅ SHIPPED consolidado em vc 102
+
+- **Status:** tag `v0.2.7.0` (commit `a80a349`). Não shipped Play Console standalone — consolidado em vc 102 (v0.2.8.0) com whatsnew cobrindo both. Esforço ~20h (4 fases + 5 commits hardening pós-QA real S25 Ultra).
+- **Bug case raiz (Refactor_Sync_v2.md):** B102 crônico v0.2.6.6→v0.2.6.15 — 8 tentativas hotfix falharam parcialmente. Diagnóstico em camadas: (1) `mutateAsync` sem `await` em DoseModal (fix v0.2.6.12 parcial); (2) `processLock` órfão supabase-js mid-refresh pós-Doze → RPCs travam silent; (3) idle longo + JWT expira → 401 RPC v2 swallowed em `parseDoseV2Response` → rollback silent UI. Refactor v2 reescreve foundation.
+- **Escopo (4 fases + 5 commits hardening):**
+  - **Fase 1 — Foundation**: `src/services/sessionManager.js` novo — `getValidSession()` refresh proativo se token expira em <30s; `authedRpc(rpcName, params, {timeoutMs})` Promise.race timeout único cobrindo refresh + RPC; `AuthLostError` + `TimeoutError` classes; mutex `refreshPromise` dedupa concurrent refreshes. Heartbeat clean.
+  - **Fase 2 — Zustand stores**: remove `PersistQueryClientProvider` + `flushPersistImmediate`. 3 stores novos `src/state/{doseStore,patientStore,treatmentStore}.js` (Map+snapshot revert). Princípio P4: cold start sempre fetch fresh.
+  - **Fase 3 — markDose pipeline**: `src/services/markDose.js` — optimistic patch + queue antes RPC + timeout dinâmico 30s cold-start. `pendingMutationsQueue.js` IDB sobrevive kill. RPCs v3 idempotentes (`mutation_log` PK request_id, server-side dedup). `drainPendingMutations` FIFO + `scheduleRetryDrain` backoff 5s→60s self-perpetuating.
+  - **Fase 4 — Realtime simplificado**: `useRealtime.js` postgres_changes → `scheduleRefetch` debounced 1.5s → `fetchDashboard()`. Remove `realtimeGate` + `versionedCache` complexity.
+  - **Hardening (5 commits)**: `7d47726` timeout dinâmico cold-start (boot + resume tardio); `69e1879` retry persistente backoff + reconnect listener; `c1ce900` AppHeader overdueCount lê Zustand reativo; `2f9a069` bridge Zustand→TanStack invalidate (DoseHistory/Reports/Analytics); `a80a349` AuthLost agenda retry + watchdog 30s queue stuck.
+- **Auditoria egress:** watchdog 30s setInterval = 120 reads IDB/h em JS (vs 4 reads/h do Worker v0.2.8.0). Mitigação via WorkManager nativo v0.2.8.0.
+- **Validação:** QA real S25 Ultra 2026-05-24/25 — fluxo doses + kill + idle + resume + drain idempotente. Bug latentes capturados em hardening pós-QA (4 buracos offline corrigidos).
+- **Pendências device físico:** none — consolidado em vc 102.
+- **is_mandatory v0.2.7.0:** `false` (refactor; comportamento user-facing preservado).
+
+---
+
+### #release-v0.2.3.17 — Refactor Fase 2 thread-safety + Fase 4 componentes core ✅ SHIPPED (consolidado em releases v0.2.4+ posteriores)
 
 - **Status:** branch `release/v0.2.3.17`. Esforço ~2h (AlarmService refactor cuidadoso + 3 componentes novos + cleanup legacy).
 - **Bug case raiz (Refactor_Full.md §1.8):**
@@ -25,7 +171,7 @@
 
 ---
 
-### #release-v0.2.3.16 — Refactor Fase 2 partial (Java ACK/SNOOZE) + Fase 5.8 (Dashboard opt) 🚧 EM CURSO
+### #release-v0.2.3.16 — Refactor Fase 2 partial (Java ACK/SNOOZE) + Fase 5.8 (Dashboard opt) ✅ SHIPPED (consolidado em releases v0.2.4+ posteriores)
 
 - **Status:** branch `release/v0.2.3.16` aberta. 1 commit `1f72515`. Esforço ~3h (Java refactor + migration RPC + Dashboard query opt).
 - **Bug case raiz (Refactor_Full.md §1.8 + §11.7 + descobertas v0.2.3.15 device físico):**
@@ -51,7 +197,7 @@
 
 ---
 
-### #release-v0.2.3.15 — Refactor Fase 1: sync resiliente + MultiDoseModal per-dose 🚧 EM CURSO
+### #release-v0.2.3.15 — Refactor Fase 1: sync resiliente + MultiDoseModal per-dose ✅ SHIPPED (consolidado em releases v0.2.4+ posteriores)
 
 - **Status:** branch `release/v0.2.3.15` aberta. Commits `15220da` refactor Fase 1 (8 arquivos, +1410 / -21 + Refactor_Full.md) + `9337ec5` bump vc 77→78. Esforço ~6h (investigação 4 agents Explore paralelos + plano Refactor_Full.md 5 fases + código Fase 1 + validação 2 emuladores).
 - **Bug case raiz (reportado em produção v0.2.3.14 Internal Testing):**

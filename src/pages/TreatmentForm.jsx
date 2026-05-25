@@ -204,19 +204,39 @@ export default function TreatmentForm() {
   }
 
   // Auto-switch unit baseado em intervalHours quando user muda interval (não em edit existing).
-  useEffect(() => {
-    if (existing) return // Não auto-switch em edit mode (preserva escolha original)
-    if (form.mode !== 'interval') return
-    const ih = Number(form.intervalHours)
-    let newUnit
-    if (ih === 720) newUnit = 'months'           // mensal
-    else if (ih === 168 || ih === 336) newUnit = 'weeks' // semanal/quinzenal
-    else newUnit = 'days'                        // 4h, 6h, 8h, 12h, 24h, 48h, 72h
-    if (newUnit !== form.durationUnit) {
-      setDurationUnit(newUnit)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.intervalHours, form.mode])
+  function handleModeChange(newMode) {
+    setForm((f) => {
+      const next = { ...f, mode: newMode }
+      if (!existing && newMode === 'interval') {
+        const ih = Number(next.intervalHours)
+        let newUnit = 'days'
+        if (ih === 720) newUnit = 'months'
+        else if (ih === 168 || ih === 336) newUnit = 'weeks'
+        if (newUnit !== f.durationUnit) {
+          const days = (Number(f.durationValue) || 0) * DURATION_MULTIPLIER[newUnit]
+          return { ...next, durationUnit: newUnit, durationDays: days }
+        }
+      }
+      return next
+    })
+  }
+
+  function handleIntervalHoursChange(h) {
+    setForm((f) => {
+      const next = { ...f, intervalHours: h }
+      if (!existing && f.mode === 'interval') {
+        const ih = Number(h)
+        let newUnit = 'days'
+        if (ih === 720) newUnit = 'months'
+        else if (ih === 168 || ih === 336) newUnit = 'weeks'
+        if (newUnit !== f.durationUnit) {
+          const days = (Number(f.durationValue) || 0) * DURATION_MULTIPLIER[newUnit]
+          return { ...next, durationUnit: newUnit, durationDays: days }
+        }
+      }
+      return next
+    })
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -619,7 +639,7 @@ export default function TreatmentForm() {
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => set('mode', opt.id)}
+                  onClick={() => handleModeChange(opt.id)}
                   className="dosy-press"
                   style={{
                     border: 'none', cursor: 'pointer',
@@ -654,7 +674,7 @@ export default function TreatmentForm() {
                       key={h}
                       size="sm"
                       active={Number(form.intervalHours) === h}
-                      onClick={() => set('intervalHours', h)}
+                      onClick={() => handleIntervalHoursChange(h)}
                     >
                       {label}
                     </Chip>

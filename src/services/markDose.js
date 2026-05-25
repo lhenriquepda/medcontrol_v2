@@ -425,16 +425,30 @@ async function _runDrain(options = {}) {
           ...(mut.payload?.observation !== undefined ? { p_observation: mut.payload.observation || '' } : {}),
         }, { timeoutMs: rpcTimeoutMs })
 
-        if (result?.ok === false && result?.code === 409 && result?.current_state) {
+        if (result?.ok === false) {
+          if (result?.code === 409 && result?.current_state) {
+            patchDose(mut.doseId, {
+              ...result.current_state,
+              _optimistic: false,
+              _pendingSync: false,
+              _conflict: { from: result.from, to: result.to, at: Date.now() },
+            })
+            emitConflict({
+              mutation: mut.action,
+              doseId: mut.doseId,
+              currentState: result.current_state,
+              from: result.from,
+              to: result.to,
+            })
+          } else {
+            revertDose(mut.doseId)
+            const e = new Error(result?.error || 'rpc_error')
+            e.code = result?.code
+            emitMutationError({ mutation: rpcName, error: e, code: result?.code })
+          }
+        } else {
           patchDose(mut.doseId, {
-            ...result.current_state,
-            _optimistic: false,
-            _pendingSync: false,
-            _conflict: { from: result.from, to: result.to, at: Date.now() },
-          })
-        } else if (result?.ok === true) {
-          patchDose(mut.doseId, {
-            ...(result.dose || result),
+            ...(result?.dose || result),
             _optimistic: false,
             _pendingSync: false,
             _confirmedAt: Date.now(),
