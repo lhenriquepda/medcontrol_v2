@@ -291,16 +291,64 @@ import { getAll as queueGetAll, remove as _queueRemove, size as queueSize } from
 let currentDrainPromise = null
 let retryDrainTimer = null
 
-// v0.2.7.0 hardening — re-agenda drain rápido em transient errors (rede flapping,
-// auth refresh). Sem este retry, mutations ficavam stuck esperando heartbeat 60s
-// (useAppResume), causando UI mostrar server stale por 1min após reconnect.
-const RETRY_DRAIN_DELAY_MS = 5_000
+// v0.2.7.0 hardening — retry persistente com backoff exponencial.
+// Enquanto queue > 0 e há transient errors, agenda nova tentativa.
+// Reset delay em sucesso. Para quando queue = 0 OU erro real (não-network).
+//
+// Storm prevention:
+//   - Apenas 1 timer ativo (retryDrainTimer guard)
+//   - Backoff 5s → 60s evita rajada em offline real
+//   - Quando queue = 0, NÃO re-agenda → 0 RPC em idle
+//   - Quando RPC sucede, delay reseta pra 5s pra próxima possível falha
+const RETRY_DELAY_MIN_MS = 5_000
+const RETRY_DELAY_MAX_MS = 60_000
+let currentRetryDelayMs = RETRY_DELAY_MIN_MS
+
 function scheduleRetryDrain() {
-  if (retryDrainTimer) return
-  retryDrainTimer = setTimeout(() => {
+  if (retryDrainTimer) return  // já agendado, evita duplicado
+  retryDrainTimer = setTimeout(async () => {
     retryDrainTimer = null
-    drainPendingMutations().catch(() => {})
-  }, RETRY_DRAIN_DELAY_MS)
+    let result = null
+    try {
+      result = await drainPendingMutations()
+    } catch { /* ignore */ }
+
+    // Verifica se ainda há fila — se sim, re-agenda. Se não, para.
+    let remaining = 0
+    try { remaining = await queueSize() } catch { /* ignore */ }
+
+    if (remaining === 0) {
+      currentRetryDelayMs = RETRY_DELAY_MIN_MS  // reseta pra próxima
+      return  // queue vazia, para retry chain
+    }
+
+    // Ainda tem fila — backoff: se drenou algo, reseta; senão dobra.
+    if (result?.drained > 0) {
+      currentRetryDelayMs = RETRY_DELAY_MIN_MS  // sucesso parcial reseta
+    } else {
+      currentRetryDelayMs = Math.min(currentRetryDelayMs * 2, RETRY_DELAY_MAX_MS)
+    }
+    scheduleRetryDrain()  // re-agenda com novo delay
+  }, currentRetryDelayMs)
+}
+
+// v0.2.7.0 hardening — Network reconnect listener: força drain imediato quando
+// device sai de offline. Antes user precisava interagir pra disparar drain.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    // Reset delay (rede voltou — tentativa imediata vale)
+    currentRetryDelayMs = RETRY_DELAY_MIN_MS
+    if (retryDrainTimer) {
+      clearTimeout(retryDrainTimer)
+      retryDrainTimer = null
+    }
+    drainPendingMutations().then((r) => {
+      // Se ainda tem fila após drain, agenda retry
+      queueSize().then((n) => {
+        if (n > 0) scheduleRetryDrain()
+      }).catch(() => {})
+    }).catch(() => {})
+  })
 }
 
 // Exporta pra Dashboard usar como indicador visual ("N doses sincronizando").
