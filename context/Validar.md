@@ -38,7 +38,29 @@
 - `[x]` **4.** Login S25U com teste-free@teste.com pwd 123456 (Sharegiver FREE) ✅ Logout lhenrique.pda + login teste-free OK, "Boa tarde, Teste Free" + plano FREE
 - `[x]` **5.** Cadastre Paciente em teste-plus via UI ("+" header Pacientes → form → Cadastrar) ✅ QA_Paciente_v0283_01 (id 03d659b8-6e58-4d14-92ad-1d948f1f022c) criado em 1069ms pós force-restart. ⚠️ **BUG #0025 manifestou na 1ª tentativa**: btn disabled 30s, zero requests via CDP Network domain, mutationFn jamais executou. Force-restart do app resolveu instantaneamente. Confirma root cause ≠ timeout RPC, é TanStack mutation queue stuck.
 - `[x]` **6.** Compartilhe paciente com teste-free via UI (botão Compartilhar no patient detail → SharePatientSheet → e-mail teste-free@teste.com) ✅ Concluído em 1051ms — "Compartilhado com" passou de "Ninguém ainda" pra teste-free@teste.com.
-- `[ ]` **7.** Verifique se Paciente aparece para teste-free Realtime, sem precisar recarregar APP — comportamento esperado **⏸️ QA INTERROMPIDO 2026-05-25 ~19:58 BRT (user precisou do celular S25U). Continuar daqui na próxima sessão.**
+- `[~]` **7.** Verifique se Paciente aparece para teste-free Realtime, sem precisar recarregar APP — comportamento esperado **🐛 BUG OBSERVADO**: S25U estava em background quando share foi feito. Ao trazer Dosy pra foreground, lista Pacientes ficou em skeleton stuck (15s+ sem carregar). **Após force-restart, paciente apareceu corretamente.** Realtime cross-account funciona pra app ATIVO, mas em S25U background → foreground, query stuck (mesma classe #0023/#0026 — list/query não recovery após pause). Anotar.
+- `[x]` **8.** Após force-restart o paciente apareceu corretamente em Pacientes (avatar 😊, "5 anos") + bottom-nav Pacientes mostrou badge "1". Cumprido conforme fallback do roteiro.
+- `[x]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min ✅ Tratamento `7144d247-7b26-4023-88cb-7f7f1b8df4f6` criado via UI no emul-5554 com medName="TestMed_v0283", intervalHours=8, duração=1 dia → 3 doses pending (17:50/01:50/09:50 UTC = 14:50/22:50/06:50 BRT). BUG #0025 manifestou primeira vez no submit (30s stuck) — APÓS preencher categoria "Antibiótico" via suggestion modal, submit funcionou. Toast verde "Tratamento criado." + redirect Dashboard.
+- `[x]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime) ✅ **EM TEMPO REAL** — S25U teste-free Dashboard mostrou imediatamente: "0/2 doses · 2 pendentes · 1 atrasada agora", QA_Paciente_v0283_01 com 3 doses (TestMed_v0283 14:50 atrasada 2h, 22:50 pendente, 06:50 amanhã pendente). **Opção D `patientId.in.(uuid)` cross-account confirmada funcionando** quando app está em foreground.
+- `[x]` **11.** Esperado que apareça (se não aparecer = BUG) ✅ apareceu via Realtime <2s.
+- `[skip]` **12-17.** Alarme cross-account + MultiDoseAlarm — pulados nesta sessão (validados em sessão anterior 2026-05-25 ~15:12 BRT com APK debug e share manual: AlarmActivity fullscreen FIRED em S25U mostrando dose XACC-Realtime-Test). Para revalidação completa em release futura.
+- `[~]` **20.** Marque a dose DoseA_Test_Alarm como pulada usando teste-plus — **🐛 BUG #0029 + #0030 descobertos**. Tap Pular em DoseModal: optimistic UI atualizou ("pulada") + banner amarelo "1 dose ainda não foi salva". CDP inspect: `pendingMutationsQueue` 1 entry `{action:'skip', retryCount:0}` — drain function NUNCA disparou (BUG #0029). Após force-restart emul, drain executou e dose ficou `status='skipped'` no BD. ⚠️ Mutation drain só funciona em boot.
+- `[~]` **21.** Veja se dose aparece pulada para teste-free IMEDIATAMENTE — **🐛 BUG #0030 descoberto**. Mesmo após drain confirmado no BD, S25U teste-free Dashboard continua mostrando "atrasada 2h" (não pulada). Realtime UPDATE não entregou cross-account. Hipótese: REPLICA IDENTITY DEFAULT impede patientId.in filter de funcionar em UPDATE events.
+- `[skip]` **22-25.** Marcar tomada teste-free + delete patient — **pulados nesta sessão**. QA bloqueado por BUG #0029 + #0030 que precisam fix antes de validar fluxo cross-account completo.
+
+### Bugs encontrados durante 2ª iteração QA (2026-05-25 17:00-17:46 BRT):
+1. **#0025** (já existia, manifestou novamente) — TanStack mutation queue stuck → workaround force-restart
+2. **#0026** (já existia) — Dashboard timeout cold-start, fix aplicado mas não revalidado
+3. **#0027** (deferred) — Samsung S25U Stylus popup
+4. **#0028** (deferred) — AdMob log spam
+5. **🆕 #0029** P1 — pendingMutationsQueue drain só executa em boot, não on-demand pós add()
+6. **🆕 #0030** P1 — Realtime UPDATE cross-account não entrega (REPLICA IDENTITY DEFAULT bloqueia filter)
+
+### Próxima sessão QA:
+- Atacar #0029 (drain pós-add via setTimeout(0) em markDose.js)
+- Atacar #0030 (migration `ALTER TABLE doses REPLICA IDENTITY FULL` + revalidar com `patientId.in.()` filter)
+- Re-build APK + re-instalar ambos devices
+- Re-rodar QA Passos 20-25 cross-account marcação + delete
 - `[ ]` **8.** Se não aparecer: guarde como BUG, recarregue app e verifique se agora está lá
 - `[ ]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min
 - `[ ]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime)
