@@ -61,6 +61,34 @@
 - Atacar #0030 (migration `ALTER TABLE doses REPLICA IDENTITY FULL` + revalidar com `patientId.in.()` filter)
 - Re-build APK + re-instalar ambos devices
 - Re-rodar QA Passos 20-25 cross-account marcação + delete
+
+---
+
+### 🆕 QA Round 3 v0.2.8.3 (2026-05-25 21:00-21:16 BRT) — fixes aplicados + revalidação
+
+**Fixes aplicados antes round 3:**
+- **#0025 root cause** — `networkMode: 'always'` em mutationRegistry pra patient/treatment CRUD (era 'offlineFirst' default que pausava mutations)
+- **#0029** — `scheduleRetryDrain()` chamado em markDose catch + watchdog 30s → 10s + setTimeout 5s backup drain pós queueAdd
+- **#0030** — `ALTER TABLE medcontrol.{doses,treatments,patients,patient_shares} REPLICA IDENTITY FULL` aplicado via migration
+
+**Resultado QA round 3:**
+- `[x]` 1-4. BD limpo + logins OK
+- `[x]` 5. **Paciente criado em 2s** (era 30s stuck). Fix #0025 ✅ FUNCIONOU
+- `[x]` 6. Share criado <2s
+- `[~]` 7-8. Realtime cross-account paciente INSERT: S25U precisou restart pra ver paciente (Realtime channel disconnect Samsung-kill); pós restart aparece OK
+- `[x]` 9. Tratamento criado + 3 doses (TestMed_R3 18:16/26:02:16/26:10:16)
+- `[x]` 10. **Doses apareceram no S25U via Realtime IMEDIATO** (sem restart) ✅ Opção D INSERT confirmada
+- `[x]` 20. **Mark dose pulada teste-plus**: dose status='skipped' em <10s no BD. Fix #0029 ✅ FUNCIONOU (drain pós-add disparou imediato)
+- `[~]` 21. **Realtime UPDATE cross-account**: S25U Dashboard NÃO atualizou em foreground (continuou mostrando "atrasada 2h"). Pós force-restart, dose aparece corretamente como "pulada" (BD sync OK). **Hipótese residual:** Realtime channel S25U disconnect Samsung-kill OR useRealtime UPDATE handler missing refetch trigger. REPLICA IDENTITY FULL aplicado mas channel não recebeu evento.
+
+**Fixes validados:**
+- ✅ #0025 mutation stuck — RESOLVIDO via networkMode='always'
+- ✅ #0029 drain pós-add — RESOLVIDO via scheduleRetryDrain + watchdog 10s
+- ✅ #0030 (parcial) — REPLICA IDENTITY FULL OK em BD, UPDATE delivery in-app real-time ainda intermitente devido Samsung background kill OR useRealtime handler
+
+**Pendente próximo round:**
+- Investigar Realtime UPDATE delivery real-time (channel reconnect strategy + handler refetchDoses on UPDATE)
+- Passos 22-25 (marcar tomada teste-free + delete paciente cross-account)
 - `[ ]` **8.** Se não aparecer: guarde como BUG, recarregue app e verifique se agora está lá
 - `[ ]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min
 - `[ ]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime)

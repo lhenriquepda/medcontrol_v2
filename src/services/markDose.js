@@ -154,6 +154,12 @@ export async function markDose({ doseId, action, payload = {} }) {
     console.warn('[markDose] queue.add fail:', e?.message)
   }
 
+  // BUG #0029 v0.2.8.3 belt-and-suspenders — agenda drain backup em 5s.
+  // Mesmo se o RPC inline abaixo suceder (caso comum), drain encontra queue
+  // vazia e exit cheap. Se RPC falhar silenciosamente (cenário capturado em QA
+  // 2026-05-25 ~17:42, queue stuck retryCount=0), esse drain garante retry.
+  setTimeout(() => { drainPendingMutations().catch(() => {}) }, 5000)
+
   // 4. RPC tentativa. v0.2.7.0 hardening: timeout dinâmico — 30s em cold-start
   // window (boot ou resume tardio), 10s em regime normal.
   try {
@@ -192,11 +198,20 @@ export async function markDose({ doseId, action, payload = {} }) {
     if (e instanceof AuthLostError) {
       // Sessão perdida: useAppResume cuida signOut. Mantém queue pra drain pós-login.
       patchDose(doseId, { _pendingSync: true, _pendingReason: 'auth_lost' })
+      // BUG #0029 v0.2.8.3 fix — schedule drain retry imediato. Antes só dependia de:
+      //   (a) watchdog 30s (que pode estar bloqueado por currentDrainPromise zombie)
+      //   (b) window 'online' event (não dispara se network nunca caiu)
+      //   (c) useAppResume heartbeat (idle a maior parte do tempo).
+      // Resultado: queue ficava 2+min stuck sem drain rodar (QA 2026-05-25 ~17:42).
+      // Fix: dispara scheduleRetryDrain() do markDose.js que arma timer 5s→60s backoff.
+      scheduleRetryDrain()
       return { ok: false, pendingSync: true, error: e }
     }
     if (isNetworkError(e)) {
       // Timeout / offline / fetch failed: mantém optimistic + queue pra drain.
       patchDose(doseId, { _pendingSync: true, _pendingReason: 'network' })
+      // BUG #0029 v0.2.8.3 fix — ver comment AuthLostError acima.
+      scheduleRetryDrain()
       return { ok: false, pendingSync: true, error: e }
     }
     // Erro real (não tratado pelo RPC v3 — server bug, network corruption etc).
@@ -346,7 +361,11 @@ function scheduleRetryDrain() {
 // quebrar (bug, edge case, exception perdida), a fila eventualmente drena.
 // Custo zero quando queue vazia. Bug capturado QA real 2026-05-25 00:00:
 // queue ficou stuck 7+min sem drain rodar por causa do AuthLost break.
-const WATCHDOG_INTERVAL_MS = 30_000
+// v0.2.8.3 BUG #0029 — reduzido 30s → 10s. Em healthcare critical, 30s de
+// dose stuck é eternidade — usuário marca, vê banner amarelo, app fica idle
+// e nada acontece por meio minuto. 10s é compromise entre snappy recovery e
+// custo idle (1 queueSize check a cada 10s é trivial).
+const WATCHDOG_INTERVAL_MS = 10_000
 if (typeof window !== 'undefined') {
   setInterval(async () => {
     let n = 0
