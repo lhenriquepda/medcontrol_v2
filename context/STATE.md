@@ -40,11 +40,14 @@ Resolve bugs menores, limpa warnings do linter e corrige permissão silenciosa n
 - ✅ **Warnings do Linter** (commit `3956d38`): `TreatmentForm.jsx` atualiza a unidade de duração de forma síncrona nos cliques em vez de efeito reativo (`useEffect`), eliminando warning de set-state-in-effect. `notifications/index.js` remove chamada duplicada a `setPermState`.
 - ✅ **Grant SELECT em medications_catalog** (migration `20260525124500`): Concedida permissão de leitura à tabela de catálogo para as roles `anon`, `authenticated` e `service_role`, resolvendo o bug silencioso HTTP 403 no autocomplete do nome do medicamento.
 
-**Validação QA emulador:**
-- ✅ Rodar `npm run test` com sucesso (66 testes passando)
-- ✅ Rodar `npm run lint` com sucesso (zero erros)
-- ✅ Autocomplete retornando sugestões corretas com badges e categorias do catálogo Supabase
-- ✅ Rollback otimista e aviso visual funcionando no offline drain de mutação maliciosa/inválida
+**Validação QA emulador (Pixel 10 Pro XL 5554, commit `672dc2b`):**
+- ✅ `npm run test` 66 testes vitest passando após exclude `e2e/**`
+- ✅ `npm run lint` zero erros
+- ✅ `npm run build` 19.10s + `npx cap sync android` + `./gradlew assembleDebug` 32s OK
+- ✅ Grant SELECT confirmado em prod (4 grantees: anon/authenticated/postgres/service_role) — RPC `search_medications('amox')` retorna 5 rows sem 403
+- ✅ Appium UI test: `MedNameInput` sheet abre, digita "amox" → "Amoxicilina" + "Amoxicilina + Clavulanato" exibidos (sem permission error)
+- ⚠️ **Bug latente descoberto durante QA (não regressão v0.2.8.1):** badges CMED/DCB não renderizam quando nome local-dedupa contra catálogo (`MedNameInput.jsx:142-144` filtra catálogo se nome bate com `localSuggestions`). Local entries herdam `source='free'|'user'` sem badge. Item separado para próxima release — não bloqueia v0.2.8.1 close
+- ✅ Form switch: chips 24h/Contínuo responsivos, `hasError=false`, sem render loop ou crash (confirma fix `useEffect`→handler síncrono em `TreatmentForm.jsx`)
 
 **v0.2.8.0 SHIPPED 2026-05-25 — MutationDrainWorker nativo Android (B102 FECHADO CATEGORICAMENTE):**
 

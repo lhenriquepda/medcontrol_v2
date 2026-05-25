@@ -38,7 +38,7 @@ Nenhum bug P3 aberto.
 
 ## 🔵 P4 — Cosmético / UX
 
-Nenhum bug P4 aberto.
+- **#0024** P4 — `MedNameInput.jsx:142-144` filtra catálogo Supabase se nome bate com sugestão local (`localSuggestions` da heurística `suggestMedications`). Como local entries têm `source: 'free'` ou `source: 'user'`, **badges CMED/DCB ANVISA não renderizam** mesmo quando o item existe no `medications_catalog`. Descoberto em QA Appium v0.2.8.1 (2026-05-25): digitar "amox" mostra "Amoxicilina" + "Amoxicilina + Clavulanato" sem badges, apesar do RPC `search_medications` retornar 5 rows válidas no BD. **Não é regressão** do grant fix v0.2.8.1; é decisão de design preexistente (dedup local-first). **Plano fix**: priorizar entries do catálogo Supabase OR fazer merge dos metadados (`is_dcb`, `group_id`, `cmed_class`) quando nome bate. Item próxima release. Status: `OPEN`.
 
 ---
 
@@ -53,6 +53,8 @@ Nenhum bug P4 aberto.
   - **Divergência de Testes (`dateUtils.test.js` / `statusUtils.test.js`)**: Corrigido teste de `rangeNow('24h')` para esperar `0h` em vez de `6h` de início. Atualizado o teste de quantidade de status para 5 elementos incluindo `cancelled`.
   - **Vitest Config (`vitest.config.js`)**: Excluído o diretório `e2e/**` da execução padrão do Vitest, evitando erros de carregamento de sintaxe Mocha do Appium.
   - **Warnings do ESLint (`TreatmentForm.jsx` / `notifications/index.js`)**: Removido o `useEffect` reativo de auto-switch de `durationUnit` no formulário e substituído por atualizações síncronas nos cliques, eliminando o warning `react-hooks/set-state-in-effect`. Removida a chamada duplicada de `setPermState` no `useEffect` de montagem de notificações.
+
+- **GRANT SELECT em `medications_catalog`** (migration `20260525124500_v0_2_8_2_grant_medications_catalog_select.sql`, commit `672dc2b`) — fix HTTP 403 silencioso no autocomplete do nome do medicamento. RPC inline `search_medications` retornava 0 rows sem erro visível (browser PostgREST 403 swallowed por TanStack como `data: []`). Concedido `SELECT` na tabela `medcontrol.medications_catalog` para roles `anon`, `authenticated`, `service_role`. Aplicado em Supabase prod via MCP. 4 grantees confirmados (incluindo postgres). Validado em emulador Appium: digitar "amox" agora retorna 5 entries do catálogo.
 
 ### v0.2.8.0 (2026-05-25, vc 102)
 
