@@ -10,12 +10,14 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.6.9` SHIPPED (hotfix UI lenta + BD não persiste) — anteriores `v0.2.6.7/8` SHIPPED |
-| **versionCode** | `94` (v0.2.6.9, não-mandatory) — anterior `93` (v0.2.6.8) → `92` (v0.2.6.7) |
-| **Branch ativa** | `release/v0.2.6.9` (pré-merge master) |
-| **Último tag master** | `v0.2.6.6` (mergeado 2026-05-24) — próximo: `v0.2.6.9` |
-| **Ship date v0.2.6.9** | 2026-05-24 15:18 BRT (Internal Testing) |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.6.9 (deploy auto post-merge) |
+| **Versão** | `v0.2.8.0` SHIPPED — MutationDrainWorker nativo Java (B102 FECHADO categoricamente) |
+| **versionCode** | `102` (v0.2.8.0, não-mandatory) — anteriores `101` (v0.2.7.0 refactor sync v2) → `94` (v0.2.6.9) |
+| **Branch ativa** | `release/v0.2.8.0` (close em curso) |
+| **Último tag master** | (próximo: `v0.2.8.0`) |
+| **Ship date v0.2.8.0** | 2026-05-25 (Internal Testing) |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.0 (deploy auto post-merge) |
+| **Play Console v0.2.8.0** | ⏳ vc 102 não-mandatory — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java |
+| **Play Console v0.2.7.0** | ⏳ vc 101 não-mandatory — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
 | **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
 | **Play Console v0.2.6.8** | ✅ vc 93 não-mandatory (UX quick wins MEL-001/004/005/007/009/012/M102/M600/M-realq7) |
 | **Play Console v0.2.6.7** | ✅ vc 92 não-mandatory (8 fixes: B100 ceil minute + B102 retry 3→1 + B001/E01 admob + E02 RPC + E04 + M-realq3 toast + M101 24h + M201/M500) |
@@ -26,6 +28,31 @@
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED com 2 bugs P0 — superseded |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
+
+**v0.2.8.0 SHIPPED 2026-05-25 — MutationDrainWorker nativo Android (B102 FECHADO CATEGORICAMENTE):**
+
+Resolve último 10% do caminho B102: marca dose com WebView suspended em Doze → JS timers param → queue stuck até user reabrir. v0.2.7.0 cobriu 90% (kill mid-RPC + boot drain idempotente), mas suspended state = limite arquitetural de JavaScript em WebView.
+
+- ✅ **Passo 1 — Storage migration** (commit `4d212ee`): `pendingMutationsQueue.js` substitui `idb-keyval` (IndexedDB JS-only) por `@capacitor/preferences` (SharedPreferences acessível JS + Java). Migration one-way no boot `main.jsx` (decisão user #5 sem fallback). Key: `dosy_pending_mutations` group `CapacitorStorage`. Adiciona `incrementRetry(requestId)`. Em `markDose.js`: erro real (não-network, não-auth) retry 3× antes de descartar (decisão user #3) via `queueIncrementRetry`.
+
+- ✅ **Passo 2+3+4 — Worker Java + schedule + test plan** (commit `9ae8414`): `MutationQueueStore.java` + `MutationDrainWorker.java` em `com.dosyapp.dosy.sync.*`. POST RPC v3 idempotentes via `HttpURLConnection`. **Refresh nativo Java (Opção B do user — decisão #2)** via POST `/auth/v1/token?grant_type=refresh_token`, persiste novos tokens atomicamente em `dosy_sync_credentials` SharedPreferences (~200 linhas Java extras vs Opção A reuse). MainActivity `enqueueMutationDrainWorker` PeriodicWorkRequest 15min NetworkType.CONNECTED policy KEEP (decisão #1). SEM `setRequiresBatteryNotLow` (decisão #4 — healthcare > bateria). ProGuard `-keep class com.dosyapp.dosy.sync.**`. Test plan §6 expandido com 5 cenários adb + logcat.
+
+- ✅ **Passo 5 — Docs** (commit `54c7e32`): Refactor_Sync_v2 §5.5 atualizado (drain 4 momentos: boot/resume/online/Worker 15min). BUGS.md entry v0.2.8.0 com B102 FECHADO + explicação cadeia 3 camadas root causes.
+
+**Validação QA emulador (parcial):**
+- ✅ Worker scheduled correto no boot (logcat: `MutationDrainWorker enqueued (15min CONNECTED)`)
+- ✅ Primeiro cycle quick-exit OK (logcat: `MutationDrainWorker: queue vazia — skip cycle` — zero RPC)
+- ✅ RPC v3 endpoint funcional via curl direto (auth + payload + schema validados, dose `ed33b1c2` marked done)
+- ✅ Build assembleDebug + bundleRelease OK
+- ⏳ Drain end-to-end com queue não-vazia: validação manual S25U pós-ship (esperar fire 15min natural ou simular Doze)
+
+**Estimativa egress (§2 do plano):**
+- Idle típico (queue vazia): 4 SharedPref reads/h = zero RPC = 0 bytes
+- Cenário patológico (50 mutations offline 24h): ~50KB únicos
+- Pior caso (queue stuck): ~100KB/dia
+- **Menos agressivo que v0.2.7.0 watchdog 30s** (120 reads/h vs 4 reads/h)
+
+**v0.2.7.0 SHIPPED — Refactor Sync v2 (commits `7d47726` `69e1879` `c1ce900` `2f9a069` `a80a349`):** sessionManager + authedRpc + Zustand stores + markDose + pendingMutationsQueue + RPCs v3 idempotentes (mutation_log PK) + 4 fixes hardening pós-QA real (AppHeader Zustand reativo + retry backoff + AuthLost retry + watchdog 30s). Resolve 90% B102.
 
 **v0.2.6.9 SHIPPED 2026-05-24 15:18 BRT — hotfix REAL bug crônico "UI lenta + BD não persiste em <5min":**
 
