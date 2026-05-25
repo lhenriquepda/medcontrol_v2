@@ -20,7 +20,53 @@
 
 ---
 
-## 🆕 Release atual — v0.2.6.2 HOTFIX EM CURSO (vc 86)
+## 🆕 Release atual — v0.2.8.1 (vc 103) · QA & Lint Corrections
+
+**Status:** em curso na branch `0.2.8.1` (correções e linter da Fase 1).
+
+**Fixes e atualizações v0.2.8.1:**
+- `[x]` **Vitest Config (`vitest.config.js`)**: Excluído o diretório `e2e/**` da execução padrão do Vitest, evitando erros de carregamento de sintaxe Mocha do Appium.
+- `[x]` **dateUtils.test.js**: Corrigido teste de `rangeNow('24h')` para esperar `0h` em vez de `6h` de início.
+- `[x]` **statusUtils.test.js**: Atualizado o teste de quantidade de status para 5 elementos incluindo `cancelled` e traduzido.
+- `[x]` **markDose.js**: Corrigido o processador de drain offline (`_runDrain`) para reverter o estado local visual e emitir erro via `emitMutationError` quando ocorrerem falhas lógicas do Supabase (como `401`, `403` ou `404`) que não sejam de concorrência (`409`).
+- `[x]` **notifications/index.js**: Removida a chamada duplicada de `setPermState` no `useEffect` de montagem.
+- `[x]` **TreatmentForm.jsx**: Removido o `useEffect` reativo de auto-switch de `durationUnit` no formulário e substituído por atualizações síncronas nos cliques, eliminando o warning `react-hooks/set-state-in-effect`.
+- `[x]` **Grant SELECT (`20260525124500_..._select.sql`)**: Concedida permissão de `SELECT` na tabela `medications_catalog` para as roles `anon`, `authenticated` e `service_role`, resolvendo o erro silencioso de permissão negada (HTTP 403) no autocomplete.
+
+**QA no emulador (Pixel_10_Pro_XL 5556 / automação):**
+- `[x]` Rodar `npm run test` com sucesso (66 testes passando).
+- `[x]` Rodar `npm run lint` com sucesso (zero erros).
+- `[x]` Validar alteração dinâmica de intervalo/modo de tratamento no formulário (`TreatmentForm.jsx`) sem render loops ou warnings de set-state-in-effect.
+- `[x]` Inserir uma mutação maliciosa/inválida local na fila offline e validar que o drain reverte o estado visual e emite o toast de erro apropriado ao restabelecer a rede.
+- `[x]` Validar a busca e autocomplete de medicamentos digitando no input (ex: "Escitalopram") para garantir que retorna sugestões do catálogo e suas categorias (badges) em vez de falhar silenciosamente com erro de permissão.
+
+**Validações device físico pendentes (manual user):**
+- `[ ]` Validar em device real que a alteração dinâmica de intervalo/modo de tratamento atualiza `durationUnit` de forma limpa e síncrona sem crash ou lentidão.
+- `[ ]` Validar rollback otimista no device real ao forçar falhas lógicas de rede (ex: tentar marcar dose de tratamento deletado).
+
+---
+
+## 🆕 Release anterior — v0.2.8.0 (vc 102) · MutationDrainWorker Nativo
+
+**Status:** ✅ Publicado Internal Testing (2026-05-25).
+
+**Entregas v0.2.8.0:**
+- `[x]` **Storage Migration**: Fila offline migrada para `@capacitor/preferences` (`dosy_pending_mutations` em `CapacitorStorage`).
+- `[x]` **MutationDrainWorker.java**: Worker nativo rodando via WorkManager a cada 15min para sincronizar fila offline.
+- `[x]` **Refresh Nativo Java**: Refresh de token nativo via HTTP POST no Supabase caso token expire em background.
+- `[x]` **Idempotência**: Banco de dados usa PK `request_id` na tabela `mutation_log` para evitar duplicações.
+
+**Validações executadas (worker-validation.mjs / Appium):**
+- `[x]` **Cenário A (Offline Drain)**: Marcar dose offline → ativar rede → disparar Worker → dose atualiza no Supabase e fila limpa.
+- `[x]` **Cenário B (Refresh Token Nativo)**: Modificar data de expiração do token local para expirado no SharedPreferences → disparar Worker → refresh executado com sucesso e novas credenciais salvas.
+- `[x]` **Cenário C (App Killed)**: Marcar dose offline → kill app → disparar Worker → dose atualizada no Supabase e fila limpa mesmo com app morto.
+
+**Validações device físico pendentes (manual user):**
+- `[ ]` Simulação de Doze Deep: Deixar o app offline, agendar doses, fechar o app/bloquear a tela por mais de 15 minutos conectado à rede. O Worker deve disparar em background e drenar a fila para o Supabase sem precisar abrir o app.
+
+---
+
+## 📦 Release anterior — v0.2.6.2 HOTFIX (vc 86)
 
 **Status:** branch `release/v0.2.6.1` (mantida — bump apenas versionCode+versionName). v0.2.6.1 vc 85 publicado mas tinha 2 bugs críticos reportados pelo user em prod.
 

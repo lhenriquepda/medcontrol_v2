@@ -152,6 +152,32 @@ await emailInput.setValue('teste-plus@teste.com')
 await driver.deleteSession()
 ```
 
+### Abordagem Híbrida: Appium + Contexto WEBVIEW (Altamente Recomendado)
+
+Para aplicações baseadas em Capacitor, a forma mais robusta e rápida de interagir com elementos React (sem depender de seletores nativos frágeis) é alternar o contexto do Appium para `WEBVIEW` e injetar comandos diretos de DOM usando `driver.execute`:
+
+```js
+// 1. Listar e alternar para o contexto da WebView do app
+const contexts = await driver.getContexts()
+const webview = contexts.find(c => typeof c === 'string' ? c.startsWith('WEBVIEW') : c.id?.startsWith('WEBVIEW'))
+const webviewId = typeof webview === 'string' ? webview : webview.id
+await driver.switchContext(webviewId)
+
+// 2. Localizar e interagir com elementos diretamente no DOM do app
+await driver.execute(() => {
+  var btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Tomada')
+  if (btn) {
+    btn.scrollIntoView({ block: 'center' })
+    btn.click()
+  }
+})
+
+// 3. Voltar para o contexto nativo para operações nativas (como desativar rede via adb/svc)
+await driver.switchContext('NATIVE_APP')
+```
+
+Esta abordagem une a precisão de seletores CSS no front-end com a capacidade do Appium de controlar o sistema operacional, capturar telas e monitorar logs. Um exemplo completo desta implementação está documentado em [worker-validation.mjs](file:///g:/00_Trabalho/01_Pessoal/Apps/medcontrol_v2/scripts/qa-v028/worker-validation.mjs).
+
 ### Fallback simples (uiautomator dump) — APENAS pra leitura/screenshot
 
 ```bash

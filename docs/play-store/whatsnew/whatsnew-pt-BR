@@ -1,7 +1,8 @@
-v0.2.6.11 — encerramento ciclo QA + monitoramento auto
+v0.2.8.1 — Correções de QA e Autocomplete
 
-• Monitoramento automático: app envia evento anônimo a cada marcação de dose pra confirmar que a correção do bug "marquei e voltou pendente" (v0.2.6.10) está funcionando — sem você precisar reportar nada.
-• Estrutura interna de testes E2E pronta (uso interno desenvolvedor).
-• Documentação de decisões técnicas registradas no repositório.
+• Correção de permissão no autocomplete do catálogo de medicamentos, resolvendo a falha silenciosa de busca.
+• Correção do processador de fila offline para reverter o estado da dose local e notificar falhas lógicas no banco de dados.
+• Correção nos testes unitários e linter para estabilidade do código de desenvolvimento.
+• Melhoria interna no formulário de tratamento, eliminando renders em cascata.
 
-Sem mudanças visuais — release de infra/monitoramento.
+Sem mudanças visuais — release de infra e correções lógicas.

@@ -46,6 +46,14 @@ Nenhum bug P4 aberto.
 
 > Ordem cronológica reversa. Releases anteriores: ver `context/updates/` + ROADMAP §6.3 Δ release log.
 
+### v0.2.8.1 (2026-05-25, vc 103)
+
+- **Correções de Testes e warnings de Linter (Fase 1)**:
+  - **Fila Offline (`src/services/markDose.js`)**: Corrigido o processador de drain offline (`_runDrain`) para reverter o estado local visual e emitir erro via `emitMutationError` quando ocorrerem falhas lógicas do Supabase (como `401`, `403` ou `404`) que não sejam de concorrência (`409`).
+  - **Divergência de Testes (`dateUtils.test.js` / `statusUtils.test.js`)**: Corrigido teste de `rangeNow('24h')` para esperar `0h` em vez de `6h` de início. Atualizado o teste de quantidade de status para 5 elementos incluindo `cancelled`.
+  - **Vitest Config (`vitest.config.js`)**: Excluído o diretório `e2e/**` da execução padrão do Vitest, evitando erros de carregamento de sintaxe Mocha do Appium.
+  - **Warnings do ESLint (`TreatmentForm.jsx` / `notifications/index.js`)**: Removido o `useEffect` reativo de auto-switch de `durationUnit` no formulário e substituído por atualizações síncronas nos cliques, eliminando o warning `react-hooks/set-state-in-effect`. Removida a chamada duplicada de `setPermState` no `useEffect` de montagem de notificações.
+
 ### v0.2.8.0 (2026-05-25, vc 102)
 
 - **B102** P0 crônico **FECHADO CATEGORICAMENTE** — "Dose marcada não persiste depois de fechar e abrir o app" (8 tentativas hotfix v0.2.6.7→v0.2.6.15 falharam parcialmente). Root cause em camadas: (1) `mutateAsync` sem `await` em DoseModal — fixed v0.2.6.12; (2) `processLock` órfão supabase-js pós-Doze — fixed sessionManager v0.2.7.0; (3) JS timers suspended em Doze — UNFIXABLE em JS, requer Worker nativo. **Fix arquitetural v0.2.8.0:** `MutationDrainWorker.java` (`com.dosyapp.dosy.sync`) WorkManager 15min CONNECTED drena `pending_mutations` SharedPreferences "CapacitorStorage" key `dosy_pending_mutations` (mesma fonte que `@capacitor/preferences` usa do JS). Worker faz refresh nativo Java (Opção B do user) via POST `/auth/v1/token?grant_type=refresh_token` se access_token expirado, persiste novos tokens atomicamente em `dosy_sync_credentials`. Retry 3× erro real antes de descartar (decisão #3). Idempotência server-side via `mutation_log` PK request_id garante drain JS + Worker concorrentes = 1 RPC. Migration one-way IDB → Preferences no boot (`src/main.jsx`). Plano detalhado: `Plano_Worker_Native_v028.md`. ProGuard `-keep class com.dosyapp.dosy.sync.**` pra WorkManager reflection. Schedule em `MainActivity.enqueueMutationDrainWorker` policy KEEP.

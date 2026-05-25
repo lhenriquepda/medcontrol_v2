@@ -10,12 +10,13 @@
 
 | Campo | Valor |
 |---|---|
-| **Versão** | `v0.2.8.0` SHIPPED — MutationDrainWorker nativo Java (B102 FECHADO categoricamente) |
-| **versionCode** | `102` (v0.2.8.0, não-mandatory) — anteriores `101` (v0.2.7.0 refactor sync v2) → `94` (v0.2.6.9) |
-| **Branch ativa** | `release/v0.2.8.0` (close em curso) |
-| **Último tag master** | (próximo: `v0.2.8.0`) |
-| **Ship date v0.2.8.0** | 2026-05-25 (Internal Testing) |
-| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.0 (deploy auto post-merge) |
+| **Versão** | `v0.2.8.1` EM CURSO — Correção de bugs, testes unitários e ESLint (Fase 1) |
+| **versionCode** | `103` (v0.2.8.1, não-mandatory) — anteriores `102` (v0.2.8.0) → `101` (v0.2.7.0) |
+| **Branch ativa** | `0.2.8.1` |
+| **Último tag master** | `v0.2.8.0` |
+| **Ship date v0.2.8.1** | 2026-05-25 (Internal Testing) |
+| **Vercel prod** | ⏳ `dosymed.app` v0.2.8.1 (deploy auto post-merge) |
+| **Play Console v0.2.8.1** | ⏳ vc 103 em curso |
 | **Play Console v0.2.8.0** | ✅ vc 102 não-mandatory (25 mai 01:48 BRT) — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java. v0.2.7.0 (vc 101) consolidado neste shipping (Play Console pula vc 96 → 102, whatsnew cobre both). |
 | **Play Console v0.2.7.0** | — vc 101 build local apenas (consolidado em vc 102) — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
 | **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
@@ -28,6 +29,22 @@
 | **Play Console v0.2.6.2** | ✅ vc 87 superseded |
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED com 2 bugs P0 — superseded |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
+
+**v0.2.8.1 EM CURSO 2026-05-25 — Correções de QA, testes unitários e ESLint (Fase 1):**
+
+Resolve bugs menores, limpa warnings do linter e corrige permissão silenciosa no autocomplete do catálogo de medicamentos.
+
+- ✅ **Exclusão de E2E do Vitest** (commit `3956d38`): Configuração `vitest.config.js` exclui pasta `e2e/**` da execução padrão de testes unitários para evitar erros com a sintaxe do Appium.
+- ✅ **Correções de Testes Unitários** (commit `3956d38`): `dateUtils.test.js` corrigido para esperar hora de início `0h` em vez de `6h` no mock de `24h`. `statusUtils.test.js` atualizado para conter os 5 status (adicionado `cancelled`) e a rotulagem correta.
+- ✅ **Tratamento de erros no Offline Drain** (commit `3956d38`): `markDose.js` (`_runDrain`) agora reverte o estado local e chama `emitMutationError` em caso de erros lógicos (como 401, 403, 404) no Supabase.
+- ✅ **Warnings do Linter** (commit `3956d38`): `TreatmentForm.jsx` atualiza a unidade de duração de forma síncrona nos cliques em vez de efeito reativo (`useEffect`), eliminando warning de set-state-in-effect. `notifications/index.js` remove chamada duplicada a `setPermState`.
+- ✅ **Grant SELECT em medications_catalog** (migration `20260525124500`): Concedida permissão de leitura à tabela de catálogo para as roles `anon`, `authenticated` e `service_role`, resolvendo o bug silencioso HTTP 403 no autocomplete do nome do medicamento.
+
+**Validação QA emulador:**
+- ✅ Rodar `npm run test` com sucesso (66 testes passando)
+- ✅ Rodar `npm run lint` com sucesso (zero erros)
+- ✅ Autocomplete retornando sugestões corretas com badges e categorias do catálogo Supabase
+- ✅ Rollback otimista e aviso visual funcionando no offline drain de mutação maliciosa/inválida
 
 **v0.2.8.0 SHIPPED 2026-05-25 — MutationDrainWorker nativo Android (B102 FECHADO CATEGORICAMENTE):**
 
