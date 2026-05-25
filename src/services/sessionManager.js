@@ -94,9 +94,18 @@ export async function getValidSession() {
   return refreshPromise
 }
 
+// v0.2.7.0 hardening — refreshSession() pode pendurar indefinido (processLock
+// zombie observado em prod, especialmente pós-WebView pause). Wrap em timeout
+// 8s pra forçar fail-fast em vez de bloquear toda a stack de auth.
+const REFRESH_TIMEOUT_MS = 8_000
+
 async function doRefresh() {
   try {
-    const { data, error } = await supabase.auth.refreshSession()
+    const refreshPromise = supabase.auth.refreshSession()
+    const refreshTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('refreshSession timeout 8s')), REFRESH_TIMEOUT_MS)
+    })
+    const { data, error } = await Promise.race([refreshPromise, refreshTimeoutPromise])
     if (error) {
       refreshFailCount += 1
       if (refreshFailCount >= MAX_REFRESH_FAILS) {
@@ -137,16 +146,24 @@ async function doRefresh() {
 export async function authedRpc(rpcName, params, options = {}) {
   const timeoutMs = options.timeoutMs ?? 10_000
 
-  await getValidSession()  // pode throw AuthLostError
+  // v0.2.7.0 hardening — timeout TOTAL cobre getValidSession + supabase.rpc.
+  // Antes: timeout só envolvia rpcPromise. Se getValidSession travava (refresh
+  // pendurando em processLock zombie / network filter), authedRpc nunca
+  // retornava → markDose ficava aguardando indefinido → queue stuck até user
+  // reabrir app. console.warn vira logs visíveis em devDebug, console.error em
+  // prod (não stripped por Terser).
+  const wrappedPromise = (async () => {
+    await getValidSession()  // pode throw AuthLostError
+    const { data, error } = await supabase.rpc(rpcName, params)
+    if (error) throw error
+    return data
+  })()
 
-  const rpcPromise = supabase.rpc(rpcName, params)
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => reject(new TimeoutError(rpcName, timeoutMs)), timeoutMs)
   })
 
-  const { data, error } = await Promise.race([rpcPromise, timeoutPromise])
-  if (error) throw error
-  return data
+  return Promise.race([wrappedPromise, timeoutPromise])
 }
 
 // Reset interno pra testes — não usar em produção.
