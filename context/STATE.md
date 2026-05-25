@@ -16,8 +16,8 @@
 | **Último tag master** | (próximo: `v0.2.8.0`) |
 | **Ship date v0.2.8.0** | 2026-05-25 (Internal Testing) |
 | **Vercel prod** | ⏳ `dosymed.app` v0.2.8.0 (deploy auto post-merge) |
-| **Play Console v0.2.8.0** | ⏳ vc 102 não-mandatory — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java |
-| **Play Console v0.2.7.0** | ⏳ vc 101 não-mandatory — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
+| **Play Console v0.2.8.0** | ✅ vc 102 não-mandatory (25 mai 01:48 BRT) — Worker nativo drena pending_mutations 15min CONNECTED independente do WebView (Doze-aware) + refresh nativo Java. v0.2.7.0 (vc 101) consolidado neste shipping (Play Console pula vc 96 → 102, whatsnew cobre both). |
+| **Play Console v0.2.7.0** | — vc 101 build local apenas (consolidado em vc 102) — Refactor Sync v2 (sessionManager + Zustand + markDose + RPCs v3 idempotentes + hardening) |
 | **Play Console v0.2.6.9** | ✅ vc 94 não-mandatory — hotfix 4 root causes UI lenta (logMut DEV-only + refetchOnFocus false + heartbeat 60s + watchdog 60s+wsState) |
 | **Play Console v0.2.6.8** | ✅ vc 93 não-mandatory (UX quick wins MEL-001/004/005/007/009/012/M102/M600/M-realq7) |
 | **Play Console v0.2.6.7** | ✅ vc 92 não-mandatory (8 fixes: B100 ceil minute + B102 retry 3→1 + B001/E01 admob + E02 RPC + E04 + M-realq3 toast + M101 24h + M201/M500) |
