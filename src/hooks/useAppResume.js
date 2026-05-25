@@ -3,25 +3,31 @@ import { useQueryClient, onlineManager } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { supabase } from '../services/supabase'
-// v0.2.6.10 FIX B102 H3 — proteger refetchQueries do useAppResume com gate.
-// Heartbeat/onResume disparavam refetch sem filtro, atropelando mutation
-// otimista em flight — server retornava status stale → cache sobrescrito.
-import { isInFlight } from '../state/realtimeGate'
+import { getValidSession, AuthLostError, onAuthLost } from '../services/sessionManager'
+// v0.2.7.0 Fase 3 — drena mutations pendentes no resume (idempotência server-side).
+import { drainPendingMutations, markColdStart } from '../services/markDose'
+// v0.2.7.0 hardening — schedule notification se queue > 0 quando app vai bg.
+import { schedulePendingSyncNotification, cancelPendingSyncNotification } from '../services/pendingSyncNotifier'
 
 /**
  * useAppResume — handle app coming back from background/inactive state.
  *
- * Item #076 (release v0.1.7.0) — recovery sem reload destrutivo.
+ * Refactor Sync v2 Fase 1 (v0.2.7.0):
+ *   - REMOVIDO: heartbeat soft-reconnect que detectava 401 mas NÃO chamava
+ *     refreshSession() — causava loop infinito de degradação (heartbeat fail
+ *     observado a cada 60s por 7min em S25U sem recovery).
+ *   - REMOVIDO: watchdog ping (substituído por authedRpc com timeout 10s
+ *     em cada RPC individual — fail-fast por chamada, não por estado global).
+ *   - REMOVIDO: lógica de "soft recover" vs "long idle" — sempre que app
+ *     retoma, valida sessão via sessionManager (que faz refresh proativo
+ *     se token expira em <30s).
  *
- * Comportamento anterior: após 5min idle, força `window.location.href = '/'`.
- * Causava cold reload + tela branca + perda de URL + cascata de refetch.
- * Se algo falhasse no caminho (SW velho, JWT expirado, race), app ficava
- * travado até hard close do Chrome.
- *
- * Comportamento novo: soft recovery preservando URL.
- *   - Curto (<5min): invalida queries (refresh suave)
- *   - Longo (≥5min): refresh JWT → drop realtime channels → invalidate +
- *     refetch active queries. URL preservada. Sem reload.
+ * Comportamento novo:
+ *   - On resume (foreground / visibilitychange / app state): getValidSession()
+ *     + invalidate active queries (TanStack refetch).
+ *   - Heartbeat 60s: chama getValidSession() — se token expira em <30s,
+ *     refresh proativo. Se refresh falha 2× → AuthLostError → emit pra UI.
+ *   - Sem mutex próprio — sessionManager dedupa refreshSession() concorrentes.
  *
  * Alarme nativo Android (AlarmReceiver + SharedPreferences) é INDEPENDENTE
  * deste hook. Push FCM (background handler) também. Estes seguem disparando
@@ -29,218 +35,97 @@ import { isInFlight } from '../state/realtimeGate'
  *
  * Mount once em App.jsx top-level.
  */
-const SOFT_RECOVER_THRESHOLD_MS = 5 * 60 * 1000 // 5 min
-
-// Item #202 (release v0.2.1.5+) — mutex + debounce pra prevenir refresh storm.
-// Bug observado em prod 2026-05-08 09:00 BRT: 5 tokens rotacionados em 1.48s
-// → Supabase detectou reuse → revogou refresh chain → user deslogado.
-// Causa: visibilitychange + window focus + Capacitor appStateChange podem
-// disparar onResume() em paralelo, cada um chamando refreshSession() →
-// múltiplas rotações concorrentes do mesmo refresh_token.
-// Solução: mutex module-level + debounce 1s.
-let refreshInProgress = false
-let lastResumeAt = 0
 const RESUME_DEBOUNCE_MS = 1000
-
-// v0.2.6.9 FIX UI-LENTA — heartbeat ativo independente de visibility.
-// Bug crônico: user reporta app abre OK, <5min depois fica lento + mutations não
-// persistem BD. Cenário com app VISÍVEL o tempo todo → sem visibilitychange →
-// soft recover NUNCA dispara. WebSocket Realtime ou supabase-js client podem
-// degradar silenciosamente (TCP keepalive expira, processLock orphan, network
-// glitch invisível à camada navigator.onLine).
-// Heartbeat 60s faz ping leve. Se timeout/401 → trigger reconnect:
-//   - supabase.removeAllChannels() drop dead sockets
-//   - qc.refetchQueries active → recupera cache stale
-//   - qc.resumePausedMutations → drena mutations dormindo
-// Custo: 1 req/min em idle ativo (~60 req/hr extras). Aceitável vs UX broken.
 const HEARTBEAT_INTERVAL_MS = 60_000
-const HEARTBEAT_TIMEOUT_MS = 5_000
+
+let lastResumeAt = 0
 
 export function useAppResume() {
   const qc = useQueryClient()
-  const lastActiveRef = useRef(Date.now())
+  const lastActiveRef = useRef(0)
 
   useEffect(() => {
     const onResume = async () => {
-      // Item #202 — debounce: ignora resume events <1s após o último.
-      // visibilitychange + focus + appStateChange disparam quase simultâneos
-      // ao retomar app. Sem debounce, múltiplos refreshSession() concorrentes.
+      // Debounce: visibilitychange + focus + appStateChange disparam ~simultâneos
+      // quando user retoma app. Sem debounce, múltiplas validações concorrentes.
       const now = Date.now()
-      if (now - lastResumeAt < RESUME_DEBOUNCE_MS) {
-        console.log('[useAppResume] debounced (last resume', now - lastResumeAt, 'ms ago)')
-        return
-      }
+      if (now - lastResumeAt < RESUME_DEBOUNCE_MS) return
+      const inactiveMs = now - lastResumeAt
       lastResumeAt = now
+      lastActiveRef.current = now
 
-      const inactiveMs = Date.now() - lastActiveRef.current
-      lastActiveRef.current = Date.now()
+      // v0.2.7.0 hardening — resume tardio (>30s idle) marca cold start de novo.
+      // Primeira RPC pós-resume tem latência alta (network re-establish, processLock
+      // pode estar zombie). markDose vai usar timeout 30s em vez de 10s.
+      if (inactiveMs > 30_000) {
+        markColdStart()
+      }
 
-      if (inactiveMs >= SOFT_RECOVER_THRESHOLD_MS) {
-        console.log('[useAppResume] long idle', Math.round(inactiveMs / 1000), 's → soft recover')
-        // Item #202 — mutex: se outro refresh em curso, skip pra evitar
-        // token storm. Próximo onResume natural vai cobrir.
-        if (refreshInProgress) {
-          console.warn('[useAppResume] refresh já em curso, skip pra evitar storm')
+      try {
+        // sessionManager garante token válido (refresh sync se necessário, mutex).
+        await getValidSession()
+      } catch (e) {
+        if (e instanceof AuthLostError) {
+          // Sessão perdida — onAuthLost listener (registrado abaixo) cuida do UI.
+          // signOut força state cleanup do supabase-js.
+          console.warn('[useAppResume] AuthLost on resume → signOut')
+          try { await supabase.auth.signOut() } catch { /* ignore */ }
           return
         }
-        refreshInProgress = true
+        console.warn('[useAppResume] resume session check failed:', e?.message)
+        // Continua mesmo assim — refetch abaixo pode falhar mas não trava UI.
+      }
+
+      // Re-sync onlineManager com Capacitor Network. Bridge listener pode ter
+      // morrido junto com WebView durante Doze, deixando isOnline()=false sticky.
+      if (Capacitor.isNativePlatform()) {
         try {
-          // 1. Renovar JWT — Supabase rotaciona refresh token automaticamente.
-          //
-          // Item #190 (release v0.2.1.3) FIX BUG-LOGOUT-RESUME (extends #159):
-          // distinguir refresh transient errors (network slow, timeout, 5xx,
-          // SecureStorage hiccup) vs real auth failures (refresh_token revoked,
-          // user deleted, JWT corrupt). Implementação anterior tratava QUALQUER
-          // erro como falha — onAuthStateChange disparava SIGNED_OUT em network
-          // glitch. Resultado: user deslogado toda vez voltava de >5min idle
-          // com network instável (Android Doze + cellular fluctuations típicos).
-          // Agora: signOut só se evidência forte de invalid refresh token. Outros
-          // erros: log + preservar session, próxima request authenticated re-valida.
-          const { error: refreshErr } = await supabase.auth.refreshSession()
-          if (refreshErr) {
-            const errMsg = refreshErr.message || ''
-            const errStatus = refreshErr.status
-            const isAuthFailure =
-              errStatus === 401 ||
-              errStatus === 403 ||
-              /jwt|token.*expired|invalid.*refresh|invalid.*claim|invalid.*token|user.*not.*found|refresh.*revoked/i.test(errMsg)
-            if (!isAuthFailure) {
-              // v0.2.3.6 #255 idle fix: erro "transient" pode ser ProcessLockAcquireTimeout
-              // pós-idle longo (>1h token Supabase padrão). Se ficamos inativos mais que
-              // o token lifetime, o access_token certamente expirou e refetchQueries()
-              // vai falhar com 401 em TODAS as queries → skeleton infinito.
-              // Usa inactiveMs (já calculado) — independe do storage backend
-              // (funciona para localStorage/web E SecureStorage/nativo Android).
-              const SUPABASE_TOKEN_LIFETIME_MS = 60 * 60 * 1000 // 1h padrão Supabase
-              if (inactiveMs > SUPABASE_TOKEN_LIFETIME_MS) {
-                console.warn('[useAppResume] idle', Math.round(inactiveMs / 1000), 's > token lifetime + refresh falhou (transient) → signOut forçado')
-                await supabase.auth.signOut()
-                return
-              }
-              console.warn('[useAppResume] refresh transient error (keeping session):', errMsg, 'status:', errStatus)
-            } else {
-              console.warn('[useAppResume] refresh auth failure (will signOut via listener):', errMsg, 'status:', errStatus)
-            }
-          }
-
-          // v0.2.3.6 #268 fix — validar session pós-refresh com timeout 5s.
-          // Cenário: refreshSession() retorna OK mas session interna ainda inválida
-          // (token expirou DURANTE idle ~30-60min, refresh chain quebrou silencioso,
-          // queries subsequentes ficam travadas em fetching/401 retry loop).
-          // Sem este check, skeleton infinito mascarado por placeholderData cross-key
-          // (fix #267). User vê dashboard com dados stale + queries fetching forever.
-          try {
-            const sessionCheck = await Promise.race([
-              supabase.auth.getSession(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 5000))
-            ])
-            const sess = sessionCheck?.data?.session
-            const nowSec = Math.floor(Date.now() / 1000)
-            const sessionInvalid = !sess || (sess.expires_at && sess.expires_at < nowSec)
-            if (sessionInvalid) {
-              console.warn('[useAppResume] pós-refresh session inválida (exp:', sess?.expires_at, 'now:', nowSec, ') → signOut forçado')
-              await supabase.auth.signOut()
-              return
-            }
-          } catch (e) {
-            console.warn('[useAppResume] getSession timeout/error → signOut forçado:', e?.message)
-            await supabase.auth.signOut()
-            return
-          }
-
-          // 2. Drop dead websocket channels — useRealtime resubscribe via
-          //    onAuthStateChange (TOKEN_REFRESHED) ou re-mount do hook.
-          await supabase.removeAllChannels()
-
-          // v0.2.6.6 F1 — re-sync onlineManager com Capacitor Network. Bridge
-          // listener pode ter morrido junto com WebView durante Doze, deixando
-          // onlineManager.isOnline()=false sticky → toda mutation 'offlineFirst'
-          // pausa silenciosamente. Re-query Network.getStatus() recupera estado real.
-          if (Capacitor.isNativePlatform()) {
-            try {
-              const { Network } = await import('@capacitor/network')
-              const status = await Network.getStatus()
-              onlineManager.setOnline(status.connected)
-            } catch (e) {
-              console.warn('[useAppResume] Network.getStatus failed:', e?.message)
-            }
-          }
-
-          // 3. Item #134 (egress-audit-2026-05-05 F1): refetchQueries sem
-          //    invalidateQueries antes. invalidate marca TODAS queries stale
-          //    e dispara refetch separado em cada useQuery active — duplica
-          //    round-trips com refetchOnWindowFocus. refetchQueries({active})
-          //    sozinho re-executa só queries observadas.
-          //
-          // v0.2.6.10 FIX B102 H3 — predicate gate-aware. Mutation otimista
-          // em flight marca queryKey no gate (TTL 10s). Sem filtro, soft
-          // recover refetchQueries atropelava mutation em curso, server
-          // retornava status stale → cache sobrescrito → dose voltava pending.
-          await qc.refetchQueries({
-            type: 'active',
-            predicate: (q) => !isInFlight(q.queryKey),
-          })
-
-          // v0.2.6.6 F2 — drenar fila de mutations persistidas durante idle.
-          // PersistQueryClientProvider só chama resumePausedMutations() no boot
-          // hydrate. Após soft recover pós-idle, mutations dormindo no IDB ficam
-          // sem dispatch. Esta linha força reprocessar.
-          qc.resumePausedMutations().catch((e) => {
-            console.warn('[useAppResume] resumePausedMutations failed:', e?.message)
-          })
-
-          // v0.2.6.6 F3 — watchdog ping pós-resume. Token pode ter sido
-          // "renovado" pelo refreshSession() acima mas estar zombie (processLock
-          // órfão pós WebView pause). Ping leve detecta esse estado: se 401 ou
-          // timeout 5s, força signOut + reload — único caso onde reload é OK
-          // porque o client supabase-js está corrompido (processLock state machine).
-          try {
-            const pingPromise = supabase
-              .from('user_prefs')
-              .select('user_id')
-              .limit(1)
-              .maybeSingle()
-            const pingResult = await Promise.race([
-              pingPromise,
-              new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), 5000)),
-            ])
-            if (pingResult?.__timeout) {
-              console.warn('[useAppResume] watchdog ping timeout 5s → supabase client zombie → reload')
-              try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
-              window.location.reload()
-              return
-            }
-            if (pingResult?.error && (pingResult.error.status === 401 || pingResult.error.code === 'PGRST301')) {
-              console.warn('[useAppResume] watchdog ping 401 → token zombie → signOut')
-              await supabase.auth.signOut()
-              return
-            }
-          } catch (e) {
-            console.warn('[useAppResume] watchdog ping exception (não-crítico):', e?.message)
-          }
-        } catch (err) {
-          // Item #190 (release v0.2.1.3): NÃO forçar reload em catch.
-          // Reload remonta React tree → useAuth init → getUser() boot check.
-          // Se network ainda instável, getUser() falha → cascade signOut.
-          // Preservar session local + log. Próxima request authenticated
-          // vai re-validar OR onAuthStateChange dispara SIGNED_OUT se token
-          // realmente revogado.
-          console.warn('[useAppResume] soft recover network exception (keeping session):', err?.message || err)
-        } finally {
-          // Item #202 — sempre liberar mutex
-          refreshInProgress = false
+          const { Network } = await import('@capacitor/network')
+          const status = await Network.getStatus()
+          onlineManager.setOnline(status.connected)
+        } catch (e) {
+          console.warn('[useAppResume] Network.getStatus failed:', e?.message)
         }
       }
-      // Item #134 (egress-audit-2026-05-05 F1): short idle (<5min) NÃO invalida
-      // mais. Realtime postgres_changes + refetchInterval 5min cobrem updates
-      // necessários. user típico mobile/web muda tabs/apps centenas de vezes/dia
-      // → invalidate em cada mudança era a fonte #1 de egress (estimado -30 a
-      // -45% após este fix). Trade-off: dados podem aparecer 30-120s "antigos"
-      // se Realtime não trouxer update; aceitável vs custo.
+
+      // Drena mutations pendentes ANTES de refetch — evita race condition
+      // (refetch carregaria server stale antes de drain aplicar mutations locais).
+      // Idempotência server-side via mutation_log garante exactly-once mesmo se
+      // drain duplica (ex: heartbeat e onResume concorrentes).
+      try {
+        await drainPendingMutations()
+      } catch (e) {
+        console.warn('[useAppResume] drainPendingMutations failed:', e?.message)
+      }
+
+      // v0.2.7.0 hardening — Dashboard agora vive em Zustand store (não TanStack
+      // cache). refetchQueries só atinge useDoses/usePatients/useTreatments de
+      // outras telas. Pra atualizar Dashboard, dispara fetchDashboard direto.
+      try {
+        const { fetchDashboard } = await import('../services/fetchDashboard')
+        await fetchDashboard()
+      } catch (e) {
+        console.warn('[useAppResume] fetchDashboard failed:', e?.message)
+      }
+
+      // Refetch active queries TanStack (DoseHistory, Reports, Analytics, etc).
+      try {
+        await qc.refetchQueries({ type: 'active' })
+      } catch (e) {
+        console.warn('[useAppResume] refetchQueries failed:', e?.message)
+      }
+
+      // v0.2.7.0 hardening — cancela notification "doses não sincronizadas"
+      // já que app voltou + drain rodou (queue agora vazia idealmente).
+      cancelPendingSyncNotification().catch(() => { /* fail-safe */ })
     }
 
     const onPause = () => {
       lastActiveRef.current = Date.now()
+      // v0.2.7.0 hardening — se queue tem entries quando app vai bg,
+      // schedule notification 30s alertando user pra reabrir e sincronizar.
+      // Sem isso, cuidadores compartilhados nunca veem mutations queued.
+      schedulePendingSyncNotification().catch(() => { /* fail-safe */ })
     }
 
     // Web: document visibility change
@@ -252,8 +137,6 @@ export function useAppResume() {
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
-
-    // Web: window focus/blur (fallback)
     window.addEventListener('focus', onResume)
     window.addEventListener('blur', onPause)
 
@@ -271,69 +154,31 @@ export function useAppResume() {
       })()
     }
 
-    // v0.2.6.9 FIX UI-LENTA — heartbeat ativo (independente visibilitychange).
-    // Roda mesmo com app visível continuamente. Detecta supabase client zombie,
-    // WebSocket Realtime dead, processLock orphan que NÃO disparam events.
+    // Heartbeat 60s — valida sessão silenciosamente. sessionManager faz refresh
+    // proativo se token expira em <30s. AuthLostError emit cobre falhas.
     //
-    // v0.2.6.10 FIX B102 H2 — heartbeat ping mudou de network query (`from('user_prefs')`)
-    // para `getSession()` LOCAL-ONLY (sem rede). Diagnóstico v3 revelou que o ping
-    // de rede a cada 60s race-condition-ava com mutation otimista em flight: heartbeat
-    // disparava refetch ANTES da mutation drenar → server stale sobrescrevia cache.
-    // getSession() lê SecureStorage local, retorna null/session sem network call.
-    // Token zombie (expires_at < now) é detectado direto + soft reconnect.
+    // Diferente do v0.2.6.x: NÃO faz "soft reconnect" (remove channels, refetch
+    // tudo). Heartbeat é APENAS validação de auth. Se sessão OK, no-op.
     const heartbeatTimer = setInterval(async () => {
-      // Skip se documento hidden (foreground listener cobre quando volta).
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-      // Skip se refresh em curso (mutex same that onResume usa).
-      if (refreshInProgress) return
       try {
-        const pingResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), HEARTBEAT_TIMEOUT_MS)),
-        ])
-        const isTimeout = pingResult?.__timeout
-        const sess = pingResult?.data?.session
-        const nowSec = Math.floor(Date.now() / 1000)
-        const tokenExpired = sess?.expires_at && sess.expires_at < nowSec
-        const is401 = !sess || tokenExpired
-        if (!isTimeout && !is401) return  // saudável, nada a fazer
-
-        console.warn('[useAppResume] heartbeat fail', isTimeout ? 'TIMEOUT' : (tokenExpired ? 'EXPIRED' : '401'), '→ soft reconnect')
-        refreshInProgress = true
-        try {
-          // Drop dead WebSocket channels — useRealtime re-subscribe via auth event.
-          await supabase.removeAllChannels()
-          // Re-sync online state (bridge nativa pode estar com cached stale).
-          if (Capacitor.isNativePlatform()) {
-            try {
-              const { Network } = await import('@capacitor/network')
-              const status = await Network.getStatus()
-              onlineManager.setOnline(status.connected)
-            } catch (e) {
-              console.warn('[useAppResume] heartbeat Network.getStatus failed:', e?.message)
-            }
-          }
-          // Refetch active queries pra recuperar payload stale.
-          // v0.2.6.10 FIX B102 H3 — predicate gate-aware. Sem filtro, heartbeat
-          // refetch atropelava mutation otimista em flight (server stale vencia).
-          await qc.refetchQueries({
-            type: 'active',
-            predicate: (q) => !isInFlight(q.queryKey),
-          })
-          // Drena mutations persistidas dormindo durante degradação.
-          qc.resumePausedMutations().catch(() => { /* best-effort */ })
-        } catch (e) {
-          console.warn('[useAppResume] heartbeat soft reconnect exception:', e?.message)
-        } finally {
-          refreshInProgress = false
-        }
+        await getValidSession()
       } catch (e) {
-        // Network exception transitória — não loga storm em offline real.
-        if (e?.message && !/network|fetch/i.test(e.message)) {
+        if (e instanceof AuthLostError) {
+          console.warn('[useAppResume] heartbeat AuthLost → signOut')
+          try { await supabase.auth.signOut() } catch { /* ignore */ }
+        } else {
           console.warn('[useAppResume] heartbeat exception:', e?.message)
         }
       }
     }, HEARTBEAT_INTERVAL_MS)
+
+    // Listener pra emit de AuthLost vindos de qualquer RPC (authedRpc).
+    // Por ora apenas signOut — Fase 2 vai adicionar UI banner via store.
+    const unsubAuthLost = onAuthLost(({ reason }) => {
+      console.warn('[useAppResume] onAuthLost:', reason)
+      supabase.auth.signOut().catch(() => { /* ignore */ })
+    })
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
@@ -341,6 +186,7 @@ export function useAppResume() {
       window.removeEventListener('blur', onPause)
       stateHandle?.remove?.()
       clearInterval(heartbeatTimer)
+      unsubAuthLost()
     }
   }, [qc])
 }

@@ -21,8 +21,9 @@ import { MiniStat } from '../components/dosy/MiniStat'
 import StatGrid from '../components/dosy/StatGrid'
 import { Plus as PlusIcon, Hand as HandIcon } from 'lucide-react'
 import { useConfirmDose, useSkipDose, useUndoDose } from '../hooks/useDoses'
+// v0.2.7.0 Fase 2 — useDashboardData substitui useDashboardPayload (Zustand store, sem persist).
 import { useToast } from '../hooks/useToast'
-import { useDashboardPayload } from '../hooks/useDashboardPayload'
+import { useDashboardData } from '../hooks/useDashboardData'
 import { rangeNow } from '../utils/dateUtils'
 
 export default function Dashboard() {
@@ -93,21 +94,39 @@ export default function Dashboard() {
   // (usePatients + useTreatments + useDoses) + 1 RPC (extend_continuous_treatments) por
   // single round-trip. Hook popula caches individuais via qc.setQueryData side-effect,
   // outras telas (Patients, DoseHistory, Reports) continuam usando hooks separados sem regressão.
-  const { data: payload, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useDashboardPayload(baseWindow)
-  // v0.2.3.6 #270 fix — detectar query travada mascarada por placeholderData (#267).
-  // Quando current queryKey está fetching há >8s + temos placeholderData de OUTRA key,
-  // mostrar banner "Sincronizando..." pra user saber que dados podem estar stale.
-  // Esconde após 60s pra não ficar permanente (Sentry breadcrumb captura caso travado).
-  //
-  // Refactor Fase 5 sub-tarefa 8.2 (v0.2.3.16) — guard sessionMountedAt.
-  // `dataUpdatedAt` vem do TanStack hidratado da sessão anterior (PersistQueryClient 24h).
-  // Resultado pre-fix: na primeira reabertura do app após >8s sem usar, banner aparecia
-  // falsamente porque `dataUpdatedAt` era do dia anterior. Agora state local marca o
-  // mount da sessão atual; banner só ativa se houve sucesso DEPOIS desse mount.
-  // useState lazy initializer (chamado 1× no mount) — evita acesso a ref durante render.
+  const { data: payload, isLoading, isError, error, refetch, isFetching } = useDashboardData(baseWindow)
+  // v0.2.7.0 Fase 2 — banner "Sincronizando..." simplificado.
+  // useDashboardData expõe isFetching diretamente; sem placeholderData cross-key
+  // (Zustand não tem o problema cross-queryKey transition entre horas), o banner
+  // só precisa ativar quando refetch dura >8s (raro, mas mostra ao user que rede está lenta).
   const [sessionMountedAt] = useState(() => Date.now())
-  const hasFreshSuccess = dataUpdatedAt && dataUpdatedAt > sessionMountedAt
-  const isStaleSync = isFetching && hasFreshSuccess && (Date.now() - dataUpdatedAt > 8000) && (Date.now() - dataUpdatedAt < 60000)
+  // v0.2.7.0 Fase 2 — banner "Sincronizando..." quando refetch demora >8s.
+  // Useful pra Realtime que disparou refetch invisível ao user.
+  const [fetchStartedAt, setFetchStartedAt] = useState(null)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (isFetching && !fetchStartedAt) setFetchStartedAt(Date.now())
+    if (!isFetching && fetchStartedAt) setFetchStartedAt(null)
+  }, [isFetching, fetchStartedAt])
+  const isStaleSync = isFetching && fetchStartedAt && (Date.now() - fetchStartedAt > 8000) && (Date.now() - sessionMountedAt > 1000)
+  // v0.2.7.0 hardening — banner "Salvando N dose(s)..." quando pending queue > 0.
+  // Princípio P2 do Refactor_Sync_v2 (feedback visual sempre): user vê status real
+  // em vez de UI fingindo que dose já persistiu.
+  const [pendingQueueCount, setPendingQueueCount] = useState(0)
+  useEffect(() => {
+    let mounted = true
+    let intervalId = null
+    const tick = async () => {
+      try {
+        const { getPendingQueueSize } = await import('../services/markDose')
+        const n = await getPendingQueueSize()
+        if (mounted) setPendingQueueCount(n)
+      } catch { /* ignore */ }
+    }
+    tick()  // imediato no mount
+    intervalId = setInterval(tick, 3000)  // poll IDB a cada 3s
+    return () => { mounted = false; if (intervalId) clearInterval(intervalId) }
+  }, [])
   // v0.2.3.15 — exclui doses canceladas do Dashboard.
   // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
   // pending+futuras pra status='cancelled' (preserva histórico mas marca como
@@ -226,35 +245,26 @@ export default function Dashboard() {
   const toggleCollapse = useCallback((id) => setCollapsed((s) => ({ ...s, [id]: !s[id] })), [])
 
   // v0.2.3.9 P1 — handlers swipe estáveis pra preservar React.memo de DoseCard
-  // v0.2.6.14 — telemetria verbose (console.warn) pra rastrear se mutation dispara.
   const handleSwipeConfirm = useCallback(async (dose) => {
-    console.warn('[Dashboard] handleSwipeConfirm ENTER', { doseId: dose.id, medName: dose.medName, mutStatus: confirmMut.status })
     try {
-      console.warn('[Dashboard] confirmMut.mutateAsync calling', { doseId: dose.id })
-      const result = await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
-      console.warn('[Dashboard] confirmMut.mutateAsync RESOLVED', { doseId: dose.id, hasResult: !!result })
+      await confirmMut.mutateAsync({ id: dose.id, actualTime: dose.scheduledAt, observation: '' })
       toast.show({
         message: `${dose.medName} marcada como tomada.`, kind: 'success',
         undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
       })
     } catch (e) {
-      console.warn('[Dashboard] confirmMut.mutateAsync REJECTED', { doseId: dose.id, errName: e?.name, errMsg: e?.message })
       toast.show({ message: e?.message || 'Falha ao confirmar.', kind: 'error' })
     }
   }, [confirmMut, undoMut, toast])
 
   const handleSwipeSkip = useCallback(async (dose) => {
-    console.warn('[Dashboard] handleSwipeSkip ENTER', { doseId: dose.id, medName: dose.medName, mutStatus: skipMut.status })
     try {
-      console.warn('[Dashboard] skipMut.mutateAsync calling', { doseId: dose.id })
-      const result = await skipMut.mutateAsync({ id: dose.id, observation: '' })
-      console.warn('[Dashboard] skipMut.mutateAsync RESOLVED', { doseId: dose.id, hasResult: !!result })
+      await skipMut.mutateAsync({ id: dose.id, observation: '' })
       toast.show({
         message: `${dose.medName} marcada como pulada.`, kind: 'warn',
         undoLabel: 'Desfazer', onUndo: () => undoMut.mutate(dose.id)
       })
     } catch (e) {
-      console.warn('[Dashboard] skipMut.mutateAsync REJECTED', { doseId: dose.id, errName: e?.name, errMsg: e?.message })
       toast.show({ message: e?.message || 'Falha ao pular.', kind: 'error' })
     }
   }, [skipMut, undoMut, toast])
@@ -408,6 +418,31 @@ export default function Dashboard() {
               opacity: 0.7,
             }} />
             Sincronizando dados... (mostrando última versão conhecida)
+          </div>
+        )}
+
+        {pendingQueueCount > 0 && (
+          <div role="status" style={{
+            background: 'var(--dosy-warning-bg)',
+            color: 'var(--dosy-warning)',
+            padding: '10px 14px',
+            borderRadius: 12,
+            fontSize: 12.5,
+            display: 'flex', flexDirection: 'column', gap: 4,
+            marginTop: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: 99,
+                background: 'currentColor',
+                animation: 'shimmer 1.3s infinite',
+                opacity: 0.7,
+              }} />
+              {pendingQueueCount} {pendingQueueCount === 1 ? 'dose ainda não foi salva' : 'doses ainda não foram salvas'}
+            </div>
+            <div style={{ fontSize: 11.5, opacity: 0.85, paddingLeft: 18 }}>
+              Marcação só vai para nuvem (e cuidadores) quando reconectar. Mantenha o app aberto até sincronizar.
+            </div>
           </div>
         )}
 

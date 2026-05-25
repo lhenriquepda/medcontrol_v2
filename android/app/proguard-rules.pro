@@ -22,6 +22,12 @@
 -keep class com.dosyapp.dosy.plugins.criticalalarm.** { *; }
 -keep class com.dosyapp.dosy.MainActivity { *; }
 
+# === v0.2.8.0 — Workers nativos (instanciados via reflection pelo WorkManager) ===
+# MutationDrainWorker drena pending_mutations queue a cada 15min.
+# MutationQueueStore: helpers SharedPreferences (não estritamente reflexivo, mas
+# protege contra inline/strip que quebraria assinatura quando JS atualiza queue).
+-keep class com.dosyapp.dosy.sync.** { *; }
+
 # === Capacitor community plugins ===
 -keep class com.getcapacitor.community.** { *; }
 -keep class com.aparajita.capacitor.securestorage.** { *; }

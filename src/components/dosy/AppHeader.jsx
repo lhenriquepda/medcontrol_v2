@@ -30,9 +30,12 @@ import TierBadge from '../TierBadge'
 import HeaderAlertIcon from './HeaderAlertIcon'
 import EndingSoonSheet from '../EndingSoonSheet'
 import { useAuth } from '../../hooks/useAuth'
-import { useDoses } from '../../hooks/useDoses'
 import { useTreatments } from '../../hooks/useTreatments'
 import { usePatients } from '../../hooks/usePatients'
+// v0.2.7.0 hardening — overdueCount lê direto do Zustand doseStore (única fonte
+// de verdade após refactor sync v2). useDoses TanStack era atualizado só a cada
+// 60s OU on-mount → badge ficava stale após markDose patch local.
+import { useDoseStore } from '../../state/doseStore'
 import { useReceivedShares } from '../../hooks/useShares'
 import { useAppUpdate } from '../../hooks/useAppUpdate'
 import { shortName } from '../../utils/userDisplay'
@@ -78,22 +81,18 @@ function DosyAppHeader() {
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
   const name = shortName(user) || ''
 
-  // Overdue window — 90d. Mantém comportamento legacy (sem `to` pra refetch
-  // detectar dose recém-overdue dynamic).
-  const overdueFilter = useMemo(() => {
-    const from = new Date()
-    from.setDate(from.getDate() - 90)
-    return { from: from.toISOString(), status: 'overdue' }
-  }, [])
-  // v0.2.3.6 #269 fix: pollIntervalMs 60s pra detectar:
-  // (a) doses pending recém-virando overdue (cross hour boundary)
-  // (b) doses externamente modificadas (outro device, cuidador, etc)
-  // (c) doses deletadas (cancel treatment) ficando órfãs no cache
-  const { data: overdueDoses = [] } = useDoses(overdueFilter, { pollIntervalMs: 60_000 })
-  // Filter por status atual: cache patch (mark taken/skipped) muta dose dentro do
-  // array sem alterar length. Sem este filter, sino fica com count stale após
-  // user marcar overdue como tomada/pulada/encerrar tratamento.
-  const overdueCount = overdueDoses.filter((d) => d.status === 'overdue').length
+  // v0.2.7.0 hardening — overdueCount lê direto do doseStore Zustand.
+  // Re-renderiza sempre que store muda (markDose patch local).
+  // Antes: useDoses TanStack puxava listDoses com poll 60s + cache stale
+  // → badge não acompanhava marcações imediatas.
+  const dosesMap = useDoseStore((s) => s.doses)
+  const overdueCount = useMemo(() => {
+    let count = 0
+    for (const d of dosesMap.values()) {
+      if (d.status === 'overdue') count += 1
+    }
+    return count
+  }, [dosesMap])
 
   // App update — Play Store In-App / web reload
   const { available: updateAvailable, startUpdate } = useAppUpdate()

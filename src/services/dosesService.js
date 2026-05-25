@@ -1,5 +1,8 @@
 import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
+// Refactor Sync v2 Fase 1 (v0.2.7.0) — authedRpc com timeout + token válido upfront.
+// Substitui rpcV2WithAuthRetry (sem timeout, hang forever quando session zombie).
+import { authedRpc, AuthLostError, TimeoutError } from './sessionManager'
 
 // Marca doses pendentes cujo horário já passou como 'overdue' (mock + cliente Supabase).
 //
@@ -173,41 +176,28 @@ function parseDoseV2Response(data) {
   return data
 }
 
-// v0.2.6.6 F4 — wrapper de retry pra RPCs v2 quando token zombie (401).
-// RPCs SECURITY DEFINER retornam JSONB {ok:false, code:401} quando auth.uid()
-// é NULL (token expirado pós-idle). parseDoseV2Response lança Error com code=401.
-// Aqui interceptamos: tenta refreshSession() + retry 1× antes de propagar.
-// Cobre cenário "app idle 1h+ → JWT expirou silencioso → user clica → falha mas
-// refresh recupera". Sem isso user vê falha onde recovery automática era possível.
-async function rpcV2WithAuthRetry(rpcName, params) {
-  const callOnce = async () => {
-    const { data, error } = await supabase.rpc(rpcName, params)
-    if (error) throw error
-    return parseDoseV2Response(data)
-  }
-  try {
-    return await callOnce()
-  } catch (e) {
-    const isAuth = e?.code === 401 || e?.code === 403 || /unauthorized|forbidden|jwt/i.test(e?.message || '')
-    if (!isAuth) throw e
-    console.warn('[rpcV2] auth error, tentando refreshSession + retry:', rpcName, e?.code, e?.message)
-    try {
-      const { error: refreshErr } = await supabase.auth.refreshSession()
-      if (refreshErr) {
-        console.warn('[rpcV2] refreshSession falhou:', refreshErr?.message)
-        throw e // propaga original (cliente vai mostrar erro)
-      }
-    } catch (refreshExc) {
-      console.warn('[rpcV2] refreshSession exception:', refreshExc?.message)
-      throw e
-    }
-    return await callOnce()
-  }
+// Refactor Sync v2 Fase 1 (v0.2.7.0) — substituiu rpcV2WithAuthRetry.
+//
+// Antes: callOnce → if 401 → refreshSession → retry. Sem timeout.
+// Bug capturado v0.2.6.15 (S25U): supabase.rpc() hang forever quando session zombie
+// porque refresh em paralelo (heartbeat) deixava client em estado degradado.
+//
+// Agora: authedRpc(rpcName, params, { timeoutMs }) garante:
+//   1. getValidSession() upfront — se token expira em <30s, refresh sync (dedup mutex)
+//   2. Promise.race com timeout 10s — RPC nunca pendura indefinido
+//   3. AuthLostError emit pra UI mostrar banner "Sessão expirou"
+//
+// Implementação em src/services/sessionManager.js.
+async function rpcV2(rpcName, params) {
+  // authedRpc throws AuthLostError/TimeoutError/Error — propagamos pra parseDoseV2Response
+  // tratar. AuthLostError sobe pra mutation onError handler (UI mostra banner).
+  const data = await authedRpc(rpcName, params)
+  return parseDoseV2Response(data)
 }
 
 export async function confirmDose(id, { actualTime, observation } = {}) {
   if (hasSupabase) {
-    return rpcV2WithAuthRetry('confirm_dose_v2', {
+    return rpcV2('confirm_dose_v2', {
       p_dose_id:     id,
       p_actual_time: actualTime || new Date().toISOString(),
       p_observation: observation || ''
@@ -222,7 +212,7 @@ export async function confirmDose(id, { actualTime, observation } = {}) {
 
 export async function skipDose(id, { observation } = {}) {
   if (hasSupabase) {
-    return rpcV2WithAuthRetry('skip_dose_v2', {
+    return rpcV2('skip_dose_v2', {
       p_dose_id:    id,
       p_observation: observation || ''
     })
@@ -236,7 +226,7 @@ export async function skipDose(id, { observation } = {}) {
 
 export async function undoDose(id) {
   if (hasSupabase) {
-    return rpcV2WithAuthRetry('undo_dose_v2', { p_dose_id: id })
+    return rpcV2('undo_dose_v2', { p_dose_id: id })
   }
   return mock.update('doses', id, { status: 'pending', actualTime: null })
 }

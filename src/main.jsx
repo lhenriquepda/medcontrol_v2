@@ -1,12 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, onlineManager } from '@tanstack/react-query'
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
-// v0.2.3.4 #165 — IndexedDB persister via idb-keyval (async, sem limit ~5MB localStorage)
-import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
-import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query'
+// v0.2.7.0 Fase 2 — TanStack persist REMOVIDO (Refactor_Sync_v2.md §6.2).
+// Princípio P4: cold start sempre fetcha fresh (sem hydrate stale → elimina classe
+// inteira de bugs "cache stale sobrescreve fresh"). Doses/patients/treatments agora
+// vivem em Zustand stores (src/state/), populados via fetchDashboard().
 import { Capacitor } from '@capacitor/core'
 import * as Sentry from '@sentry/react'
 import * as SentryCapacitor from '@sentry/capacitor'
@@ -17,6 +16,9 @@ import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
 import { initAnalytics } from './services/analytics'
 import { registerMutationDefaults } from './services/mutationRegistry'
+// v0.2.7.0 hardening — expõe queryClient pra módulos non-React invalidarem
+// queries (markDose Zustand → invalida TanStack ['doses'] de outras telas).
+import { setQueryClient } from './services/queryClientRef'
 import './index.css'
 
 // Aud 4.5.7 G4 — PostHog analytics. No-op se VITE_POSTHOG_KEY ausente ou modo dev.
@@ -301,41 +303,15 @@ if (Capacitor.isNativePlatform()) {
 }
 // Web: TanStack default subscriber já cobre (navigator.onLine + online/offline events).
 
-// Persist React Query cache → fast re-open + offline last-known data.
-// v0.2.3.4 #165 — IndexedDB via idb-keyval (async, sem limit ~5MB localStorage).
-// Antes: localStorage sync block main thread em write + max ~5MB (quota varia browser).
-// Agora: IDB async + suporta GB-scale + write off-main-thread.
-// Fallback localStorage se IDB indisponível (Safari private mode raro).
-//
-// v0.2.3.12 NB-4 — REVERT #275 throttle 5000→1000ms.
-// Assumption #275 ("crash-safety preservado pela fila offline") PROVADA ERRADA
-// pelo QA Appium v0.2.3.12: mutations críticas (confirmDose) também são throttled
-// junto com cache. Force-kill <1s após mark "tomada" perde a dose silenciosamente
-// (mutation queue não chegou no IDB antes do kill). Healthcare = data loss inaceitável.
-//
-// Trade-off: ~5× mais writes IDB (~600KB-1MB cache) vs zero data loss em force-kill.
-// IDB writes off-main-thread, custo perf desprezível. Otimização #275 era assumption
-// errada — outras melhorias #272-#274 (cache size + memo + signature) já cobrem perf.
-const idbAvailable = typeof window !== 'undefined' && 'indexedDB' in window
-const persister = idbAvailable
-  ? createAsyncStoragePersister({
-      storage: {
-        getItem: (key) => idbGet(key),
-        setItem: (key, value) => idbSet(key, value),
-        removeItem: (key) => idbDel(key),
-      },
-      key: 'dosy-query-cache',
-      throttleTime: 1000
-    })
-  : createSyncStoragePersister({
-      storage: typeof window !== 'undefined' ? window.localStorage : null,
-      key: 'dosy-query-cache',
-      throttleTime: 1000
-    })
-
-// v0.2.3.12 NB-4 — registerMutationDefaults precisa do persister pra flushPersistImmediate
-// em mutations críticas. Chamado aqui após persister const, antes do render.
-registerMutationDefaults(queryClient, persister)
+// v0.2.7.0 Fase 2 — persister REMOVIDO. Mutações healthcare migram pra pendingMutationsQueue
+// (IDB próprio, sobrevive process kill por design) na Fase 3. Por ora mutationRegistry
+// continua existindo (Fase 3 deleta), mas SEM persist — mutations em flight perdidas
+// se app killed mid-RPC. Trade-off aceito: Fase 1 já tem authedRpc timeout 10s, hang
+// forever zerou. Fase 3 entrega exactly-once via request_id PK em mutation_log.
+registerMutationDefaults(queryClient, null)
+// v0.2.7.0 hardening — expõe queryClient pra markDose invalidar queries TanStack
+// (DoseHistory/Reports/Analytics) após patchDose Zustand.
+setQueryClient(queryClient)
 
 // Native StatusBar overlay config one-time. Style + background color são
 // sincronizados dinamicamente pelo ThemeProvider conforme theme light/dark.
@@ -367,11 +343,55 @@ if (Capacitor.isNativePlatform()) {
 }
 
 // [Fix B v0.2.1.8] Boot bloqueante — pre-mount sync Network.getStatus + setOnline
-// pra garantir onlineManager.isOnline() reflete realidade ANTES React mount +
-// PersistQueryClientProvider hydrate + resumePausedMutations. Sem isso, mutations
-// rehydradas em avião mode tentam executar (1s), falham, re-pausam — burn fetches
-// + race condition observada logcat 09:24:22.
+// pra garantir onlineManager.isOnline() reflete realidade ANTES React mount.
+//
+// v0.2.7.0 Fase 3 — drena pending mutations queue (IDB) ANTES do mount.
+// Mutations persistidas em sessão anterior (process kill mid-RPC) são retomadas
+// via idempotência server-side (mutation_log PK request_id). Não-bloqueante:
+// fire-and-forget pra não atrasar UI mount.
 async function boot() {
+  // v0.2.8.0 — migração one-way IDB → @capacitor/preferences (decisão user #5).
+  //
+  // Por quê: v0.2.7.0 usava idb-keyval (IndexedDB), acessível apenas pela WebView JS.
+  // v0.2.8.0 introduz MutationDrainWorker (Java nativo) que precisa ler a queue
+  // independente do WebView (drena durante Doze / app killed). SharedPreferences
+  // é o storage compartilhado mais simples (plugin @capacitor/preferences).
+  //
+  // Estratégia one-way: lê IDB legacy uma vez, escreve em Preferences, deleta IDB.
+  // Sem fallback de volta pra IDB (decisão explícita user). Próximo boot: no-op
+  // (IDB key não existe).
+  //
+  // Idempotente: se rodar 2× sem entries em IDB, no-op silencioso.
+  // Robust: try/catch envolvendo tudo — falha de migração não bloqueia app boot
+  // (mutations ficam temporariamente invisíveis pro drain JS mas Worker nativo
+  // ainda lê do mesmo SharedPreferences depois).
+  try {
+    const { get: idbGet, del: idbDel } = await import('idb-keyval')
+    const LEGACY_KEY = 'dosy:pending-mutations'
+    const oldQueue = await idbGet(LEGACY_KEY)
+    if (Array.isArray(oldQueue) && oldQueue.length > 0) {
+      const { Preferences } = await import('@capacitor/preferences')
+      const NEW_KEY = 'dosy_pending_mutations'
+      // Lê Preferences atual (idealmente vazio em primeira execução, mas pode
+      // ter algo se v0.2.8.0 instalada e desinstalada — defensive).
+      const { value: existingValue } = await Preferences.get({ key: NEW_KEY })
+      let existing = []
+      try { existing = existingValue ? JSON.parse(existingValue) : [] } catch { existing = [] }
+      if (!Array.isArray(existing)) existing = []
+      // Dedupe por requestId (IDB entries têm prioridade — vieram primeiro)
+      const seenIds = new Set(existing.map(e => e.requestId))
+      const merged = [
+        ...oldQueue.filter(e => e?.requestId && !seenIds.has(e.requestId)),
+        ...existing,
+      ]
+      await Preferences.set({ key: NEW_KEY, value: JSON.stringify(merged) })
+      await idbDel(LEGACY_KEY)
+      console.log('[migrate v028] IDB→Preferences:', oldQueue.length, 'entries migradas,', merged.length, 'total')
+    }
+  } catch (e) {
+    console.warn('[migrate v028] IDB→Preferences fail:', e?.message)
+  }
+
   if (Capacitor.isNativePlatform()) {
     try {
       const { Network } = await import('@capacitor/network')
@@ -382,38 +402,29 @@ async function boot() {
     }
   }
 
+  // v0.2.7.0 hardening — drena pending mutations ANTES do mount React.
+  //
+  // Cold start latência (WebView pre-warm + TLS handshake + supabase-js init):
+  // primeira RPC pode levar 20-30s. Boot drain usa timeout 30s pra cobrir; resume
+  // / heartbeat ulteriores usam default 10s. Drain roda em background (não await)
+  // pra não atrasar mount React — race condition com fetchDashboard é resolvido
+  // pelo currentDrainPromise reutilizável (fetchDashboard aguarda mesma promise).
+  //
+  // QA real 2026-05-25: cold start drain timeout 10s expirava → banner queue
+  // persistente até user reabrir app. timeout 30s + retry loop cobrem.
+  try {
+    const { drainPendingMutations } = await import('./services/markDose')
+    drainPendingMutations({ rpcTimeoutMs: 30_000 }).catch(e =>
+      console.warn('[boot] drain fail:', e?.message)
+    )
+  } catch (e) {
+    console.warn('[boot] drain import fail:', e?.message)
+  }
+
   ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{
-          persister,
-          maxAge: 1000 * 60 * 60 * 24, // 24h
-          // Item #204: NÃO bumpar buster pra adicionar persist de mutations.
-          //
-          // v0.2.6.3 #0015 — EXCEÇÃO LEGÍTIMA pra bump v1 → v2:
-          // Bug fix prévio v0.2.6.2 incluiu DOSE_COLS_LIST com group_id+cmed_class
-          // e RPC `get_dashboard_payload` atualizada. PORÉM payloads cached em IDB
-          // (key `dosy-query-cache`) ANTES do fix continham doses sem group_id.
-          // TanStack hydrate carrega esse cache stale → user vê doses sem
-          // categoria mesmo após update do APK. Bump buster força purge único
-          // do cache local na primeira abertura da nova versão. Próximo fetch
-          // bate no server e popula com group_id presente. Pico egress global
-          // aceito (1x) pelo benefício de UX correto pós-update.
-          buster: 'v2',
-          dehydrateOptions: {
-            // Persist mutations pausadas (offline) pra sobreviver a force-kill / reboot.
-            // Sem isso, queue offline é perdida quando user fecha app antes reconectar.
-            shouldDehydrateMutation: () => true,
-          }
-        }}
-        onSuccess={() => {
-          // Hydrate completo — drena fila de mutations pausadas. No-op se nada persistido
-          // ou se ainda offline (TanStack mantém pause até onlineManager.isOnline()).
-          queryClient.resumePausedMutations()
-        }}
-      >
+      <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
@@ -423,7 +434,7 @@ async function boot() {
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>
-      </PersistQueryClientProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>
   )
