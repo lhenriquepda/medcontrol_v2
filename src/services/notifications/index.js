@@ -80,7 +80,6 @@ export function useNotifications() {
   // Web — current subscription on mount
   useEffect(() => {
     if (isNative || !supported) return
-    setPermState(Notification.permission)
     navigator.serviceWorker.ready.then(async (reg) => {
       const sub = await reg.pushManager.getSubscription()
       setSubscribed(!!sub)

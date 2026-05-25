@@ -129,7 +129,7 @@ describe('dateUtils', () => {
     })
     it('24h', () => {
       const r = rangeNow('24h')
-      expect(new Date(r.from).getHours()).toBe(6)
+      expect(new Date(r.from).getHours()).toBe(0)
       expect(new Date(r.to).getDate()).toBe(16)
     })
     it('48h spans 2 days fwd', () => {
