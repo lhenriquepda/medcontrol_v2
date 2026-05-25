@@ -336,6 +336,23 @@ function scheduleRetryDrain() {
   }, currentRetryDelayMs)
 }
 
+// v0.2.7.0 hardening — Watchdog independente. A cada 30s, checa queue e força
+// drain se > 0. Defesa em camadas — garante que mesmo se scheduleRetryDrain
+// quebrar (bug, edge case, exception perdida), a fila eventualmente drena.
+// Custo zero quando queue vazia. Bug capturado QA real 2026-05-25 00:00:
+// queue ficou stuck 7+min sem drain rodar por causa do AuthLost break.
+const WATCHDOG_INTERVAL_MS = 30_000
+if (typeof window !== 'undefined') {
+  setInterval(async () => {
+    let n = 0
+    try { n = await queueSize() } catch { /* ignore */ }
+    if (n > 0 && !currentDrainPromise && !retryDrainTimer) {
+      // Há fila e nenhum drain agendado/em curso — força.
+      drainPendingMutations().catch(() => {})
+    }
+  }, WATCHDOG_INTERVAL_MS)
+}
+
 // v0.2.7.0 hardening — Network reconnect listener: força drain imediato quando
 // device sai de offline. Antes user precisava interagir pra disparar drain.
 if (typeof window !== 'undefined') {
@@ -425,15 +442,17 @@ async function _runDrain(options = {}) {
         drained += 1
       } catch (e) {
         if (e instanceof AuthLostError) {
-          // Auth perdido — sem ponto retry até user re-logar. useAppResume
-          // signOut chega via onAuthLost listener. Para drain neste ciclo.
+          // Auth perdido — sessionManager signOut listener chega. Mas ALSO
+          // agenda retry: se token expirar e refresh transient falhar, próxima
+          // tentativa pode passar antes do user precisar re-logar.
+          // Bug capturado QA real 2026-05-25 00:00: AuthLost só break causava
+          // banner queue preso eternamente quando refresh travava.
           failedTransient += 1
+          scheduleRetryDrain()
           break
         }
         if (isNetworkError(e)) {
-          // Network transient — para drain neste ciclo MAS re-agenda retry em 5s.
-          // Sem este retry, mutations ficavam stuck até heartbeat 60s, fazendo UI
-          // mostrar server stale por 1min após reconectar (QA real 2026-05-24).
+          // Network transient — agenda retry com backoff.
           failedTransient += 1
           scheduleRetryDrain()
           break
