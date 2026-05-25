@@ -20,7 +20,51 @@
 
 ---
 
-## 🆕 Release atual — v0.2.8.2 (vc 104) · RealtimeManager + Folder Boundaries + BUG-MEDINPUT
+## 🆕 Release EM CURSO — v0.2.8.3 (vc 105) · Realtime Opção D `patientId.in` + bug-fix loop
+
+**Status:** ⏳ EM CURSO branch `0.2.8.3`. Working tree dirty. Bugs #0025/#0026 corrigidos código-side (withTimeout helper + Dashboard cold-start retry). #0027/#0028 deferred. APK debug vc 105 instalado em ambos devices. Pronto pra QA round 1.
+
+### QA cross-account 25 passos (loop user-driven):
+
+> **⚠️ Setup atualizado 2026-05-25 — NUNCA usar lhenrique.pda em QA. Substituído por teste-free@teste.com como sharegiver pra garantir isolamento.**
+>
+> - **Owner:** emul-5554 (Pixel9Pro_Test API 35) = **teste-plus@teste.com** (PRO tier, multi-paciente, compartilha)
+> - **Sharegiver:** S25U RXCY308LH0L = **teste-free@teste.com** (FREE tier, recebe compartilhamento)
+> - Ambos APK debug v0.2.8.3 vc 105 instalado. Flag `realtime_enabled=true` em prod. Permissões alarme granted em ambos.
+
+- `[x]` **1.** Limpe BD de teste-plus + teste-free via SQL (DELETE patient_shares + doses + treatments + sos_rules + patients onde userId IN teste-plus, teste-free). **NUNCA tocar lhenrique.pda.** ✅ Concluído 2026-05-25 16:23 BRT — 3 doses + 1 treatment + 2 patients deletados, lhenrique.pda intacto (3 patients/44 treatments/2482 doses preservados).
+- `[x]` **2.** Verifique emulador Pixel9Pro Test API 35 rodando + S25U conectado adb ✅ adb devices: emulator-5554 + RXCY308LH0L
+- `[x]` **3.** Login emul-5554 com teste-plus@teste.com pwd 123456 (Owner PRO) ✅ "Boa noite, Teste Plus" visível
+- `[x]` **4.** Login S25U com teste-free@teste.com pwd 123456 (Sharegiver FREE) ✅ Logout lhenrique.pda + login teste-free OK, "Boa tarde, Teste Free" + plano FREE
+- `[x]` **5.** Cadastre Paciente em teste-plus via UI ("+" header Pacientes → form → Cadastrar) ✅ QA_Paciente_v0283_01 (id 03d659b8-6e58-4d14-92ad-1d948f1f022c) criado em 1069ms pós force-restart. ⚠️ **BUG #0025 manifestou na 1ª tentativa**: btn disabled 30s, zero requests via CDP Network domain, mutationFn jamais executou. Force-restart do app resolveu instantaneamente. Confirma root cause ≠ timeout RPC, é TanStack mutation queue stuck.
+- `[x]` **6.** Compartilhe paciente com teste-free via UI (botão Compartilhar no patient detail → SharePatientSheet → e-mail teste-free@teste.com) ✅ Concluído em 1051ms — "Compartilhado com" passou de "Ninguém ainda" pra teste-free@teste.com.
+- `[ ]` **7.** Verifique se Paciente aparece para teste-free Realtime, sem precisar recarregar APP — comportamento esperado **⏸️ QA INTERROMPIDO 2026-05-25 ~19:58 BRT (user precisou do celular S25U). Continuar daqui na próxima sessão.**
+- `[ ]` **8.** Se não aparecer: guarde como BUG, recarregue app e verifique se agora está lá
+- `[ ]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min
+- `[ ]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime)
+- `[ ]` **11.** Esperado que apareça (se não aparecer = BUG)
+- `[ ]` **12.** Feche APP de teste-free com swipe up Recents (kill normal de usuário, NÃO force-stop)
+- `[ ]` **13.** Cadastre DoseB_Test_Alarm para o MESMO horário de DoseA_Test_Alarm em teste-plus
+- `[ ]` **14.** Verifique se S25U tem alarme programado para as duas doses (`dumpsys alarm | grep criticalalarm`)
+- `[ ]` **15.** Aguarde horário do alarme, onde as duas doses devem aparecer (MultiDoseAlarm fullscreen)
+- `[ ]` **16.** Clique em "Pular" em ambos os devices
+- `[ ]` **17.** Abra APP em teste-free
+- `[ ]` **18.** Cadastre DoseC_Test_Alarm +4min usando agora o teste-free
+- `[ ]` **19.** Veja se apareceu para teste-plus imediatamente, com Realtime
+- `[ ]` **20.** Marque a dose DoseA_Test_Alarm como pulada usando teste-plus
+- `[ ]` **21.** Veja se dose aparece pulada para teste-free IMEDIATAMENTE
+- `[ ]` **22.** Marque DoseB_Test_Alarm tomada em teste-free
+- `[ ]` **23.** Veja em teste-plus se DoseB aparece imediatamente como tomada
+- `[ ]` **24.** Delete Paciente de teste-plus via UI (PatientDetail → menu → Excluir)
+- `[ ]` **25.** Esperado que paciente suma de teste-free em Realtime, imediatamente
+- `[ ]` **Cleanup obrigatório (CRÍTICO antes de fechar QA):** DELETE patient_share teste-plus → teste-free + DELETE doses/treatments/patients de teste-plus + teste-free. **NUNCA tocar lhenrique.pda.**
+
+### Bugs encontrados durante 1ª iteração QA (parou no Passo 5):
+Ver [BUGS.md](BUGS.md) #0025, #0026, #0027, #0028 (P1, P2, P2, P3).
+
+---
+
+## 📦 Release anterior — v0.2.8.2 (vc 104) · RealtimeManager + Folder Boundaries + BUG-MEDINPUT
 
 **Status:** ✅ Publicado Internal Testing 2026-05-25 13:39 BRT via Vetor 4. AAB 37MB signed, SQL `app_releases` vc 104 inserido, `realtime_enabled=true` em prod (gate dual `useHasActiveShares` protege user solo). Branch `0.2.8.2` aguarda merge master.
 

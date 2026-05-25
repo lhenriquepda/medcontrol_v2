@@ -1,8 +1,14 @@
 import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
 import { generateDoses } from '../utils/generateDoses'
+import { withTimeout } from '../utils/withTimeout'
 
 export const CONTINUOUS_DAYS = 90
+
+// BUG #0025 v0.2.8.3 — timeout 20s pra mutations CRUD tratamento (mesma motivação patientsService).
+// Sem isso, supabase-js fetch underlying pode pendurar (cold-start, Doze, rede ruim)
+// e useMutation isPending nunca volta false → botão Salvar/Pausar/Encerrar stuck disabled.
+const TREATMENT_MUTATION_TIMEOUT_MS = 20000
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
@@ -34,22 +40,26 @@ export async function createTreatmentWithDoses(payload) {
   if (hasSupabase) {
     // Browser timezone — RPC computes "first dose time" relative to user's local TZ
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo'
-    const { data, error } = await supabase.rpc('create_treatment_with_doses', {
-      p_patient_id:      payload.patientId,
-      p_med_name:        payload.medName,
-      p_unit:            payload.unit,
-      p_interval_hours:  payload.mode === 'times' ? null : (payload.intervalHours ?? null),
-      p_duration_days:   payload.isContinuous ? CONTINUOUS_DAYS : (payload.durationDays ?? 7),
-      p_is_continuous:   !!payload.isContinuous,
-      p_start_date:      payload.startDate,
-      p_first_dose_time: payload.firstDoseTime ?? '08:00',
-      p_mode:            payload.mode || 'interval',
-      p_is_template:     !!payload.isTemplate,
-      p_timezone:        tz,
-      // v0.2.4.0 — Categorias de Medicamentos. RPC tem DEFAULT NULL, retrocompat.
-      p_group_id:        payload.group_id ?? null,
-      p_cmed_class:      payload.cmed_class ?? null,
-    })
+    const { data, error } = await withTimeout(
+      supabase.rpc('create_treatment_with_doses', {
+        p_patient_id:      payload.patientId,
+        p_med_name:        payload.medName,
+        p_unit:            payload.unit,
+        p_interval_hours:  payload.mode === 'times' ? null : (payload.intervalHours ?? null),
+        p_duration_days:   payload.isContinuous ? CONTINUOUS_DAYS : (payload.durationDays ?? 7),
+        p_is_continuous:   !!payload.isContinuous,
+        p_start_date:      payload.startDate,
+        p_first_dose_time: payload.firstDoseTime ?? '08:00',
+        p_mode:            payload.mode || 'interval',
+        p_is_template:     !!payload.isTemplate,
+        p_timezone:        tz,
+        // v0.2.4.0 — Categorias de Medicamentos. RPC tem DEFAULT NULL, retrocompat.
+        p_group_id:        payload.group_id ?? null,
+        p_cmed_class:      payload.cmed_class ?? null,
+      }),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'criar tratamento'
+    )
     if (error) throw error
     return data
   }
@@ -71,10 +81,14 @@ export async function createTreatmentWithDoses(payload) {
 export async function updateTreatment(id, patch) {
   if (hasSupabase) {
     // Atomic RPC: applies patch + regenerates future doses if schedule changed
-    const { data, error } = await supabase.rpc('update_treatment_schedule', {
-      p_treatment_id: id,
-      p_patch:        patch,
-    })
+    const { data, error } = await withTimeout(
+      supabase.rpc('update_treatment_schedule', {
+        p_treatment_id: id,
+        p_patch:        patch,
+      }),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'atualizar tratamento'
+    )
     if (error) throw error
     return data
   }
@@ -85,7 +99,11 @@ export async function updateTreatment(id, patch) {
 export async function deleteTreatment(id) {
   if (hasSupabase) {
     // ON DELETE CASCADE handles doses automatically
-    const { error } = await supabase.from('treatments').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('treatments').delete().eq('id', id),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'excluir tratamento'
+    )
     if (error) throw error
     return
   }
@@ -103,12 +121,16 @@ export async function deleteTreatment(id) {
 async function cancelFutureDoses(treatmentId) {
   if (hasSupabase) {
     const nowIso = new Date().toISOString()
-    const { error } = await supabase
-      .from('doses')
-      .update({ status: 'cancelled' })
-      .eq('treatmentId', treatmentId)
-      .eq('status', 'pending')
-      .gt('scheduledAt', nowIso)
+    const { error } = await withTimeout(
+      supabase
+        .from('doses')
+        .update({ status: 'cancelled' })
+        .eq('treatmentId', treatmentId)
+        .eq('status', 'pending')
+        .gt('scheduledAt', nowIso),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'cancelar doses futuras'
+    )
     if (error) throw error
     return
   }
@@ -125,7 +147,11 @@ async function cancelFutureDoses(treatmentId) {
 /** Pausa tratamento: status=paused + cancela doses futuras pendentes (alarmes param). Reversível. */
 export async function pauseTreatment(id) {
   if (hasSupabase) {
-    const { error } = await supabase.from('treatments').update({ status: 'paused' }).eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('treatments').update({ status: 'paused' }).eq('id', id),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'pausar tratamento'
+    )
     if (error) throw error
   } else {
     mock.update('treatments', id, { status: 'paused' })
@@ -137,26 +163,38 @@ export async function pauseTreatment(id) {
 export async function resumeTreatment(id) {
   if (hasSupabase) {
     try {
-      const { error } = await supabase.rpc('update_treatment_schedule', {
-        p_treatment_id: id,
-        p_patch: { status: 'active' },
-      })
+      const { error } = await withTimeout(
+        supabase.rpc('update_treatment_schedule', {
+          p_treatment_id: id,
+          p_patch: { status: 'active' },
+        }),
+        TREATMENT_MUTATION_TIMEOUT_MS,
+        'retomar tratamento'
+      )
       if (error) throw error
     } catch (e) {
       console.warn('[resumeTreatment] RPC failed, falling back to status update:', e?.message)
-      const { error } = await supabase.from('treatments').update({ status: 'active' }).eq('id', id)
+      const { error } = await withTimeout(
+        supabase.from('treatments').update({ status: 'active' }).eq('id', id),
+        TREATMENT_MUTATION_TIMEOUT_MS,
+        'retomar tratamento (fallback)'
+      )
       if (error) throw error
     }
     // #0005 fix — RPC só muda treatment.status; doses cancelled pela pausa ficam
     // cancelled (v_schedule_changed=false, sem regenerate). Restaurar futuras → pending.
     // Doses passadas (período da pausa) permanecem cancelled como histórico correto.
     const nowIso = new Date().toISOString()
-    const { error: restoreErr } = await supabase
-      .from('doses')
-      .update({ status: 'pending' })
-      .eq('treatmentId', id)
-      .eq('status', 'cancelled')
-      .gt('scheduledAt', nowIso)
+    const { error: restoreErr } = await withTimeout(
+      supabase
+        .from('doses')
+        .update({ status: 'pending' })
+        .eq('treatmentId', id)
+        .eq('status', 'cancelled')
+        .gt('scheduledAt', nowIso),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'restaurar doses canceladas'
+    )
     if (restoreErr) console.warn('[resumeTreatment] restore cancelled doses err:', restoreErr.message)
   } else {
     mock.update('treatments', id, { status: 'active' })
@@ -173,7 +211,11 @@ export async function resumeTreatment(id) {
 /** Encerra tratamento permanentemente: status=ended + cancela doses futuras. Não reversível. */
 export async function endTreatment(id) {
   if (hasSupabase) {
-    const { error } = await supabase.from('treatments').update({ status: 'ended' }).eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('treatments').update({ status: 'ended' }).eq('id', id),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'encerrar tratamento'
+    )
     if (error) throw error
   } else {
     mock.update('treatments', id, { status: 'ended' })
@@ -194,7 +236,11 @@ export async function listTemplates() {
 
 export async function createTemplate(payload) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('treatment_templates').insert(payload).select().single()
+    const { data, error } = await withTimeout(
+      supabase.from('treatment_templates').insert(payload).select().single(),
+      TREATMENT_MUTATION_TIMEOUT_MS,
+      'criar template'
+    )
     if (error) throw error
     return data
   }

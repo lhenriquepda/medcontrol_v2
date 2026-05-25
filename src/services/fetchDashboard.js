@@ -7,7 +7,7 @@
  *
  * Princípios:
  *   P1 — server source of truth, store é view layer.
- *   P5 — UI nunca trava: timeout via authedRpc (10s hard).
+ *   P5 — UI nunca trava: timeout via authedRpc.
  *
  * Uso:
  *   await fetchDashboard()                // -7d/+14d default
@@ -15,9 +15,16 @@
  *
  * Side-effect: popula doseStore, patientStore, treatmentStore.
  * Retorna: payload completo (compat com callers que ainda esperam objeto).
+ *
+ * BUG #0026 v0.2.8.3 — cold-start RPC pode levar até 15s legítimos (Supabase
+ * Pooler PgBouncer reconnect + first auth check). Default authedRpc 10s estava
+ * disparando TimeoutError no primeiro fetchDashboard pós-emul boot, mostrando
+ * skeleton infinito. Solução: 1ª tentativa 30s (cold-start budget), retry imediato
+ * 15s caso timeout (cobre Supabase recovery transient). 2 tentativas total = 45s
+ * worst-case mas user vê Dashboard popular em vez de skeleton stuck.
  */
 import { hasSupabase } from './supabase'
-import { authedRpc } from './sessionManager'
+import { authedRpc, TimeoutError } from './sessionManager'
 import { setAllDoses } from '../state/doseStore'
 import { setAllPatients } from '../state/patientStore'
 import { setAllTreatments } from '../state/treatmentStore'
@@ -26,6 +33,10 @@ import { size as queueSize } from '../state/pendingMutationsQueue'
 
 const DEFAULT_RANGE_PAST_DAYS = 7
 const DEFAULT_RANGE_FUTURE_DAYS = 14
+
+// BUG #0026 — timeouts dimensionados pro cold-start emul observado em QA v0.2.8.3.
+const DASHBOARD_RPC_TIMEOUT_FIRST_MS = 30_000   // 1ª tentativa cold-start
+const DASHBOARD_RPC_TIMEOUT_RETRY_MS = 15_000   // 2ª tentativa retry
 
 function applyDefaultRange(from, to) {
   if (from && to) return { from, to }
@@ -94,11 +105,27 @@ async function doFetch({ from, to, daysAhead }) {
   }
 
   // Production: RPC consolidado com timeout via authedRpc.
-  const data = await authedRpc('get_dashboard_payload', {
-    p_from: range.from,
-    p_to: range.to,
-    p_days_ahead: daysAhead,
-  })
+  // BUG #0026 — 1ª tentativa cold-start 30s, retry single attempt 15s se TimeoutError.
+  let data
+  try {
+    data = await authedRpc('get_dashboard_payload', {
+      p_from: range.from,
+      p_to: range.to,
+      p_days_ahead: daysAhead,
+    }, { timeoutMs: DASHBOARD_RPC_TIMEOUT_FIRST_MS })
+  } catch (e) {
+    if (e instanceof TimeoutError) {
+      console.warn('[fetchDashboard] cold-start timeout — retry 15s window')
+      // Retry imediato — supabase-js mantém conn pool quente, 2ª chamada normalmente <2s.
+      data = await authedRpc('get_dashboard_payload', {
+        p_from: range.from,
+        p_to: range.to,
+        p_days_ahead: daysAhead,
+      }, { timeoutMs: DASHBOARD_RPC_TIMEOUT_RETRY_MS })
+    } else {
+      throw e
+    }
+  }
 
   const patients = Array.isArray(data?.patients) ? data.patients : []
   const treatments = Array.isArray(data?.treatments) ? data.treatments : []

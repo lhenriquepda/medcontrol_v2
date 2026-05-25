@@ -1,5 +1,11 @@
 import { hasSupabase, supabase } from './supabase'
 import { mock } from './mockStore'
+import { withTimeout } from '../utils/withTimeout'
+
+// BUG #0025 v0.2.8.3 — timeout 20s pra mutations CRUD paciente.
+// Sem isso, supabase-js fetch underlying pode pendurar (cold-start, Doze, rede ruim)
+// e useMutation isPending nunca volta false → botão Cadastrar stuck disabled.
+const PATIENT_MUTATION_TIMEOUT_MS = 20000
 
 const byCreatedDesc = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')
 
@@ -44,7 +50,12 @@ export class PatientLimitError extends Error {
 
 export async function createPatient(payload) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').insert(payload).select().single()
+    const op = withTimeout(
+      supabase.from('patients').insert(payload).select().single(),
+      PATIENT_MUTATION_TIMEOUT_MS,
+      'criar paciente'
+    )
+    const { data, error } = await op
     if (error) {
       const raw = error.message || ''
       if (raw.includes('PLANO_FREE_LIMITE_PACIENTES')) {
@@ -59,7 +70,11 @@ export async function createPatient(payload) {
 
 export async function updatePatient(id, patch) {
   if (hasSupabase) {
-    const { data, error } = await supabase.from('patients').update(patch).eq('id', id).select().single()
+    const { data, error } = await withTimeout(
+      supabase.from('patients').update(patch).eq('id', id).select().single(),
+      PATIENT_MUTATION_TIMEOUT_MS,
+      'atualizar paciente'
+    )
     if (error) throw error
     return data
   }
@@ -68,7 +83,11 @@ export async function updatePatient(id, patch) {
 
 export async function deletePatient(id) {
   if (hasSupabase) {
-    const { error } = await supabase.from('patients').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('patients').delete().eq('id', id),
+      PATIENT_MUTATION_TIMEOUT_MS,
+      'excluir paciente'
+    )
     if (error) throw error
     return
   }
