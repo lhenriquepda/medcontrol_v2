@@ -22,6 +22,7 @@ import { setAllDoses } from '../state/doseStore'
 import { setAllPatients } from '../state/patientStore'
 import { setAllTreatments } from '../state/treatmentStore'
 import { recomputeOverdueDoses } from './dashboardService'
+import { size as queueSize } from '../state/pendingMutationsQueue'
 
 const DEFAULT_RANGE_PAST_DAYS = 7
 const DEFAULT_RANGE_FUTURE_DAYS = 14
@@ -55,6 +56,24 @@ export async function fetchDashboard({ from, to, daysAhead = 5 } = {}) {
 }
 
 async function doFetch({ from, to, daysAhead }) {
+  // v0.2.7.0 hardening — se há mutations pendentes em IDB, drena ANTES de
+  // fetchar payload do server. Sem isto, fetchDashboard volta server stale
+  // (doses ainda overdue) ANTES do drain aplicar mutations locais → UI mostra
+  // status server por ~1min até próximo drain do heartbeat.
+  // Idempotência (mutation_log + request_id) garante drain duplicado = safe.
+  // Lazy import pra evitar ciclo (markDose importa fetchDashboard? não, mas safe).
+  try {
+    const pending = await queueSize()
+    if (pending > 0) {
+      const { drainPendingMutations } = await import('./markDose')
+      await drainPendingMutations()
+    }
+  } catch (e) {
+    // Drain falhou — segue pro fetch (server state pode estar stale, próximo
+    // resume/heartbeat tenta de novo).
+    console.warn('[fetchDashboard] drain pre-fetch fail:', e?.message)
+  }
+
   const range = applyDefaultRange(from, to)
 
   if (!hasSupabase) {

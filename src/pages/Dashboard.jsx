@@ -109,6 +109,24 @@ export default function Dashboard() {
     if (!isFetching && fetchStartedAt) setFetchStartedAt(null)
   }, [isFetching, fetchStartedAt])
   const isStaleSync = isFetching && fetchStartedAt && (Date.now() - fetchStartedAt > 8000) && (Date.now() - sessionMountedAt > 1000)
+  // v0.2.7.0 hardening — banner "Salvando N dose(s)..." quando pending queue > 0.
+  // Princípio P2 do Refactor_Sync_v2 (feedback visual sempre): user vê status real
+  // em vez de UI fingindo que dose já persistiu.
+  const [pendingQueueCount, setPendingQueueCount] = useState(0)
+  useEffect(() => {
+    let mounted = true
+    let intervalId = null
+    const tick = async () => {
+      try {
+        const { getPendingQueueSize } = await import('../services/markDose')
+        const n = await getPendingQueueSize()
+        if (mounted) setPendingQueueCount(n)
+      } catch { /* ignore */ }
+    }
+    tick()  // imediato no mount
+    intervalId = setInterval(tick, 3000)  // poll IDB a cada 3s
+    return () => { mounted = false; if (intervalId) clearInterval(intervalId) }
+  }, [])
   // v0.2.3.15 — exclui doses canceladas do Dashboard.
   // Quando user pausa/encerra/exclui tratamento, RPC cancelFutureDoses UPDATE doses
   // pending+futuras pra status='cancelled' (preserva histórico mas marca como
@@ -400,6 +418,26 @@ export default function Dashboard() {
               opacity: 0.7,
             }} />
             Sincronizando dados... (mostrando última versão conhecida)
+          </div>
+        )}
+
+        {pendingQueueCount > 0 && (
+          <div role="status" style={{
+            background: 'var(--dosy-warning-bg)',
+            color: 'var(--dosy-warning)',
+            padding: '8px 14px',
+            borderRadius: 12,
+            fontSize: 12.5,
+            display: 'flex', alignItems: 'center', gap: 8,
+            marginTop: 8,
+          }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: 99,
+              background: 'currentColor',
+              animation: 'shimmer 1.3s infinite',
+              opacity: 0.7,
+            }} />
+            Salvando {pendingQueueCount} {pendingQueueCount === 1 ? 'dose' : 'doses'}... (offline ou rede lenta)
           </div>
         )}
 

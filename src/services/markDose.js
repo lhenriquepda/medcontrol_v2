@@ -244,9 +244,27 @@ function trackAction(action) {
 // (mutation_log) garante exactly-once mesmo se entry foi parcialmente processada
 // em runtime anterior.
 
-import { getAll as queueGetAll, remove as _queueRemove } from '../state/pendingMutationsQueue'
+import { getAll as queueGetAll, remove as _queueRemove, size as queueSize } from '../state/pendingMutationsQueue'
 
 let drainInProgress = false
+let retryDrainTimer = null
+
+// v0.2.7.0 hardening — re-agenda drain rápido em transient errors (rede flapping,
+// auth refresh). Sem este retry, mutations ficavam stuck esperando heartbeat 60s
+// (useAppResume), causando UI mostrar server stale por 1min após reconnect.
+const RETRY_DRAIN_DELAY_MS = 5_000
+function scheduleRetryDrain() {
+  if (retryDrainTimer) return
+  retryDrainTimer = setTimeout(() => {
+    retryDrainTimer = null
+    drainPendingMutations().catch(() => {})
+  }, RETRY_DRAIN_DELAY_MS)
+}
+
+// Exporta pra Dashboard usar como indicador visual ("N doses sincronizando").
+export async function getPendingQueueSize() {
+  try { return await queueSize() } catch { return 0 }
+}
 
 export async function drainPendingMutations() {
   if (drainInProgress) return { drained: 0, skipped: true }
@@ -292,9 +310,18 @@ export async function drainPendingMutations() {
         await _queueRemove(mut.requestId)
         drained += 1
       } catch (e) {
-        if (e instanceof AuthLostError || isNetworkError(e)) {
-          // Transient — para drain neste ciclo (próximo onResume/heartbeat retoma).
+        if (e instanceof AuthLostError) {
+          // Auth perdido — sem ponto retry até user re-logar. useAppResume
+          // signOut chega via onAuthLost listener. Para drain neste ciclo.
           failedTransient += 1
+          break
+        }
+        if (isNetworkError(e)) {
+          // Network transient — para drain neste ciclo MAS re-agenda retry em 5s.
+          // Sem este retry, mutations ficavam stuck até heartbeat 60s, fazendo UI
+          // mostrar server stale por 1min após reconectar (QA real 2026-05-24).
+          failedTransient += 1
+          scheduleRetryDrain()
           break
         }
         // Erro real — descarta mutation pra não retry forever.

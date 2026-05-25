@@ -19,7 +19,23 @@ import { useTreatmentStore } from '../state/treatmentStore'
 import { fetchDashboard, forceRefetchDashboard } from '../services/fetchDashboard'
 import { AuthLostError } from '../services/sessionManager'
 
+// v0.2.7.0 hardening — normaliza timestamps pra hora corrente.
+// Dashboard.jsx recomputa baseWindow a cada tick 60s → causava refetch a cada
+// minuto em idle (60 RPC/hora, ~3-5MB egress). Round-to-hour estabiliza key:
+// useEffect só dispara fetch novo quando hora vira (1× por hora vs 60× por hora).
+function roundToHour(iso) {
+  if (!iso) return iso
+  const d = new Date(iso)
+  if (isNaN(d)) return iso
+  d.setMinutes(0, 0, 0)
+  return d.toISOString()
+}
+
 export function useDashboardData({ from, to, daysAhead = 5 } = {}) {
+  // Normaliza params pra hora — re-fetch só dispara em hour boundary.
+  // fetchDashboard usa from/to crus na RPC (precisão preservada).
+  const stableFrom = useMemo(() => roundToHour(from), [from])
+  const stableTo = useMemo(() => roundToHour(to), [to])
   const dosesMap = useDoseStore(s => s.doses)
   const dosesLoaded = useDoseStore(s => s.loaded)
   const dosesLoadedAt = useDoseStore(s => s.loadedAt)
@@ -36,6 +52,8 @@ export function useDashboardData({ from, to, daysAhead = 5 } = {}) {
     setError(null)
     let err = null
     try {
+      // v0.2.7.0 hardening — usa stableFrom/stableTo (round-to-hour) pras deps
+      // do useCallback, mas envia from/to crus pro fetchDashboard (precisão RPC).
       if (force) {
         await forceRefetchDashboard({ from, to, daysAhead })
       } else {
@@ -53,7 +71,8 @@ export function useDashboardData({ from, to, daysAhead = 5 } = {}) {
         setIsFetching(false)
       }
     }
-  }, [from, to, daysAhead])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stableFrom, stableTo, daysAhead])
 
   // Fetch on mount + quando params mudam. Dispara async, sem setState síncrono no effect.
   useEffect(() => {

@@ -88,7 +88,17 @@ export function useAppResume() {
         console.warn('[useAppResume] drainPendingMutations failed:', e?.message)
       }
 
-      // Refetch active queries pra trazer fresh data.
+      // v0.2.7.0 hardening — Dashboard agora vive em Zustand store (não TanStack
+      // cache). refetchQueries só atinge useDoses/usePatients/useTreatments de
+      // outras telas. Pra atualizar Dashboard, dispara fetchDashboard direto.
+      try {
+        const { fetchDashboard } = await import('../services/fetchDashboard')
+        await fetchDashboard()
+      } catch (e) {
+        console.warn('[useAppResume] fetchDashboard failed:', e?.message)
+      }
+
+      // Refetch active queries TanStack (DoseHistory, Reports, Analytics, etc).
       try {
         await qc.refetchQueries({ type: 'active' })
       } catch (e) {

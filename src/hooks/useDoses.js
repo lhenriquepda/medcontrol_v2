@@ -69,6 +69,21 @@ function useDoseAction(action) {
       setStatus('success')
       return result.dose
     }
+    // v0.2.7.0 hardening — pendingSync (offline/timeout/auth) NÃO é erro pra UI.
+    // markDose já patchou store com _pendingSync flag, queue persistida em IDB,
+    // drain vai retomar quando network voltar / re-login. Caller (Dashboard /
+    // DoseModal) recebe success → toast normal ("marcada como pulada") em vez de
+    // toast vermelho assustador "Failed to fetch".
+    if (result.pendingSync) {
+      setStatus('success')
+      return { _pendingSync: true }
+    }
+    // Conflict 409 também não é erro fatal — server tem state diferente, já foi
+    // aplicado via emitConflict (banner "Aceitar mudança outro dispositivo?").
+    if (result.conflict) {
+      setStatus('success')
+      return { _conflict: true, currentState: result.currentState }
+    }
     setStatus('error')
     setError(result.error || new Error('markDose failed'))
     if (result.error) throw result.error
