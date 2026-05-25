@@ -22,7 +22,7 @@
 
 ## 🆕 Release atual — v0.2.8.1 (vc 103) · QA & Lint Corrections
 
-**Status:** em curso na branch `0.2.8.1` (correções e linter da Fase 1).
+**Status:** ✅ Publicado Internal Testing 2026-05-25 11:42 BRT via Vetor 4. AAB 35MB signed, SQL `app_releases` vc 103 inserido. Branch `0.2.8.1` aguarda merge master.
 
 **Fixes e atualizações v0.2.8.1:**
 - `[x]` **Vitest Config (`vitest.config.js`)**: Excluído o diretório `e2e/**` da execução padrão do Vitest, evitando erros de carregamento de sintaxe Mocha do Appium.
