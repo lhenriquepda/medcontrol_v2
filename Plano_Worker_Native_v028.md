@@ -426,26 +426,133 @@ WorkManager.getInstance(this).enqueueUniquePeriodicWork(
 
 ## 6. Test plan
 
-### Testes manuais (S25 Ultra)
-
-1. **Drain offline:** Marca 3 doses → modo avião → fecha app → desativa avião → wait 15min → verifica BD via Supabase
-2. **Suspended state:** Marca 1 dose → idle 10min (tela bloqueia) → verifica BD via Supabase
-3. **Token expirado:** Espera 1h sem abrir app → marca dose → wait 15min → verifica que Worker pulou ciclo
-4. **App killed mid-RPC:** Marca dose → kill processo via Force Stop → wait 15min → verifica BD
-5. **Volume alto:** Marca 30 doses em sequência → fecha app → wait 30min → verifica todas no BD
-
-### Verificação via logcat
+### Preparação (uma vez)
 
 ```bash
+# Setup logcat verbose pra ver Worker activity
 adb shell setprop log.tag.MutationDrainWorker VERBOSE
-adb logcat -s MutationDrainWorker
+adb shell setprop log.tag.MutationQueueStore VERBOSE
+
+# Filtro logcat ao vivo (executa em terminal separado)
+adb logcat -s MutationDrainWorker MutationQueueStore MainActivity
+
+# Forçar disparo manual do Worker (atalho — bypassa 15min wait)
+# Substituir <pkg> por com.dosyapp.dosy ou com.dosyapp.dosy.dev
+adb shell cmd jobscheduler run -f com.dosyapp.dosy 999  # JobId varia, descobrir via dumpsys
+adb shell dumpsys jobscheduler | grep -A 5 "dosy-mutation-drain"
 ```
 
-Esperado: log a cada 15min indicando se queue tinha entries e quantas drenou.
+### Cenário 1 — Drain durante app suspended (caminho B102 último)
 
-### Verificação via BD
+**Setup:**
+- Login conta teste-free@teste.com (pwd 123456)
+- Criar paciente + 1 tratamento com 3 doses agendadas pra próxima hora
+- Garantir online (Wi-Fi ON)
 
-Query `mutation_log` count das últimas 24h. Esperado: número crescente conforme Worker drena, sem duplicatas (mesmo request_id 1×).
+**Steps:**
+1. Marcar 1 dose como "Tomada" → confirma banner "Salvando..." some em <2s (drain JS OK normal)
+2. Marcar 2ª dose como "Pular"
+3. Bloquear tela do device imediatamente (botão lateral)
+4. Aguardar 15-20min com tela bloqueada (sem tocar device)
+5. Desbloquear tela → abrir app
+
+**Verificação:**
+- Logcat deve mostrar `[MutationDrainWorker] drain start — N entries pendentes` + `drain end — processed=N`
+- BD via Supabase `mutation_log` table: COUNT(*) das últimas 30min = mutations marcadas
+- Dashboard mostra doses como "Tomada"/"Pulado" (não banner queue)
+
+**Passa se:** Worker drenou queue mesmo com app suspended (sem interação user).
+
+### Cenário 2 — Drain offline + reconexão
+
+**Steps:**
+1. Wi-Fi + dados móveis OFF (modo avião ON)
+2. Marcar 5 doses como "Tomada" rapidamente
+3. Banner "Salvando 5 dose(s)..." aparece (network offline detectado)
+4. Bloquear tela + esperar 5min (modo avião ainda)
+5. Desativar modo avião (Wi-Fi/dados OFF→ON)
+6. Imediatamente bloquear tela de novo, aguardar 20min sem tocar
+
+**Verificação:**
+- Logcat: Worker tenta cycle a cada 15min, mas NetworkType.CONNECTED gate skip enquanto offline
+- Quando rede volta: próximo cycle drena 5 entries
+- BD: 5 mutations em `mutation_log`
+
+**Passa se:** Worker dispara só quando rede disponível (zero RPC offline).
+
+### Cenário 3 — Refresh nativo Java (Opção B)
+
+**Setup:**
+- Login + aguardar 1h+ SEM abrir app (token JWT 1h expira)
+- ALT: editar `access_token_exp_ms` em SharedPreferences pra forçar expiry (root/debug only)
+
+**Steps:**
+1. Com token expirado, marcar 1 dose via app
+2. Banner queue aparece (RPC inicial falha 401 → drain JS tenta refresh → maybe queue stuck)
+3. Fechar app + bloquear tela + aguardar 20min
+
+**Verificação:**
+- Logcat: `[MutationDrainWorker] token refreshed via refresh nativo (Opção B)`
+- BD `mutation_log`: entry presente
+
+**Passa se:** Worker fez refresh autônomo (sem JS) e drenou queue.
+
+### Cenário 4 — App killed mid-RPC
+
+**Steps:**
+1. Marcar 1 dose como "Tomada"
+2. Imediatamente: Settings → Apps → Dosy → Force Stop (mata processo mid-RPC)
+3. NÃO abrir app por 20min (mantém killed)
+
+**Verificação:**
+- Logcat: Worker dispara (independent processo) e drena entry da SharedPreferences
+- BD `mutation_log`: entry presente
+
+**Passa se:** Worker drena mesmo com app NUNCA reaberta.
+
+### Cenário 5 — Volume alto + dedupe idempotência
+
+**Steps:**
+1. Marcar 30 doses em sequência rápida (10 confirm, 10 skip, 10 undo)
+2. Imediatamente fechar app (swipe recents)
+3. Aguardar 30min (2 cycles do Worker)
+
+**Verificação:**
+- BD `mutation_log`: COUNT(*) = 30 (ou menor se JS drain pegou algumas)
+- Sem duplicatas: SELECT request_id, COUNT(*) FROM mutation_log GROUP BY request_id HAVING COUNT(*) > 1 → 0 rows
+- `pending_mutations` SharedPreferences: queue vazia ou diminuiu drasticamente
+
+**Passa se:** Todas as 30 mutations processadas idempotentes (sem duplicate writes server-side).
+
+### Verificação via BD (Supabase SQL)
+
+```sql
+-- Total drenado últimas 1h
+SELECT
+  COUNT(*) AS total,
+  COUNT(DISTINCT user_id) AS users,
+  MIN(created_at) AS first,
+  MAX(created_at) AS last
+FROM medcontrol.mutation_log
+WHERE created_at > NOW() - INTERVAL '1 hour';
+
+-- Detectar duplicatas (sinal de bug idempotência)
+SELECT request_id, COUNT(*) AS dupes
+FROM medcontrol.mutation_log
+WHERE created_at > NOW() - INTERVAL '24 hours'
+GROUP BY request_id
+HAVING COUNT(*) > 1;
+```
+
+### Verificação via SharedPreferences (debugging)
+
+```bash
+# Ver SharedPreferences "CapacitorStorage" do app
+adb shell run-as com.dosyapp.dosy.dev cat /data/data/com.dosyapp.dosy.dev/shared_prefs/CapacitorStorage.xml
+
+# Ver tokens auth
+adb shell run-as com.dosyapp.dosy.dev cat /data/data/com.dosyapp.dosy.dev/shared_prefs/dosy_sync_credentials.xml
+```
 
 ---
 

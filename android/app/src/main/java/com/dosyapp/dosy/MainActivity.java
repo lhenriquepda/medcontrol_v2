@@ -14,13 +14,16 @@ import java.lang.ref.WeakReference;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
 import com.dosyapp.dosy.plugins.criticalalarm.CriticalAlarmPlugin;
 import com.dosyapp.dosy.plugins.criticalalarm.AlarmService;
 import com.dosyapp.dosy.plugins.criticalalarm.DoseSyncWorker;
+import com.dosyapp.dosy.sync.MutationDrainWorker;
 import com.getcapacitor.BridgeActivity;
 
 import java.util.concurrent.Executors;
@@ -41,6 +44,7 @@ public class MainActivity extends BridgeActivity {
         // enqueue + cleanupChannels pra background thread. Idempotente, sem dependência síncrona.
         Executors.newSingleThreadExecutor().execute(() -> {
             enqueueDoseSyncWorker();
+            enqueueMutationDrainWorker();
             cleanupLegacyChannels();
         });
         // v0.2.6.5 — injeta status bar height (DP) como CSS var --system-status-bar-height
@@ -142,6 +146,47 @@ public class MainActivity extends BridgeActivity {
             );
         } catch (Exception e) {
             android.util.Log.w("MainActivity", "enqueueDoseSyncWorker failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * v0.2.8.0 — Agenda MutationDrainWorker pra drenar pending_mutations queue
+     * (SharedPreferences "CapacitorStorage" key "dosy_pending_mutations") a cada
+     * 15min, INDEPENDENTE da WebView estar viva.
+     *
+     * Resolve último caminho B102: user marca dose com app suspended → JS timers
+     * não rodam (Doze) → queue stuck até user reabrir. Worker nativo cobre isso.
+     *
+     * Decisões user (Plano_Worker_Native_v028.md §9):
+     *   #1 — Frequência 15min (limite mínimo WorkManager)
+     *   #2 — Worker faz refresh nativo (Opção B) se token expirar
+     *   #3 — 3× retry em erro real antes de descartar
+     *   #4 — SEM RequiresBatteryNotLow (healthcare > bateria)
+     *   #5 — Migração one-way IDB → Preferences (sem fallback)
+     *
+     * Constraints:
+     *   - NetworkType.CONNECTED — sem rede = pula cycle (zero rede)
+     *
+     * Policy KEEP: depois de scheduled uma vez, próximas chamadas no-op. Evita
+     * resetar contagem dos 15min toda vez que app abre. Se precisar mudar intervalo
+     * em release futuro, pode trocar pra REPLACE temporariamente.
+     */
+    private void enqueueMutationDrainWorker() {
+        try {
+            Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+            PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
+                MutationDrainWorker.class, 15, TimeUnit.MINUTES
+            ).setConstraints(constraints).build();
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "dosy-mutation-drain",
+                ExistingPeriodicWorkPolicy.KEEP,
+                req
+            );
+            android.util.Log.d("MainActivity", "MutationDrainWorker enqueued (15min CONNECTED)");
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "enqueueMutationDrainWorker failed: " + e.getMessage());
         }
     }
 
