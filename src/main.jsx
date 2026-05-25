@@ -428,6 +428,8 @@ async function boot() {
   try {
     const { realtimeManager } = await import('./core/realtime/manager')
     realtimeManager.init().catch(e => console.warn('[boot] realtimeManager init fail:', e?.message))
+    // Debug introspection (CDP/QA can read state). Sem PII — apenas booleans + reasons.
+    if (typeof window !== 'undefined') window.__realtimeManager = realtimeManager
   } catch (e) {
     console.warn('[boot] realtimeManager import fail:', e?.message)
   }

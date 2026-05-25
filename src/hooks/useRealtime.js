@@ -5,6 +5,7 @@ import { useAuth } from './useAuth'
 import { fetchDashboard } from '../services/fetchDashboard'
 import { useRealtimeManager } from './useRealtimeManager'
 import { realtimeManager } from '../core/realtime/manager'
+import { useHasActiveShares } from './useHasActiveShares'
 
 /**
  * useRealtime — Refactor Sync v2 Fase 4 (v0.2.7.0) + Gemini Fase 4 ADR-016 (v0.2.8.2).
@@ -52,11 +53,17 @@ export function useRealtime() {
   const qc = useQueryClient()
   const { user } = useAuth()
   const { isActive } = useRealtimeManager()
+  // v0.2.8.2 optimization (Gemini Fase 4 ADR-016 + user feedback): só subscribe
+  // se user tem patient_shares ativos. User solo sem compartilhamento não tem
+  // outro device/conta pra sincronizar — subscribe seria egress sem valor.
+  const { hasShares } = useHasActiveShares()
 
   useEffect(() => {
-    // ADR-016 gate: só subscribe se manager autoriza
-    // (feature flag enabled + não pausado por visibility/idle/auth/network)
-    if (!hasSupabase || !user || !isActive) return
+    // ADR-016 gate dual:
+    //   1. Manager: feature flag enabled + não pausado por visibility/idle/auth/network
+    //   2. Active shares: user tem ≥1 patient_share (cuidador-mode real)
+    // Se qualquer gate fechado → no subscribe → zero egress
+    if (!hasSupabase || !user || !isActive || !hasShares) return
 
     let refetchTimer = null
     const tanstackTimers = new Map()
@@ -121,5 +128,5 @@ export function useRealtime() {
         supabase.removeChannel(channel).catch(() => { /* ignore */ })
       }
     }
-  }, [user, qc, isActive])
+  }, [user, qc, isActive, hasShares])
 }
