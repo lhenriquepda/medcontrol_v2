@@ -16,6 +16,9 @@ import { AuthProvider } from './hooks/useAuth.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
 import { initAnalytics } from './services/analytics'
 import { registerMutationDefaults } from './services/mutationRegistry'
+// v0.2.7.0 hardening — expõe queryClient pra módulos non-React invalidarem
+// queries (markDose Zustand → invalida TanStack ['doses'] de outras telas).
+import { setQueryClient } from './services/queryClientRef'
 import './index.css'
 
 // Aud 4.5.7 G4 — PostHog analytics. No-op se VITE_POSTHOG_KEY ausente ou modo dev.
@@ -306,6 +309,9 @@ if (Capacitor.isNativePlatform()) {
 // se app killed mid-RPC. Trade-off aceito: Fase 1 já tem authedRpc timeout 10s, hang
 // forever zerou. Fase 3 entrega exactly-once via request_id PK em mutation_log.
 registerMutationDefaults(queryClient, null)
+// v0.2.7.0 hardening — expõe queryClient pra markDose invalidar queries TanStack
+// (DoseHistory/Reports/Analytics) após patchDose Zustand.
+setQueryClient(queryClient)
 
 // Native StatusBar overlay config one-time. Style + background color são
 // sincronizados dinamicamente pelo ThemeProvider conforme theme light/dark.

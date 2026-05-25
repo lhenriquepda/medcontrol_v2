@@ -41,6 +41,7 @@ import { captureCaught } from './sentry'
 import { emitConflict } from '../state/conflictBus'
 import { emitMutationError } from '../state/mutationErrorBus'
 import { track, EVENTS } from './analytics'
+import { invalidateDoseQueries } from './queryClientRef'
 
 const MUTATION_TIMEOUT_NORMAL_MS = 10_000
 const MUTATION_TIMEOUT_COLD_MS = 30_000
@@ -181,6 +182,9 @@ export async function markDose({ doseId, action, payload = {} }) {
       _confirmedAt: Date.now(),
     })
     await queueRemove(requestId)
+    // v0.2.7.0 hardening — invalida TanStack queries de doses pra DoseHistory/
+    // Reports/Analytics/etc refletirem mudança imediato (não esperar poll 60s).
+    invalidateDoseQueries()
     trackAction(action)
     return { ok: true, dose: finalDose }
 
@@ -415,6 +419,9 @@ async function _runDrain(options = {}) {
           })
         }
         await _queueRemove(mut.requestId)
+        // v0.2.7.0 hardening — invalida TanStack queries pra DoseHistory/etc
+        // refletirem drain.
+        invalidateDoseQueries()
         drained += 1
       } catch (e) {
         if (e instanceof AuthLostError) {
