@@ -20,9 +20,34 @@
 
 ---
 
-## 🆕 Release atual — v0.2.8.1 (vc 103) · QA & Lint Corrections
+## 🆕 Release atual — v0.2.8.2 (vc 104) · RealtimeManager + Folder Boundaries + BUG-MEDINPUT
 
-**Status:** ✅ Publicado Internal Testing 2026-05-25 11:42 BRT via Vetor 4. AAB 35MB signed, SQL `app_releases` vc 103 inserido. Branch `0.2.8.1` aguarda merge master.
+**Status:** ✅ Publicado Internal Testing 2026-05-25 13:39 BRT via Vetor 4. AAB 37MB signed, SQL `app_releases` vc 104 inserido, `realtime_enabled=true` em prod (gate dual `useHasActiveShares` protege user solo). Branch `0.2.8.2` aguarda merge master.
+
+**Entregas v0.2.8.2:**
+- `[x]` **RealtimeManager (ADR-016, Gemini Fase 4)** — `src/core/realtime/manager.js` singleton com 5 salvaguardas: visibility pause/resume, idle 5min, feature flag `realtime_enabled` master switch, canal único postgres_changes, PostHog telemetria throttled
+- `[x]` **useHasActiveShares hook (user feedback)** — gate adicional só subscribe Realtime se user tem `patient_shares` ativos (zero egress pra user solo)
+- `[x]` **Folder boundaries (Gemini Fase 5)** — criado `src/core/realtime/` + ESLint `no-restricted-imports` WARN em UI (proíbe `@supabase/supabase-js`, `@capacitor/*` direto)
+- `[x]` **BUG-MEDINPUT-001** — `MedNameInput.jsx` merge metadados catalog quando nome bate com local (badges CMED/DCB renderizam pra meds em ambas fontes)
+- `[x]` **Migration `v0_2_8_2_grant_feature_flags_select`** — fix silent 403 (mesmo padrão de medications_catalog v0.2.8.1)
+- `[x]` **Migration `v0_2_8_2_publication_supabase_realtime_tables`** — adiciona doses/treatments/patients/patient_shares à publication (sem isso Realtime subscribe mas zero eventos chegam)
+
+**QA Realtime egress executado (CDP Network domain emulator-5554):**
+- `[x]` Fase A (flag OFF, user solo): **0 bytes em 90s idle** — manager bloqueou subscribe perfeitamente
+- `[x]` Fase B (flag ON, user solo sem hasShares gate): **0.78 KB em 90s = 31 KB/h** (heartbeat keepalive WS + 1 PostHog event)
+- `[x]` Comparação vs storm v0.2.1.0 (pré-RealtimeManager): **160.000× menor** (~5 GB/h → 31 KB/h)
+- `[x]` Idle 5min auto-pausou manager confirmado (`pauseReason='idle'` capturado durante o teste)
+- `[x]` Manager re-fetch da feature flag confirmado: `isActive` flipou false→true após SQL flag flip
+
+**Validação device físico pendente (manual user):**
+- `[ ]` Validar Realtime entrega real cross-device — instalar APK em 2 contas teste-plus+teste-free com paciente compartilhado, marcar dose num device, ver atualização no outro ~1.5s (gate `hasShares=true` ativado)
+- `[ ]` Validar badges CMED/DCB renderizam em nomes "Amoxicilina"/"Escitalopram" (que estão tanto em dicionário local quanto catálogo)
+
+---
+
+## 📦 Release anterior — v0.2.8.1 (vc 103) · QA & Lint Corrections
+
+**Status:** ✅ Publicado Internal Testing 2026-05-25 11:42 BRT via Vetor 4. AAB 35MB signed, SQL `app_releases` vc 103 inserido. Merged em master via `0.2.8.1`.
 
 **Fixes e atualizações v0.2.8.1:**
 - `[x]` **Vitest Config (`vitest.config.js`)**: Excluído o diretório `e2e/**` da execução padrão do Vitest, evitando erros de carregamento de sintaxe Mocha do Appium.
