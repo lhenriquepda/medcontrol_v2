@@ -56,6 +56,21 @@ const STATUS_BY_ACTION = {
   undo:    'pending',
 }
 
+// v0.2.7.0 hardening — undo retorna dose pra 'pending' no server. Se a dose
+// já passou da hora (scheduledAt < now), client recompute pra 'overdue' senão
+// fica como "pendente" no Dashboard mesmo já atrasada (UI inconsistente
+// reportada em QA real 2026-05-24 22:54).
+// Espelha a lógica de recomputeOverdueDoses (services/dashboardService.js).
+function applyOverdueRule(dose) {
+  if (!dose || dose.status !== 'pending') return dose
+  try {
+    if (new Date(dose.scheduledAt) < new Date()) {
+      return { ...dose, status: 'overdue' }
+    }
+  } catch { /* fail-safe */ }
+  return dose
+}
+
 // Erro de rede (genérico — DOMException, TypeError de fetch abortado etc).
 function isNetworkError(e) {
   if (!e) return false
@@ -104,6 +119,10 @@ export async function markDose({ doseId, action, payload = {} }) {
     optimisticPatch.actualTime = payload.actualTime || new Date().toISOString()
   } else if (action === 'undo') {
     optimisticPatch.actualTime = null
+    // v0.2.7.0 hardening — undo retorna 'pending' mas se já passou da hora,
+    // virar 'overdue' direto pra UI consistente.
+    const merged = applyOverdueRule({ ...before, ...optimisticPatch })
+    optimisticPatch.status = merged.status
   }
   patchDose(doseId, optimisticPatch)
 
@@ -132,15 +151,19 @@ export async function markDose({ doseId, action, payload = {} }) {
 
     // Sucesso real
     const serverDose = result?.dose || result
+    // v0.2.7.0 hardening — recompute overdue (server retorna 'pending' mas se
+    // já passou da hora, UI deve mostrar 'overdue'). Aplica pra todos os actions
+    // mas só tem efeito quando status final é 'pending' (undo, ou edge cases).
+    const finalDose = applyOverdueRule(serverDose)
     patchDose(doseId, {
-      ...serverDose,
+      ...finalDose,
       _optimistic: false,
       _pendingSync: false,
       _confirmedAt: Date.now(),
     })
     await queueRemove(requestId)
     trackAction(action)
-    return { ok: true, dose: serverDose }
+    return { ok: true, dose: finalDose }
 
   } catch (e) {
     if (e instanceof AuthLostError) {
