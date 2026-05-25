@@ -269,7 +269,7 @@ function trackAction(action) {
 
 import { getAll as queueGetAll, remove as _queueRemove, size as queueSize } from '../state/pendingMutationsQueue'
 
-let drainInProgress = false
+let currentDrainPromise = null
 let retryDrainTimer = null
 
 // v0.2.7.0 hardening — re-agenda drain rápido em transient errors (rede flapping,
@@ -289,9 +289,19 @@ export async function getPendingQueueSize() {
   try { return await queueSize() } catch { return 0 }
 }
 
+// v0.2.7.0 hardening — callers concorrentes await a MESMA promise em vez de
+// pular (que fazia fetchDashboard prosseguir com server stale). Bug capturado
+// QA real 2026-05-24 23:00: boot tinha drain (main.jsx fire-and-forget) +
+// fetchDashboard (Dashboard mount) em paralelo. fetchDashboard pulava drain
+// (mutex), pegava server payload ANTES da mutation drenar → setAllDoses
+// sobrescrevia patchDose feita pelo drain → UI mostrava status antigo.
 export async function drainPendingMutations() {
-  if (drainInProgress) return { drained: 0, skipped: true }
-  drainInProgress = true
+  if (currentDrainPromise) return currentDrainPromise
+  currentDrainPromise = _runDrain().finally(() => { currentDrainPromise = null })
+  return currentDrainPromise
+}
+
+async function _runDrain() {
   let drained = 0
   let failedTransient = 0
   let failedReal = 0
@@ -357,8 +367,9 @@ export async function drainPendingMutations() {
         })
       }
     }
-  } finally {
-    drainInProgress = false
+  } catch (e) {
+    // Erro de ler queue / outro fail. Log mas não propaga.
+    console.warn('[drainPendingMutations] outer catch:', e?.message)
   }
   return { drained, failedTransient, failedReal }
 }

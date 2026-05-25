@@ -354,11 +354,24 @@ async function boot() {
     }
   }
 
-  // Drena pending mutations em background (não bloqueia UI mount).
-  // Vai ser tentado de novo no useAppResume onResume (defesa em camadas).
-  import('./services/markDose').then(({ drainPendingMutations }) => {
-    drainPendingMutations().catch(e => console.warn('[boot] drain fail:', e?.message))
-  })
+  // v0.2.7.0 hardening — drena pending mutations ANTES do mount React.
+  // Antes: fire-and-forget criava race com useDashboardData.fetchDashboard.
+  // fetchDashboard pegava server stale (drain RPC ainda em flight) → setAllDoses
+  // sobrescrevia patchDose feita pelo drain → UI ficava com status antigo até
+  // user reabrir app de novo. Bug reportado QA real 2026-05-24 23:00.
+  //
+  // Trade-off: cold start +200-500ms se queue tem entries. Aceitável vs UI errada.
+  // Timeout 3s no await pra evitar boot stuck se drain travar (resume handler
+  // continua tentando depois).
+  try {
+    const { drainPendingMutations } = await import('./services/markDose')
+    await Promise.race([
+      drainPendingMutations(),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ])
+  } catch (e) {
+    console.warn('[boot] drain pre-mount fail:', e?.message)
+  }
 
   ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
