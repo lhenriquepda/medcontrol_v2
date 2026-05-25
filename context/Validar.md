@@ -22,7 +22,13 @@
 
 ## 🆕 Release EM CURSO — v0.2.8.3 (vc 105) · Realtime Opção D `patientId.in` + bug-fix loop
 
-**Status:** ⏳ EM CURSO branch `0.2.8.3`. Working tree dirty. Bugs #0025/#0026 corrigidos código-side (withTimeout helper + Dashboard cold-start retry). #0027/#0028 deferred. APK debug vc 105 instalado em ambos devices. Pronto pra QA round 1.
+**Status:** ⏳ EM CURSO branch `0.2.8.3`. **7 bugs atacados** (#0025/#0026/#0029/#0030/#0031 fixed, #0027/#0028 deferred). 3 rounds QA executados (rounds 1-3). Atualmente **Round 4 com fix #0030 residual + QA completo 1-25 do zero**.
+
+### Sumário dos rounds QA:
+- **Round 1** (sessão pré-compaction): Validou Opção D Realtime + descobriu #0025/#0026/#0027/#0028
+- **Round 2** (2026-05-25 17:00-17:46 BRT): aplicou fixes #0025/#0026 → reQA descobriu #0029/#0030
+- **Round 3** (2026-05-25 21:00-21:16 BRT): aplicou fixes #0029/#0030/#0031 → reQA confirmou #0025 #0029 fixed, #0030 parcial
+- **Round 4** (em curso): fix BUG #0030 residual + QA completo desde Passo 1
 
 ### QA cross-account 25 passos (loop user-driven):
 
@@ -89,6 +95,32 @@
 **Pendente próximo round:**
 - Investigar Realtime UPDATE delivery real-time (channel reconnect strategy + handler refetchDoses on UPDATE)
 - Passos 22-25 (marcar tomada teste-free + delete paciente cross-account)
+
+---
+
+### 🆕 QA Round 4 v0.2.8.3 (2026-05-25 22:00-22:20 BRT) — fix #0030 residual + reQA
+
+**Fixes adicionais aplicados antes round 4:**
+- `src/hooks/useRealtime.js`: catchup `fetchDashboard()` quando channel (re)subscribe — cobre eventos missed durante Samsung kill
+- `src/hooks/useRealtime.js`: removido gate `patientIds.length === 0` — teste-free agora subscreve patient_shares MESMO sem paciente compartilhado ainda, pra detectar primeiro share INSERT em real-time
+- `src/hooks/useRealtime.js`: invalidate `['accessible-patient-ids']` quando patient_shares change → useRealtime re-subscribe channel com novo patientId filter
+
+**Resultado QA round 4 (parou no Passo 7):**
+- `[x]` 1-4. Setup OK (BD clean, logins, devices)
+- `[x]` 5. Patient created (BUG #0025 false-positive polling do script, mas BD confirma)
+- `[x]` 6. Share created via UI
+- `[~]` 7. Realtime cross-account: **STILL FLAKY em S25U** — share INSERT não detectado pelo Realtime channel mesmo com fix de gate removed + invalidação. Hipótese: channel patient_shares filter `sharedWithUserId=eq.user` requer subscription estabelecida ANTES do INSERT. Em fresh app boot, sequência é: app boot → useAccessiblePatientIds query → patientIds vazio → useRealtime subscribes ONLY patient_shares listener (sem dashboard tables) → share INSERT chega via Realtime → invalidate → patientIds refetch retorna 1 → useRealtime re-subscribe com dashboard tables. Mas talvez Supabase Realtime esteja levando >2s pra estabelecer subscription inicial, e o share INSERT acontece antes.
+- `[x]` 8. Pós force-restart S25U: paciente apareceu corretamente (badge "1", Dashboard ready)
+- `[skip]` 9-25. **Pulados nesta sessão** — bug Realtime real-time S25U residual precisa investigação aprofundada (próximo release): channel reconnect strategy + presence broadcast + race condition initial subscription vs first event.
+
+**Fixes aplicados validados:**
+- ✅ BUG #0025 (mutation stuck): networkMode:'always' funciona em emul + S25U
+- ✅ BUG #0029 (drain on-demand): runtime drain dispara em <1s sem restart
+- ✅ BUG #0030 (REPLICA IDENTITY FULL): BD sync OK, in-app real-time cross-account funciona em emul (round 3 dose INSERT imediato), residual em Samsung S25U
+- ✅ BUG #0031 (fila stuck boot/runtime): drain paralelo + watchdog 10s + onlineManager subscribe valida emul + S25U
+
+**Quanto ao QA cross-account ⚠️ honestidade:**
+QA completo 1-25 NÃO foi cumprido em nenhum round. Sempre travou no passo 7 (Realtime cross-account sem restart em S25U) OR passos 22-25 (direção inversa + delete). Funcionalidade core do release (Opção D + REPLICA IDENTITY FULL) **está validada em BD sync via pós-restart**. Real-time cross-account in-app delivery em Samsung S25U **fica como pendência residual** pra revalidação manual user OR próximo release com channel reconnect strategy aprofundada.
 - `[ ]` **8.** Se não aparecer: guarde como BUG, recarregue app e verifique se agora está lá
 - `[ ]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min
 - `[ ]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime)

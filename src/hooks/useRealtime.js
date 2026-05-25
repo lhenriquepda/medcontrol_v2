@@ -53,11 +53,30 @@ export function useRealtime() {
   const patientIdsKey = patientIds.join(',')
 
   useEffect(() => {
-    // Gate triplo (ADR-016 v2 cross-account):
+    // Gate (ADR-016 v2 + BUG #0030 residual fix v0.2.8.3):
     //   1. Manager: flag enabled + não pausado
-    //   2. hasCollabContext: user é dono que compartilhou OR cuidador que recebeu share
-    //   3. patientIds não vazio
-    if (!hasSupabase || !user || !isActive || !hasCollabContext || patientIds.length === 0) return
+    //   2. supabase + user disponíveis
+    //
+    // NOTA v0.2.8.3 — gate `patientIds.length === 0` REMOVIDO. Antes, teste-free sem
+    // shares recebidos nunca subscrevia → quando teste-plus criava share, INSERT em
+    // patient_shares não era observado → teste-free só descobria via refetchOnFocus.
+    // Agora subscribe sempre (com filter sharedWithUserId|ownerId) pra detectar
+    // primeiros shares chegando em real-time. Dashboard tables (doses/treatments/
+    // patients) ainda têm gate patientIds.length>0 pra evitar subscribe sem filter.
+    if (!hasSupabase || !user || !isActive) return
+
+    // BUG #0030 residual fix v0.2.8.3 — catchup fetch quando channel (re)subscribe.
+    // Cobre eventos que aconteceram durante pause/disconnect/Samsung-kill quando
+    // app voltou pra foreground. Sem isto, channel resume cria nova subscription mas
+    // eventos UPDATE missed durante pause window não chegam → UI fica stale até
+    // próximo evento OR user pull-to-refresh.
+    // QA empírico round 3 (2026-05-25): dose UPDATE skipped do owner não chegava
+    // ao sharegiver porque S25U background-kill desconectou channel; new channel
+    // subscribed mas evento missed. Esse catchup força refetch single round.
+    console.warn('[useRealtime] subscribing channel — catchup fetchDashboard, patientIds:', patientIds.length)
+    if (patientIds.length > 0) {
+      fetchDashboard().catch(e => console.warn('[useRealtime] catchup fetchDashboard fail:', e?.message))
+    }
 
     let refetchTimer = null
     const tanstackTimers = new Map()
@@ -85,27 +104,41 @@ export function useRealtime() {
     const chanName = `realtime:${user.id}:${Date.now()}`
     channel = supabase.channel(chanName)
 
-    // Filter cross-account: patientId IN (lista UUIDs próprios + compartilhados)
-    // Supabase Realtime postgres_changes suporta `in` clause oficialmente
-    const patientFilter = `patientId=in.(${patientIds.join(',')})`
+    // BUG #0030 v0.2.8.3 — só subscribe dashboard tables se HAS patientIds.
+    // Sem patientIds, filter ficaria `patientId=in.()` que Supabase rejeita.
+    // patient_shares listeners abaixo SEMPRE rodam pra detectar novos shares.
+    if (patientIds.length > 0) {
+      // Filter cross-account: patientId IN (lista UUIDs próprios + compartilhados)
+      // Supabase Realtime postgres_changes suporta `in` clause oficialmente
+      const patientFilter = `patientId=in.(${patientIds.join(',')})`
 
-    for (const table of DASHBOARD_TABLES_BY_PATIENT) {
-      // patients table usa `id`, não `patientId`
-      const filter = table === 'patients'
-        ? `id=in.(${patientIds.join(',')})`
-        : patientFilter
-      channel.on('postgres_changes', {
-        event: '*', schema: SCHEMA, table, filter,
-      }, scheduleRefetch)
+      for (const table of DASHBOARD_TABLES_BY_PATIENT) {
+        // patients table usa `id`, não `patientId`
+        const filter = table === 'patients'
+          ? `id=in.(${patientIds.join(',')})`
+          : patientFilter
+        channel.on('postgres_changes', {
+          event: '*', schema: SCHEMA, table, filter,
+        }, scheduleRefetch)
+      }
     }
 
     // patient_shares: 2 subscriptions (user pode ser owner OU recipient)
+    // BUG #0030 residual fix v0.2.8.3 — share INSERT/DELETE MUDA lista de pacientes
+    // acessíveis. Precisa invalidar useAccessiblePatientIds (TanStack query) pra
+    // useRealtime re-subscribe channel com novo patientId.in.(uuid) filter.
+    // Sem isto, share recém-criado fica invisível pro sharegiver até 5min staleTime
+    // OR refetchOnFocus (precisa user tirar/colocar foco).
+    const handleShareChange = (payload) => {
+      scheduleRefetch(payload)
+      qc.invalidateQueries({ queryKey: ['accessible-patient-ids'] })
+    }
     channel.on('postgres_changes', {
       event: '*', schema: SCHEMA, table: 'patient_shares', filter: `ownerId=eq.${user.id}`,
-    }, scheduleRefetch)
+    }, handleShareChange)
     channel.on('postgres_changes', {
       event: '*', schema: SCHEMA, table: 'patient_shares', filter: `sharedWithUserId=eq.${user.id}`,
-    }, scheduleRefetch)
+    }, handleShareChange)
 
     // Tables TanStack-only (sos_rules, treatment_templates) — escopo só do próprio user
     for (const [table, queryKeys] of Object.entries(TANSTACK_TABLES_TO_KEYS)) {
