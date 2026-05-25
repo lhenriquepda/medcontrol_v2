@@ -379,21 +379,34 @@ if (typeof window !== 'undefined') {
 
 // v0.2.7.0 hardening — Network reconnect listener: força drain imediato quando
 // device sai de offline. Antes user precisava interagir pra disparar drain.
+//
+// BUG #0031 v0.2.8.3 — adicionado TanStack onlineManager.subscribe() em paralelo.
+// window 'online' event dispara prematuramente em Capacitor Android (logcat 2026-05-10:
+// 7ms antes do Capacitor confirmar connectivity). TanStack onlineManager.subscribe é
+// a UI fonte mais confiável (atualizada via Capacitor.Network bridge em main.jsx).
+// Camadas redundantes garantem que pelo menos UMA delas dispara drain pós-reconnect.
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    // Reset delay (rede voltou — tentativa imediata vale)
+  const triggerDrain = (source) => {
+    console.warn('[drain] trigger via', source)
     currentRetryDelayMs = RETRY_DELAY_MIN_MS
     if (retryDrainTimer) {
       clearTimeout(retryDrainTimer)
       retryDrainTimer = null
     }
-    drainPendingMutations().then((r) => {
-      // Se ainda tem fila após drain, agenda retry
+    drainPendingMutations().then(() => {
       queueSize().then((n) => {
         if (n > 0) scheduleRetryDrain()
       }).catch(() => {})
     }).catch(() => {})
-  })
+  }
+  window.addEventListener('online', () => triggerDrain('window.online'))
+  // TanStack onlineManager subscribe — mais confiável em Capacitor Android.
+  // Lazy import pra evitar dep circular se markDose carregar antes do queryClient init.
+  import('@tanstack/react-query').then(({ onlineManager }) => {
+    onlineManager.subscribe((isOnline) => {
+      if (isOnline) triggerDrain('tanstack.onlineManager')
+    })
+  }).catch(() => { /* fail-safe */ })
 }
 
 // Exporta pra Dashboard usar como indicador visual ("N doses sincronizando").
@@ -426,103 +439,146 @@ async function _runDrain(options = {}) {
   let failedReal = 0
   try {
     const pending = await queueGetAll()
+    // BUG #0031 v0.2.8.3 — log detalhado pra capture pendentes stuck no boot.
+    // Terser preserva console.warn (config v0.2.6.15). Permite reproduzir + debug
+    // logcat real quando user reporta "carregando fila no boot mesmo online".
+    console.warn('[drain] start — queue size:', pending.length, 'timeout:', rpcTimeoutMs, 'ms')
     if (pending.length === 0) return { drained: 0 }
 
-    // FIFO serial (evita conflitar entre si — mutations consecutivas mesma dose).
+    // BUG #0031 fix — drenagem PARALELA por doseId.
+    // Antes era FIFO serial: 5 entries × 30s cold-start = 150s pra UI limpar banner.
+    // Agora agrupa por doseId pra preservar ordem dentro de cada dose (Pular→Undo→Tomada),
+    // mas drena groups diferentes em paralelo via Promise.allSettled.
+    // Resultado: backlog de N doses únicas drena em ~30s (uma rodada paralela),
+    // não 30s × N. Idempotência via mutation_log PK request_id garante safety.
+    const byDose = new Map()
     for (const mut of pending) {
-      const rpcName = RPC_BY_ACTION[mut.action]
-      if (!rpcName) {
-        // Action inválida — remove pra não acumular lixo.
-        await _queueRemove(mut.requestId)
-        continue
-      }
-      try {
-        const result = await authedRpc(rpcName, {
-          p_request_id: mut.requestId,
-          p_dose_id: mut.doseId,
-          ...(mut.action === 'confirm' ? { p_actual_time: mut.payload?.actualTime || new Date().toISOString() } : {}),
-          ...(mut.payload?.observation !== undefined ? { p_observation: mut.payload.observation || '' } : {}),
-        }, { timeoutMs: rpcTimeoutMs })
+      const arr = byDose.get(mut.doseId) || []
+      arr.push(mut)
+      byDose.set(mut.doseId, arr)
+    }
+    console.warn('[drain] grouped into', byDose.size, 'unique doseIds')
 
-        if (result?.ok === false) {
-          if (result?.code === 409 && result?.current_state) {
-            patchDose(mut.doseId, {
-              ...result.current_state,
-              _optimistic: false,
-              _pendingSync: false,
-              _conflict: { from: result.from, to: result.to, at: Date.now() },
-            })
-            emitConflict({
-              mutation: mut.action,
-              doseId: mut.doseId,
-              currentState: result.current_state,
-              from: result.from,
-              to: result.to,
-            })
-          } else {
-            revertDose(mut.doseId)
-            const e = new Error(result?.error || 'rpc_error')
-            e.code = result?.code
-            emitMutationError({ mutation: rpcName, error: e, code: result?.code })
-          }
-        } else {
-          patchDose(mut.doseId, {
-            ...(result?.dose || result),
-            _optimistic: false,
-            _pendingSync: false,
-            _confirmedAt: Date.now(),
-          })
-        }
-        await _queueRemove(mut.requestId)
-        // v0.2.7.0 hardening — invalida TanStack queries pra DoseHistory/etc
-        // refletirem drain.
-        invalidateDoseQueries()
-        drained += 1
-      } catch (e) {
-        if (e instanceof AuthLostError) {
-          // Auth perdido — sessionManager signOut listener chega. Mas ALSO
-          // agenda retry: se token expirar e refresh transient falhar, próxima
-          // tentativa pode passar antes do user precisar re-logar.
-          // Bug capturado QA real 2026-05-25 00:00: AuthLost só break causava
-          // banner queue preso eternamente quando refresh travava.
-          failedTransient += 1
-          scheduleRetryDrain()
-          break
-        }
-        if (isNetworkError(e)) {
-          // Network transient — agenda retry com backoff.
-          failedTransient += 1
-          scheduleRetryDrain()
-          break
-        }
-        // Erro real (não-network, não-auth).
-        // v0.2.8.0 — decisão user #3: retry 3× antes de descartar. Cobre
-        // bugs intermitentes server-side. Antes era descart imediato 1×.
-        const newRetry = await queueIncrementRetry(mut.requestId)
-        if (newRetry >= REAL_ERROR_MAX_RETRIES) {
-          await _queueRemove(mut.requestId)
-          failedReal += 1
-          captureCaught(e, {
-            source: 'drainPendingMutations',
-            level: 'warning',
-            extra: { mut, retryCount: newRetry },
-          })
-        } else {
-          // Mantém entry, agenda retry posterior. Não break — outras entries
-          // no loop ainda tentam (talvez sejam OK).
-          failedTransient += 1
-          scheduleRetryDrain()
-          captureCaught(e, {
-            source: 'drainPendingMutations.retry',
-            level: 'info',
-            extra: { mut, retryCount: newRetry, maxRetries: REAL_ERROR_MAX_RETRIES },
-          })
-        }
+    // Cada grupo processa serial internamente (mesma dose) mas grupos rodam paralelo.
+    const groupResults = await Promise.allSettled(
+      Array.from(byDose.values()).map(group => _drainDoseGroup(group, rpcTimeoutMs))
+    )
+
+    let anyTransientFailed = false
+    for (const gr of groupResults) {
+      if (gr.status === 'fulfilled') {
+        drained += gr.value.drained
+        failedTransient += gr.value.failedTransient
+        failedReal += gr.value.failedReal
+        if (gr.value.failedTransient > 0) anyTransientFailed = true
+      } else {
+        console.warn('[drain] group rejected:', gr.reason?.message)
+        failedTransient += 1
+        anyTransientFailed = true
       }
     }
+
+    console.warn('[drain] done — drained:', drained, 'transient:', failedTransient, 'real:', failedReal)
+
+    // Se qualquer transient falhou, agenda retry com backoff (5s → 60s).
+    if (anyTransientFailed) {
+      scheduleRetryDrain()
+    }
+
+    return { drained, failedTransient, failedReal }
   } catch (e) {
-    // Erro de ler queue / outro fail. Log mas não propaga.
-    console.warn('[drainPendingMutations] outer catch:', e?.message)
+    console.warn('[drain] outer catch:', e?.message)
+    return { drained, failedTransient: failedTransient + 1, failedReal }
+  }
+}
+
+// BUG #0031 v0.2.8.3 — processa um grupo de mutations da mesma dose serial.
+// Diferentes doses rodam paralelo (chamado N vezes via Promise.allSettled em _runDrain).
+async function _drainDoseGroup(mutations, rpcTimeoutMs) {
+  let drained = 0
+  let failedTransient = 0
+  let failedReal = 0
+  for (const mut of mutations) {
+    const rpcName = RPC_BY_ACTION[mut.action]
+    if (!rpcName) {
+      // Action inválida — remove pra não acumular lixo.
+      console.warn('[drain] entry com action inválida, removendo:', mut.action, mut.requestId)
+      await _queueRemove(mut.requestId)
+      continue
+    }
+    try {
+      const result = await authedRpc(rpcName, {
+        p_request_id: mut.requestId,
+        p_dose_id: mut.doseId,
+        ...(mut.action === 'confirm' ? { p_actual_time: mut.payload?.actualTime || new Date().toISOString() } : {}),
+        ...(mut.payload?.observation !== undefined ? { p_observation: mut.payload.observation || '' } : {}),
+      }, { timeoutMs: rpcTimeoutMs })
+
+      if (result?.ok === false) {
+        if (result?.code === 409 && result?.current_state) {
+          patchDose(mut.doseId, {
+            ...result.current_state,
+            _optimistic: false,
+            _pendingSync: false,
+            _conflict: { from: result.from, to: result.to, at: Date.now() },
+          })
+          emitConflict({
+            mutation: mut.action,
+            doseId: mut.doseId,
+            currentState: result.current_state,
+            from: result.from,
+            to: result.to,
+          })
+        } else {
+          revertDose(mut.doseId)
+          const e = new Error(result?.error || 'rpc_error')
+          e.code = result?.code
+          emitMutationError({ mutation: rpcName, error: e, code: result?.code })
+        }
+      } else {
+        patchDose(mut.doseId, {
+          ...(result?.dose || result),
+          _optimistic: false,
+          _pendingSync: false,
+          _confirmedAt: Date.now(),
+        })
+      }
+      await _queueRemove(mut.requestId)
+      invalidateDoseQueries()
+      drained += 1
+    } catch (e) {
+      if (e instanceof AuthLostError) {
+        console.warn('[drain] AuthLost em', mut.doseId, '— scheduleRetryDrain')
+        failedTransient += 1
+        // BUG #0031 — não break do loop, mas SKIP demais entries desse grupo
+        // (auth global afetaria todas igual). scheduleRetryDrain global na _runDrain.
+        return { drained, failedTransient, failedReal, abortReason: 'auth' }
+      }
+      if (isNetworkError(e)) {
+        console.warn('[drain] Network/Timeout em', mut.doseId, '— skip rest of group, scheduleRetryDrain')
+        failedTransient += 1
+        return { drained, failedTransient, failedReal, abortReason: 'network' }
+      }
+      // Erro real (não-network, não-auth). Retry 3× antes de descartar.
+      const newRetry = await queueIncrementRetry(mut.requestId)
+      console.warn('[drain] real error em', mut.doseId, 'code:', e?.code, 'retry:', newRetry)
+      if (newRetry >= REAL_ERROR_MAX_RETRIES) {
+        await _queueRemove(mut.requestId)
+        failedReal += 1
+        captureCaught(e, {
+          source: 'drainPendingMutations',
+          level: 'warning',
+          extra: { mut, retryCount: newRetry },
+        })
+      } else {
+        failedTransient += 1
+        captureCaught(e, {
+          source: 'drainPendingMutations.retry',
+          level: 'info',
+          extra: { mut, retryCount: newRetry, maxRetries: REAL_ERROR_MAX_RETRIES },
+        })
+      }
+    }
   }
   return { drained, failedTransient, failedReal }
 }

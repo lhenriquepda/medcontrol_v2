@@ -412,11 +412,24 @@ async function boot() {
   //
   // QA real 2026-05-25: cold start drain timeout 10s expirava → banner queue
   // persistente até user reabrir app. timeout 30s + retry loop cobrem.
+  //
+  // BUG #0031 v0.2.8.3 — boot drain agora roda DUAS rodadas:
+  //  1ª rodada @ +0s: tenta drenar com timeout 30s (cobre cold start padrão).
+  //  2ª rodada @ +15s: força nova tentativa via setTimeout pra capturar caso
+  //  primeiro drain falhou silenciosamente (processLock zombie, TLS handshake
+  //  delayed, etc). Idempotência via mutation_log PK request_id garante safety.
+  //  Watchdog 10s no markDose também age — esses são camadas defensivas.
   try {
     const { drainPendingMutations } = await import('./services/markDose')
     drainPendingMutations({ rpcTimeoutMs: 30_000 }).catch(e =>
-      console.warn('[boot] drain fail:', e?.message)
+      console.warn('[boot] drain 1st run fail:', e?.message)
     )
+    // 2ª rodada delayed — recupera de falhas silenciosas da 1ª. Idempotência cobre.
+    setTimeout(() => {
+      drainPendingMutations({ rpcTimeoutMs: 15_000 }).catch(e =>
+        console.warn('[boot] drain 2nd run fail:', e?.message)
+      )
+    }, 15_000)
   } catch (e) {
     console.warn('[boot] drain import fail:', e?.message)
   }

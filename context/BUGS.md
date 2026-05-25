@@ -20,6 +20,18 @@ Nenhum bug P0 aberto.
 
 ## 🟠 P1 — Alta prioridade
 
+- **#0031** P1 (mesma classe #0029, mais profundo) — **Boot exibe banner "Carregando fila de envio de modificações" mesmo com internet OK; bug crônico desde v0.2.6.6.** User reportou (2026-05-25 21:25 BRT): "às vezes ao iniciar app com boot, fica carregando fila de envio mesmo estando com internet". Investigação profunda revelou múltiplos problemas combinados:
+  - **Drain serial FIFO**: backlog de N doses × 30s timeout = 30·N segundos UI stuck banner. Cold-start latência 15-25s × backlog de 5 doses = 75-125s banner.
+  - **Terser strippava `console.warn`** desde v0.2.7.0 (lista `pure_funcs` em vite.config) — diagnóstico impossível em prod, fica adivinhando root cause.
+  - **TanStack `onlineManager` reconnect não disparava drain** em Capacitor Android — apenas `window 'online'` event listener; em Capacitor, esse event dispara prematuro vs Capacitor.Network.
+  - **Boot drain rodava 1 vez fire-and-forget** — se primeira tentativa falhasse silenciosamente (processLock zombie, fetch hang antes do timeout), não havia 2ª chance até watchdog 30s rodar.
+  - Status: `FIXED v0.2.8.3 (boot drain test empirically validated 2026-05-25 21:35 BRT)`:
+    - **`_runDrain` reescrito em paralelo por doseId** — `Promise.allSettled` de grupos por doseId (mesma dose serial, doses diferentes paralelas). Idempotência via mutation_log PK garante safety.
+    - **`vite.config.js` Terser pure_funcs**: removido `console.warn` da lista → preservado em prod pra logcat capture. Logs `[drain] start/done/group/...` agora visíveis.
+    - **`markDose.js`** subscriber dual `window 'online'` + `onlineManager.subscribe` — TanStack onlineManager é fonte mais confiável em Capacitor Android.
+    - **`main.jsx` boot drain DUAS rodadas**: 1ª @ +0s timeout 30s, 2ª @ +15s timeout 15s. Idempotência cobre re-tentativa. Combinado com watchdog 10s + scheduleRetryDrain 5s backoff em markDose.js.
+    - **QA empírico** (2026-05-25 21:35 BRT): script `qa-test-boot-drain.mjs` populou queue com 2 entries → force-stop + restart → drain detectou queue size: 2 → grouped 2 unique doseIds → drained em 2.1s (parallel) → BD `status='skipped'` confirmado SQL. Total UI banner disappear: ~6s.
+
 - **#0030** P1 — **Realtime cross-account `postgres_changes` UPDATE não entrega para sharegiver.** Descoberto QA real v0.2.8.3 (2026-05-25 17:46 BRT): teste-plus marcou dose `aea9db03-5b34-4193-8ca7-f1b3984df01e` como Pular (BD `status='skipped'` confirmado SQL). teste-free S25U Dashboard continua mostrando "atrasada 2h" mesmo 8s+ pós-update. App foreground, network OK. **Hipótese:** Supabase Realtime publication só está com INSERT events, não UPDATE — OU `REPLICA IDENTITY DEFAULT` apenas envia primary key na payload e o filter `patientId.in.(uuid)` não pode aplicar sem patientId no payload. **Plano fix:** rodar `ALTER TABLE medcontrol.doses REPLICA IDENTITY FULL` em migration → garante UPDATE entrega payload completo incluindo patientId pra filter funcionar. Bug crítico pra UX cuidador — sharegiver não vê mudanças real-time. Status: `PARTIAL FIX v0.2.8.3`:
   - **Migration aplicada** `v0_2_8_3_replica_identity_full_realtime` — ALTER TABLE doses/treatments/patients/patient_shares REPLICA IDENTITY FULL. Verificado via pg_class: `relreplident='f'` confirmado.
   - **Pub config OK** — publication supabase_realtime tem `pubupdate=true` pra todas 4 tabelas.
