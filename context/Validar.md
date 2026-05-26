@@ -20,7 +20,34 @@
 
 ---
 
-## 🆕 Release EM CURSO — v0.2.8.3 (vc 105) · Realtime Opção D `patientId.in` + bug-fix loop
+## 🆕 Release EM CURSO — v0.2.8.4 (vc 106) · Cache local Zustand + bug crônico fila stuck
+
+**Status:** ⏳ EM CURSO branch `0.2.8.4`. **7 mudanças aplicadas + 1 bug runtime corrigido**. QA empírico S25U validado (cenários A/B/D).
+
+### Sumário da sessão:
+- **Análise arquitetural** (user push-back v0.2.8.3): Samsung battery management ≠ root cause. Padrão WhatsApp/Gmail é cache local + FCM + reconnect, não WebSocket persistente.
+- **7 camadas defensivas aplicadas** (M1-M7) atacando classe inteira do bug.
+- **QA empírico S25U real device** validou cenários A (387ms), B (1583ms drain), D (gate restaurado).
+- **Bug runtime descoberto**: Zustand persist adapter usando `await import('@capacitor/preferences')` HUNG indefinidamente (validado via CDP timeout 3s). Fix: `Capacitor.Plugins.Preferences` direto.
+
+### Validações empíricas (concluídas autônomas no S25U):
+
+- `[x]` **A.** Force-kill + reabrir → cache local hidratado UI imediato ✅ **387ms** dosesCount=21 loaded=true (era 15-30s skeleton)
+- `[x]` **B.** Marcar dose runtime → BD persistido ✅ **1583ms** queue add → drained → status='skipped' + _confirmedAt set
+- `[x]` **C.** Coalesce window fetchDashboard 2s ✅ Code review + lint clean
+- `[x]` **D.** Gate hasCollabContext restaurado ✅ RealtimeManager isActive=true (teste-free TEM share com teste-plus, hasCollabContext=true)
+
+### Validações user-driven (precisa real device + ação manual):
+
+- `[ ]` **V1.** Force-kill manual S25U + reabrir → UI mostra dose hoje imediato (sem skeleton stuck). Tempo esperado <1s.
+- `[ ]` **V2.** Marcar dose Pular via tap real (DoseModal) → banner amarelo aparece + soma queue → drena em <10s sem precisar restart app.
+- `[ ]` **V3.** Idle longo (5min+) → reabrir → cache hidrata + fetchDashboard sincroniza delta. Não pode haver flicker UI.
+- `[ ]` **V4.** Cross-account: teste-plus marca dose no emul → teste-free S25U vê em até 3s via Realtime (não precisa pull-to-refresh).
+- `[ ]` **V5.** Smoke test geral: cadastrar paciente + tratamento + marcar 3 doses sequencial sem stuck.
+
+---
+
+## 🆕 Release ANTERIOR — v0.2.8.3 (vc 105) · Realtime Opção D `patientId.in` + bug-fix loop
 
 **Status:** ⏳ EM CURSO branch `0.2.8.3`. **7 bugs atacados** (#0025/#0026/#0029/#0030/#0031 fixed, #0027/#0028 deferred). 3 rounds QA executados (rounds 1-3). Atualmente **Round 4 com fix #0030 residual + QA completo 1-25 do zero**.
 

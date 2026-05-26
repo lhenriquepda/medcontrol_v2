@@ -20,7 +20,22 @@ Nenhum bug P0 aberto.
 
 ## 🟠 P1 — Alta prioridade
 
-- **#0031** P1 (mesma classe #0029, mais profundo) — **Boot exibe banner "Carregando fila de envio de modificações" mesmo com internet OK; bug crônico desde v0.2.6.6.** User reportou (2026-05-25 21:25 BRT): "às vezes ao iniciar app com boot, fica carregando fila de envio mesmo estando com internet". Investigação profunda revelou múltiplos problemas combinados:
+- **#0031** ✅ FIXED v0.2.8.4 (raiz atacada) — **Boot exibe banner "Carregando fila de envio de modificações" mesmo com internet OK; bug crônico desde v0.2.6.6.**
+
+  **Fix v0.2.8.4 (camada arquitetural, padrão WhatsApp/Gmail):**
+  - **Zustand persist (M1)** — patient/treatment/doseStore agora usam `zustand/middleware persist` + Capacitor Preferences. Boot hydrate cache → UI imediato (387ms validado S25U, era 15-30s skeleton).
+  - **fetchDashboard coalesce 2s (M2)** — cascade resume 5 calls → 1 RPC.
+  - **Drain batch chunks 3 (M3)** — backlog grande não estoura connection pool.
+  - **Realtime debounce 3s unified (M4)** — burst cross-account → 1 fetchDashboard.
+  - **refetchOnWindowFocus false global (M5)** — apenas useDoses/useAccessiblePatientIds override.
+  - **Mutex zombie killer 60s (M7)** — drain stuck zombie auto-clear.
+  - **Bug runtime durante QA:** `await import('@capacitor/preferences')` HUNG no persist adapter (CDP timeout 3s revelou). Fix: `Capacitor.Plugins.Preferences` direto.
+
+  QA empírico S25U: Cenário A (force-kill + reabrir) **387ms** UI hidratada · Cenário B (marcar dose runtime) **1583ms** queue→drained→_confirmedAt.
+
+  [Histórico v0.2.8.3 abaixo:]
+
+- **#0031-original** P1 (mesma classe #0029, mais profundo) — **Boot exibe banner "Carregando fila de envio de modificações" mesmo com internet OK; bug crônico desde v0.2.6.6.** User reportou (2026-05-25 21:25 BRT): "às vezes ao iniciar app com boot, fica carregando fila de envio mesmo estando com internet". Investigação profunda revelou múltiplos problemas combinados:
   - **Drain serial FIFO**: backlog de N doses × 30s timeout = 30·N segundos UI stuck banner. Cold-start latência 15-25s × backlog de 5 doses = 75-125s banner.
   - **Terser strippava `console.warn`** desde v0.2.7.0 (lista `pure_funcs` em vite.config) — diagnóstico impossível em prod, fica adivinhando root cause.
   - **TanStack `onlineManager` reconnect não disparava drain** em Capacitor Android — apenas `window 'online'` event listener; em Capacitor, esse event dispara prematuro vs Capacitor.Network.
@@ -33,7 +48,7 @@ Nenhum bug P0 aberto.
     - **QA empírico boot drain** (2026-05-25 21:35 BRT): script `qa-test-boot-drain.mjs` populou queue com 2 entries → force-stop + restart → drain detectou queue size: 2 → grouped 2 unique doseIds → drained em 2.1s (parallel) → BD `status='skipped'` confirmado SQL. Total UI banner disappear: ~6s.
     - **QA empírico RUNTIME drain (validação REAL do bug user)** (2026-05-25 21:48 BRT): user clarificou que bug real é "mods ficam stuck mesmo com app aberto + internet OK, só drenam após restart". Script `qa-runtime-drain.mjs` populou queue com 2 entries SEM restart → drain auto-disparou em **t+452ms** (340ms após populate) → drained em **1.1s** → watchdog 10s pegou residual de 1 entry race → queue final = 0 em **30s total**. BD final: ambas doses status='skipped'. App permaneceu aberto durante todo teste. **Bug user "fila stuck com app aberto e internet OK" CONFIRMADAMENTE RESOLVIDO** — drain runtime funciona via watchdog 10s + onlineManager.subscribe + scheduleRetryDrain combinados.
 
-- **#0030** P1 — **Realtime cross-account `postgres_changes` UPDATE não entrega para sharegiver.** Descoberto QA real v0.2.8.3 (2026-05-25 17:46 BRT): teste-plus marcou dose `aea9db03-5b34-4193-8ca7-f1b3984df01e` como Pular (BD `status='skipped'` confirmado SQL). teste-free S25U Dashboard continua mostrando "atrasada 2h" mesmo 8s+ pós-update. App foreground, network OK. **Hipótese:** Supabase Realtime publication só está com INSERT events, não UPDATE — OU `REPLICA IDENTITY DEFAULT` apenas envia primary key na payload e o filter `patientId.in.(uuid)` não pode aplicar sem patientId no payload. **Plano fix:** rodar `ALTER TABLE medcontrol.doses REPLICA IDENTITY FULL` em migration → garante UPDATE entrega payload completo incluindo patientId pra filter funcionar. Bug crítico pra UX cuidador — sharegiver não vê mudanças real-time. Status: `PARTIAL FIX v0.2.8.3`:
+- **#0030** P1 — **Realtime cross-account `postgres_changes` UPDATE não entrega para sharegiver.** Status atualizado v0.2.8.4: hardening complementar (gate `hasCollabContext` restaurado em useRealtime — regressão round 4 v0.2.8.3 — user solo sem shares: zero subscribe; debounce 1500→3000ms trailing-only unified pra reduzir storm cascade). QA real cross-account in-app delivery em Samsung S25U a ser revalidado em release subsequente. **Histórico v0.2.8.3:** Descoberto QA real v0.2.8.3 (2026-05-25 17:46 BRT): teste-plus marcou dose `aea9db03-5b34-4193-8ca7-f1b3984df01e` como Pular (BD `status='skipped'` confirmado SQL). teste-free S25U Dashboard continua mostrando "atrasada 2h" mesmo 8s+ pós-update. App foreground, network OK. **Hipótese:** Supabase Realtime publication só está com INSERT events, não UPDATE — OU `REPLICA IDENTITY DEFAULT` apenas envia primary key na payload e o filter `patientId.in.(uuid)` não pode aplicar sem patientId no payload. **Plano fix:** rodar `ALTER TABLE medcontrol.doses REPLICA IDENTITY FULL` em migration → garante UPDATE entrega payload completo incluindo patientId pra filter funcionar. Bug crítico pra UX cuidador — sharegiver não vê mudanças real-time. Status: `PARTIAL FIX v0.2.8.3`:
   - **Migration aplicada** `v0_2_8_3_replica_identity_full_realtime` — ALTER TABLE doses/treatments/patients/patient_shares REPLICA IDENTITY FULL. Verificado via pg_class: `relreplident='f'` confirmado.
   - **Pub config OK** — publication supabase_realtime tem `pubupdate=true` pra todas 4 tabelas.
   - **QA round 3 resultado**: BD sync correto (dose UPDATE status='skipped' chega ao S25U **pós force-restart**, com label "pulada" correto). Mas Realtime delivery in-app real-time (sem restart) **ainda intermitente** — S25U Samsung agressive kill desconecta channel; reconnect strategy/refetchDoses on UPDATE handler precisa ser revisitado. Residual investigation pendente.
