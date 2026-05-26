@@ -463,6 +463,22 @@ async function boot() {
     console.warn('[boot] drain import fail:', e?.message)
   }
 
+  // v0.2.8.5 BUG-FIX 401 — aguarda JWT válido ANTES de mount React.
+  // Race observada (S25U boot pós-idle/cold-start): React mounta → useQuery
+  // dispara queries (usePatients/useTreatments/useAccessiblePatientIds) com
+  // JWT velho lido do SecureStorage → 401 → supabase-js auto-refresh em
+  // background (~500ms-2s) → próximas requests OK, mas as primeiras já
+  // falharam (noise console + sensação "buga no boot").
+  // getValidSession() lê session local + refresh proativo se expira em <30s.
+  // Timeout interno 8s. Fail soft: sem sessão → mount segue → login screen.
+  try {
+    const { getValidSession } = await import('./services/sessionManager')
+    await getValidSession()
+  } catch (e) {
+    // Sem sessão / Supabase off / refresh failed — segue mount; login screen renderiza.
+    console.warn('[boot] pre-mount session check:', e?.message)
+  }
+
   // ADR-016 RealtimeManager (Gemini Fase 4 v0.2.8.2) — init salvaguardas globalmente.
   // Setup listeners visibilitychange + pointerdown/keydown/touchstart pra idle 5min +
   // poll feature flag `realtime_enabled` (default false). useRealtime() consulta
