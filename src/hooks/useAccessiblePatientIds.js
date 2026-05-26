@@ -69,11 +69,19 @@ export function useAccessiblePatientIds() {
 
       // 3. Conta shares enviados (user é OWNER que compartilhou com outros)
       // pra decidir se Realtime tem valor mesmo quando user solo nas tabelas dele
+      //
+      // v0.2.8.5 BUG-FIX 400: PostgREST .or() parser usa `.` como separador
+      // entre coluna.operador.valor. Quando o valor contém `:` (ISO 8601
+      // `T03:39:35.384Z`), o parser quebra → "Bad Request 400". Solução:
+      // envolver o valor entre aspas duplas — PostgREST aceita quoted values
+      // com chars especiais. Bug observado em boot + idle longo (queries
+      // fresh, sem cache) → outboundSharedCount=0 → hasCollabContext=false
+      // → Realtime desabilitado pra user com APENAS shares enviados.
       const { count: outboundCount, error: errOut } = await supabase
         .from('patient_shares')
         .select('id', { count: 'exact', head: true })
         .eq('ownerId', user.id)
-        .or(`expiresAt.is.null,expiresAt.gt.${nowIso}`)
+        .or(`expiresAt.is.null,expiresAt.gt."${nowIso}"`)
       const outboundSharedCount = errOut ? 0 : (outboundCount || 0)
 
       return { ownIds, sharedIds, outboundSharedCount }

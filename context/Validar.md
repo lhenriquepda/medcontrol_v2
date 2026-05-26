@@ -20,7 +20,18 @@
 
 ---
 
-## 🆕 Release EM CURSO — v0.2.8.4 (vc 106) · Cache local Zustand + bug crônico fila stuck
+## 🆕 Release EM CURSO — v0.2.8.5 (vc 107) · Hotfix 400/401 boot
+
+**Status:** ⏳ EM CURSO branch `0.2.8.5`. **2 bugs corrigidos** (#0032 P1 — 400 `.or()` ISO, #0033 P2 — 401 noise boot). Build + lint OK. Upload Play Console concluído 26 mai 08:32.
+
+### Validações user-driven (precisa device físico):
+
+- `[ ]` **V6.** Force-kill S25U + reabrir → console DevTools sem 400/401 (compare com baseline v0.2.8.4 que tinha 5× 401 + 5× 400)
+- `[ ]` **V7.** User com SHARE ENVIADO mas SEM recebido (teste-plus em outra conta) → Realtime ATIVO (não pula `hasCollabContext=false` errado)
+
+---
+
+## 🆕 Release ANTERIOR — v0.2.8.4 (vc 106) · Cache local Zustand + bug crônico fila stuck
 
 **Status:** ⏳ EM CURSO branch `0.2.8.4`. **7 mudanças aplicadas + 1 bug runtime corrigido**. QA empírico S25U validado (cenários A/B/D).
 
