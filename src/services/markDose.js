@@ -313,7 +313,17 @@ import { getAll as queueGetAll, remove as _queueRemove, size as queueSize, incre
 const REAL_ERROR_MAX_RETRIES = 3
 
 let currentDrainPromise = null
+let currentDrainStartedAt = 0
 let retryDrainTimer = null
+
+// v0.2.8.4 BUG #0031 — zombie mutex killer.
+// Se `_runDrain` hang (fetch sem timeout, exception perdida, race condition entre
+// abort e cleanup), `currentDrainPromise` fica set forever → todas chamadas
+// subsequentes retornam essa promise zombie → drain fila NUNCA acontece de novo.
+// Cenário observado: BUG #0029 v0.2.8.3, queue stuck 2+min mesmo com app aberto +
+// internet OK, porque drain "estava em progresso" mas inerte.
+// Threshold 60s é generoso (cold-start cobre 30s + retry 15s + margem 15s).
+const MUTEX_ZOMBIE_TIMEOUT_MS = 60_000
 
 // v0.2.7.0 hardening — retry persistente com backoff exponencial.
 // Enquanto queue > 0 e há transient errors, agenda nova tentativa.
@@ -427,8 +437,19 @@ export async function getPendingQueueSize() {
  *   heartbeat usa default 10s.
  */
 export async function drainPendingMutations(options = {}) {
+  // v0.2.8.4 BUG #0031 — zombie mutex killer. Se drain rodando há >60s, força clear
+  // (assumido travado por bug invisível) + permite nova tentativa.
+  if (currentDrainPromise && (Date.now() - currentDrainStartedAt) > MUTEX_ZOMBIE_TIMEOUT_MS) {
+    console.warn('[drain] zombie mutex detected (>', MUTEX_ZOMBIE_TIMEOUT_MS, 'ms), force-clearing')
+    currentDrainPromise = null
+    currentDrainStartedAt = 0
+  }
   if (currentDrainPromise) return currentDrainPromise
-  currentDrainPromise = _runDrain(options).finally(() => { currentDrainPromise = null })
+  currentDrainStartedAt = Date.now()
+  currentDrainPromise = _runDrain(options).finally(() => {
+    currentDrainPromise = null
+    currentDrainStartedAt = 0
+  })
   return currentDrainPromise
 }
 
@@ -445,12 +466,19 @@ async function _runDrain(options = {}) {
     console.warn('[drain] start — queue size:', pending.length, 'timeout:', rpcTimeoutMs, 'ms')
     if (pending.length === 0) return { drained: 0 }
 
-    // BUG #0031 fix — drenagem PARALELA por doseId.
+    // BUG #0031 fix — drenagem PARALELA por doseId, em chunks de 3.
     // Antes era FIFO serial: 5 entries × 30s cold-start = 150s pra UI limpar banner.
     // Agora agrupa por doseId pra preservar ordem dentro de cada dose (Pular→Undo→Tomada),
     // mas drena groups diferentes em paralelo via Promise.allSettled.
-    // Resultado: backlog de N doses únicas drena em ~30s (uma rodada paralela),
-    // não 30s × N. Idempotência via mutation_log PK request_id garante safety.
+    //
+    // v0.2.8.4 (BUG #0031 hardening): processa em CHUNKS de 3 doses.
+    //   - Backlog típico (1-5 doses): drena em 1-2 rodadas (~2-4s).
+    //   - Backlog extremo (50+ doses, user offline dias): chunk evita rajada de 50 RPCs
+    //     simultâneos que estouraria connection pool Supabase Pooler / timeout server.
+    //   - Mantém idempotência via mutation_log PK request_id (safe retry).
+    //
+    // Trade-off: 100 doses → 34 rodadas × ~1s = ~34s total (vs paralelo all-at-once que
+    // poderia falhar). Aceitável: rajada extrema é rara, conservar BD/network é crítico.
     const byDose = new Map()
     for (const mut of pending) {
       const arr = byDose.get(mut.doseId) || []
@@ -459,22 +487,32 @@ async function _runDrain(options = {}) {
     }
     console.warn('[drain] grouped into', byDose.size, 'unique doseIds')
 
-    // Cada grupo processa serial internamente (mesma dose) mas grupos rodam paralelo.
-    const groupResults = await Promise.allSettled(
-      Array.from(byDose.values()).map(group => _drainDoseGroup(group, rpcTimeoutMs))
-    )
-
+    const groups = Array.from(byDose.values())
+    const CHUNK_SIZE = 3
     let anyTransientFailed = false
-    for (const gr of groupResults) {
-      if (gr.status === 'fulfilled') {
-        drained += gr.value.drained
-        failedTransient += gr.value.failedTransient
-        failedReal += gr.value.failedReal
-        if (gr.value.failedTransient > 0) anyTransientFailed = true
-      } else {
-        console.warn('[drain] group rejected:', gr.reason?.message)
-        failedTransient += 1
-        anyTransientFailed = true
+
+    for (let i = 0; i < groups.length; i += CHUNK_SIZE) {
+      const chunk = groups.slice(i, i + CHUNK_SIZE)
+      const chunkResults = await Promise.allSettled(
+        chunk.map((group) => _drainDoseGroup(group, rpcTimeoutMs))
+      )
+      for (const gr of chunkResults) {
+        if (gr.status === 'fulfilled') {
+          drained += gr.value.drained
+          failedTransient += gr.value.failedTransient
+          failedReal += gr.value.failedReal
+          if (gr.value.failedTransient > 0) anyTransientFailed = true
+        } else {
+          console.warn('[drain] group rejected:', gr.reason?.message)
+          failedTransient += 1
+          anyTransientFailed = true
+        }
+      }
+      // Early-exit se transient fail (network/auth) — backoff via scheduleRetryDrain
+      // recupera depois. Não vale insistir em chunks seguintes na mesma rodada.
+      if (anyTransientFailed) {
+        console.warn('[drain] transient fail detected, abort remaining chunks (will retry)')
+        break
       }
     }
 

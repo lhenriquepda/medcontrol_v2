@@ -33,7 +33,14 @@ import { useAccessiblePatientIds } from './useAccessiblePatientIds'
  * Re-subscribe automático quando patientIds muda (novo share criado/revogado) via dep array.
  */
 const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
-const REFETCH_DEBOUNCE_MS = 1500
+// v0.2.8.4 BUG #0031 — debounce aumentado 1500→3000ms (trailing-only unified).
+// scheduleRefetch é UM timer compartilhado entre TODOS listeners dashboard
+// (doses/treatments/patients/patient_shares × 2). N eventos burst → 1 fetchDashboard.
+// Alinhamento com fetchDashboard coalesce window 2s (M2): 3s debounce + 2s coalesce
+// garante que rajadas Realtime cross-account (cuidador marca 5 doses simultâneas)
+// disparem APENAS 1 RPC get_dashboard_payload total — ~80% redução egress.
+// Trade-off: 3s delay percebido entre evento server e UI atualizar (vs 1.5s antes).
+const REFETCH_DEBOUNCE_MS = 3000
 
 // Tables que afetam dashboard — filtrar por patientId (cross-account)
 const DASHBOARD_TABLES_BY_PATIENT = ['doses', 'treatments', 'patients']
@@ -53,17 +60,24 @@ export function useRealtime() {
   const patientIdsKey = patientIds.join(',')
 
   useEffect(() => {
-    // Gate (ADR-016 v2 + BUG #0030 residual fix v0.2.8.3):
+    // Gate (ADR-016 v2 + BUG #0030 residual fix v0.2.8.3 + BUG #0031 v0.2.8.4):
     //   1. Manager: flag enabled + não pausado
     //   2. supabase + user disponíveis
+    //   3. hasCollabContext: user enviou OU recebeu ≥1 share (v0.2.8.4 restaurado)
     //
-    // NOTA v0.2.8.3 — gate `patientIds.length === 0` REMOVIDO. Antes, teste-free sem
-    // shares recebidos nunca subscrevia → quando teste-plus criava share, INSERT em
-    // patient_shares não era observado → teste-free só descobria via refetchOnFocus.
-    // Agora subscribe sempre (com filter sharedWithUserId|ownerId) pra detectar
-    // primeiros shares chegando em real-time. Dashboard tables (doses/treatments/
-    // patients) ainda têm gate patientIds.length>0 pra evitar subscribe sem filter.
-    if (!hasSupabase || !user || !isActive) return
+    // NOTA v0.2.8.4 — gate `hasCollabContext` RESTAURADO após regressão round 4 v0.2.8.3.
+    // Round 4 removeu o gate pra detectar "primeiro share chegando" em real-time
+    // pro user solo. Custo: TODO user logado (mesmo solo) subscribe channel WebSocket
+    // com 4 listeners fixos (patient_shares×2 + sos_rules + treatment_templates) =
+    // egress contínuo desnecessário pra base solo (~80% dos users).
+    // Solução alternativa pra "primeiro share chegando": useAccessiblePatientIds tem
+    // refetchOnReconnect + refetchOnWindowFocus (own staleTime 5min) — sharegiver
+    // descobre share via pull-to-refresh OR navegar Compartilhar. Trade-off aceito.
+    //
+    // patientIds gate (>0) AINDA gateia dashboard tables: filter `patientId=in.()` vazio
+    // causa erro Supabase. Mas patient_shares listeners SEMPRE rodam quando hasCollabContext
+    // (cuida revogação de share, adicionar novo paciente compartilhado, etc).
+    if (!hasSupabase || !user || !isActive || !hasCollabContext) return
 
     // BUG #0030 residual fix v0.2.8.3 — catchup fetch quando channel (re)subscribe.
     // Cobre eventos que aconteceram durante pause/disconnect/Samsung-kill quando

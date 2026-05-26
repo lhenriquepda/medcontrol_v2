@@ -6,6 +6,12 @@ import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
 import { setSyncCredentials, clearSyncCredentials, syncUserPrefs } from '../services/criticalAlarm'
 import { logAuthEvent } from '../services/authTelemetry'
+// v0.2.8.4 BUG #0031 fix — caches Zustand persistidos (Capacitor Preferences)
+// precisam ser limpos em signOut pra evitar vazamento cross-account.
+import { resetDoseStore } from '../state/doseStore'
+import { resetPatientStore } from '../state/patientStore'
+import { resetTreatmentStore } from '../state/treatmentStore'
+import { clearAllZustandCaches } from '../state/persistStorage'
 
 const isNative = Capacitor.isNativePlatform()
 // Deep link Capacitor (manifest dosy:// already configured) OR https web origin
@@ -579,6 +585,13 @@ export function AuthProvider({ children }) {
     // Limpa cache de queries pra evitar stale data (ex: tier=plus persistir
     // após logout, mantendo banner ad na tela de Login)
     qc.clear()
+    // v0.2.8.4 BUG #0031 fix — limpa stores Zustand em memória + Preferences
+    // persistidas (doses/patients/treatments). Evita próximo user ver dados
+    // do user anterior no boot via cache hidratado.
+    try { resetDoseStore() } catch { /* ignore */ }
+    try { resetPatientStore() } catch { /* ignore */ }
+    try { resetTreatmentStore() } catch { /* ignore */ }
+    try { await clearAllZustandCaches() } catch { /* fail-safe */ }
   }
 
   return (

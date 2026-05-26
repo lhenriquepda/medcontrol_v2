@@ -32,7 +32,11 @@ export function useDoses(filter = {}, options = {}) {
     refetchInterval: options.pollIntervalMs || false,
     refetchIntervalInBackground: false,
     staleTime: 2 * 60_000,
-    refetchOnMount: true
+    refetchOnMount: true,
+    // v0.2.8.4 BUG #0031 — override global default (false → true). DoseHistory/
+    // Reports/Analytics precisam atualizar quando user volta foco (ex: cuidador
+    // marcou dose em outro dispositivo enquanto sharegiver estava em outro app).
+    refetchOnWindowFocus: true,
   })
 }
 

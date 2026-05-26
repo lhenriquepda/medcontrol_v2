@@ -56,11 +56,32 @@ function applyDefaultRange(from, to) {
 // simultâneo). Promise compartilhada — segundo caller espera primeiro resolver.
 let inFlightPromise = null
 
+// v0.2.8.4 BUG #0031 fix — coalesce window pós-resolve. Cascade resume típica
+// dispara 4-5 fetchDashboard quase-simultâneos:
+//   1. useAppResume onResume → fetchDashboard
+//   2. onlineManager bridge re-flip → triggerDrain → drain → fetchDashboard
+//   3. Realtime channel re-subscribe (useRealtime catchup) → fetchDashboard
+//   4. visibilitychange → focus → onResume #2 → fetchDashboard
+//   5. accessible-patient-ids invalidate → re-fetch dependencies
+// Sem coalesce, cada call faz get_dashboard_payload separado = 5× egress + 5× RPC.
+// Window 2s pós-resolve serve mesmo resultado pros callers cascateados — apenas
+// 1 RPC real disparado. Após window expira, próxima call faz fetch fresco normal.
+const COALESCE_WINDOW_MS = 2_000
+let lastResolvedAt = 0
+let lastResult = null
+
 export async function fetchDashboard({ from, to, daysAhead = 5 } = {}) {
   // Reutiliza fetch em curso se mesmo range (raro variação no Dashboard).
   if (inFlightPromise) return inFlightPromise
 
+  // Coalesce window — re-serve último result se dentro 2s pós-resolve.
+  // Evita storm cascade quando app retoma e múltiplos triggers disparam fetch.
+  if (lastResult && (Date.now() - lastResolvedAt) < COALESCE_WINDOW_MS) {
+    return lastResult
+  }
+
   inFlightPromise = doFetch({ from, to, daysAhead })
+    .then((r) => { lastResult = r; lastResolvedAt = Date.now(); return r })
     .finally(() => { inFlightPromise = null })
 
   return inFlightPromise
@@ -159,7 +180,11 @@ function enrichDoses(doses, patients) {
 }
 
 // Helper pra forçar refetch sem caching cooperativo (pull-to-refresh, etc).
+// v0.2.8.4 — também invalida coalesce window (lastResolvedAt/lastResult) pra
+// garantir fetch real (pull-to-refresh deve sempre bater no server).
 export async function forceRefetchDashboard(options = {}) {
-  inFlightPromise = null  // invalida dedup
+  inFlightPromise = null  // invalida dedup in-flight
+  lastResolvedAt = 0      // invalida coalesce window
+  lastResult = null
   return fetchDashboard(options)
 }

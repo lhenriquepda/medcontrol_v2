@@ -226,8 +226,16 @@ if (SENTRY_DSN && import.meta.env.PROD) {
 // Item #075 (release v0.1.7.0) — config menos agressiva pra mitigar lentidão geral.
 // Antes: staleTime: 0 + refetchOnMount: 'always' fazia toda nav refetchar todas queries.
 // Agora: staleTime 30s + refetchOnMount: true (só se stale) — refetch só quando necessário.
-// refetchOnWindowFocus mantido (útil pós-idle curto sem reload).
-// Hooks individuais (ex.: useDoses) podem override se precisarem janela menor/maior.
+//
+// v0.2.8.4 BUG #0031 — refetchOnWindowFocus GLOBAL desabilitado.
+// Antes: toda query refetchava ao volta foco → storm cascade quando user troca apps
+// (visibilitychange + focus + appStateChange disparam ~simultâneos). 10-15 queries
+// refetch paralelo + fetchDashboard + drain + Realtime catchup = pico egress.
+// Agora: hooks que precisam refetch on focus override individualmente:
+//   - useDoses (DoseHistory/Reports/Analytics) — refetchOnWindowFocus: true
+//   - useAccessiblePatientIds — refetchOnWindowFocus: true (detectar share novo)
+//   - Demais queries (templates, sos_rules, profile) ficam stale 30s — OK,
+//     useAppResume.refetchQueries({type:'active'}) cobre quando volta foco.
 //
 // Item #204 (release v0.2.1.7) — networkMode: 'offlineFirst' nos defaults.
 //   queries.networkMode='offlineFirst' → serve cache mesmo offline (já era comportamento
@@ -241,7 +249,7 @@ const queryClient = new QueryClient({
       networkMode: 'offlineFirst',
       staleTime: 30_000,
       refetchOnMount: true,
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,  // v0.2.8.4 — hooks override quando UI imediato precisar
       refetchOnReconnect: true,
       retry: 1,
       gcTime: 1000 * 60 * 60 * 24 // 24h — survives offline reconnect
@@ -400,6 +408,27 @@ async function boot() {
     } catch (e) {
       console.warn('[onlineManager] pre-mount fail:', e?.message)
     }
+  }
+
+  // v0.2.8.4 — expõe stores Zustand globalmente APENAS em debug builds (.dev variant).
+  // QA via CDP pode inspecionar/forçar setAll pra validar BUG #0031 fix.
+  // Production .release não expõe — evita superfície de manipulation.
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { App: CapAppInfo } = await import('@capacitor/app')
+      const info = await CapAppInfo.getInfo().catch(() => null)
+      if (info?.id?.endsWith('.dev')) {
+        const { useDoseStore } = await import('./state/doseStore')
+        const { usePatientStore } = await import('./state/patientStore')
+        const { useTreatmentStore } = await import('./state/treatmentStore')
+        if (typeof window !== 'undefined') {
+          window.__doseStore = useDoseStore
+          window.__patientStore = usePatientStore
+          window.__treatmentStore = useTreatmentStore
+          console.warn('[boot] Zustand stores exposed (dev build)')
+        }
+      }
+    } catch { /* ignore */ }
   }
 
   // v0.2.7.0 hardening — drena pending mutations ANTES do mount React.
