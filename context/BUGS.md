@@ -20,6 +20,10 @@ Nenhum bug P0 aberto.
 
 ## 🟠 P1 — Alta prioridade
 
+- **#0032** ✅ FIXED v0.2.8.5 — **Query `useAccessiblePatientIds` `.or()` com timestamp ISO retorna 400 silencioso.** Sentry capturou repetidos `400 Bad Request` em `/rest/v1/patient_shares?...or=(expiresAt.is.null,expiresAt.gt.2026-05-26T03:39:35.384Z)`. Apenas em boot/idle longo (staleTime 5min cobre demais nav). Resultado: `outboundSharedCount=0` silencioso → `hasCollabContext=false` → useRealtime gate fecha → **Realtime desliga errado** pra user com APENAS shares enviados. Root cause: PostgREST parser de `.or()` usa `.` como separador entre `coluna.operador.valor`. Timestamps ISO 8601 contêm `:` (T03:39:35.384Z) que confunde o parser. Fix: envolver valor com aspas duplas `gt."${nowIso}"` (PostgREST aceita quoted values com chars especiais). **Arquivo:** `src/hooks/useAccessiblePatientIds.js:76`.
+
+- **#0033** ✅ FIXED v0.2.8.5 — **Noise console 401 no boot/idle longo.** 5× `401 Unauthorized` em queries `usePatients`/`useTreatments`/`useAccessiblePatientIds` no cold-start pós-idle longo. Race: React mounta → useQuery dispara com JWT velho lido do SecureStorage → bate Supabase → 401 → supabase-js auto-refresh em background (~500ms-2s) → próximas requests OK, mas as primeiras já falharam. Não bloqueia funcionalidade mas polui Sentry quota + console. Fix: `await getValidSession()` em `main.jsx` `boot()` ANTES de `ReactDOM.createRoot()`. Cold-start +200-500ms (aceitável).
+
 - **#0031** ✅ FIXED v0.2.8.4 (raiz atacada) — **Boot exibe banner "Carregando fila de envio de modificações" mesmo com internet OK; bug crônico desde v0.2.6.6.**
 
   **Fix v0.2.8.4 (camada arquitetural, padrão WhatsApp/Gmail):**
