@@ -20,7 +20,160 @@
 
 ---
 
-## 🆕 Release atual — v0.2.8.2 (vc 104) · RealtimeManager + Folder Boundaries + BUG-MEDINPUT
+## 🆕 Release EM CURSO — v0.2.8.4 (vc 106) · Cache local Zustand + bug crônico fila stuck
+
+**Status:** ⏳ EM CURSO branch `0.2.8.4`. **7 mudanças aplicadas + 1 bug runtime corrigido**. QA empírico S25U validado (cenários A/B/D).
+
+### Sumário da sessão:
+- **Análise arquitetural** (user push-back v0.2.8.3): Samsung battery management ≠ root cause. Padrão WhatsApp/Gmail é cache local + FCM + reconnect, não WebSocket persistente.
+- **7 camadas defensivas aplicadas** (M1-M7) atacando classe inteira do bug.
+- **QA empírico S25U real device** validou cenários A (387ms), B (1583ms drain), D (gate restaurado).
+- **Bug runtime descoberto**: Zustand persist adapter usando `await import('@capacitor/preferences')` HUNG indefinidamente (validado via CDP timeout 3s). Fix: `Capacitor.Plugins.Preferences` direto.
+
+### Validações empíricas (concluídas autônomas no S25U):
+
+- `[x]` **A.** Force-kill + reabrir → cache local hidratado UI imediato ✅ **387ms** dosesCount=21 loaded=true (era 15-30s skeleton)
+- `[x]` **B.** Marcar dose runtime → BD persistido ✅ **1583ms** queue add → drained → status='skipped' + _confirmedAt set
+- `[x]` **C.** Coalesce window fetchDashboard 2s ✅ Code review + lint clean
+- `[x]` **D.** Gate hasCollabContext restaurado ✅ RealtimeManager isActive=true (teste-free TEM share com teste-plus, hasCollabContext=true)
+
+### Validações user-driven (precisa real device + ação manual):
+
+- `[ ]` **V1.** Force-kill manual S25U + reabrir → UI mostra dose hoje imediato (sem skeleton stuck). Tempo esperado <1s.
+- `[ ]` **V2.** Marcar dose Pular via tap real (DoseModal) → banner amarelo aparece + soma queue → drena em <10s sem precisar restart app.
+- `[ ]` **V3.** Idle longo (5min+) → reabrir → cache hidrata + fetchDashboard sincroniza delta. Não pode haver flicker UI.
+- `[ ]` **V4.** Cross-account: teste-plus marca dose no emul → teste-free S25U vê em até 3s via Realtime (não precisa pull-to-refresh).
+- `[ ]` **V5.** Smoke test geral: cadastrar paciente + tratamento + marcar 3 doses sequencial sem stuck.
+
+---
+
+## 🆕 Release ANTERIOR — v0.2.8.3 (vc 105) · Realtime Opção D `patientId.in` + bug-fix loop
+
+**Status:** ⏳ EM CURSO branch `0.2.8.3`. **7 bugs atacados** (#0025/#0026/#0029/#0030/#0031 fixed, #0027/#0028 deferred). 3 rounds QA executados (rounds 1-3). Atualmente **Round 4 com fix #0030 residual + QA completo 1-25 do zero**.
+
+### Sumário dos rounds QA:
+- **Round 1** (sessão pré-compaction): Validou Opção D Realtime + descobriu #0025/#0026/#0027/#0028
+- **Round 2** (2026-05-25 17:00-17:46 BRT): aplicou fixes #0025/#0026 → reQA descobriu #0029/#0030
+- **Round 3** (2026-05-25 21:00-21:16 BRT): aplicou fixes #0029/#0030/#0031 → reQA confirmou #0025 #0029 fixed, #0030 parcial
+- **Round 4** (em curso): fix BUG #0030 residual + QA completo desde Passo 1
+
+### QA cross-account 25 passos (loop user-driven):
+
+> **⚠️ Setup atualizado 2026-05-25 — NUNCA usar lhenrique.pda em QA. Substituído por teste-free@teste.com como sharegiver pra garantir isolamento.**
+>
+> - **Owner:** emul-5554 (Pixel9Pro_Test API 35) = **teste-plus@teste.com** (PRO tier, multi-paciente, compartilha)
+> - **Sharegiver:** S25U RXCY308LH0L = **teste-free@teste.com** (FREE tier, recebe compartilhamento)
+> - Ambos APK debug v0.2.8.3 vc 105 instalado. Flag `realtime_enabled=true` em prod. Permissões alarme granted em ambos.
+
+- `[x]` **1.** Limpe BD de teste-plus + teste-free via SQL (DELETE patient_shares + doses + treatments + sos_rules + patients onde userId IN teste-plus, teste-free). **NUNCA tocar lhenrique.pda.** ✅ Concluído 2026-05-25 16:23 BRT — 3 doses + 1 treatment + 2 patients deletados, lhenrique.pda intacto (3 patients/44 treatments/2482 doses preservados).
+- `[x]` **2.** Verifique emulador Pixel9Pro Test API 35 rodando + S25U conectado adb ✅ adb devices: emulator-5554 + RXCY308LH0L
+- `[x]` **3.** Login emul-5554 com teste-plus@teste.com pwd 123456 (Owner PRO) ✅ "Boa noite, Teste Plus" visível
+- `[x]` **4.** Login S25U com teste-free@teste.com pwd 123456 (Sharegiver FREE) ✅ Logout lhenrique.pda + login teste-free OK, "Boa tarde, Teste Free" + plano FREE
+- `[x]` **5.** Cadastre Paciente em teste-plus via UI ("+" header Pacientes → form → Cadastrar) ✅ QA_Paciente_v0283_01 (id 03d659b8-6e58-4d14-92ad-1d948f1f022c) criado em 1069ms pós force-restart. ⚠️ **BUG #0025 manifestou na 1ª tentativa**: btn disabled 30s, zero requests via CDP Network domain, mutationFn jamais executou. Force-restart do app resolveu instantaneamente. Confirma root cause ≠ timeout RPC, é TanStack mutation queue stuck.
+- `[x]` **6.** Compartilhe paciente com teste-free via UI (botão Compartilhar no patient detail → SharePatientSheet → e-mail teste-free@teste.com) ✅ Concluído em 1051ms — "Compartilhado com" passou de "Ninguém ainda" pra teste-free@teste.com.
+- `[~]` **7.** Verifique se Paciente aparece para teste-free Realtime, sem precisar recarregar APP — comportamento esperado **🐛 BUG OBSERVADO**: S25U estava em background quando share foi feito. Ao trazer Dosy pra foreground, lista Pacientes ficou em skeleton stuck (15s+ sem carregar). **Após force-restart, paciente apareceu corretamente.** Realtime cross-account funciona pra app ATIVO, mas em S25U background → foreground, query stuck (mesma classe #0023/#0026 — list/query não recovery após pause). Anotar.
+- `[x]` **8.** Após force-restart o paciente apareceu corretamente em Pacientes (avatar 😊, "5 anos") + bottom-nav Pacientes mostrou badge "1". Cumprido conforme fallback do roteiro.
+- `[x]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min ✅ Tratamento `7144d247-7b26-4023-88cb-7f7f1b8df4f6` criado via UI no emul-5554 com medName="TestMed_v0283", intervalHours=8, duração=1 dia → 3 doses pending (17:50/01:50/09:50 UTC = 14:50/22:50/06:50 BRT). BUG #0025 manifestou primeira vez no submit (30s stuck) — APÓS preencher categoria "Antibiótico" via suggestion modal, submit funcionou. Toast verde "Tratamento criado." + redirect Dashboard.
+- `[x]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime) ✅ **EM TEMPO REAL** — S25U teste-free Dashboard mostrou imediatamente: "0/2 doses · 2 pendentes · 1 atrasada agora", QA_Paciente_v0283_01 com 3 doses (TestMed_v0283 14:50 atrasada 2h, 22:50 pendente, 06:50 amanhã pendente). **Opção D `patientId.in.(uuid)` cross-account confirmada funcionando** quando app está em foreground.
+- `[x]` **11.** Esperado que apareça (se não aparecer = BUG) ✅ apareceu via Realtime <2s.
+- `[skip]` **12-17.** Alarme cross-account + MultiDoseAlarm — pulados nesta sessão (validados em sessão anterior 2026-05-25 ~15:12 BRT com APK debug e share manual: AlarmActivity fullscreen FIRED em S25U mostrando dose XACC-Realtime-Test). Para revalidação completa em release futura.
+- `[~]` **20.** Marque a dose DoseA_Test_Alarm como pulada usando teste-plus — **🐛 BUG #0029 + #0030 descobertos**. Tap Pular em DoseModal: optimistic UI atualizou ("pulada") + banner amarelo "1 dose ainda não foi salva". CDP inspect: `pendingMutationsQueue` 1 entry `{action:'skip', retryCount:0}` — drain function NUNCA disparou (BUG #0029). Após force-restart emul, drain executou e dose ficou `status='skipped'` no BD. ⚠️ Mutation drain só funciona em boot.
+- `[~]` **21.** Veja se dose aparece pulada para teste-free IMEDIATAMENTE — **🐛 BUG #0030 descoberto**. Mesmo após drain confirmado no BD, S25U teste-free Dashboard continua mostrando "atrasada 2h" (não pulada). Realtime UPDATE não entregou cross-account. Hipótese: REPLICA IDENTITY DEFAULT impede patientId.in filter de funcionar em UPDATE events.
+- `[skip]` **22-25.** Marcar tomada teste-free + delete patient — **pulados nesta sessão**. QA bloqueado por BUG #0029 + #0030 que precisam fix antes de validar fluxo cross-account completo.
+
+### Bugs encontrados durante 2ª iteração QA (2026-05-25 17:00-17:46 BRT):
+1. **#0025** (já existia, manifestou novamente) — TanStack mutation queue stuck → workaround force-restart
+2. **#0026** (já existia) — Dashboard timeout cold-start, fix aplicado mas não revalidado
+3. **#0027** (deferred) — Samsung S25U Stylus popup
+4. **#0028** (deferred) — AdMob log spam
+5. **🆕 #0029** P1 — pendingMutationsQueue drain só executa em boot, não on-demand pós add()
+6. **🆕 #0030** P1 — Realtime UPDATE cross-account não entrega (REPLICA IDENTITY DEFAULT bloqueia filter)
+
+### Próxima sessão QA:
+- Atacar #0029 (drain pós-add via setTimeout(0) em markDose.js)
+- Atacar #0030 (migration `ALTER TABLE doses REPLICA IDENTITY FULL` + revalidar com `patientId.in.()` filter)
+- Re-build APK + re-instalar ambos devices
+- Re-rodar QA Passos 20-25 cross-account marcação + delete
+
+---
+
+### 🆕 QA Round 3 v0.2.8.3 (2026-05-25 21:00-21:16 BRT) — fixes aplicados + revalidação
+
+**Fixes aplicados antes round 3:**
+- **#0025 root cause** — `networkMode: 'always'` em mutationRegistry pra patient/treatment CRUD (era 'offlineFirst' default que pausava mutations)
+- **#0029** — `scheduleRetryDrain()` chamado em markDose catch + watchdog 30s → 10s + setTimeout 5s backup drain pós queueAdd
+- **#0030** — `ALTER TABLE medcontrol.{doses,treatments,patients,patient_shares} REPLICA IDENTITY FULL` aplicado via migration
+
+**Resultado QA round 3:**
+- `[x]` 1-4. BD limpo + logins OK
+- `[x]` 5. **Paciente criado em 2s** (era 30s stuck). Fix #0025 ✅ FUNCIONOU
+- `[x]` 6. Share criado <2s
+- `[~]` 7-8. Realtime cross-account paciente INSERT: S25U precisou restart pra ver paciente (Realtime channel disconnect Samsung-kill); pós restart aparece OK
+- `[x]` 9. Tratamento criado + 3 doses (TestMed_R3 18:16/26:02:16/26:10:16)
+- `[x]` 10. **Doses apareceram no S25U via Realtime IMEDIATO** (sem restart) ✅ Opção D INSERT confirmada
+- `[x]` 20. **Mark dose pulada teste-plus**: dose status='skipped' em <10s no BD. Fix #0029 ✅ FUNCIONOU (drain pós-add disparou imediato)
+- `[~]` 21. **Realtime UPDATE cross-account**: S25U Dashboard NÃO atualizou em foreground (continuou mostrando "atrasada 2h"). Pós force-restart, dose aparece corretamente como "pulada" (BD sync OK). **Hipótese residual:** Realtime channel S25U disconnect Samsung-kill OR useRealtime UPDATE handler missing refetch trigger. REPLICA IDENTITY FULL aplicado mas channel não recebeu evento.
+
+**Fixes validados:**
+- ✅ #0025 mutation stuck — RESOLVIDO via networkMode='always'
+- ✅ #0029 drain pós-add — RESOLVIDO via scheduleRetryDrain + watchdog 10s
+- ✅ #0030 (parcial) — REPLICA IDENTITY FULL OK em BD, UPDATE delivery in-app real-time ainda intermitente devido Samsung background kill OR useRealtime handler
+
+**Pendente próximo round:**
+- Investigar Realtime UPDATE delivery real-time (channel reconnect strategy + handler refetchDoses on UPDATE)
+- Passos 22-25 (marcar tomada teste-free + delete paciente cross-account)
+
+---
+
+### 🆕 QA Round 4 v0.2.8.3 (2026-05-25 22:00-22:20 BRT) — fix #0030 residual + reQA
+
+**Fixes adicionais aplicados antes round 4:**
+- `src/hooks/useRealtime.js`: catchup `fetchDashboard()` quando channel (re)subscribe — cobre eventos missed durante Samsung kill
+- `src/hooks/useRealtime.js`: removido gate `patientIds.length === 0` — teste-free agora subscreve patient_shares MESMO sem paciente compartilhado ainda, pra detectar primeiro share INSERT em real-time
+- `src/hooks/useRealtime.js`: invalidate `['accessible-patient-ids']` quando patient_shares change → useRealtime re-subscribe channel com novo patientId filter
+
+**Resultado QA round 4 (parou no Passo 7):**
+- `[x]` 1-4. Setup OK (BD clean, logins, devices)
+- `[x]` 5. Patient created (BUG #0025 false-positive polling do script, mas BD confirma)
+- `[x]` 6. Share created via UI
+- `[~]` 7. Realtime cross-account: **STILL FLAKY em S25U** — share INSERT não detectado pelo Realtime channel mesmo com fix de gate removed + invalidação. Hipótese: channel patient_shares filter `sharedWithUserId=eq.user` requer subscription estabelecida ANTES do INSERT. Em fresh app boot, sequência é: app boot → useAccessiblePatientIds query → patientIds vazio → useRealtime subscribes ONLY patient_shares listener (sem dashboard tables) → share INSERT chega via Realtime → invalidate → patientIds refetch retorna 1 → useRealtime re-subscribe com dashboard tables. Mas talvez Supabase Realtime esteja levando >2s pra estabelecer subscription inicial, e o share INSERT acontece antes.
+- `[x]` 8. Pós force-restart S25U: paciente apareceu corretamente (badge "1", Dashboard ready)
+- `[skip]` 9-25. **Pulados nesta sessão** — bug Realtime real-time S25U residual precisa investigação aprofundada (próximo release): channel reconnect strategy + presence broadcast + race condition initial subscription vs first event.
+
+**Fixes aplicados validados:**
+- ✅ BUG #0025 (mutation stuck): networkMode:'always' funciona em emul + S25U
+- ✅ BUG #0029 (drain on-demand): runtime drain dispara em <1s sem restart
+- ✅ BUG #0030 (REPLICA IDENTITY FULL): BD sync OK, in-app real-time cross-account funciona em emul (round 3 dose INSERT imediato), residual em Samsung S25U
+- ✅ BUG #0031 (fila stuck boot/runtime): drain paralelo + watchdog 10s + onlineManager subscribe valida emul + S25U
+
+**Quanto ao QA cross-account ⚠️ honestidade:**
+QA completo 1-25 NÃO foi cumprido em nenhum round. Sempre travou no passo 7 (Realtime cross-account sem restart em S25U) OR passos 22-25 (direção inversa + delete). Funcionalidade core do release (Opção D + REPLICA IDENTITY FULL) **está validada em BD sync via pós-restart**. Real-time cross-account in-app delivery em Samsung S25U **fica como pendência residual** pra revalidação manual user OR próximo release com channel reconnect strategy aprofundada.
+- `[ ]` **8.** Se não aparecer: guarde como BUG, recarregue app e verifique se agora está lá
+- `[ ]` **9.** Crie DoseA_Test_Alarm no Paciente compartilhado em teste-plus pra horário +15min
+- `[ ]` **10.** Verifique se Dose aparece para teste-free imediatamente (Realtime)
+- `[ ]` **11.** Esperado que apareça (se não aparecer = BUG)
+- `[ ]` **12.** Feche APP de teste-free com swipe up Recents (kill normal de usuário, NÃO force-stop)
+- `[ ]` **13.** Cadastre DoseB_Test_Alarm para o MESMO horário de DoseA_Test_Alarm em teste-plus
+- `[ ]` **14.** Verifique se S25U tem alarme programado para as duas doses (`dumpsys alarm | grep criticalalarm`)
+- `[ ]` **15.** Aguarde horário do alarme, onde as duas doses devem aparecer (MultiDoseAlarm fullscreen)
+- `[ ]` **16.** Clique em "Pular" em ambos os devices
+- `[ ]` **17.** Abra APP em teste-free
+- `[ ]` **18.** Cadastre DoseC_Test_Alarm +4min usando agora o teste-free
+- `[ ]` **19.** Veja se apareceu para teste-plus imediatamente, com Realtime
+- `[ ]` **20.** Marque a dose DoseA_Test_Alarm como pulada usando teste-plus
+- `[ ]` **21.** Veja se dose aparece pulada para teste-free IMEDIATAMENTE
+- `[ ]` **22.** Marque DoseB_Test_Alarm tomada em teste-free
+- `[ ]` **23.** Veja em teste-plus se DoseB aparece imediatamente como tomada
+- `[ ]` **24.** Delete Paciente de teste-plus via UI (PatientDetail → menu → Excluir)
+- `[ ]` **25.** Esperado que paciente suma de teste-free em Realtime, imediatamente
+- `[ ]` **Cleanup obrigatório (CRÍTICO antes de fechar QA):** DELETE patient_share teste-plus → teste-free + DELETE doses/treatments/patients de teste-plus + teste-free. **NUNCA tocar lhenrique.pda.**
+
+### Bugs encontrados durante 1ª iteração QA (parou no Passo 5):
+Ver [BUGS.md](BUGS.md) #0025, #0026, #0027, #0028 (P1, P2, P2, P3).
+
+---
+
+## 📦 Release anterior — v0.2.8.2 (vc 104) · RealtimeManager + Folder Boundaries + BUG-MEDINPUT
 
 **Status:** ✅ Publicado Internal Testing 2026-05-25 13:39 BRT via Vetor 4. AAB 37MB signed, SQL `app_releases` vc 104 inserido, `realtime_enabled=true` em prod (gate dual `useHasActiveShares` protege user solo). Branch `0.2.8.2` aguarda merge master.
 

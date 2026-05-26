@@ -1,4 +1,9 @@
 import { hasSupabase, supabase } from './supabase'
+import { withTimeout } from '../utils/withTimeout'
+
+// BUG #0025 v0.2.8.3 — timeout 20s pra mutations share que ainda não tinham proteção.
+// sharePatientByEmail / unsharePatient já tem inline Promise.race (15s) — não trocar.
+const SHARE_MUTATION_TIMEOUT_MS = 20000
 
 export class ShareError extends Error {
   constructor(msg, code) { super(msg); this.code = code }
@@ -54,10 +59,14 @@ export async function sharePatientByEmail(patientId, email, expiresAt = null, ac
 // v0.2.6.1 P3.15 — estender prazo de share temporário (owner only).
 export async function extendTemporaryShare(shareId, newExpiresAt) {
   if (!hasSupabase) throw new ShareError('Supabase indisponível')
-  const { data, error } = await supabase.rpc('extend_temporary_share', {
-    p_share_id: shareId,
-    p_new_expires_at: newExpiresAt,
-  })
+  const { data, error } = await withTimeout(
+    supabase.rpc('extend_temporary_share', {
+      p_share_id: shareId,
+      p_new_expires_at: newExpiresAt,
+    }),
+    SHARE_MUTATION_TIMEOUT_MS,
+    'estender share temporário'
+  )
   if (error) throw mapErr(error)
   return data
 }
@@ -65,10 +74,14 @@ export async function extendTemporaryShare(shareId, newExpiresAt) {
 // v0.2.6.1 P3.15 — mudar access_level de share existente.
 export async function updateShareAccess(shareId, accessLevel) {
   if (!hasSupabase) throw new ShareError('Supabase indisponível')
-  const { data, error } = await supabase.rpc('update_share_access', {
-    p_share_id: shareId,
-    p_access_level: accessLevel,
-  })
+  const { data, error } = await withTimeout(
+    supabase.rpc('update_share_access', {
+      p_share_id: shareId,
+      p_access_level: accessLevel,
+    }),
+    SHARE_MUTATION_TIMEOUT_MS,
+    'atualizar nível share'
+  )
   if (error) throw mapErr(error)
   return data
 }

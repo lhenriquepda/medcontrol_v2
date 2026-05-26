@@ -3,6 +3,10 @@ import { mock } from './mockStore'
 // Refactor Sync v2 Fase 1 (v0.2.7.0) — authedRpc com timeout + token válido upfront.
 // Substitui rpcV2WithAuthRetry (sem timeout, hang forever quando session zombie).
 import { authedRpc, AuthLostError, TimeoutError } from './sessionManager'
+// BUG #0025 v0.2.8.3 — timeout 20s pra mutations SOS rules (que não passam por authedRpc).
+import { withTimeout } from '../utils/withTimeout'
+
+const DOSE_MUTATION_TIMEOUT_MS = 20000
 
 // Marca doses pendentes cujo horário já passou como 'overdue' (mock + cliente Supabase).
 //
@@ -238,16 +242,21 @@ export async function registerSos({ patientId, medName, unit, scheduledAt, obser
     // v0.2.3.6: param `p_force` skip server-side over-limit validation quando
     // user já confirmou ConfirmDialog cliente-side (decisão clínica do user).
     // v0.2.4.0: p_group_id + p_cmed_class opcionais (RPC com DEFAULT NULL).
-    const { data, error } = await supabase.rpc('register_sos_dose', {
-      p_patient_id:   patientId,
-      p_med_name:     medName,
-      p_unit:         unit,
-      p_scheduled_at: scheduledAt || new Date().toISOString(),
-      p_observation:  observation || '',
-      p_force:        force,
-      p_group_id:     group_id,
-      p_cmed_class:   cmed_class,
-    })
+    // BUG #0025 v0.2.8.3: withTimeout pra evitar mutation stuck quando RPC pendura.
+    const { data, error } = await withTimeout(
+      supabase.rpc('register_sos_dose', {
+        p_patient_id:   patientId,
+        p_med_name:     medName,
+        p_unit:         unit,
+        p_scheduled_at: scheduledAt || new Date().toISOString(),
+        p_observation:  observation || '',
+        p_force:        force,
+        p_group_id:     group_id,
+        p_cmed_class:   cmed_class,
+      }),
+      DOSE_MUTATION_TIMEOUT_MS,
+      'registrar SOS'
+    )
     if (error) throw error
     return data
   }
@@ -275,14 +284,22 @@ export async function listSosRules(patientId) {
 export async function upsertSosRule({ id, ...payload }) {
   if (hasSupabase) {
     if (id) {
-      const { data, error } = await supabase.from('sos_rules').update(payload).eq('id', id).select().single()
+      const { data, error } = await withTimeout(
+        supabase.from('sos_rules').update(payload).eq('id', id).select().single(),
+        DOSE_MUTATION_TIMEOUT_MS,
+        'atualizar regra SOS'
+      )
       if (error) throw error; return data
     }
     // v0.2.3.5 #238 fix — RLS WITH CHECK exige userId=auth.uid() em INSERT. Sem userId no
     // payload, insert era silenciosamente bloqueado. Pega user atual via supabase.auth.
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Não autenticado')
-    const { data, error } = await supabase.from('sos_rules').insert({ ...payload, userId: user.id }).select().single()
+    const { data, error } = await withTimeout(
+      supabase.from('sos_rules').insert({ ...payload, userId: user.id }).select().single(),
+      DOSE_MUTATION_TIMEOUT_MS,
+      'criar regra SOS'
+    )
     if (error) throw error; return data
   }
   if (id) return mock.update('sos_rules', id, payload)
@@ -291,7 +308,11 @@ export async function upsertSosRule({ id, ...payload }) {
 
 export async function deleteSosRule(id) {
   if (hasSupabase) {
-    const { error } = await supabase.from('sos_rules').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('sos_rules').delete().eq('id', id),
+      DOSE_MUTATION_TIMEOUT_MS,
+      'excluir regra SOS'
+    )
     if (error) throw error
     return true
   }

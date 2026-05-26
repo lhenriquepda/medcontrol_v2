@@ -7,7 +7,7 @@
  *
  * Princípios:
  *   P1 — server source of truth, store é view layer.
- *   P5 — UI nunca trava: timeout via authedRpc (10s hard).
+ *   P5 — UI nunca trava: timeout via authedRpc.
  *
  * Uso:
  *   await fetchDashboard()                // -7d/+14d default
@@ -15,9 +15,16 @@
  *
  * Side-effect: popula doseStore, patientStore, treatmentStore.
  * Retorna: payload completo (compat com callers que ainda esperam objeto).
+ *
+ * BUG #0026 v0.2.8.3 — cold-start RPC pode levar até 15s legítimos (Supabase
+ * Pooler PgBouncer reconnect + first auth check). Default authedRpc 10s estava
+ * disparando TimeoutError no primeiro fetchDashboard pós-emul boot, mostrando
+ * skeleton infinito. Solução: 1ª tentativa 30s (cold-start budget), retry imediato
+ * 15s caso timeout (cobre Supabase recovery transient). 2 tentativas total = 45s
+ * worst-case mas user vê Dashboard popular em vez de skeleton stuck.
  */
 import { hasSupabase } from './supabase'
-import { authedRpc } from './sessionManager'
+import { authedRpc, TimeoutError } from './sessionManager'
 import { setAllDoses } from '../state/doseStore'
 import { setAllPatients } from '../state/patientStore'
 import { setAllTreatments } from '../state/treatmentStore'
@@ -26,6 +33,10 @@ import { size as queueSize } from '../state/pendingMutationsQueue'
 
 const DEFAULT_RANGE_PAST_DAYS = 7
 const DEFAULT_RANGE_FUTURE_DAYS = 14
+
+// BUG #0026 — timeouts dimensionados pro cold-start emul observado em QA v0.2.8.3.
+const DASHBOARD_RPC_TIMEOUT_FIRST_MS = 30_000   // 1ª tentativa cold-start
+const DASHBOARD_RPC_TIMEOUT_RETRY_MS = 15_000   // 2ª tentativa retry
 
 function applyDefaultRange(from, to) {
   if (from && to) return { from, to }
@@ -45,11 +56,32 @@ function applyDefaultRange(from, to) {
 // simultâneo). Promise compartilhada — segundo caller espera primeiro resolver.
 let inFlightPromise = null
 
+// v0.2.8.4 BUG #0031 fix — coalesce window pós-resolve. Cascade resume típica
+// dispara 4-5 fetchDashboard quase-simultâneos:
+//   1. useAppResume onResume → fetchDashboard
+//   2. onlineManager bridge re-flip → triggerDrain → drain → fetchDashboard
+//   3. Realtime channel re-subscribe (useRealtime catchup) → fetchDashboard
+//   4. visibilitychange → focus → onResume #2 → fetchDashboard
+//   5. accessible-patient-ids invalidate → re-fetch dependencies
+// Sem coalesce, cada call faz get_dashboard_payload separado = 5× egress + 5× RPC.
+// Window 2s pós-resolve serve mesmo resultado pros callers cascateados — apenas
+// 1 RPC real disparado. Após window expira, próxima call faz fetch fresco normal.
+const COALESCE_WINDOW_MS = 2_000
+let lastResolvedAt = 0
+let lastResult = null
+
 export async function fetchDashboard({ from, to, daysAhead = 5 } = {}) {
   // Reutiliza fetch em curso se mesmo range (raro variação no Dashboard).
   if (inFlightPromise) return inFlightPromise
 
+  // Coalesce window — re-serve último result se dentro 2s pós-resolve.
+  // Evita storm cascade quando app retoma e múltiplos triggers disparam fetch.
+  if (lastResult && (Date.now() - lastResolvedAt) < COALESCE_WINDOW_MS) {
+    return lastResult
+  }
+
   inFlightPromise = doFetch({ from, to, daysAhead })
+    .then((r) => { lastResult = r; lastResolvedAt = Date.now(); return r })
     .finally(() => { inFlightPromise = null })
 
   return inFlightPromise
@@ -94,11 +126,27 @@ async function doFetch({ from, to, daysAhead }) {
   }
 
   // Production: RPC consolidado com timeout via authedRpc.
-  const data = await authedRpc('get_dashboard_payload', {
-    p_from: range.from,
-    p_to: range.to,
-    p_days_ahead: daysAhead,
-  })
+  // BUG #0026 — 1ª tentativa cold-start 30s, retry single attempt 15s se TimeoutError.
+  let data
+  try {
+    data = await authedRpc('get_dashboard_payload', {
+      p_from: range.from,
+      p_to: range.to,
+      p_days_ahead: daysAhead,
+    }, { timeoutMs: DASHBOARD_RPC_TIMEOUT_FIRST_MS })
+  } catch (e) {
+    if (e instanceof TimeoutError) {
+      console.warn('[fetchDashboard] cold-start timeout — retry 15s window')
+      // Retry imediato — supabase-js mantém conn pool quente, 2ª chamada normalmente <2s.
+      data = await authedRpc('get_dashboard_payload', {
+        p_from: range.from,
+        p_to: range.to,
+        p_days_ahead: daysAhead,
+      }, { timeoutMs: DASHBOARD_RPC_TIMEOUT_RETRY_MS })
+    } else {
+      throw e
+    }
+  }
 
   const patients = Array.isArray(data?.patients) ? data.patients : []
   const treatments = Array.isArray(data?.treatments) ? data.treatments : []
@@ -132,7 +180,11 @@ function enrichDoses(doses, patients) {
 }
 
 // Helper pra forçar refetch sem caching cooperativo (pull-to-refresh, etc).
+// v0.2.8.4 — também invalida coalesce window (lastResolvedAt/lastResult) pra
+// garantir fetch real (pull-to-refresh deve sempre bater no server).
 export async function forceRefetchDashboard(options = {}) {
-  inFlightPromise = null  // invalida dedup
+  inFlightPromise = null  // invalida dedup in-flight
+  lastResolvedAt = 0      // invalida coalesce window
+  lastResult = null
   return fetchDashboard(options)
 }

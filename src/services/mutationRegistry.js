@@ -556,6 +556,13 @@ export function registerMutationDefaults(qc, persister = null) {
   // reconnect). Cache patch local insere temp paciente → UI fecha modal +
   // mostra paciente novo imediato. onSuccess substitui temp por real pós-drain.
   qc.setMutationDefaults(['createPatient'], {
+    // BUG #0025 v0.2.8.3 — networkMode 'always' força mutationFn rodar imediato
+    // (vs default 'offlineFirst' que pausa quando onlineManager.isOnline()=false).
+    // Diagnose QA 2026-05-25: mesmo com Capacitor.Network=connected, TanStack pausava
+    // mutation eternamente → btn Cadastrar stuck disabled, ZERO requests pra Supabase.
+    // PatientForm.submit já tem branch `if (isOffline) { create.mutate() + nav }` que
+    // cobre offline real. Manter offlineFirst era redundante e caused race fix.
+    networkMode: 'always',
     mutationFn: createPatient,
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ['patients'] })
@@ -597,6 +604,7 @@ export function registerMutationDefaults(qc, persister = null) {
   // Item #204 v0.2.1.8 fix-A — optimistic updatePatient.
   // Edit offline: cache patch local + modal fecha imediato. onError rollback.
   qc.setMutationDefaults(['updatePatient'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: ({ id, patch }) => updatePatient(id, patch),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: ['patients'] })
@@ -632,6 +640,7 @@ export function registerMutationDefaults(qc, persister = null) {
   })
 
   qc.setMutationDefaults(['deletePatient'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: deletePatient,
     onSuccess: () => {
       track(EVENTS.PATIENT_DELETED)
@@ -649,6 +658,7 @@ export function registerMutationDefaults(qc, persister = null) {
   // agenda (AlarmScheduler escuta cache ['doses']). mutationFn resolve patientId
   // temp → real ID antes RPC (drain pós-reconnect FK fix).
   qc.setMutationDefaults(['createTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: async (vars) => {
       let pid = vars.patientId
       // fix-A1: se patientId é temp, busca real ID via _tempIdSource marker
@@ -780,6 +790,7 @@ export function registerMutationDefaults(qc, persister = null) {
   // doses futuras só ficam corretas pós-drain (invalidate ['doses']). Aceitável —
   // mostra status correto na lista, refetch real após reconectar.
   qc.setMutationDefaults(['updateTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: ({ id, patch }) => updateTreatment(id, patch),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
@@ -809,6 +820,7 @@ export function registerMutationDefaults(qc, persister = null) {
   })
 
   qc.setMutationDefaults(['deleteTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: deleteTreatment,
     onSuccess: () => {
       track(EVENTS.TREATMENT_DELETED)
@@ -822,6 +834,7 @@ export function registerMutationDefaults(qc, persister = null) {
   // ['treatments', filter]. setQueryData(['treatments']) sozinho NÃO atinge
   // useTreatments({patientId}) etc → UI mostrava status antigo.
   qc.setMutationDefaults(['pauseTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: pauseTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
@@ -866,6 +879,7 @@ export function registerMutationDefaults(qc, persister = null) {
 
   // Item #204 v0.2.1.8 fix — resumeTreatment patch TODAS variações.
   qc.setMutationDefaults(['resumeTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: resumeTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })
@@ -896,6 +910,7 @@ export function registerMutationDefaults(qc, persister = null) {
 
   // Item #204 v0.2.1.8 fix — endTreatment patch TODAS variações + cancel doses.
   qc.setMutationDefaults(['endTreatment'], {
+    networkMode: 'always',  // BUG #0025 — ver comment createPatient
     mutationFn: endTreatment,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['treatments'] })

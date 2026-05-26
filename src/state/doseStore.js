@@ -1,76 +1,118 @@
 /**
- * doseStore.js — Refactor Sync v2 Fase 2 (v0.2.7.0)
+ * doseStore.js — Refactor Sync v2 Fase 2 (v0.2.7.0) + persist BUG #0031 (v0.2.8.4)
  *
  * Single source of truth pra doses no cliente. Substitui TanStack Query cache
  * de doses (com hydrate persist + race conditions) por Zustand store em memória.
  *
  * Princípios (Refactor_Sync_v2.md §2):
  *   P1 — server é fonte da verdade, store é view layer
- *   P4 — process kill é estado normal: NÃO persistimos cache (cold start = fresh fetch)
+ *   P4 — process kill é estado normal (v0.2.8.4 revisitado: persistimos cache LOCAL
+ *        pra Boot mostrar UI imediato — fresh fetch sobrescreve em paralelo)
+ *
+ * v0.2.8.4 persist (BUG #0031 root fix):
+ *   Reabilita persistência LOCAL (zustand/middleware persist + Capacitor Preferences)
+ *   pra mata classe inteira de bugs "carregando fila no boot mesmo online".
+ *   Padrão WhatsApp/Gmail — cache local sobrevive Samsung kill, UI imediato.
+ *   Snapshots (_snapshots) NÃO persistem — são runtime only.
  *
  * API:
  *   - useDoseStore(selector)         — Zustand hook
- *   - setAllDoses(doses)             — substitui Map inteiro (cold fetch)
+ *   - setAllDoses(doses)             — substitui Map inteiro (fresh fetch)
  *   - patchDose(id, patch)           — atualiza dose individual (optimistic / Realtime)
  *   - revertDose(id)                 — reverte ao último snapshot _confirmedAt
  *   - getDose(id)                    — getter síncrono
  *   - subscribeDoses(callback)       — alternativa pra contextos non-React
  */
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { capacitorStorage } from './persistStorage'
 
-const useDoseStore = create((set) => ({
-  doses: new Map(),
-  loaded: false,
-  loadedAt: null,
+const useDoseStore = create(
+  persist(
+    (set) => ({
+      doses: new Map(),
+      loaded: false,
+      loadedAt: null,
 
-  // Snapshots pra rollback de optimistic patches.
-  // Key: doseId. Value: dose object antes do patch otimista (sem _optimistic flag).
-  _snapshots: new Map(),
+      // Snapshots pra rollback de optimistic patches.
+      // Key: doseId. Value: dose object antes do patch otimista (sem _optimistic flag).
+      // NÃO persiste (partialize filtra) — runtime only.
+      _snapshots: new Map(),
 
-  setAll(doses) {
-    set({
-      doses: new Map((doses || []).map(d => [d.id, d])),
-      loaded: true,
-      loadedAt: Date.now(),
-      _snapshots: new Map(),  // limpa snapshots — fresh fetch reseta tudo
-    })
-  },
+      setAll(doses) {
+        set({
+          doses: new Map((doses || []).map(d => [d.id, d])),
+          loaded: true,
+          loadedAt: Date.now(),
+          _snapshots: new Map(),  // limpa snapshots — fresh fetch reseta tudo
+        })
+      },
 
-  patch(id, patchObj) {
-    set(state => {
-      const current = state.doses.get(id)
-      if (!current) return state  // dose não existe — ignora
-      // Cria snapshot SE não existe ainda E se patch é otimista (pra rollback).
-      const nextSnapshots = new Map(state._snapshots)
-      if (patchObj._optimistic && !nextSnapshots.has(id)) {
-        nextSnapshots.set(id, current)
-      }
-      // Se patch confirma (remove _optimistic), limpa snapshot.
-      if (patchObj._optimistic === false || patchObj._confirmedAt) {
-        nextSnapshots.delete(id)
-      }
-      const next = new Map(state.doses)
-      next.set(id, { ...current, ...patchObj })
-      return { doses: next, _snapshots: nextSnapshots }
-    })
-  },
+      patch(id, patchObj) {
+        set(state => {
+          const current = state.doses.get(id)
+          if (!current) return state  // dose não existe — ignora
+          // Cria snapshot SE não existe ainda E se patch é otimista (pra rollback).
+          const nextSnapshots = new Map(state._snapshots)
+          if (patchObj._optimistic && !nextSnapshots.has(id)) {
+            nextSnapshots.set(id, current)
+          }
+          // Se patch confirma (remove _optimistic), limpa snapshot.
+          if (patchObj._optimistic === false || patchObj._confirmedAt) {
+            nextSnapshots.delete(id)
+          }
+          const next = new Map(state.doses)
+          next.set(id, { ...current, ...patchObj })
+          return { doses: next, _snapshots: nextSnapshots }
+        })
+      },
 
-  revert(id) {
-    set(state => {
-      const snapshot = state._snapshots.get(id)
-      if (!snapshot) return state  // sem snapshot — nada pra reverter
-      const next = new Map(state.doses)
-      next.set(id, snapshot)
-      const nextSnapshots = new Map(state._snapshots)
-      nextSnapshots.delete(id)
-      return { doses: next, _snapshots: nextSnapshots }
-    })
-  },
+      revert(id) {
+        set(state => {
+          const snapshot = state._snapshots.get(id)
+          if (!snapshot) return state  // sem snapshot — nada pra reverter
+          const next = new Map(state.doses)
+          next.set(id, snapshot)
+          const nextSnapshots = new Map(state._snapshots)
+          nextSnapshots.delete(id)
+          return { doses: next, _snapshots: nextSnapshots }
+        })
+      },
 
-  reset() {
-    set({ doses: new Map(), loaded: false, loadedAt: null, _snapshots: new Map() })
-  },
-}))
+      reset() {
+        set({ doses: new Map(), loaded: false, loadedAt: null, _snapshots: new Map() })
+      },
+    }),
+    {
+      name: 'dosy_cache_doses_v1',
+      storage: createJSONStorage(() => capacitorStorage),
+      version: 1,
+      // Persiste só doses + loadedAt. Map serializa como Array.entries() (JSON-safe).
+      // _snapshots é runtime-only (rollback de optimistic — não faz sentido pós-restart,
+      // mutations em flight são tratadas pelo pendingMutationsQueue + drain).
+      partialize: (state) => ({
+        doses: Array.from(state.doses.entries()),
+        loadedAt: state.loadedAt,
+      }),
+      // Reconverte Array → Map ao rehydrate. Falha silenciosa → cache vazio + fetch normal.
+      merge: (persisted, current) => {
+        if (!persisted || !Array.isArray(persisted.doses)) return current
+        try {
+          return {
+            ...current,
+            doses: new Map(persisted.doses),
+            loaded: true,
+            loadedAt: persisted.loadedAt,
+          }
+        } catch {
+          return current
+        }
+      },
+      // Future-proof: bump version + migrate fn quando dose schema mudar.
+      migrate: (persistedState) => persistedState,
+    }
+  )
+)
 
 export { useDoseStore }
 
