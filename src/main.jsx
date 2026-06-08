@@ -308,8 +308,30 @@ if (Capacitor.isNativePlatform()) {
       listenerHandle?.remove?.()
     }
   })
+} else {
+  // v0.2.8.6 #9 (diagnostico_conexao_cronica) — bridge custom TAMBÉM no WEB.
+  // O default do TanStack ouve só window 'online'/'offline'. Falha STICKY-FALSE:
+  // um 'offline' transitório (ou o laptop dormindo) dispara, mas o 'online'
+  // correspondente NEM sempre é emitido pelo browser quando a conexão volta →
+  // onlineManager.isOnline() trava em false → com networkMode 'offlineFirst' as
+  // mutations/queries pausam pra sempre e o user precisa RECARREGAR. Aqui
+  // re-lemos navigator.onLine também em focus/visibilitychange (que SEMPRE
+  // disparam ao voltar pra aba) — recupera o estado sem reload.
+  onlineManager.setEventListener((setOnline) => {
+    const update = () => setOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
+  })
 }
-// Web: TanStack default subscriber já cobre (navigator.onLine + online/offline events).
 
 // v0.2.7.0 Fase 2 — persister REMOVIDO. Mutações healthcare migram pra pendingMutationsQueue
 // (IDB próprio, sobrevive process kill por design) na Fase 3. Por ora mutationRegistry

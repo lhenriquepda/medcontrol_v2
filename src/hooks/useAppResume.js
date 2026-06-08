@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient, onlineManager } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
-import { supabase } from '../services/supabase'
 import { getValidSession, AuthLostError, onAuthLost } from '../services/sessionManager'
 // v0.2.7.0 Fase 3 — drena mutations pendentes no resume (idempotência server-side).
 import { drainPendingMutations, markColdStart } from '../services/markDose'
@@ -39,6 +38,11 @@ const RESUME_DEBOUNCE_MS = 1000
 const HEARTBEAT_INTERVAL_MS = 60_000
 
 let lastResumeAt = 0
+// v0.2.8.6 #8 — separa o instante em que o app FOI pra background (onPause) do
+// lastResumeAt (que serve ao debounce). Antes inactiveMs = now - lastResumeAt
+// media "tempo desde o último resume" (~0 em resumes encadeados), então
+// markColdStart (timeout 30s na 1ª RPC pós-idle longo) quase nunca disparava.
+let lastBackgroundAt = 0
 
 export function useAppResume() {
   const qc = useQueryClient()
@@ -50,30 +54,33 @@ export function useAppResume() {
       // quando user retoma app. Sem debounce, múltiplas validações concorrentes.
       const now = Date.now()
       if (now - lastResumeAt < RESUME_DEBOUNCE_MS) return
-      const inactiveMs = now - lastResumeAt
+      // v0.2.8.6 #8 — inactiveMs = tempo REAL em background (não desde o último resume).
+      const inactiveMs = lastBackgroundAt ? (now - lastBackgroundAt) : 0
       lastResumeAt = now
       lastActiveRef.current = now
 
       // v0.2.7.0 hardening — resume tardio (>30s idle) marca cold start de novo.
-      // Primeira RPC pós-resume tem latência alta (network re-establish, processLock
-      // pode estar zombie). markDose vai usar timeout 30s em vez de 10s.
+      // Primeira RPC pós-resume tem latência alta (network re-establish, cold-start).
+      // markDose vai usar timeout 30s em vez de 10s.
       if (inactiveMs > 30_000) {
         markColdStart()
       }
 
       try {
-        // sessionManager garante token válido (refresh sync se necessário, mutex).
+        // sessionManager garante token válido (lock-free; refresh via mutex se <90s).
         await getValidSession()
       } catch (e) {
         if (e instanceof AuthLostError) {
-          // Sessão perdida — onAuthLost listener (registrado abaixo) cuida do UI.
-          // signOut força state cleanup do supabase-js.
-          console.warn('[useAppResume] AuthLost on resume → signOut')
-          try { await supabase.auth.signOut() } catch { /* ignore */ }
-          return
+          // v0.2.8.6 #7 — NÃO desloga por AuthLost transitório (rádio acordando
+          // pós-background gera 1-2 timeouts de refresh). O logout DEFINITIVO vem do
+          // auth-js (SIGNED_OUT em refresh_token inválido, tratado em useAuth) ou do
+          // boot getUser(). Antes: signOut + `return` aqui ABORTAVA o drain — a única
+          // retomada capaz de drenar a fila se auto-destruía. Agora segue pro drain.
+          console.warn('[useAppResume] AuthLost on resume — segue pro drain (sem signOut)')
+        } else {
+          console.warn('[useAppResume] resume session check failed:', e?.message)
         }
-        console.warn('[useAppResume] resume session check failed:', e?.message)
-        // Continua mesmo assim — refetch abaixo pode falhar mas não trava UI.
+        // Segue mesmo assim — drain/refetch abaixo são best-effort e não travam UI.
       }
 
       // Re-sync onlineManager com Capacitor Network. Bridge listener pode ter
@@ -121,7 +128,10 @@ export function useAppResume() {
     }
 
     const onPause = () => {
-      lastActiveRef.current = Date.now()
+      const now = Date.now()
+      lastActiveRef.current = now
+      // v0.2.8.6 #8 — marca o instante de ida pra background (mede inactiveMs no resume).
+      lastBackgroundAt = now
       // v0.2.7.0 hardening — se queue tem entries quando app vai bg,
       // schedule notification 30s alertando user pra reabrir e sincronizar.
       // Sem isso, cuidadores compartilhados nunca veem mutations queued.
@@ -165,8 +175,8 @@ export function useAppResume() {
         await getValidSession()
       } catch (e) {
         if (e instanceof AuthLostError) {
-          console.warn('[useAppResume] heartbeat AuthLost → signOut')
-          try { await supabase.auth.signOut() } catch { /* ignore */ }
+          // v0.2.8.6 #7 — degrada, sem signOut (logout definitivo via auth-js/boot).
+          console.warn('[useAppResume] heartbeat AuthLost — degrada (sem signOut)')
         } else {
           console.warn('[useAppResume] heartbeat exception:', e?.message)
         }
@@ -176,8 +186,11 @@ export function useAppResume() {
     // Listener pra emit de AuthLost vindos de qualquer RPC (authedRpc).
     // Por ora apenas signOut — Fase 2 vai adicionar UI banner via store.
     const unsubAuthLost = onAuthLost(({ reason }) => {
-      console.warn('[useAppResume] onAuthLost:', reason)
-      supabase.auth.signOut().catch(() => { /* ignore */ })
+      // v0.2.8.6 #7 — emitAuthLost dispara após 2 falhas de refresh em <5min (com
+      // decay). Ainda assim NÃO deslogamos aqui: logout só em erro auth DEFINITIVO
+      // (auth-js SIGNED_OUT / boot getUser). Antes este signOut ejetava o user por
+      // glitch de rede transitório. Fase 2 troca isto por banner "reconectando".
+      console.warn('[useAppResume] onAuthLost (degrada, sem signOut):', reason)
     })
 
     return () => {

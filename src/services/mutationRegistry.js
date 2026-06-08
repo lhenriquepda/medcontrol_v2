@@ -490,6 +490,11 @@ export function registerMutationDefaults(qc, persister = null) {
   // SOS rules (minIntervalHours, maxDosesIn24h). Se server rejeita → onError reverte
   // e UI mostra dose desaparecendo (raro: validação local já feita pré-mutate).
   qc.setMutationDefaults(['registerSos'], {
+    // v0.2.8.6 #9 — networkMode 'always' (antes herdava 'offlineFirst' do default
+    // global). Com onlineManager preso em isOnline()=false (sticky no web) +
+    // resumePausedMutations REMOVIDO junto com o persister (v0.2.7.0), o SOS pausava
+    // eternamente sem nunca rodar. SOS é healthcare-critical → sempre dispara já.
+    networkMode: 'always',
     mutationFn: registerSos,
     onMutate: async (vars) => {
       markDosesInFlight()
