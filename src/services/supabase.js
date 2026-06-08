@@ -25,20 +25,37 @@ const AUTH_DEBUG = (() => {
 // Storage adapter: KeyStore (Android) / Keychain (iOS) / localStorage (web fallback)
 const isNative = Capacitor.isNativePlatform()
 
+// v0.2.8.6 #10 (diagnostico_conexao_cronica) — timeout no adapter SecureStorage.
+// get/set/remove rodam DENTRO do lock de auth (__loadSession/_saveSession). Uma
+// bridge Capacitor lenta/suspensa (Doze, app pré-warm) sem timeout retém o lock
+// — agravante nativo do wedge. Com o dual-client o dado já não depende desse lock,
+// mas o caminho de AUTH (boot/refresh) ainda pode pendurar aqui. Timeout generoso
+// (7s) só atua em bridge patológica; no get o fallback é null (auth-js trata como
+// "sem sessão" transitório e re-tenta — o cache do sessionManager mantém o dado vivo).
+const SECURE_STORAGE_TIMEOUT_MS = 7_000
+function withStorageTimeout(promise, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), SECURE_STORAGE_TIMEOUT_MS)),
+  ])
+}
+
 const SecureStorageAdapter = {
   getItem: async (key) => {
     try {
-      const v = await SecureStorage.get(key)
+      const v = await withStorageTimeout(SecureStorage.get(key), null)
       return v ?? null
     } catch {
       return null
     }
   },
   setItem: async (key, value) => {
-    try { await SecureStorage.set(key, value) } catch {}
+    // Write abandonado no timeout é seguro: a sessão em memória segue válida e o
+    // próximo refresh re-persiste. Melhor que reter o lock indefinidamente.
+    try { await withStorageTimeout(SecureStorage.set(key, value), undefined) } catch {}
   },
   removeItem: async (key) => {
-    try { await SecureStorage.remove(key) } catch {}
+    try { await withStorageTimeout(SecureStorage.remove(key), undefined) } catch {}
   }
 }
 
