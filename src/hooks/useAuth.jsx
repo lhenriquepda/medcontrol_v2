@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Capacitor } from '@capacitor/core'
 import { hasSupabase, supabase, traduzirErro } from '../services/supabase'
+// v0.2.8.6 #5 — prima o cache lock-free do sessionManager (fonte do token do
+// cliente de dados supabaseData). Mantém o cache em sync com o cliente de auth.
+import { primeAuthSession, clearAuthSession } from '../services/sessionManager'
 import { mock } from '../services/mockStore'
 import { identifyUser, resetUser } from '../services/analytics'
 import { setSyncCredentials, clearSyncCredentials, syncUserPrefs } from '../services/criticalAlarm'
@@ -31,6 +34,8 @@ export function AuthProvider({ children }) {
     async function init() {
       if (hasSupabase) {
         const { data } = await supabase.auth.getSession()
+        // v0.2.8.6 #5 — prima o cache antes de qualquer query (boot lock-free).
+        primeAuthSession(data.session || null)
         const initialUser = data.session?.user || null
         setUser(initialUser)
         if (initialUser?.id) {
@@ -91,6 +96,10 @@ export function AuthProvider({ children }) {
           }
         }
         const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
+          // v0.2.8.6 #5 — mantém o cache lock-free do sessionManager em sync com o
+          // cliente de auth (TOKEN_REFRESHED/SIGNED_IN/INITIAL_SESSION/SIGNED_OUT).
+          // É isto que permite o supabaseData servir o token SEM tocar o lock.
+          primeAuthSession(s || null)
           const u = s?.user || null
           const prevUserId = user?.id
 
@@ -585,6 +594,8 @@ export function AuthProvider({ children }) {
     // Limpa cache de queries pra evitar stale data (ex: tier=plus persistir
     // após logout, mantendo banner ad na tela de Login)
     qc.clear()
+    // v0.2.8.6 #5 — limpa o cache de sessão lock-free (supabaseData volta a anon).
+    try { clearAuthSession() } catch { /* ignore */ }
     // v0.2.8.4 BUG #0031 fix — limpa stores Zustand em memória + Preferences
     // persistidas (doses/patients/treatments). Evita próximo user ver dados
     // do user anterior no boot via cache hidratado.

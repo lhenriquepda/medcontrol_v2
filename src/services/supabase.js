@@ -8,6 +8,20 @@ const SCHEMA = import.meta.env.VITE_SUPABASE_SCHEMA || 'public'
 
 export const hasSupabase = Boolean(URL && KEY)
 
+// v0.2.8.6 #1 (diagnostico_conexao_cronica) — auth debug atrás de flag.
+// Liga os markers internos do GoTrueClient ('#_acquireLock begin/end',
+// '#__loadSession session has expired', '_callRefreshToken') no console, pra
+// capturar o lock-wedge (begin sem end pós-idle) em DEV ou via ?authdebug=1.
+// NUNCA liga em prod por default (verbose degrada main thread WebView — catch-22
+// documentado v0.2.6.9). Removido/auditado em #11.
+const AUTH_DEBUG = (() => {
+  try {
+    if (import.meta.env.DEV) return true
+    if (typeof window !== 'undefined' && /[?&]authdebug=1/.test(window.location.search)) return true
+  } catch { /* ignore */ }
+  return false
+})()
+
 // Storage adapter: KeyStore (Android) / Keychain (iOS) / localStorage (web fallback)
 const isNative = Capacitor.isNativePlatform()
 
@@ -33,6 +47,8 @@ export const supabase = hasSupabase
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        // v0.2.8.6 #1 — instrumentação temporária (ver AUTH_DEBUG acima).
+        debug: AUTH_DEBUG,
         // Native: encrypted KeyStore. Web: default localStorage (browser session-isolated)
         ...(isNative ? { storage: SecureStorageAdapter } : {}),
         // Required on native — no URL redirect for OAuth in WebView
@@ -63,6 +79,51 @@ export const supabase = hasSupabase
         heartbeatIntervalMs: 30_000,
         reconnectAfterMs: (tries) => Math.min(1_000 * Math.pow(2, tries), 30_000)
       }
+    })
+  : null
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.2.8.6 #5 (diagnostico_conexao_cronica) — DUAL-CLIENT: cliente de DADOS
+// separado, lock-free.
+//
+// ROOT CAUSE que isto resolve: no cliente único, TODA RPC PostgREST monta o
+// header Authorization via fetchWithAuth → _getAccessToken → auth.getSession()
+// → _acquireLock (o MESMO mutex em memória que o refreshSession). Quando um
+// refresh pendura em background (WebView/aba congelada mid-fetch), o lock fica
+// retido e toda query trava ou cai pra Bearer anon (RLS nega) — "perde conexão
+// com o BD" até reload. Confirmado em @supabase/auth-js 2.103.3
+// (GoTrueClient.js getSession→_acquireLock→__loadSession→_callRefreshToken inline)
+// + supabase-js index.cjs:108,519-524.
+//
+// FIX: com a opção `accessToken` custom (index.cjs:379-388,519-524), o
+// _getAccessToken do cliente de dados retorna `await accessToken()` SEM chamar
+// getSession nem _acquireLock — eliminando o acoplamento auth↔dados na raiz.
+// O provider (registrado pelo sessionManager via setDataTokenProvider) lê uma
+// sessão em CACHE (sem lock) e só refresca perto da expiração, com timeout +
+// fallback pro token cacheado (válido server-side até a margem) — o dado NUNCA
+// trava esperando o lock de auth.
+//
+// IMPORTANTE: `accessToken` custom transforma `supabaseData.auth.*` num Proxy
+// que LANÇA (index.cjs:385) e desativa _listenForAuthEvents (index.cjs:402).
+// Por isso é um SEGUNDO cliente: o `supabase` acima continua sendo a ÚNICA fonte
+// de auth (login/sessão/refresh/onAuthStateChange/signOut) E de realtime
+// (auth-js auto-propaga token ao realtime via _handleTokenChanged no refresh).
+// O `supabaseData` é só PostgREST de dados.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Provider injetado tardiamente pelo sessionManager (evita ciclo de import:
+// supabase.js NÃO importa sessionManager). Default seguro: sem token → Bearer
+// anon (só ocorre antes do sessionManager carregar, i.e. nunca no hot path real).
+let _dataTokenProvider = async () => null
+export function setDataTokenProvider(fn) {
+  if (typeof fn === 'function') _dataTokenProvider = fn
+}
+
+export const supabaseData = hasSupabase
+  ? createClient(URL, KEY, {
+      db: { schema: SCHEMA },
+      // _getAccessToken retorna await this.accessToken() — sem getSession/lock.
+      accessToken: () => _dataTokenProvider(),
     })
   : null
 
