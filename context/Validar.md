@@ -24,7 +24,7 @@
 
 **Status:** ⏳ EM CURSO branch `release/v0.2.8.6`. Ataca a **causa-raiz** do bug crônico "perde conexão com o BD / fila travada até fechar-abrir": acoplamento auth↔dados pelo mesmo `processLock` em memória. Diagnóstico completo em [`docs/diagnostico_conexao_cronica.md`](../docs/diagnostico_conexao_cronica.md). 12 tarefas (#1–#11 código + #12 validação). Build + 66 testes + lint OK.
 
-### ✅ Validado autônomo (web — preview do bundle de produção v0.2.8.6, conta `teste-plus`):
+### ✅ Validado autônomo — WEB (preview do bundle de produção v0.2.8.6, conta `teste-plus`):
 - ✅ Boot + render OK — dual-client NÃO quebrou o boot
 - ✅ Sessão stale/inválida tratada sem crash (mostra login)
 - ✅ Login `teste-plus` OK — cliente de auth intacto (signInWithPassword/getSession/onAuthStateChange)
@@ -32,6 +32,13 @@
 - ✅ Marcar dose (`confirm_dose_v3`) **grava direto** — fila `dosy_pending_mutations` vazia, sem banner de sync, contador 19→18 atrasadas. Sintoma "dose vai pra fila" NÃO ocorre.
 - ✅ `confirm_dose_v3` confirmado existente em prod (resolve #2 p/ confirm)
 - ✅ `navigator.onLine=true`, sem sticky-false
+
+### ✅ Validado autônomo — EMULADOR NATIVO (Pixel_9_Pro, APK v0.2.8.6 vc 108 `.dev`, Appium+CDP):
+> Script reutilizável: [`scripts/qa-v0286/validate-cdp.mjs`](../scripts/qa-v0286/validate-cdp.mjs) (rodar no S25U com teste-plus logado p/ cobrir B/C — ver caveat no header).
+- ✅ Boot nativo v0.2.8.6 (vc 108) + login (SecureStorage) + dashboard com dados RLS reais (run inicial: teste-plus, 18 atrasadas)
+- ✅ **Bearer JWT em /rest/v1: 10–11 requests, 0 anon** — PROVA DECISIVA nativa: o cliente de dados manda sempre JWT do usuário, NUNCA a anon key (o oposto exato do bug, que caía em `Bearer anon`)
+- ✅ logcat: `#_acquireLock` balanceado (sem órfão) + 0 `authedRpc lento (>5s)` — sem wedge de lock
+- ⏳ **Mark-dose nativo (B/C) não fechado no emulador**: o credential-manager do Google no WebView do emulador substitui as credenciais por uma conta de teste SEM doses (teste4) no submit do form — artefato do ambiente, não do app. No S25U (sessão teste-plus viva, com doses) o script cobre B/C. Mark-dose já validado no WEB (mesma JS).
 
 ### Validações user-driven (precisam device físico / idle longo real — IA não consegue autônomo):
 
