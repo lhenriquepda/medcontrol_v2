@@ -1,8 +1,9 @@
-v0.2.8.1 — Correções de QA e Autocomplete
+v0.2.8.6 — Conexão mais estável
 
-• Correção de permissão no autocomplete do catálogo de medicamentos, resolvendo a falha silenciosa de busca.
-• Correção do processador de fila offline para reverter o estado da dose local e notificar falhas lógicas no banco de dados.
-• Correção nos testes unitários e linter para estabilidade do código de desenvolvimento.
-• Melhoria interna no formulário de tratamento, eliminando renders em cascata.
+• Corrigimos de vez aquele problema em que o app, depois de um tempo aberto ou ao reabrir, parecia "perder a conexão" e as doses ficavam presas numa fila até você fechar e abrir de novo.
 
-Sem mudanças visuais — release de infra e correções lógicas.
+• Agora a marcação de doses grava direto no servidor, mesmo após o celular ficar parado — sem precisar reiniciar o app.
+
+• Também ajustamos a detecção de internet no navegador (dosymed.app), que às vezes exigia recarregar a página.
+
+Atualização focada em estabilidade. Sem mudanças visuais.

@@ -20,7 +20,32 @@
 
 ---
 
-## 🆕 Release EM CURSO — v0.2.8.5 (vc 107) · Hotfix 400/401 boot
+## 🆕 Release EM CURSO — v0.2.8.6 (vc 108) · Bug crônico conexão DB — dual-client lock-free (ROOT CAUSE)
+
+**Status:** ⏳ EM CURSO branch `release/v0.2.8.6`. Ataca a **causa-raiz** do bug crônico "perde conexão com o BD / fila travada até fechar-abrir": acoplamento auth↔dados pelo mesmo `processLock` em memória. Diagnóstico completo em [`docs/diagnostico_conexao_cronica.md`](../docs/diagnostico_conexao_cronica.md). 12 tarefas (#1–#11 código + #12 validação). Build + 66 testes + lint OK.
+
+### ✅ Validado autônomo (web — preview do bundle de produção v0.2.8.6, conta `teste-plus`):
+- ✅ Boot + render OK — dual-client NÃO quebrou o boot
+- ✅ Sessão stale/inválida tratada sem crash (mostra login)
+- ✅ Login `teste-plus` OK — cliente de auth intacto (signInWithPassword/getSession/onAuthStateChange)
+- ✅ Dashboard carrega dados RLS reais (19 doses) — `supabaseData` (provider lock-free) entrega JWT válido (anon falharia RLS)
+- ✅ Marcar dose (`confirm_dose_v3`) **grava direto** — fila `dosy_pending_mutations` vazia, sem banner de sync, contador 19→18 atrasadas. Sintoma "dose vai pra fila" NÃO ocorre.
+- ✅ `confirm_dose_v3` confirmado existente em prod (resolve #2 p/ confirm)
+- ✅ `navigator.onLine=true`, sem sticky-false
+
+### Validações user-driven (precisam device físico / idle longo real — IA não consegue autônomo):
+
+- `[ ]` **V1 (ROOT — S25U idle longo aberto).** App aberto e idle >30min (tela ligada ou bloqueada), internet OK → marcar uma dose. **Esperar:** grava DIRETO, sem ir pra fila, sem precisar fechar/reabrir. **Se falhar:** capturar logcat + `?authdebug=1` e ver se há `#_acquireLock begin` sem `end`.
+- `[ ]` **V2 (cold-start pós-idle — S25U).** Force-stop o app, esperar >30min, reabrir e marcar dose. **Esperar:** drena/grava sem stuck (markColdStart usa timeout 30s). **Se falhar:** anotar tempo até gravar.
+- `[ ]` **V3 (browser idle).** `dosymed.app` logado `teste-plus`, aba em background 30-60min (ou laptop dormindo), voltar e marcar dose. **Esperar:** grava sem RECARREGAR. **Se falhar:** no console comparar `onlineManager.isOnline()` vs `navigator.onLine`.
+- `[ ]` **V4 (Doze real — S25U).** Device em Doze (tela travada, sem carregador) 30-60min, acordar e marcar dose. **Esperar:** grava direto.
+- `[ ]` **V5 (não ejeta por glitch).** Simular 2 falhas de refresh consecutivas (throttle rede DevTools/ADB). **Esperar:** NÃO cai pra tela de login; drain roda quando a rede volta.
+- `[ ]` **V6 (Bearer JWT sob wedge).** Com `?authdebug=1`, num episódio pós-idle, capturar header `Authorization` das requests `/rest/v1`. **Esperar:** sempre `Bearer <JWT>`, NUNCA a anon key.
+- `[ ]` **V7 (emulador Appium — Regra 16).** Path nativo tocado (SecureStorage timeout, onlineManager). Rodar §11b emulador Appium quando houver device/emulador disponível (este ambiente não tinha adb/emulator).
+
+---
+
+## 🆕 Release ANTERIOR — v0.2.8.5 (vc 107) · Hotfix 400/401 boot
 
 **Status:** ⏳ EM CURSO branch `0.2.8.5`. **2 bugs corrigidos** (#0032 P1 — 400 `.or()` ISO, #0033 P2 — 401 noise boot). Build + lint OK. Upload Play Console concluído 26 mai 08:32.
 

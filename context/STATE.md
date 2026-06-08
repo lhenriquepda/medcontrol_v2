@@ -31,6 +31,16 @@
 | **Play Console v0.2.6.1** | ⚠️ vc 85 SHIPPED com 2 bugs P0 — superseded |
 | **Play Console v0.2.6.0** | ✅ vc 84 superseded |
 
+**v0.2.8.6 EM CURSO 2026-06-08 — Bug crônico conexão DB: dual-client lock-free (ROOT CAUSE, branch `release/v0.2.8.6` vc 108):**
+
+Ataca a **causa-raiz** do bug crônico de muitas versões ("perde conexão com o BD / dose vai pra fila e só drena fechando-abrindo / no browser precisa recarregar"). Diagnóstico via debate multi-agente (13 agentes) confirmado lendo a `@supabase/auth-js` 2.103.3 instalada. Relatório completo: [`docs/diagnostico_conexao_cronica.md`](../docs/diagnostico_conexao_cronica.md).
+
+- **Root cause:** acoplamento auth↔dados pelo MESMO `processLock` em memória. Toda RPC monta o header `Authorization` via `getSession()→_acquireLock` (o mesmo mutex do `refreshSession`). Refresh pendurado em background retém o lock → queries travam ou caem pra `Bearer anon` (RLS nega). Estado 100% em memória → só reload limpa. Cross-platform (lock incondicional, mesmo bundle JS no browser e WebView).
+- **#5 (ROOT FIX)** — cliente de dados separado `supabaseData` com `accessToken` custom (sem `getSession`/lock). Provider lock-free lê sessão em cache (primada por `onAuthStateChange`) + refresh com timeout/fallback. `authedRpc` roda no `supabaseData`. Cliente `supabase` (auth+realtime) intacto.
+- **#3** margem 30s→90s (mata o gatilho do refresh inline sob lock). **#4** provider com timeout 6s + fallback ao token cacheado. **#7** remove signOut por AuthLost transitório (3 pontos) + decay no `refreshFailCount` + drain independente no resume. **#8** `inactiveMs` mede background real (markColdStart dispara). **#9** bridge `onlineManager` no web (mata sticky-false) + `registerSos` networkMode `always`. **#10** timeout no `SecureStorageAdapter`. **#1** auth debug atrás de flag (`DEV`/`?authdebug=1`).
+- **Validação web (preview prod, `teste-plus`):** boot/login/dashboard OK, marcar dose **grava direto** (fila vazia, sem regressão), `confirm_dose_v3` confirmado em prod. Build + 66 testes + lint verdes.
+- **Pendente (device):** cenários de idle-longo real (V1-V6 em `Validar.md`) + emulador Appium (Regra 16 — ambiente sem adb/emulator nesta sessão).
+
 **v0.2.8.1 EM CURSO 2026-05-25 — Correções de QA, testes unitários e ESLint (Fase 1):**
 
 Resolve bugs menores, limpa warnings do linter e corrige permissão silenciosa no autocomplete do catálogo de medicamentos.
